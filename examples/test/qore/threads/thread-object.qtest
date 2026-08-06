@@ -59,6 +59,63 @@ class TransparentObjectThreadTest {
     }
 }
 
+#! Object holding a lock member acquired by another thread during teardown
+/** An object's members are destroyed only after its destructor returns, and
+    entering a method is still allowed in that window, so another thread can be
+    holding a member @ref Qore::Thread::Mutex "Mutex" exactly when the member
+    cleanup deletes it.  @ref Qore::Thread::AutoLock "AutoLock" references only
+    the lock's private data, not the @ref Qore::Thread::Mutex "Mutex" object, so
+    the cleanup raises \c LOCK-ERROR in the thread dropping the object unless the
+    lock object is pinned in a local for the life of the call.
+
+    The counters make the interleaving deterministic: the worker enters the
+    object only after teardown has started, and the destructor returns only once
+    the worker holds the lock.
+*/
+class MemberLockLifetimeHolder {
+    public {
+        Mutex m();
+        bool pin;
+        Counter in_destructor;
+        Counter locked;
+        Counter release;
+    }
+
+    constructor(bool pin_lock, Counter in_destructor, Counter locked, Counter release) {
+        pin = pin_lock;
+        self.in_destructor = in_destructor;
+        self.locked = locked;
+        self.release = release;
+    }
+
+    #! returns a weak method call reference, as async APIs hand to I/O controllers
+    code<nothing()> getCallback() {
+        return \work();
+    }
+
+    destructor() {
+        # let the worker enter the object now that teardown has begun
+        in_destructor.dec();
+        # return (and destroy the members) only while the worker holds the lock
+        locked.waitForZero();
+    }
+
+    private work() {
+        if (pin) {
+            # pin the lock object in a local so the member cleanup cannot delete
+            # it while it is held
+            Mutex m_pin = m;
+            AutoLock al(m);
+            locked.dec();
+            release.waitForZero();
+        } else {
+            AutoLock al(m);
+            locked.dec();
+            release.waitForZero();
+        }
+    }
+}
+
 class ThreadObjectTest inherits QUnit::Test {
     private {
         int threads;
@@ -70,6 +127,7 @@ class ThreadObjectTest inherits QUnit::Test {
         addTestCase("Test Thread", \testThread());
         addTestCase("Test TransparentObjectThreadTest", \transparentObjectThreadTest());
         addTestCase("Test TransparentObjectThreadTest JIT cleanup", \transparentObjectThreadJitCleanupTest());
+        addTestCase("Test member lock lifetime in teardown", \memberLockLifetimeTest());
         set_return_value(main());
     }
 
@@ -104,6 +162,63 @@ class ThreadObjectTest inherits QUnit::Test {
             TransparentObjectThreadTest t(1000);
         }
         assertTrue(True);
+    }
+
+    #! Deleting an object whose member lock another thread holds
+    /** Negative case: without a local pin on the lock object, the member cleanup
+        that follows the destructor deletes the @ref Qore::Thread::Mutex "Mutex"
+        while the worker holds it, and the thread dropping the object gets
+        \c LOCK-ERROR.  Positive case: a local pin keeps the lock object alive, so
+        its destructor is deferred until the lock has been released.
+
+        This is the mechanism behind async APIs that hand weak method call
+        references to an I/O controller (e.g.
+        @ref HttpClientStreamingIo::SseObservable "SseObservable"): the controller
+        does not keep the object alive, so its own I/O thread can be inside the
+        object while the owner tears it down.
+    */
+    memberLockLifetimeTest() {
+        assertThrows("LOCK-ERROR", "deleted Mutex object", \runMemberLockTeardown(), False,
+            "unpinned member lock is deleted while held");
+        # no exception with the pin, and the worker did hold the lock across the
+        # object's teardown (otherwise the counter would still be 1)
+        assertEq(0, runMemberLockTeardown(True),
+            "pinned member lock survives teardown while held");
+    }
+
+    #! Drops the object while a worker thread holds its member lock
+    /** @return the \c locked counter value: 0 once the worker has taken the lock
+    */
+    private int runMemberLockTeardown(bool pin) {
+        Counter in_destructor(1);
+        Counter locked(1);
+        Counter release(1);
+        Counter finished(1);
+        code<nothing()> cb;
+        on_exit {
+            # let the worker release the lock and reap it in all cases; only this
+            # thread ever decrements the counter, so it is still 1 here
+            release.dec();
+            finished.waitForZero();
+        }
+        {
+            MemberLockLifetimeHolder h(pin, in_destructor, locked, release);
+            # weak method call reference: it does not keep the object alive
+            cb = h.getCallback();
+            background sub () {
+                on_exit finished.dec();
+                # enter the object only after its teardown has started
+                in_destructor.waitForZero();
+                try {
+                    cb();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the object can already be gone; nothing to do here
+                }
+            }();
+            # scope exit drops the last strong reference: the destructor runs and
+            # the member cleanup that follows deletes the lock
+        }
+        return locked.getCount();
     }
 }
 

@@ -77,6 +77,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *string received_body;
         #! Signals server thread completion
         Counter done(1);
+        #! Set by wait() to stop the accept loop
+        bool stop_flag = False;
         #! Error from server thread
         *string server_error;
         #! Whether to require AUTH
@@ -158,8 +160,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         background acceptAndServe();
     }
 
-    #! Wait for the server thread to finish
+    #! Stops the accept loop and waits for the server thread to exit
     wait(timeout to = 30s) {
+        stop_flag = True;
         done.waitForZero(to);
     }
 
@@ -175,12 +178,55 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         return server_error;
     }
 
+    #! Accepts and serves client sessions until wait() stops the loop
+    /** The loop replaces a one-shot @c accept(15s): the delay between start() and the
+        client's first connect is unbounded (module loading and tiered-mode warmup both
+        land in it), and a client whose session ended may reconnect.  With a single
+        accept the acceptor was gone in both cases, and the client then blocked until
+        its own connect timeout — surfacing as an unrelated SOCKET-TIMEOUT far from
+        here.
+    */
     private acceptAndServe() {
         on_exit done.dec();
-        try {
-            Socket client = listener.accept(15s);
-            serveClient(client);
-        } catch (hash<ExceptionInfo> ex) {
+        while (!stopping()) {
+            *Socket client;
+            try {
+                # short accept timeout so wait() is noticed promptly
+                client = listener.accept(250ms);
+            } catch (hash<ExceptionInfo> ex) {
+                recordServerError(ex);
+                break;
+            }
+            if (!client) {
+                continue;
+            }
+            try {
+                serveClient(client);
+            } catch (hash<ExceptionInfo> ex) {
+                recordServerError(ex);
+            }
+            try {
+                client.close();
+            } catch () {
+            }
+        }
+    }
+
+    #! Returns True once wait() has asked the accept loop to stop
+    private bool stopping() {
+        return stop_flag;
+    }
+
+    #! Records the first server-side error that is not a normal session end
+    /** A closed socket or an idle-read timeout ends only that session; the loop keeps
+        accepting, so the client can reconnect and these are not errors.
+    */
+    private recordServerError(hash<ExceptionInfo> ex) {
+        if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-NOT-OPEN"
+            || ex.err == "SOCKET-TIMEOUT") {
+            return;
+        }
+        if (!server_error) {
             server_error = sprintf("%s: %s", ex.err, ex.desc);
         }
     }

@@ -45,6 +45,35 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     private {
         #! Lock for atomic actions
+        /** @anchor pcm_lock_pin
+            Every method that locks this mutex pins it in a local first:
+            @code
+            Mutex m_pin = m;
+            @endcode
+
+            Ping results are delivered on async I/O controller worker threads
+            (@ref handlePingResult()), and the monitor can be destroyed —
+            explicitly with @c delete, or by its owner dropping the last
+            reference — while such a callback is running.  %Qore destroys an
+            object's members only @b after its destructor returns, and entering
+            a method is still allowed in that window, so the worker can be
+            holding this mutex exactly when the member cleanup deletes it.
+            @ref Qore::Thread::AutoLock "AutoLock" (and
+            @ref Qore::Thread::Mutex::lock() "Mutex::lock()") reference only the
+            lock's private data, not the @ref Qore::Thread::Mutex "Mutex"
+            object, so without the pin that cleanup fires \c "LOCK-ERROR: TID N
+            deleted Mutex object while TID M was holding the lock" in the
+            thread destroying the monitor.
+
+            The pin is a local-only reference: member cleanup then finds the
+            object still referenced and defers its destructor until the pin goes
+            out of scope, by which time the lock has been released, so the
+            deferred destructor runs cleanly.  This is the same idiom used for
+            \c HttpClientConnectionManager's \c pool_lock in the %HttpClientIo
+            module.  It complements — and does not replace — the teardown
+            drain in @ref stop(): the drain stops new work, the pin makes the
+            lock outlive any callback that is already inside the object.
+        */
         Mutex m();
 
         #! Connection cache; unique name -> connection object wrapper
@@ -126,6 +155,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     /** @throw MONITOR-START-ERROR if monitoring is already active or the monitor is being stopped
     */
     start() {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         AutoLock al(m);
 
         if (stopping) {
@@ -140,6 +171,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Stops monitoring
     stop() {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         list<string> cancel_ping_names;
         bool was_active;
         {
@@ -182,6 +215,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Stops monitoring and clears all connections
     stopClear() {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         int count;
         list<string> cancel_names;
         bool was_active;
@@ -244,6 +279,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         @throw MONITOR-ADD-ERROR a different connection with this name is already being monitored
     */
     add(AbstractConnection conn, *hash<auto> other, *bool start_pending) {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         string name = conn.getName();
         if (!conn.supportsPollingApi()) {
             throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
@@ -271,6 +308,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         @throw MONITOR-CONNECTION-ERROR the connection does not support the connection polling API
     */
     addOrUpdate(AbstractConnection conn, *hash<auto> other, *bool start_pending) {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         string name = conn.getName();
         if (!conn.supportsPollingApi()) {
             throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
@@ -318,6 +357,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         @see removeConnectionEx()
     */
     bool removeConnection(string name) {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         bool rv;
         bool need_cancel;
 
@@ -373,6 +414,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         @see removeConnection()
     */
     *bool removeConnectionNoWait(string name) {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         m.lock();
         on_exit m.unlock();
         *hash<PollInfo> info = remove cache{name};
@@ -477,6 +520,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Starts and submits a ping operation to the async I/O controller
     private submitPing(string name, int gen) {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         # Step 1: check eligibility and capture the connection reference under the lock,
         # then release the lock BEFORE calling startPollConnect().
         #
@@ -643,6 +688,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         contention can never serialise the monitor lock.
     */
     private handlePingResult(string name, int gen, hash<SocketPollResultInfo> result) {
+        # Pin @c m across this method: see @ref pcm_lock_pin
+        Mutex m_pin = m;
         on_exit flushDeferredLogs();
         m.lock();
         on_exit m.unlock();
