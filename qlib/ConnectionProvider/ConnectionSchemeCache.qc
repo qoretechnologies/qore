@@ -82,6 +82,7 @@ public class ConnectionSchemeCache {
 
             "awsrests": "AwsRestClient",
             "s3": "AwsRestClient",
+            "s3compatible": "AwsRestClient",
 
             "aws-textract": "AwsTextractRestClient",
 

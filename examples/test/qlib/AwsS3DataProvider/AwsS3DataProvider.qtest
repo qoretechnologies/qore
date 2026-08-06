@@ -54,31 +54,41 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
     constructor() : Test("AwsS3DataProvider Test", "1.0") {
         addTestCase("connection construction", \connectionConstructionTest());
         addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("S3-compatible connection", \compatibleConnectionTest());
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
 
         set_return_value(main());
     }
 
-    #! The connection must be constructible through both constructor forms
+    #! The connection must be constructible without being given a URL
     /** Regression: the connection used to inject "aws_service" and "aws_s3" into its own option hash while
         removing both from its declared option set, so validation rejected them as unknown options and the
         connection could not be created at all
     */
     connectionConstructionTest() {
-        AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
-            TestConnOptions);
+        # no URL is passed: Amazon serves every region at a well-known endpoint, so the URL is derived from the
+        # region rather than asked for
+        AwsS3RestConnection conn({
+            "name": "s3-test",
+            "desc": "test connection",
+            "opts": TestConnOptions,
+        });
         assertEq("s3", conn.getType());
         assertEq(App, conn.getAppName());
         assertEq(True, conn.hasDataProvider());
+        assertEq("https://s3.eu-central-1.amazonaws.com", conn.getSafeUrl(),
+            "the endpoint is derived from the region");
 
-        AwsS3RestConnection conn2({
-            "name": "s3-test-2",
-            "desc": "test connection",
-            "url": AwsS3RestConnection::DefaultUrl,
-            "opts": TestConnOptions,
-        });
-        assertEq("s3", conn2.getType());
+        # the other constructor form ignores the URL it is given for the same reason
+        AwsS3RestConnection conn2("s3-test-2", "test connection", "https://wrong.example.com", {},
+            TestConnOptions);
+        assertEq("https://s3.eu-central-1.amazonaws.com", conn2.getSafeUrl());
+
+        # the regional endpoint is used rather than the global one, which answers a request for a bucket in
+        # another region with a redirect that has to be re-signed
+        assertEq("https://s3.us-east-1.amazonaws.com", AwsS3RestConnection::getRegionUrl("us-east-1"));
+        assertEq(AwsS3RestConnection::DefaultUrl, AwsS3RestConnection::getRegionUrl(NOTHING));
 
         # neither option may appear in the connection's own options, since neither is a user-settable option
         assertEq(False, conn.getInfo().opts.hasKey("aws_service"));
@@ -107,9 +117,60 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         # both are pinned by the connection and must not be offered as options
         assertEq(False, scheme.options.hasKey("aws_service"));
         assertEq(False, scheme.options.hasKey("aws_s3"));
-        assertTrue(scheme.options.hasKey("path_style"));
+        # the user is never asked for a URL; it is derived from the region
+        assertEq(True, scheme.auto_url, "the Amazon S3 connection supplies its own URL");
+        # path-style is the only mode the module implements, so it is not offered as a choice here
+        assertEq(False, scheme.options.hasKey("path_style"));
+
+        # the region must be a picker rather than a free-text field with no guidance
+        assertTrue(scheme.options.aws_region.allowed_values.size() > 20,
+            "the AWS regions are offered as allowed values");
+        assertEq("us-east-1", scheme.options.aws_region.default_value);
+        # ... but AWS adds regions, so one that is not listed must still be accepted
+        assertEq(True, scheme.options.aws_region.allowed_values_creatable);
+        foreach string region in (("us-east-1", "eu-central-1", "ap-southeast-2", "sa-east-1")) {
+            assertTrue(inlist(region, (map $1.value, scheme.options.aws_region.allowed_values)),
+                sprintf("region %y is offered", region));
+        }
+        # every allowed value needs a display name, or the picker shows raw region codes
+        foreach hash<AllowedValueInfo> v in (scheme.options.aws_region.allowed_values) {
+            assertTrue(v.display_name.val(), sprintf("region %y has a display name", v.value));
+            assertTrue(v.desc.val(), sprintf("region %y has a description", v.value));
+        }
 
         assertEq("s3", (new AwsS3DataProviderFactory()).getName());
+    }
+
+    #! S3-compatible services are a separate connection type, since they need a URL of their own
+    compatibleConnectionTest() {
+        *hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("s3compatible");
+        assertTrue(exists scheme, "the s3compatible scheme is registered");
+        assertEq("S3-Compatible Storage", scheme.display_name);
+        # a service that is not Amazon is reached at a URL of its own, so one must be given
+        assertEq(False, scheme.auto_url, "an S3-compatible connection needs a URL");
+        assertEq("aws_keyid,aws_secret", scheme.required_options);
+        # the region is whatever the service was configured with, so it must not be restricted to AWS regions
+        assertEq(NOTHING, scheme.options.aws_region.allowed_values,
+            "the region is free-form for a service that is not Amazon");
+        assertEq("us-east-1", scheme.options.aws_region.default_value);
+        # most S3-compatible services require path-style addressing, so it is offered here
+        assertTrue(scheme.options.hasKey("path_style"));
+        assertEq(True, scheme.options.path_style.default_value);
+        assertEq(False, scheme.options.hasKey("aws_service"));
+        assertEq(False, scheme.options.hasKey("aws_s3"));
+
+        AwsS3CompatibleRestConnection conn("minio-test", "test connection", "https://minio.example.com:9000", {}, {
+            "aws_keyid": "minioadmin",
+            "aws_secret": "minioadmin",
+        });
+        assertEq("s3compatible", conn.getType());
+        assertRegex("minio\\.example\\.com", conn.getSafeUrl(), "the URL given is used as-is");
+        # it serves the same application and the same actions as an Amazon S3 connection
+        assertEq(App, conn.getAppName());
+        assertEq(True, conn.hasDataProvider());
+        *hash<auto> copts = conn.getConnectionOptions();
+        assertEq("s3", copts.aws_service);
+        assertEq(True, copts.aws_s3);
     }
 
     actionCatalogTest() {

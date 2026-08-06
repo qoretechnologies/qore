@@ -48,6 +48,7 @@ module AwsRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("awsrests", AwsRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("s3", AwsS3RestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("s3compatible", AwsS3CompatibleRestConnection::ConnectionScheme);
     };
 }
 
@@ -93,6 +94,12 @@ printf("%Y\n", ans.body);
     @section Awsrestclientrelnotes Release Notes
 
     @subsection awsrestclientv1_3 AwsRestClient v1.3
+    - added @ref AwsRestClient::AwsS3RestConnection "AwsS3RestConnection" for Amazon S3, which needs no URL -
+      the endpoint is derived from the region - and offers the AWS regions as a list
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - added @ref AwsRestClient::AwsS3CompatibleRestConnection "AwsS3CompatibleRestConnection" for S3-compatible
+      storage that is not Amazon, such as MinIO and Ceph, which is reached at a URL of its own
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - bounded the IMDS credential probe with its own timeout (\c aws_imds_timeout, default
       @ref AwsRestClient::AwsRestClientBase::ImdsTimeoutMs "ImdsTimeoutMs"); off AWS the
       link-local metadata address is routed rather than rejected on some platforms, so the probe
@@ -1435,94 +1442,33 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
     }
 }
 
-#! Class for AWS S3 connections; returns @ref AwsRestClient objects configured for S3
-/** This class pins the AWS service to \c s3 and enables the S3 request-encoding mode, so that a connection can be
-    created without the caller having to know which AWS options S3 requires.
+#! Common base class for Amazon S3 and S3-compatible connections
+/** Pins the AWS service to \c s3 and enables the S3 request-encoding mode, so that a connection can be created
+    without the caller having to know which AWS options S3 requires.
 
     S3 signs requests differently from every other AWS service: request URIs are URI-encoded once rather than
     twice and paths are not normalized.  @ref AwsRestClient implements that rule; it is selected by the
     \c aws_s3 option, which this class sets and does not allow to be overridden.
 
+    Two connection types are built on this: @ref AwsS3RestConnection for Amazon S3 itself, which needs no URL
+    and offers a list of AWS regions, and @ref AwsS3CompatibleRestConnection for an S3-compatible service such
+    as MinIO or Ceph, which is reached at a URL of its own.
+
     @since AwsRestClient 1.3
 */
-public class AwsS3RestConnection inherits AwsRestConnection {
+public class AwsS3RestConnectionBase inherits AwsRestConnection {
     public {
         #! The AWS service name for S3
         const AwsService = "s3";
-
-        #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
-            "display_name": "Amazon S3 Connection",
-            "short_desc": "A connection to Amazon S3 object storage",
-            "desc": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\n"
-                "Requires an AWS access key ID and secret access key with permission for the buckets to be "
-                "used, plus the region the buckets live in.  The AWS service and S3 request-encoding options "
-                "are set automatically and cannot be overridden.",
-            "cls": Class::forName("AwsS3RestConnection"),
-            "schemes": {
-                "s3": True,
-            },
-            "base_scheme_map": {
-                "https": "s3",
-            },
-            "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
-                "path_style": <ConnectionOptionInfo>{
-                    "display_name": "Path-Style Addressing",
-                    "short_desc": "Address buckets in the URI path rather than in the hostname",
-                    "type": "bool",
-                    "desc": "Address buckets in the URI path (`https://s3.<region>.amazonaws.com/<bucket>/<key>`) "
-                        "rather than in the hostname (`https://<bucket>.s3.<region>.amazonaws.com/<key>`).\n\n"
-                        "This is the default and currently the only supported mode: virtual-host addressing "
-                        "needs a separate endpoint per bucket, which the data provider module does not yet "
-                        "create.  Path-style addressing works against Amazon S3 for existing buckets and is "
-                        "required by most S3-compatible services such as MinIO and Ceph",
-                    "default_value": True,
-                },
-            },
-            "required_options": "aws_keyid,aws_secret,aws_region",
-        };
-
-        #! The default URL when none is supplied
-        const DefaultUrl = "https://s3.amazonaws.com";
     }
 
-    #! creates the AwsS3RestConnection object
-    /** @param name the name of the connection
-        @param description connection description
-        @param url connection URL (potentially with password info)
-        @param attributes various attributes. See below
-        @param options connection options
-
-        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
-
-        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
-    */
+    #! creates the object
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
-            : AwsRestConnection(name, description, url.val() ? url : DefaultUrl, attributes, options) {
+            : AwsRestConnection(name, description, url, attributes, options) {
     }
 
-    #! creates the AwsS3RestConnection object
-    /** @param config with the following keys:
-        - name (required string): the connection name
-        - display_name (optional string): the display name
-        - short_desc (optional string): a short description in plain text
-        - desc (optional string): a long description with markdown formatting
-        - url (required string): the connection URL
-        - opts (optional hash): connection options
-        - logger (optional LoggerInterface object): logger for the connection
-        @param attr optional connection attributes
-
-        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
-    */
-    constructor(hash<auto> config, *hash<auto> attr)
-            : AwsRestConnection(config + {
-                "url": config.url.val() ? config.url : DefaultUrl,
-            }, attr) {
-    }
-
-    #! returns \c "s3"
-    string getType() {
-        return "s3";
+    #! creates the object
+    constructor(hash<auto> config, *hash<auto> attr) : AwsRestConnection(config, attr) {
     }
 
     #! Returns the data provider application name this connection serves
@@ -1559,8 +1505,8 @@ public class AwsS3RestConnection inherits AwsRestConnection {
         or with the wrong URI encoding, which fail with an opaque signature mismatch
 
         @note They are applied here, where the client is configured, rather than stored in the connection's own
-        options: this class removes both from its declared option set so that neither appears as something a user
-        may set, and a connection option that is not declared is rejected as unknown when the connection is
+        options: these classes remove both from their declared option set so that neither appears as something a
+        user may set, and a connection option that is not declared is rejected as unknown when the connection is
         validated
     */
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
@@ -1568,6 +1514,270 @@ public class AwsS3RestConnection inherits AwsRestConnection {
             "aws_service": AwsService,
             "aws_s3": True,
         };
+    }
+}
+
+#! Class for Amazon S3 connections; returns @ref AwsRestClient objects configured for S3
+/** Creating one of these needs an access key ID, a secret access key, and the region the buckets live in;
+    everything else is supplied by this class.  In particular **no URL is required**: Amazon serves every region
+    at a well-known endpoint, so the URL is derived from the region rather than asked for.  The region is offered
+    as a list of the AWS regions, and a region not in the list is still accepted, since AWS adds regions over
+    time.
+
+    Use @ref AwsS3CompatibleRestConnection instead for an S3-compatible service that is not Amazon; those are
+    reached at a URL of their own, which this class does not accept.
+
+    @since AwsRestClient 1.3
+*/
+public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
+    public {
+        #! The AWS regions offered when creating a connection
+        /** Not exhaustive by design: AWS adds regions, so \c allowed_values_creatable is set on the option and a
+            region that is not listed here is still accepted
+        */
+        const AwsRegions = (
+            <AllowedValueInfo>{"value": "us-east-1", "display_name": "US East (N. Virginia)",
+                "desc": "US East (N. Virginia)"},
+            <AllowedValueInfo>{"value": "us-east-2", "display_name": "US East (Ohio)",
+                "desc": "US East (Ohio)"},
+            <AllowedValueInfo>{"value": "us-west-1", "display_name": "US West (N. California)",
+                "desc": "US West (N. California)"},
+            <AllowedValueInfo>{"value": "us-west-2", "display_name": "US West (Oregon)",
+                "desc": "US West (Oregon)"},
+            <AllowedValueInfo>{"value": "af-south-1", "display_name": "Africa (Cape Town)",
+                "desc": "Africa (Cape Town)"},
+            <AllowedValueInfo>{"value": "ap-east-1", "display_name": "Asia Pacific (Hong Kong)",
+                "desc": "Asia Pacific (Hong Kong)"},
+            <AllowedValueInfo>{"value": "ap-south-1", "display_name": "Asia Pacific (Mumbai)",
+                "desc": "Asia Pacific (Mumbai)"},
+            <AllowedValueInfo>{"value": "ap-south-2", "display_name": "Asia Pacific (Hyderabad)",
+                "desc": "Asia Pacific (Hyderabad)"},
+            <AllowedValueInfo>{"value": "ap-northeast-1", "display_name": "Asia Pacific (Tokyo)",
+                "desc": "Asia Pacific (Tokyo)"},
+            <AllowedValueInfo>{"value": "ap-northeast-2", "display_name": "Asia Pacific (Seoul)",
+                "desc": "Asia Pacific (Seoul)"},
+            <AllowedValueInfo>{"value": "ap-northeast-3", "display_name": "Asia Pacific (Osaka)",
+                "desc": "Asia Pacific (Osaka)"},
+            <AllowedValueInfo>{"value": "ap-southeast-1", "display_name": "Asia Pacific (Singapore)",
+                "desc": "Asia Pacific (Singapore)"},
+            <AllowedValueInfo>{"value": "ap-southeast-2", "display_name": "Asia Pacific (Sydney)",
+                "desc": "Asia Pacific (Sydney)"},
+            <AllowedValueInfo>{"value": "ap-southeast-3", "display_name": "Asia Pacific (Jakarta)",
+                "desc": "Asia Pacific (Jakarta)"},
+            <AllowedValueInfo>{"value": "ap-southeast-4", "display_name": "Asia Pacific (Melbourne)",
+                "desc": "Asia Pacific (Melbourne)"},
+            <AllowedValueInfo>{"value": "ca-central-1", "display_name": "Canada (Central)",
+                "desc": "Canada (Central)"},
+            <AllowedValueInfo>{"value": "ca-west-1", "display_name": "Canada West (Calgary)",
+                "desc": "Canada West (Calgary)"},
+            <AllowedValueInfo>{"value": "eu-central-1", "display_name": "Europe (Frankfurt)",
+                "desc": "Europe (Frankfurt)"},
+            <AllowedValueInfo>{"value": "eu-central-2", "display_name": "Europe (Zurich)",
+                "desc": "Europe (Zurich)"},
+            <AllowedValueInfo>{"value": "eu-west-1", "display_name": "Europe (Ireland)",
+                "desc": "Europe (Ireland)"},
+            <AllowedValueInfo>{"value": "eu-west-2", "display_name": "Europe (London)",
+                "desc": "Europe (London)"},
+            <AllowedValueInfo>{"value": "eu-west-3", "display_name": "Europe (Paris)",
+                "desc": "Europe (Paris)"},
+            <AllowedValueInfo>{"value": "eu-north-1", "display_name": "Europe (Stockholm)",
+                "desc": "Europe (Stockholm)"},
+            <AllowedValueInfo>{"value": "eu-south-1", "display_name": "Europe (Milan)",
+                "desc": "Europe (Milan)"},
+            <AllowedValueInfo>{"value": "eu-south-2", "display_name": "Europe (Spain)",
+                "desc": "Europe (Spain)"},
+            <AllowedValueInfo>{"value": "il-central-1", "display_name": "Israel (Tel Aviv)",
+                "desc": "Israel (Tel Aviv)"},
+            <AllowedValueInfo>{"value": "me-south-1", "display_name": "Middle East (Bahrain)",
+                "desc": "Middle East (Bahrain)"},
+            <AllowedValueInfo>{"value": "me-central-1", "display_name": "Middle East (UAE)",
+                "desc": "Middle East (UAE)"},
+            <AllowedValueInfo>{"value": "sa-east-1", "display_name": "South America (São Paulo)",
+                "desc": "South America (São Paulo)"},
+        );
+
+        #! The default AWS region
+        const DefaultRegion = "us-east-1";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Amazon S3",
+            "short_desc": "A connection to Amazon S3 object storage",
+            "desc": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\n"
+                "Requires an AWS access key ID and secret access key with permission for the buckets to be "
+                "used, plus the region the buckets live in.  The URL is derived from the region, and the AWS "
+                "service and S3 request-encoding options are set automatically.\n\n"
+                "Use an **S3-Compatible Storage** connection instead for MinIO, Ceph, or another service that "
+                "speaks the S3 protocol but is not Amazon",
+            "cls": Class::forName("AwsS3RestConnection"),
+            # the URL is derived from the region, so the user is never asked for one
+            "auto_url": True,
+            "schemes": {
+                "s3": True,
+            },
+            "base_scheme_map": {
+                "https": "s3",
+            },
+            # "path_style" is not offered: path-style addressing is currently the only mode the data provider
+            # module implements, so it is not a choice the user can meaningfully make
+            "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
+                "aws_region": AwsRestConnection::ConnectionScheme.options.aws_region + <ConnectionOptionInfo>{
+                    "desc": "The AWS region holding the buckets to be used; this also selects the endpoint the "
+                        "connection is made to, so a region other than the one the buckets live in produces "
+                        "redirects and signature errors",
+                    "default_value": DefaultRegion,
+                    "allowed_values": AwsRegions,
+                    # AWS adds regions, so a region not in the list must still be accepted
+                    "allowed_values_creatable": True,
+                },
+            },
+            "required_options": "aws_keyid,aws_secret,aws_region",
+        };
+
+        #! The URL used when no region is set
+        const DefaultUrl = "https://s3.amazonaws.com";
+    }
+
+    #! creates the AwsS3RestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url this argument is ignored; the URL is derived from the \c aws_region option
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl, hash<auto> attributes = {},
+            hash<auto> options = {})
+            : AwsS3RestConnectionBase(name, description, AwsS3RestConnection::getRegionUrl(options.aws_region),
+                attributes, options) {
+    }
+
+    #! creates the AwsS3RestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (optional string): ignored; the URL is derived from the \c aws_region option
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : AwsS3RestConnectionBase(config + {
+                "url": AwsS3RestConnection::getRegionUrl(config.opts.aws_region),
+            }, attr) {
+    }
+
+    #! returns \c "s3"
+    string getType() {
+        return "s3";
+    }
+
+    #! Returns the Amazon S3 endpoint URL for the given region
+    /** Amazon serves every region at a well-known endpoint, so asking the user for a URL adds a way to get the
+        connection wrong without adding anything they can usefully choose.  The regional endpoint is used rather
+        than the global \c s3.amazonaws.com one, which answers a request for a bucket in another region with a
+        redirect that has to be re-signed.
+
+        @param region the AWS region, if set
+
+        @return the endpoint URL for the region
+    */
+    static string getRegionUrl(*string region) {
+        return region.val()
+            ? sprintf("https://s3.%s.amazonaws.com", region)
+            : DefaultUrl;
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! Class for connections to S3-compatible storage that is not Amazon S3
+/** For MinIO, Ceph, and other services that speak the S3 protocol.  Unlike @ref AwsS3RestConnection these are
+    reached at a URL of their own, so a URL is required; the region is free-form, since such a service accepts
+    whatever region it was configured with, and path-style addressing is offered because most of them require it.
+
+    @since AwsRestClient 1.3
+*/
+public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "S3-Compatible Storage",
+            "short_desc": "A connection to S3-compatible object storage such as MinIO or Ceph",
+            "desc": "A connection to object storage that speaks the Amazon S3 protocol but is not Amazon S3, "
+                "such as [MinIO](https://min.io) or [Ceph](https://ceph.io).\n\n"
+                "Requires the URL the service is reached at, plus an access key ID and secret access key.  The "
+                "region is whatever the service was configured with, and is often left at `us-east-1`, which is "
+                "what most S3-compatible services default to.\n\n"
+                "Use an **Amazon S3** connection instead for Amazon S3 itself; that one derives its URL from "
+                "the region and needs no URL at all",
+            "cls": Class::forName("AwsS3CompatibleRestConnection"),
+            "schemes": {
+                "s3compatible": True,
+            },
+            "base_scheme_map": {
+                "https": "s3compatible",
+            },
+            "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
+                "aws_region": AwsRestConnection::ConnectionScheme.options.aws_region + <ConnectionOptionInfo>{
+                    "desc": "The region the service was configured with; most S3-compatible services default to "
+                        "`us-east-1` and ignore the value beyond using it to sign requests",
+                    "default_value": "us-east-1",
+                },
+                "path_style": <ConnectionOptionInfo>{
+                    "display_name": "Path-Style Addressing",
+                    "short_desc": "Address buckets in the URI path rather than in the hostname",
+                    "type": "bool",
+                    "desc": "Address buckets in the URI path (`https://<host>/<bucket>/<key>`) rather than in "
+                        "the hostname (`https://<bucket>.<host>/<key>`).\n\n"
+                        "This is the default and currently the only supported mode: virtual-host addressing "
+                        "needs a separate endpoint per bucket, which the data provider module does not yet "
+                        "create.  Most S3-compatible services require path-style addressing in any case",
+                    "default_value": True,
+                },
+            },
+            "required_options": "aws_keyid,aws_secret",
+        };
+    }
+
+    #! creates the AwsS3CompatibleRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url the URL the S3-compatible service is reached at
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url, hash<auto> attributes = {},
+            hash<auto> options = {})
+            : AwsS3RestConnectionBase(name, description, url, attributes, options) {
+    }
+
+    #! creates the AwsS3CompatibleRestConnection object
+    /** @param config the connection configuration hash
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : AwsS3RestConnectionBase(config, attr) {
+    }
+
+    #! returns \c "s3compatible"
+    string getType() {
+        return "s3compatible";
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
