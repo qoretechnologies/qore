@@ -68,6 +68,8 @@ module FileLocationHandler {
     This module provides the following classes:
     - @ref FileLocationHandler::AbstractFileLocationHandler "AbstractFileLocationHandler": the abstract API class
     - @ref FileLocationHandler::FileLocationHandler "FileLocationHandler": the main API class
+    - @ref FileLocationHandler::FileLocationHandlerConnection "FileLocationHandlerConnection": class handling
+      \c "conn://" and \c "connection://" locations (a named connection plus a path)
     - @ref FileLocationHandler::FileLocationHandlerData "FileLocationHandlerData": class handling \c "data://"
       locations (immedidate data in the location URL)
     - @ref FileLocationHandler::FileLocationHandlerFile "FileLocationHandlerFile": class handling \c "file://"
@@ -94,11 +96,43 @@ module FileLocationHandler {
     @ref FileLocationHandler::FileLocationHandler::tryRegisterHandler() "FileLocationHandler::tryRegisterHandler()" in
     its \c init code to register a handler for a new scheme.
 
+    @section filelocationhandler_conn Named Connection Locations
+
+    Locations with the \c conn or \c connection scheme name a connection and a path:
+    @verbatim
+conn://<connection-name>/<path>[{<options>}]
+    @endverbatim
+
+    The path is always relative to the connection's own base location, so the connection supplies the host, the
+    credentials, and the root, while the location string supplies only the leaf.  This keeps credentials out of
+    location strings and lets any API that accepts a file location reuse a configured, monitored connection.
+
+    @par Example
+    @code{.py}
+string csv = FileLocationHandler::getTextFileFromLocation("conn://prod-sftp/outbound/orders.csv");
+    @endcode
+
+    Connections are resolved through the \c ConnectionProvider module, which is loaded dynamically on first use;
+    this module declares no dependency on it.  The \c QORE_CONNECTION_PROVIDERS environment variable must name at
+    least one connection provider module.
+
+    @note Location strings are frequently derived from user or partner data, and a named connection can reach any
+    configured system.  Applications accepting untrusted location strings should restrict which connections are
+    reachable with
+    @ref FileLocationHandler::FileLocationHandler::setConnectionFilter() "FileLocationHandler::setConnectionFilter()"
+    or the \c QORE_FILE_LOCATION_CONNECTIONS environment variable.
+
     @section filelocationhandler_relnotes Release Notes
 
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
     - implemented support for non-blocking I/O from file handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
+    - added support for \c conn:// and \c connection:// locations naming a connection and a path
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - added @ref FileLocationHandler::AbstractFileLocationHandler::selfValidatesOptions()
+      "AbstractFileLocationHandler::selfValidatesOptions()" so that handlers that cannot know their effective
+      option set until the location is resolved can validate options themselves
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
 
     @subsection filelocationhandler_v2_2_1 FileLocationHandler v2.2.1
     - allow handler information to be returned

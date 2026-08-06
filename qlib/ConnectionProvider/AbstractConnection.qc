@@ -180,6 +180,19 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         */
         const string CF_UPDATE_OPTIONS = "update-options";
 
+        #! Connection feature: file location support
+        /** Indicates that the connection can be used in \c "conn://" file locations with the
+            \c FileLocationHandler module
+
+            @see
+            - @ref supportsFileLocations()
+            - @ref getFileLocationRedirect()
+            - @ref getFileLocationHandler()
+
+            @since ConnectionProvider 3.1
+        */
+        const string CF_FILE_LOCATIONS = "file-locations";
+
         #! Default option description
         const string DefaultDescription = "n/a; update connection to use the `AbstractConnectionWithInfo` class instead";
 
@@ -363,6 +376,107 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     */
     *string getAppName() {
         # intentionally empty
+    }
+
+    #! Returns a redirect to an existing file location scheme for the given path, if supported
+    /** @param path the path relative to the connection's own base location
+        @param write @ref True if the location will be written to, @ref False if it will be read
+
+        @return a @ref FileLocationRedirect hash, or @ref nothing if this connection does not support file locations
+        by redirect
+
+        Connections that map cleanly onto a scheme already supported by the \c FileLocationHandler module (the local
+        filesystem, FTP, SFTP, plain HTTP) implement this method rather than implementing file I/O themselves; the
+        \c "conn://" location handler re-enters normal dispatch for the returned scheme, so that handler's blocking,
+        streaming, and polling implementations are all reused unchanged.
+
+        Connections carrying state that cannot be expressed in a URL (OAuth2 tokens with automatic refresh,
+        SPNEGO configuration, certificate data supplied inline, per-connection headers) implement
+        @ref getFileLocationHandler() instead.
+
+        @note The returned location may contain password information; implementations must never place it in an
+        exception message or log entry
+
+        @since ConnectionProvider 3.1
+
+        @see
+        - @ref supportsFileLocations()
+        - @ref getFileLocationHandler()
+    */
+    *hash<FileLocationRedirect> getFileLocationRedirect(string path, bool write) {
+        return getFileLocationRedirectImpl(path, write);
+    }
+
+    #! Returns @ref True if this connection provides a native file location handler
+    /** @return @ref True if this connection provides a native file location handler
+
+        @since ConnectionProvider 3.1
+
+        @see getFileLocationHandler()
+    */
+    bool supportsFileLocations() {
+        return supportsFileLocationsImpl();
+    }
+
+    #! Returns a native file location handler object for this connection
+    /** @return an object inheriting \c FileLocationHandler::AbstractFileLocationHandler
+
+        @throw FILE-LOCATION-UNSUPPORTED this connection does not provide a native file location handler
+
+        @note The return type is declared as @ref Qore::object "object" rather than as the concrete handler class
+        deliberately.  Declaring the real type would introduce a hard dependency from this module on the
+        \c FileLocationHandler module; \c FileLocationHandler is a leaf utility whose only dependency is \c Util and
+        which sits below this module in the dependency graph (\c RestClient requires both, and
+        @ref ConnectionProvider::HttpConnection "HttpConnection" documents its \c ssl_cert_path and \c ssl_key_path
+        options as being resolved through it).  Adding the edge would pull \c DataProvider, \c AsyncSocketIo,
+        \c reflection, \c ProviderIndexUtil, and \c Logger into every consumer of a file location, and would turn any
+        future reverse dependency into a load cycle.  Do not "correct" this to a concrete type.
+
+        @since ConnectionProvider 3.1
+
+        @see
+        - @ref supportsFileLocations()
+        - @ref getFileLocationRedirect()
+    */
+    object getFileLocationHandler() {
+        return getFileLocationHandlerImpl();
+    }
+
+    #! Resolves a file location path against a connection base path, rejecting any result outside the base
+    /** @param conn_name the connection name; used in error messages
+        @param base the connection's base path; use \c "/" for no confinement
+        @param path the path from the location string, relative to \a base
+
+        @return the resolved absolute path, always strictly below \a base
+
+        A leading slash in \a path does not make it absolute; file location paths are always relative to the
+        connection's own base location.  \c ".." segments are resolved before the containment check, so a path that
+        would escape the base is rejected rather than followed.
+
+        @throw LOCATION-ERROR empty path; path resolves outside the connection base
+
+        @note The exception message names the offending relative path only, never the resolved absolute path, so
+        that error output cannot be used to probe the layout outside the base
+
+        @since ConnectionProvider 3.1
+    */
+    static string getConfinedFileLocationPath(string conn_name, string base, string path) {
+        # a leading slash does not make the path absolute here; it is always relative to the connection base
+        path =~ s/^\/+//;
+        if (!path.val()) {
+            throw "LOCATION-ERROR", sprintf("connection %y: file location is missing a file path", conn_name);
+        }
+
+        string base_norm = normalize_dir_unix(base.val() ? base : "/", "/");
+        string rv = normalize_dir_unix(base_norm + "/" + path, "/");
+
+        # the result must be strictly below the base; naming the base directory itself is not a file location
+        string prefix = base_norm == "/" ? "/" : base_norm + "/";
+        if (rv.substr(0, prefix.length()) != prefix) {
+            throw "LOCATION-ERROR", sprintf("connection %y: file location path %y resolves outside the "
+                "connection's base directory", conn_name, path);
+        }
+        return rv;
     }
 
     #! returns a hash with the results of the ping operation
@@ -1164,6 +1278,43 @@ scheme://user:pass@hostname:port/path
         @since ConnectionProvider 1.10
     */
     private *hash<string, bool> getFeaturesImpl() {
+    }
+
+    #! Returns a redirect to an existing file location scheme for the given path, if supported
+    /** The default implementation returns no value; override in child classes that map onto a scheme already
+        supported by the \c FileLocationHandler module
+
+        @param path the path relative to the connection's own base location
+        @param write @ref True if the location will be written to, @ref False if it will be read
+
+        @return @ref nothing in the base class
+
+        @since ConnectionProvider 3.1
+    */
+    private *hash<FileLocationRedirect> getFileLocationRedirectImpl(string path, bool write) {
+    }
+
+    #! Returns @ref True if this connection provides a native file location handler
+    /** The default implementation returns @ref False
+
+        @return @ref False in the base class
+
+        @since ConnectionProvider 3.1
+    */
+    private bool supportsFileLocationsImpl() {
+        return False;
+    }
+
+    #! Returns a native file location handler object for this connection
+    /** The default implementation throws an exception; override in child classes that provide a native handler
+
+        @throw FILE-LOCATION-UNSUPPORTED this connection does not provide a native file location handler
+
+        @since ConnectionProvider 3.1
+    */
+    private object getFileLocationHandlerImpl() {
+        throw "FILE-LOCATION-UNSUPPORTED", sprintf("connection %y (type %y) does not provide a native file "
+            "location handler", name, getType());
     }
 
     #! Override to set child data provider capabilities once per child class

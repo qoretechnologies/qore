@@ -105,7 +105,8 @@ public class ConnectionProviderTest inherits QUnit::Test {
         assertEq(True, fc.children_can_support_apis);
         assertEq(False, fc.children_can_support_transactions);
         hash<ConnectionInfo> info = fc.getInfo();
-        assertNothing(info.features);
+        # issue #5386: FTP connections advertise file-location support so that "conn://" locations can use them
+        assertEq({AbstractConnection::CF_FILE_LOCATIONS: True}, info.features);
 
         AbstractDataProvider prov = fc.getDataProvider();
         assertEq("ftp", prov.getName());

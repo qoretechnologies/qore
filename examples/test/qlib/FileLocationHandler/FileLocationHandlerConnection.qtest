@@ -1,0 +1,398 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+# required for Program::loadApplyToUserModule(), used to inject QORE_CONNECTION_PROVIDERS into ConnectionProvider
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires FileLocationHandler
+%requires FsUtil
+%requires Util
+%requires QUnit
+
+%exec-class FileLocationHandlerConnectionTest
+
+public class FileLocationHandlerConnectionTest inherits QUnit::Test {
+    private {
+        #! The test root directory served by the "files" test connection
+        TmpDir tmp("flh-conn-");
+
+        #! The program with the test connection provider applied
+        Program conn_pgm;
+
+        #! Set to the password embedded in the "ftp-secret" test connection URL
+        const PasswordMarker = "sup3rs3cr3tpw";
+
+        const FileContents = "line one\nline two\n";
+    }
+
+    constructor() : Test("FileLocationHandlerConnection Test", "1.0") {
+        addTestCase("scheme registration", \schemeRegistrationTest());
+        addTestCase("location parsing", \locationParsingTest());
+        addTestCase("option validation", \optionValidationTest());
+        addTestCase("read", \readTest());
+        addTestCase("write", \writeTest());
+        addTestCase("streams", \streamTest());
+        addTestCase("path confinement", \pathConfinementTest());
+        addTestCase("credential hygiene", \credentialHygieneTest());
+        addTestCase("connection filter", \connectionFilterTest());
+        addTestCase("redirect construction", \redirectConstructionTest());
+        addTestCase("negative", \negativeTest());
+
+        setupConnectionProvider();
+
+        set_return_value(main());
+    }
+
+    #! Applies the test connection provider to the ConnectionProvider module
+    /** ConnectionProvider::get_connection() reads the QORE_CONNECTION_PROVIDERS environment variable from the ENV
+        hash, which is a per-Program snapshot taken when the Program is created and is not updated by setenv().  The
+        value therefore has to be injected into the module's own Program, which is what
+        Program::loadApplyToUserModule() with an overridden ENV does here.
+
+        The test root directory is passed separately with setenv(), because the test connection provider module is
+        loaded into a fresh Program by get_connection() and only sees the real process environment through
+        getenv().
+    */
+    private setupConnectionProvider() {
+        setenv("FLH_TEST_ROOT", tmp.path);
+
+        conn_pgm = new Program(PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE);
+        conn_pgm.setGlobalVarValue("ENV", ENV + {
+            "QORE_CONNECTION_PROVIDERS": get_script_dir() + "FileLocationTestConnectionProvider.qm",
+        });
+        conn_pgm.loadApplyToUserModule(getModulePath("ConnectionProvider"), True);
+    }
+
+    #! Returns the path to a module in the local qlib directory
+    private string getModulePath(string name) {
+        string path = normalize_dir(get_script_dir() + "../../../../qlib/" + name);
+        if (!is_dir(path) && !is_file(path + ".qm")) {
+            path = normalize_dir(get_script_dir() + "../../../../../qlib/" + name);
+        }
+        return path;
+    }
+
+    private string p(string rel) {
+        return "conn://files/" + rel;
+    }
+
+    #! Writes a file directly into the test root, bypassing the location handler
+    private string makeFile(string name, string contents = FileContents) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(contents);
+        return path;
+    }
+
+    schemeRegistrationTest() {
+        assertTrue(FileLocationHandler::isSchemeSupported("conn"));
+        assertTrue(FileLocationHandler::isSchemeSupported("connection"));
+
+        hash<FileHandlerInfo> info = FileLocationHandler::getHandlerInfo("conn");
+        assertEq("conn", info.scheme);
+        # options common to both directions
+        assertTrue(info.read_options.hasKey("encoding"));
+        assertTrue(info.read_options.hasKey("subtype"));
+        assertTrue(info.write_options.hasKey("container"));
+
+        # the handler must be reachable through the new public accessor
+        assertTrue(FileLocationHandler::getHandler("conn") instanceof AbstractFileLocationHandler);
+        assertThrows("SCHEME-ERROR", \FileLocationHandler::getHandler(), "no-such-scheme-here");
+    }
+
+    locationParsingTest() {
+        # no path at all
+        assertThrows("LOCATION-ERROR", "has no path", \FileLocationHandler::getTextFileFromLocation(),
+            "conn://files");
+        # empty connection name
+        assertThrows("LOCATION-ERROR", "empty connection name", \FileLocationHandler::getTextFileFromLocation(),
+            "conn:///some/path");
+        # empty path
+        assertThrows("LOCATION-ERROR", "empty path", \FileLocationHandler::getTextFileFromLocation(),
+            "conn://files/");
+
+        # the "connection" alias resolves identically
+        makeFile("alias.txt");
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("connection://files/alias.txt"));
+
+        # a connection name containing "." and "-" is accepted (resolution fails later, not at parse time)
+        assertThrows("LOCATION-ERROR", "could not be matched",
+            \FileLocationHandler::getTextFileFromLocation(), "conn://my.conn-name/x.txt");
+    }
+
+    optionValidationTest() {
+        makeFile("opts.txt");
+
+        # a handler-level option is accepted and not passed through as an unknown option to the target
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation(p("opts.txt") + "{encoding=UTF-8}"));
+
+        # an option supported by the resolved target (file) but not declared by the connection handler passes
+        # through and is honored
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation(p("opts.txt") + "{max_file_len=1000}"));
+
+        # an option supported by neither is rejected, and the error names the resolved target scheme's option set
+        hash<ExceptionInfo> ex = getError(\FileLocationHandler::getTextFileFromLocation(),
+            (p("opts.txt") + "{no_such_option=1}",));
+        assertEq("LOCATION-ERROR", ex.err);
+        assertRegex("no_such_option", ex.desc);
+        # the message must list the target handler's options, not the connection handler's
+        assertRegex("max_file_len", ex.desc);
+
+        # a truncated file read proves the pass-through option actually reached the target handler
+        makeFile("trunc.txt", "0123456789");
+        assertEq("01234", FileLocationHandler::getTextFileFromLocation(p("trunc.txt") + "{max_file_len=5}"));
+    }
+
+    readTest() {
+        makeFile("read.txt");
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation(p("read.txt")));
+        assertEq(binary(FileContents), FileLocationHandler::getBinaryFileFromLocation(p("read.txt")));
+        assertEq(FileContents, FileLocationHandler::getFileFromLocation(True, p("read.txt")));
+        assertEq(binary(FileContents), FileLocationHandler::getFileFromLocation(False, p("read.txt")));
+
+        # a file in a subdirectory of the connection root
+        Dir d();
+        d.chdir(tmp.path + DirSep + "sub");
+        d.create();
+        makeFile("sub" + DirSep + "nested.txt", "nested\n");
+        assertEq("nested\n", FileLocationHandler::getTextFileFromLocation(p("sub/nested.txt")));
+
+        # a leading slash does not escape to the filesystem root; it is relative to the connection base
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("conn://files//read.txt"));
+    }
+
+    writeTest() {
+        FileLocationHandler::writeFileToLocation(p("written.txt"), FileContents);
+        assertEq(FileContents, ReadOnlyFile::readTextFile(tmp.path + DirSep + "written.txt"));
+
+        # binary write
+        binary bin = <0102030405>;
+        FileLocationHandler::writeFileToLocation(p("written.bin"), bin);
+        assertEq(bin, ReadOnlyFile::readBinaryFile(tmp.path + DirSep + "written.bin"));
+
+        # append is a target-handler option and must pass through
+        FileLocationHandler::writeFileToLocation(p("written.txt") + "{append=true}", "more\n");
+        assertEq(FileContents + "more\n", ReadOnlyFile::readTextFile(tmp.path + DirSep + "written.txt"));
+
+        # a read-only connection must reject writes but still allow reads
+        makeFile("ro.txt");
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("conn://files-ro/ro.txt"));
+        assertThrows("CONNECTION-ERROR", "read-only", \FileLocationHandler::writeFileToLocation(),
+            ("conn://files-ro/ro.txt", "x"));
+    }
+
+    streamTest() {
+        makeFile("stream.txt");
+
+        StreamReader sr = FileLocationHandler::getStreamReaderFromLocation(p("stream.txt"));
+        assertEq(FileContents, sr.readString());
+
+        InputStream is = FileLocationHandler::getBinaryStreamFromLocation(p("stream.txt"));
+        assertEq(binary(FileContents), (new StreamReader(is)).readBinary());
+
+        OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation(p("streamed-out.txt"));
+        os.write(binary(FileContents));
+        os.close();
+        os.waitForIo();
+        assertEq(FileContents, ReadOnlyFile::readTextFile(tmp.path + DirSep + "streamed-out.txt"));
+    }
+
+    pathConfinementTest() {
+        # a file that exists outside the connection root; the traversal attempts below must not reach it
+        TmpFile outside("flh-outside-", ".txt");
+        {
+            File f();
+            f.open2(outside.path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("SECRET OUTSIDE CONTENT\n");
+        }
+
+        list<string> attacks = (
+            "conn://files/../../etc/passwd",
+            "conn://files/a/../../../x",
+            "conn://files/..",
+            "conn://files/sub/../..",
+            "conn://files/./../escape.txt",
+        );
+        foreach string loc in (attacks) {
+            hash<ExceptionInfo> ex = getError(\FileLocationHandler::getTextFileFromLocation(), (loc,));
+            assertEq("LOCATION-ERROR", ex.err, sprintf("read %y must be rejected", loc));
+            assertRegex("outside the connection", ex.desc, sprintf("read %y error text", loc));
+            # the error names the offending relative path as supplied by the caller, but must not disclose the
+            # resolved absolute path or the connection's base directory
+            assertNRegex(tmp.path, ex.desc, sprintf("read %y must not disclose the connection base", loc));
+        }
+
+        # writes must be confined identically, and must not create anything outside the root
+        foreach string loc in (attacks) {
+            assertThrows("LOCATION-ERROR", "outside the connection", \FileLocationHandler::writeFileToLocation(),
+                (loc, "x"), sprintf("write %y must be rejected", loc));
+        }
+
+        # an absolute path naming the outside file is treated as relative to the root and must not read it
+        hash<ExceptionInfo> ex = getError(\FileLocationHandler::getTextFileFromLocation(),
+            ("conn://files" + outside.path,));
+        assertNRegex("SECRET OUTSIDE CONTENT", ex.desc);
+        assertEq("SECRET OUTSIDE CONTENT\n", ReadOnlyFile::readTextFile(outside.path),
+            "the outside file must be untouched");
+    }
+
+    credentialHygieneTest() {
+        # every failure path on a connection whose URL carries a password must not leak it
+        list<string> locations = (
+            "conn://ftp-secret/../../escape.txt",
+            "conn://ftp-secret/",
+            "conn://ftp-secret/file.txt{no_such_option=1}",
+        );
+        foreach string loc in (locations) {
+            hash<ExceptionInfo> ex = getError(\FileLocationHandler::getTextFileFromLocation(), (loc,));
+            assertEq("LOCATION-ERROR", ex.err, sprintf("%y must fail", loc));
+            assertNRegex(PasswordMarker, ex.desc, sprintf("%y desc must not contain the password", loc));
+            assertNRegex(PasswordMarker, sprintf("%y", ex.arg),
+                sprintf("%y arg must not contain the password", loc));
+            assertNRegex(PasswordMarker, get_exception_string(ex),
+                sprintf("%y exception string must not contain the password", loc));
+        }
+    }
+
+    connectionFilterTest() {
+        makeFile("filtered.txt");
+        # no filter: allowed
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation(p("filtered.txt")));
+
+        on_exit FileLocationHandler::setConnectionFilter();
+
+        # deny everything
+        FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) { return False; });
+        assertThrows("LOCATION-ERROR", "may not be used", \FileLocationHandler::getTextFileFromLocation(),
+            p("filtered.txt"));
+        assertThrows("LOCATION-ERROR", "may not be used", \FileLocationHandler::writeFileToLocation(),
+            (p("filtered.txt"), "x"));
+
+        # read-only: the write flag must be passed through correctly
+        FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) { return !write; });
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation(p("filtered.txt")));
+        assertThrows("LOCATION-ERROR", "may not be used", \FileLocationHandler::writeFileToLocation(),
+            (p("filtered.txt"), "x"));
+
+        # the connection name must reach the filter
+        list<string> seen();
+        FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
+            seen += name;
+            return True;
+        });
+        FileLocationHandler::getTextFileFromLocation(p("filtered.txt"));
+        assertEq(("files",), seen);
+
+        # removing the filter restores access
+        FileLocationHandler::setConnectionFilter();
+        assertEq(NOTHING, FileLocationHandler::getConnectionFilter());
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation(p("filtered.txt")));
+    }
+
+    #! Verifies the redirect hashes built by each connection class
+    /** The FTP and HTTP handlers both build their target URL as <tt>scheme + "://" + location</tt> and then call
+        parse_url() on the result, so the location a connection returns must be a bare authority plus path.  These
+        assertions check that shape directly; the read/write cases above cannot cover it, as they would need a live
+        FTP or HTTP server.
+    */
+    redirectConstructionTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule(getModulePath("ConnectionProvider"));
+        p.parse("*hash<auto> sub redirect(string cls, hash<auto> conf, string path, bool write) {"
+            "    return Class::forName(cls).newObject(conf).getFileLocationRedirect(path, write);"
+            "}", "");
+
+        # FTP: credentials in the URL are preserved and the path is appended to the connection's base path
+        *hash<auto> r = p.callFunction("redirect", "ConnectionProvider::FtpConnection", {
+            "name": "ftp1",
+            "desc": "d",
+            "url": "ftp://user:pw@ftp.example.com:2121/base",
+        }, "sub/file.txt", False);
+        assertEq("ftp", r.scheme);
+        assertEq("user:pw@ftp.example.com:2121/base/sub/file.txt", r.location);
+        # the composed URL must parse back to the same components
+        hash<UrlInfo> u = parse_url("ftp://" + r.location);
+        assertEq("ftp.example.com", u.host);
+        assertEq(2121, u.port);
+        assertEq("user", u.username);
+        assertEq("pw", u.password);
+        assertEq("/base/sub/file.txt", u.path);
+
+        # ftps is preserved as the scheme
+        r = p.callFunction("redirect", "ConnectionProvider::FtpConnection", {
+            "name": "ftp2",
+            "desc": "d",
+            "url": "ftps://ftp.example.com/base",
+        }, "f.txt", False);
+        assertEq("ftps", r.scheme);
+        assertEq("ftp.example.com/base/f.txt", r.location);
+
+        # credentials supplied as options rather than in the URL are merged in
+        r = p.callFunction("redirect", "ConnectionProvider::FtpConnection", {
+            "name": "ftp3",
+            "desc": "d",
+            "url": "ftp://ftp.example.com/base",
+            "opts": {"username": "u2", "password": "p2"},
+        }, "f.txt", False);
+        assertEq("u2:p2@ftp.example.com/base/f.txt", r.location);
+
+        # HTTP: the scheme is preserved and connection options the handler understands are forwarded
+        r = p.callFunction("redirect", "ConnectionProvider::HttpConnection", {
+            "name": "http1",
+            "desc": "d",
+            "url": "https://www.example.com/api",
+            "opts": {"timeout": 42s, "ssl_verify_cert": True},
+        }, "docs/file.txt", False);
+        assertEq("https", r.scheme);
+        assertEq("www.example.com/api/docs/file.txt", r.location);
+        assertEq(True, r.opts.ssl_verify_cert);
+        assertTrue(exists r.opts.timeout);
+        # options that are not set must not be forwarded as no-value keys
+        assertFalse(r.opts.hasKey("proxy"));
+
+        # path confinement applies to every connection type, not just the filesystem
+        assertThrows("LOCATION-ERROR", "outside the connection", \p.callFunction(),
+            ("redirect", "ConnectionProvider::FtpConnection", {
+                "name": "ftp4", "desc": "d", "url": "ftp://ftp.example.com/base",
+            }, "../../escape.txt", False));
+        assertThrows("LOCATION-ERROR", "outside the connection", \p.callFunction(),
+            ("redirect", "ConnectionProvider::HttpConnection", {
+                "name": "http2", "desc": "d", "url": "https://www.example.com/api",
+            }, "../../escape.txt", False));
+    }
+
+    negativeTest() {
+        # unknown connection
+        hash<ExceptionInfo> ex = getError(\FileLocationHandler::getTextFileFromLocation(),
+            ("conn://no-such-connection/x.txt",));
+        assertEq("LOCATION-ERROR", ex.err);
+        assertRegex("no-such-connection", ex.desc);
+
+        # a connection with no file location support at all
+        ex = getError(\FileLocationHandler::getTextFileFromLocation(), ("conn://no-files/x.txt",));
+        assertEq("LOCATION-ERROR", ex.err);
+        assertRegex("does not support file locations", ex.desc);
+        assertRegex("nofiles", ex.desc, "the error must name the connection type");
+
+        # a missing file below the root produces the target handler's error, not a location error
+        assertThrows("FILE-OPEN2-ERROR", \FileLocationHandler::getTextFileFromLocation(), p("no-such-file.txt"));
+
+        # empty location strings are still rejected by the framework
+        assertThrows("LOCATION-ERROR", "invalid empty location",
+            \FileLocationHandler::getTextFileFromLocation(), "");
+    }
+
+    #! Runs the given call and returns the exception it raises
+    private hash<ExceptionInfo> getError(code call, *softlist<auto> args) {
+        try {
+            call_function_args(call, args);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "expected an exception but none was raised";
+    }
+}
