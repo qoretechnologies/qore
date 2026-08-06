@@ -687,6 +687,49 @@ module DropboxDataProvider {
             ),
         });
 
+        # NOTE: these share their providers with the "list-folder" and "search" API actions.  Each API action
+        # answers one page and hands back a cursor, which is what a single call wants; these read the same
+        # source as records and walk every page.  Every option exists in the provider's SearchOptions, which is
+        # what DPAT_FIND requires
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/list-folder",
+            "action": "find-files",
+            "display_name": "Find Files in a Folder",
+            "short_desc": "Read the contents of a folder as records",
+            "desc": "Reads the contents of a folder as a stream of records.\n\n"
+                "Unlike `list-folder`, which answers one page and leaves the cursor to the caller, this walks "
+                "the whole folder: pages are fetched as they are reached.\n\n"
+                "Set `recursive` to include subfolders.  Entries that describe a deletion are not returned, "
+                "since they are not contents of the folder.",
+            "action_code": DPAT_FIND,
+            "groups": ("Files",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxListFolderDataProvider::SearchOptions, {"loc": "options"},
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/search",
+            "action": "find-by-search",
+            "display_name": "Find Files by Search",
+            "short_desc": "Search for files and read the results as records",
+            "desc": "Searches for files by name and, for supported file types, by content, and reads the "
+                "results as a stream of records.\n\n"
+                "Unlike `search`, which answers one page and leaves the cursor to the caller, this walks every "
+                "page of matches.\n\n"
+                "Dropbox indexes content asynchronously, so a file uploaded moments earlier may not be found "
+                "yet; read the folder instead when the result has to reflect the current state exactly.",
+            "action_code": DPAT_FIND,
+            "groups": ("Files",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxSearchDataProvider::SearchOptions, {"loc": "options"},
+            ),
+        });
+
         # --- Event actions ---
 
         # NOTE: all three read Dropbox's delta feed rather than re-listing the folder, so the cost of a poll

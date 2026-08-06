@@ -815,7 +815,23 @@ AwsRestClient rest({
 
         @note the \c data option is always set to \c "json"
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(opts + {"data": "json"}, do_not_connect) {
+    /** @note \c data defaults to \c "json" but is no longer forced: it was applied on the right-hand side of
+        the option hash, so it overrode whatever the caller asked for.  S3 sends and receives raw bytes and
+        asks for \c "bin"; with the option overridden, every upload body was serialized into a JSON document
+        and objects were stored as a quoted base64 string rather than as their content.
+
+        @note For S3, \c pre_encoded_urls is forced on and is not a user option.  S3 URIs are URI-encoded
+        exactly once and the signature covers the target as it is built, so the target must reach the server
+        unchanged; without this the HTTP client percent-encodes the path again on the way out, turning a
+        signed \c %%2F into \c %%252F on the wire, and every request whose path or query carries a reserved
+        character is rejected with \c SignatureDoesNotMatch.
+
+        It is applied only for S3.  Every other AWS service URI-encodes twice and its callers pass unencoded
+        paths, so their existing behavior is unchanged.
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient({"data": "json"} + opts
+                + (opts.aws_s3 ? {"pre_encoded_urls": True} : {}), do_not_connect) {
         # AWS does not support basic authentication
         hash<UrlInfo> url_info = parse_url(opts.url);
         if (url_info{"username", "password"}) {
@@ -1106,16 +1122,21 @@ AwsRestClient rest({
         # 2: canonical URI parameter
         string uri = uri_info.method ?? "/";
 
-        # normalize the path if not an S3 request
+        # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here.
+        #
+        # S3 URI-encodes the canonical path once, every other service twice
+        # (https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html).  An S3 caller
+        # builds an already-encoded path -- it has to, since a key may contain any character and "/" separates
+        # path segments rather than being data -- and "pre_encoded_urls" sends that path verbatim.  Encoding it
+        # again here would sign "%2520" while the wire carried "%20", which AWS reports as
+        # SignatureDoesNotMatch: that is how an object key containing a space and a listing continuation token
+        # containing "/" both failed.
+        #
+        # Other services keep the previous behavior exactly: their callers pass unencoded paths, which are
+        # normalized and then encoded twice.
         if (!aws_s3) {
             uri = normalize_dir_unix(uri, "/");
-        }
-
-        # URI-encode the path
-        uri = encode_url(uri, False);
-        # non-AWS-S3 requests must be URI-encoded twice
-        # https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
-        if (!aws_s3) {
+            uri = encode_url(uri, False);
             uri = encode_url(uri, False);
         }
         # add to canonical string
@@ -1402,7 +1423,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(AwsRestClientIo::stripAwsOptions(opts) + {"data": "json"}, shared_mgr) {
+            : RestClientIo({"data": "json"} + AwsRestClientIo::stripAwsOptions(opts), shared_mgr) {
         hash<UrlInfo> url_info = parse_url(opts.url);
         if (url_info{"username", "password"}) {
             throw "AWSRESTCLIENT-ERROR", sprintf("AWS URL must not contain a username or password; URL: %y",
@@ -1645,11 +1666,16 @@ public class AwsS3RestConnectionBase inherits AwsRestConnection {
         options: these classes remove both from their declared option set so that neither appears as something a
         user may set, and a connection option that is not declared is rejected as unknown when the connection is
         validated
+
+        @note \c data is pinned to \c "bin" for the same reason.  S3 sends and receives object content as raw
+        bytes; with the client left on its JSON default, every upload body was serialized into a JSON document
+        and objects were stored as a quoted base64 string rather than as their content
     */
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         return AwsRestConnection::getConnectionOptions(rtopts) + {
             "aws_service": AwsService,
             "aws_s3": True,
+            "data": "bin",
         };
     }
 }

@@ -139,6 +139,8 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         addTestCase("encryption options", \encryptionOptionsTest());
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live presigned url", \livePresignedUrlTest());
+        addTestCase("live object round trip", \liveObjectRoundTripTest());
+        addTestCase("live record iterator", \liveRecordIteratorTest());
 
         set_return_value(main());
     }
@@ -190,6 +192,19 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         AwsRestClient client = cast<AwsRestClient>(conn.get(False));
         assertEq("s3", client.getAwsService());
         assertEq("eu-central-1", client.getAwsRegion());
+
+        # Regression: the request target must reach the server exactly as signed.  Without this the HTTP client
+        # percent-encodes the path again on the way out, turning a signed "%2F" into "%252F" on the wire, and
+        # every request carrying a reserved character -- an object key with a space, a listing continuation
+        # token -- was rejected as SignatureDoesNotMatch
+        assertEq(True, client.getPreEncodedUrls(), "S3 request targets are sent pre-encoded");
+
+        # Regression: "data" must be "bin".  S3 object content is raw bytes, and with the client left on its
+        # JSON default every upload body was serialized into a JSON document, so objects were stored as a
+        # quoted base64 string rather than as their content -- reads were unaffected, so only the bytes were
+        # wrong and nothing looked broken
+        assertEq("bin", copts.data, "S3 sends and receives raw bytes rather than JSON");
+
 
         # the application file API and the data provider must agree that this connection serves S3
         assertEq(False, conn.supportsFileLocations(),
@@ -312,6 +327,23 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
                 assertTrue(exists dp.getEventTypes(){action.action_val},
                     sprintf("event action %y action_val %y is an event the provider raises", action.action,
                         action.action_val));
+                continue;
+            }
+
+            if (action.action_code == DPAT_FIND) {
+                # a find reads the provider as a record source, so it must have one, and every option it
+                # advertises must exist in the provider's own search options -- an option the provider does
+                # not declare is rejected as unknown the moment the action is used
+                assertTrue(dp.getInfo().supports_read,
+                    sprintf("find action %y has a record source", action.action));
+                assertTrue(exists dp.getRecordType(),
+                    sprintf("find action %y describes its records", action.action));
+                hash<string, bool> search_opts = map {$1: True}, keys dp.getInfo().search_options;
+                foreach string opt in (keys action.options) {
+                    assertTrue(search_opts{opt},
+                        sprintf("find action %y option %y exists in the provider's search options",
+                            action.action, opt));
+                }
                 continue;
             }
 
@@ -842,6 +874,125 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         string dstatus = s2.recv(64, 30s).toString();
         assertRegex("^HTTP/1\\.[01] 40[0-9] ", dstatus,
             sprintf("a URL signed for GET is refused for DELETE: %y", (dstatus =~ x/^([^\r\n]+)/)[0]));
+    }
+
+    #! Writes an object and reads it back, which is the only way to see that it was stored intact
+    /** Regression: nothing here ever round-tripped content.  The client's `data` option was applied so that it
+        overrode whatever the caller asked for, leaving it on the JSON default, so **every object written
+        through this module was serialized into a JSON document and stored as a quoted base64 string** rather
+        than as its content.  Reads were unaffected, so a listing looked healthy and only the bytes were wrong.
+
+        The key deliberately contains a space, a `+`, and an `&`.  All three are legal in an S3 key and all
+        three must be percent-encoded in the request target; the signature covers that target, so an encoding
+        that does not survive the trip to the wire fails as `SignatureDoesNotMatch`.
+
+        This writes to the account under test; exclude it with `--exclude="live object round trip"`.
+    */
+    liveObjectRoundTripTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string bucket = getLiveBucket(prov);
+        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string key = sprintf("qore test %s/a+b c&d.txt", stamp);
+        string content = "written by the Qore AwsS3DataProvider test suite";
+
+        prov.getChildProviderEx("create-text-file").doRequest({
+            "bucket": bucket,
+            "object_key": key,
+            "content": content,
+        });
+        on_exit {
+            prov.getChildProviderEx("delete-object").doRequest({"bucket": bucket, "object_key": key});
+        }
+
+        hash<auto> got = prov.getChildProviderEx("download-file").doRequest({
+            "bucket": bucket,
+            "object_key": key,
+        });
+        assertEq(content, parse_base64_string(got.content).toString(),
+            "the object holds exactly what was written");
+        assertEq(content.size(), got.size, "the stored size matches the content, not a serialized form of it");
+
+        # a binary upload must survive too: a JSON round trip would corrupt any byte that is not valid UTF-8
+        string bin_key = sprintf("qore test %s/binary.dat", stamp);
+        binary payload = binary(<0001020380818283fffefdfc>);
+        prov.getChildProviderEx("upload-file").doRequest({
+            "bucket": bucket,
+            "object_key": bin_key,
+            "file": {
+                "name": "binary.dat",
+                "content": make_base64_string(payload),
+                "mime_type": "application/octet-stream",
+            },
+        });
+        on_exit {
+            prov.getChildProviderEx("delete-object").doRequest({"bucket": bucket, "object_key": bin_key});
+        }
+        hash<auto> gotbin = prov.getChildProviderEx("download-file").doRequest({
+            "bucket": bucket,
+            "object_key": bin_key,
+        });
+        assertEq(payload, parse_base64_string(gotbin.content), "binary content survives the round trip");
+
+        # the key with reserved characters must also be findable by a listing under its prefix
+        hash<auto> listing = prov.getChildProviderEx("list-objects").doRequest({
+            "bucket": bucket,
+            "prefix": sprintf("qore test %s/", stamp),
+        });
+        assertEq(2, listing.objects.size(), "both objects are listed under the prefix");
+    }
+
+    #! Reads a bucket as a record source, across a page boundary
+    /** The point of the record source is that the caller never sees the pagination, so the test forces more
+        than one page: `page_size` is set to `1`, which makes every object its own page.
+
+        Regression: a continuation token contains characters needing percent-encoding, and the request target
+        was being encoded a second time on the way to the wire, so the signature never matched and **no second
+        page could ever be fetched** -- neither here nor through the `list-objects` action's own
+        `continuation_token`.
+
+        This only reads; it is safe against any account.
+    */
+    liveRecordIteratorTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string bucket = getLiveBucket(prov);
+        AbstractDataProvider dp = prov.getChildProviderEx("list-objects");
+
+        assertEq(True, dp.getInfo().supports_read, "the listing is also a record source");
+        assertEq(True, dp.getInfo().has_record);
+        assertTrue(exists dp.getRecordType().key, "the record type describes the object key");
+
+        # one object per page, so anything past the first crosses a page boundary
+        AbstractDataProviderRecordIterator i = dp.searchRecords(NOTHING, {
+            "bucket": bucket,
+            "page_size": 1,
+        });
+        list<auto> keys_read = ();
+        while (i.next()) {
+            keys_read += i.getValue().key;
+        }
+
+        # the same objects must be reachable through the action, which reads one page at a time
+        hash<auto> one_page = dp.doRequest({"bucket": bucket, "max_keys": MaxKeys});
+        list<auto> action_keys = map $1.key, one_page.objects;
+        if (!one_page.truncated) {
+            assertEq(action_keys, keys_read,
+                "the record source returns the same objects as the action, across pages");
+        } else {
+            # a bucket larger than one page: the record source must have read past the action's first page
+            assertTrue(keys_read.size() >= action_keys.size(),
+                "the record source read at least as much as one page of the action");
+        }
+        if (m_options.verbose > 0) {
+            printf("record source read %d objects from %y\n", keys_read.size(), bucket);
+        }
     }
 
     #! Returns a bucket from the live account to exercise object operations against

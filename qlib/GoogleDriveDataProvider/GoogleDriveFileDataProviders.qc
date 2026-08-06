@@ -27,11 +27,100 @@ public namespace GoogleDriveDataProvider {
 #! Lists files and folders
 public class GoogleDriveListFilesDataProvider inherits GoogleDriveDataProviderBase {
     public {
+        #! Search options for reading Drive as a record source
+        /** These are the arguments Drive can apply itself.  Drive has a real query language, so most of the
+            narrowing happens at the server; a \c where clause beyond what these express is evaluated over the
+            records as they arrive.
+        */
+        const SearchOptions = {
+            "folder_id": <DataProviderOptionInfo>{
+                "display_name": "Folder",
+                "short_desc": "Read only files held in this folder",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Read only files held directly in this folder; if not set, files anywhere the "
+                    "connection can see are read",
+                "ref_data": "folders",
+                "preselected": True,
+            },
+            "name": <DataProviderOptionInfo>{
+                "display_name": "Name",
+                "short_desc": "Match files whose name contains this text",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Match files whose name contains this text",
+                "preselected": True,
+            },
+            "mime_type": <DataProviderOptionInfo>{
+                "display_name": "MIME Type",
+                "short_desc": "Match only files of this MIME type",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Match only files of this MIME type; use "
+                    "`application/vnd.google-apps.folder` to read folders",
+            },
+            "include_trashed": <DataProviderOptionInfo>{
+                "display_name": "Include Trashed",
+                "short_desc": "Include files that are in the trash",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "desc": "Include files that are in the trash; excluded by default",
+                "default_value": False,
+            },
+            "custom_query": <DataProviderOptionInfo>{
+                "display_name": "Custom Query",
+                "short_desc": "A raw Drive query expression",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "A raw Drive query expression, used instead of the other matching options when set; "
+                    "see the Drive API `files.list` documentation for the syntax",
+                "example_value": "modifiedTime > '2026-01-01T00:00:00' and trashed = false",
+            },
+            "order_by": <DataProviderOptionInfo>{
+                "display_name": "Order By",
+                "short_desc": "The sort order for results",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "The sort order for results, as a Drive `orderBy` expression",
+                "example_value": "modifiedTime desc",
+            },
+            "drive_id": <DataProviderOptionInfo>{
+                "display_name": "Shared Drive",
+                "short_desc": "Read this shared drive rather than My Drive",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Read this shared drive (formerly a \"Team Drive\") rather than the user's own `My "
+                    "Drive`",
+                "ref_data": "shared_drives",
+            },
+            "corpora": <DataProviderOptionInfo>{
+                "display_name": "Collection",
+                "short_desc": "The collection of files to search",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "The collection of files to search; if not set, `drive` is used when `drive_id` is set",
+                "allowed_values": CorporaValues,
+            },
+            "include_shared_drives": <DataProviderOptionInfo>{
+                "display_name": "Include Shared Drives",
+                "short_desc": "Include files held on shared drives",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "desc": "Include files held on shared drives in the results",
+                "default_value": True,
+            },
+            "page_size": <DataProviderOptionInfo>{
+                "display_name": "Page Size",
+                "short_desc": "How many files to fetch per request",
+                "type": AbstractDataProviderTypeMap."*int",
+                "desc": "How many files to fetch per request; Drive caps this at `1000`.\n\n"
+                    "This affects how the walk is split into requests, not how many records are returned - "
+                    "the iterator fetches further pages as they are needed",
+                "default_value": DefaultPageSize,
+            },
+        };
+
         const ProviderInfo = <DataProviderInfo>{
             "name": "list-files",
             "type": "GoogleDriveListFilesDataProvider",
             "constructor_options": ConstructorOptions,
             "supports_request": True,
+            # the action and the record source are the same provider: the action answers one page with an
+            # explicit page token, while the record source walks the whole result itself
+            "supports_read": True,
+            "has_record": True,
+            "search_options": SearchOptions,
         };
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
@@ -77,6 +166,47 @@ public class GoogleDriveListFilesDataProvider inherits GoogleDriveDataProviderBa
             "files": files,
             "next_page_token": resp.body.nextPageToken,
         };
+    }
+
+    #! Returns the record type for a file listing
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return GoogleDriveFileDataType.getFields();
+    }
+
+    #! Reads Drive as a record source, walking the whole result rather than one page of it
+    /** @param where_cond any further conditions, evaluated over the records as they arrive
+        @param search_options the search options
+
+        @return an iterator over every matching file
+    */
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        hash<auto> req = search_options ?? {};
+        int page_size = req.page_size ?? DefaultPageSize;
+        if (page_size > MaxPageSize) {
+            page_size = MaxPageSize;
+        }
+        string base = sprintf("/drive/v3/files?pageSize=%d&fields=%s", page_size,
+            encode_url("nextPageToken,files(" + GoogleDriveDataProviderBase::getFileFields() + ")", True));
+        string q = GoogleDriveListFilesDataProvider::buildQuery(req);
+        if (q.val()) {
+            base += "&q=" + encode_url(q, True);
+        }
+        if (req.order_by.val()) {
+            base += "&orderBy=" + encode_url(req.order_by, True);
+        }
+        base += GoogleDriveListFilesDataProvider::getSharedDriveQuery(req);
+
+        # the request plumbing is private to the provider hierarchy, so the iterator is given a closure
+        code<hash<auto>(*string)> fetch = hash<auto> sub (*string page_token) {
+            string path = base;
+            if (page_token.val()) {
+                path += "&pageToken=" + encode_url(page_token, True);
+            }
+            return doRestCommand("GET", path);
+        };
+        return new DefaultRecordIterator<hash<auto>>(new GoogleDriveFilePageIterator(fetch), where_cond,
+            search_options, getRecordTypeImpl(search_options));
     }
 
     #! Builds the shared-drive query arguments for a list request

@@ -532,6 +532,31 @@ module GoogleDriveDataProvider {
             ),
         });
 
+        # NOTE: the same provider serves both this and the "list-files" API action.  The API action answers
+        # one page and hands back a page token, which is what a single call wants; this reads Drive as a record
+        # source and walks the whole result itself, which is what a pipeline wants.  Every option here exists
+        # in the provider's SearchOptions, which is what DPAT_FIND requires
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-files",
+            "action": "find-files",
+            "display_name": "Find Files",
+            "short_desc": "Search Drive and read the results as records",
+            "desc": "Searches Drive and reads the results as a stream of records.\n\n"
+                "Unlike `list-files`, which answers one page and leaves the page token to the caller, this "
+                "walks the whole result: pages are fetched as they are reached, so a drive holding more files "
+                "than fit in one page is read without the caller knowing how Drive paginates.\n\n"
+                "Narrow the search with `folder_id`, `name`, or `mime_type`; Drive applies these itself, so "
+                "they reduce what is transferred rather than only what is examined.  Use `custom_query` for "
+                "anything the other options cannot express.",
+            "action_code": DPAT_FIND,
+            "groups": ("Files",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListFilesDataProvider::SearchOptions, {"loc": "options"},
+            ),
+        });
+
         # --- Event actions ---
 
         # NOTE: both watches read Drive's own change feed rather than polling a listing, so the cost does not

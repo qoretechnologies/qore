@@ -84,6 +84,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
         addTestCase("live folder operations", \liveFolderOperationsTest());
         addTestCase("live extended operations", \liveExtendedOperationsTest());
+        addTestCase("live record iterator", \liveRecordIteratorTest());
 
         set_return_value(main());
     }
@@ -157,6 +158,23 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
                 assertTrue(exists dp.getEventTypes(){action.action_val},
                     sprintf("event action %y action_val %y is an event the provider raises", action.action,
                         action.action_val));
+                continue;
+            }
+
+            if (action.action_code == DPAT_FIND) {
+                # a find reads the provider as a record source, so it must have one, and every option it
+                # advertises must exist in the provider's own search options -- an option the provider does
+                # not declare is rejected as unknown the moment the action is used
+                assertTrue(dp.getInfo().supports_read,
+                    sprintf("find action %y has a record source", action.action));
+                assertTrue(exists dp.getRecordType(),
+                    sprintf("find action %y describes its records", action.action));
+                hash<string, bool> search_opts = map {$1: True}, keys dp.getInfo().search_options;
+                foreach string opt in (keys action.options) {
+                    assertTrue(search_opts{opt},
+                        sprintf("find action %y option %y exists in the provider's search options",
+                            action.action, opt));
+                }
                 continue;
             }
 
@@ -429,6 +447,37 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             foreach auto e in (resp.files) {
                 printf("  %y\n", e.name);
             }
+        }
+    }
+
+    #! Reads Drive as a record source, across page boundaries
+    /** The point of the record source is that the caller never sees the pagination, so the test forces more
+        than one page: `page_size` is set to `2`, which makes anything past the second record cross a boundary.
+
+        This only reads; it is safe against any account.
+    */
+    liveRecordIteratorTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider dp = conn.getDataProvider().getChildProviderEx("list-files");
+        assertEq(True, dp.getInfo().supports_read, "the listing is also a record source");
+        assertTrue(exists dp.getRecordType().id, "the record type describes the file ID");
+
+        AbstractDataProviderRecordIterator i = dp.searchRecords(NOTHING, {"page_size": 2});
+        list<auto> ids = ();
+        while (i.next() && ids.size() < 7) {
+            ids += i.getValue().id;
+        }
+        if (!ids) {
+            testSkip("the account holds no files to read");
+            return;
+        }
+        # each ID appears once: a page boundary handled wrongly repeats the last record of a page or skips it
+        assertEq(ids.size(), (map {$1: True}, ids).size(), "no record is returned twice across pages");
+        if (ids.size() > 2) {
+            assertTrue(True, sprintf("the walk crossed %d page boundaries", (ids.size() - 1) / 2));
         }
     }
 

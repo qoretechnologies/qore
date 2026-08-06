@@ -1009,4 +1009,51 @@ public class AwsS3ListObjectVersionsResponseDataType inherits HashDataType {
 }
 
 public const AwsS3ListObjectVersionsResponseDataType = new AwsS3ListObjectVersionsResponseDataType();
+
+#! Record type describing one object in a bucket listing
+public class AwsS3ObjectRecordDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "key": {
+                "display_name": "Object Key",
+                "short_desc": "The full key of the object",
+                "desc": "The full key of the object within the bucket",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "size": {
+                "display_name": "Size",
+                "short_desc": "The object size in bytes",
+                "desc": "The size of the object in bytes",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "last_modified": {
+                "display_name": "Last Modified",
+                "short_desc": "When the object was last modified",
+                "desc": "When the object was last modified",
+                "type": AbstractDataProviderTypeMap."*date",
+            },
+            "etag": {
+                "display_name": "ETag",
+                "short_desc": "The entity tag of the object content",
+                "desc": "The entity tag of the object content, without the quotes Amazon S3 wraps it in",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "storage_class": {
+                "display_name": "Storage Class",
+                "short_desc": "The storage class of the object",
+                "desc": "The storage class the object is stored under",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "bucket": {
+                "display_name": "Bucket",
+                "short_desc": "The bucket holding the object",
+                "desc": "The bucket holding the object",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3ObjectRecordDataType = new AwsS3ObjectRecordDataType();
 }

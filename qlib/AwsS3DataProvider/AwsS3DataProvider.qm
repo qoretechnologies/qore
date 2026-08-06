@@ -462,6 +462,29 @@ module AwsS3DataProvider {
             ),
         });
 
+        # NOTE: the same provider serves both this and the "list-objects" API action.  The API action answers
+        # one page and hands back a continuation token, which is what a single call wants; this reads the
+        # bucket as a record source and walks the whole listing itself, which is what a pipeline wants
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/list-objects",
+            "action": "find-objects",
+            "display_name": "Find Objects",
+            "short_desc": "Read the objects in a bucket as records",
+            "desc": "Reads the objects in a bucket as a stream of records.\n\n"
+                "Unlike `list-objects`, which answers one page and leaves the continuation token to the "
+                "caller, this walks the whole listing: pages are fetched as they are reached, so a bucket "
+                "holding more than `1000` keys is read without the caller knowing how Amazon paginates.\n\n"
+                "Narrow the read with `prefix` wherever possible.  It is applied by Amazon S3 rather than "
+                "after the listing arrives, so it reduces what is transferred and paid for.",
+            "action_code": DPAT_FIND,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectRecordDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectsDataProvider::SearchOptions, {"loc": "options"},
+            ),
+        });
+
         # --- Event actions ---
 
         # NOTE: Amazon S3 has no push notification a client can subscribe to -- bucket notifications are

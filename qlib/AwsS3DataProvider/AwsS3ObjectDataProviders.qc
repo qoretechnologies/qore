@@ -30,11 +30,69 @@ public namespace AwsS3DataProvider {
 */
 public class AwsS3ListObjectsDataProvider inherits AwsS3DataProviderBase {
     public {
+        #! Search options for reading a bucket as a record source
+        /** These are the arguments Amazon S3 can apply itself.  A \c where clause beyond them is evaluated
+            over the records as they arrive, because S3 has no query language to push it into: a listing can be
+            narrowed by key prefix and grouped by delimiter, and that is all.
+        */
+        const SearchOptions = {
+            "bucket": <DataProviderOptionInfo>{
+                "display_name": "Bucket",
+                "short_desc": "The bucket to read",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The bucket to read objects from",
+                "required": True,
+                "example_value": "my-application-data",
+                "ref_data": "buckets",
+                "preselected": True,
+            },
+            "prefix": <DataProviderOptionInfo>{
+                "display_name": "Prefix",
+                "short_desc": "Read only keys beginning with this string",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Read only keys beginning with this string.\n\n"
+                    "The prefix is applied by Amazon S3 rather than after the listing arrives, so it reduces "
+                    "what is transferred and paid for, not only what is examined",
+                "example_value": "invoices/2026/",
+                "preselected": True,
+            },
+            "delimiter": <DataProviderOptionInfo>{
+                "display_name": "Delimiter",
+                "short_desc": "Group keys sharing a prefix up to this character",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Group keys that share a prefix up to the first occurrence of this character; set to "
+                    "`/` together with `prefix` to read one level of a key hierarchy rather than every key "
+                    "below it",
+                "example_value": "/",
+            },
+            "start_after": <DataProviderOptionInfo>{
+                "display_name": "Start After",
+                "short_desc": "Begin reading after this key",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Begin reading after this key; Amazon S3 returns keys in lexical order, so this "
+                    "resumes a walk from where an earlier one stopped",
+            },
+            "page_size": <DataProviderOptionInfo>{
+                "display_name": "Page Size",
+                "short_desc": "How many keys to fetch per request",
+                "type": AbstractDataProviderTypeMap."*int",
+                "desc": "How many keys to fetch per request; Amazon S3 caps this at `1000`.\n\n"
+                    "This affects how the walk is split into requests, not how many records are returned - "
+                    "the iterator fetches further pages as they are needed",
+                "default_value": MaxKeys,
+            },
+        };
+
         const ProviderInfo = <DataProviderInfo>{
             "name": "list-objects",
             "type": "AwsS3ListObjectsDataProvider",
             "constructor_options": ConstructorOptions,
             "supports_request": True,
+            # the action and the record source are the same provider: the action answers one page with an
+            # explicit continuation token, while the record source walks the whole listing itself
+            "supports_read": True,
+            "has_record": True,
+            "search_options": SearchOptions,
         };
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
@@ -104,6 +162,61 @@ public class AwsS3ListObjectsDataProvider inherits AwsS3DataProviderBase {
             "next_continuation_token": doc.NextContinuationToken,
             "key_count": doc.KeyCount.val() ? doc.KeyCount.toInt() : NOTHING,
         };
+    }
+
+    #! Returns the record type for a bucket listing
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return AwsS3ObjectRecordDataType.getFields();
+    }
+
+    #! Reads a bucket as a record source, walking the whole listing rather than one page of it
+    /** The \c list-objects action answers one page and hands back a continuation token, which is right for a
+        single API call; a record source must not make its consumer do the paginating, so this returns an
+        iterator that fetches each page as it is reached.
+
+        @param where_cond any further conditions, evaluated over the records as they arrive
+        @param search_options the search options
+
+        @return an iterator over every matching object
+
+        @throw SEARCH-OPTION-ERROR no bucket was given
+    */
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        *string bucket = search_options.bucket;
+        if (!bucket.val()) {
+            throw "SEARCH-OPTION-ERROR", "cannot read objects: no bucket was given; set the 'bucket' search "
+                "option to the bucket to read";
+        }
+        checkAddressing(bucket);
+
+        int page_size = search_options.page_size ?? MaxKeys;
+        if (page_size > MaxKeys) {
+            page_size = MaxKeys;
+        }
+        # NOTE: "hash<auto!>"; the string options below cannot go into an int-narrowed literal
+        hash<auto!> query = {
+            "list-type": 2,
+            "max-keys": page_size,
+        };
+        if (search_options.prefix.val()) {
+            query.prefix = search_options.prefix;
+        }
+        if (search_options.delimiter.val()) {
+            query.delimiter = search_options.delimiter;
+        }
+        if (search_options.start_after.val()) {
+            query."start-after" = search_options.start_after;
+        }
+
+        # the request plumbing is private to the provider hierarchy, so the iterator is given a closure
+        # rather than the provider itself
+        code<hash<auto>(hash<auto> q)> fetch = hash<auto> sub (hash<auto> q) {
+            return doS3Request("GET", bucket, NOTHING, q);
+        };
+        return new DefaultRecordIterator<hash<auto>>(
+            new AwsS3ObjectPageIterator(fetch, bucket, query), where_cond, search_options,
+            getRecordTypeImpl(search_options));
     }
 
     #! Removes the quotes S3 wraps around entity tags

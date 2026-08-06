@@ -265,6 +265,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         addTestCase("live account info", \liveAccountInfoTest());
         addTestCase("live watch cycle", \liveWatchCycleTest());
         addTestCase("live bulk operations", \liveBulkOperationsTest());
+        addTestCase("live record iterator", \liveRecordIteratorTest());
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
 
         set_return_value(main());
@@ -361,6 +362,22 @@ public class DropboxDataProviderTest inherits QUnit::Test {
                         action.action_val));
                 continue;
             }
+            if (action.action_code == DPAT_FIND) {
+                # a find reads the provider as a record source, so it must have one, and every option it
+                # advertises must exist in the provider's own search options -- an option the provider does
+                # not declare is rejected as unknown the moment the action is used
+                assertTrue(adp.getInfo().supports_read,
+                    sprintf("find action %y has a record source", action.action));
+                assertTrue(exists adp.getRecordType(),
+                    sprintf("find action %y describes its records", action.action));
+                hash<string, bool> search_opts = map {$1: True}, keys adp.getInfo().search_options;
+                foreach string opt in (keys action.options) {
+                    assertTrue(search_opts{opt},
+                        sprintf("find action %y option %y exists in the provider's search options",
+                            action.action, opt));
+                }
+                continue;
+            }
             assertEq(DPAT_API, action.action_code, sprintf("action %y is an API action", action.action));
 
             # an action whose request type has fields must advertise options for them, or it renders with no
@@ -374,7 +391,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
                 action.action));
             assertTrue(action.groups.size() > 0, sprintf("action %y has a group", action.action));
         }
-        assertEq(31, actions, "every action is registered");
+        assertEq(33, actions, "every action is registered");
         assertEq((), keys (children - (keys seen)), "every child has a registered action");
     }
 
@@ -1643,7 +1660,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         # a search cursor carries the query and every option it was made with, so continuing sends it alone
         rest.setResponse({"matches": (), "has_more": False});
         prov.getChildProviderEx("search").doRequest({"query": "x", "cursor": "c1"});
-        assertEq("/2/files/search_v2/continue", rest.last().path, "a cursor continues the previous search");
+        assertEq("/2/files/search/continue_v2", rest.last().path, "a cursor continues the previous search");
         assertEq({"cursor": "c1"}, rest.last().body, "only the cursor is sent");
         rest.setResponse({"matches": (), "has_more": False});
         prov.getChildProviderEx("search").doRequest({"query": "x"});
@@ -1803,6 +1820,59 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         # the new-file watch must not report the same change again: it already knows the file
         w.poll();
         assertEq(before, obs.events.size(), "a change to a known file is not reported as a new file");
+    }
+
+    #! Reads a folder and a search as record sources, across page boundaries
+    /** `page_size` is set to `1`, so every record is its own page and any record past the first crosses a
+        boundary.  The search continuation is the part worth exercising live: Dropbox names it
+        `/2/files/search/continue_v2` rather than `/2/files/search_v2/continue`, and the obvious spelling
+        answers with an HTML 404 page rather than an API error.
+
+        This only reads; it is safe against any account.
+    */
+    liveRecordIteratorTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        AbstractDataProvider folder = prov.getChildProviderEx("list-folder");
+        assertEq(True, folder.getInfo().supports_read, "the folder listing is also a record source");
+        assertTrue(exists folder.getRecordType().path, "the record type describes the path");
+        AbstractDataProviderRecordIterator i = folder.searchRecords(NOTHING, {
+            "path": RootPath,
+            "recursive": True,
+            "page_size": 1,
+        });
+        list<auto> paths = ();
+        while (i.next() && paths.size() < 5) {
+            paths += i.getValue().path;
+        }
+        if (!paths) {
+            testSkip("the account holds no files to read");
+            return;
+        }
+        assertEq(paths.size(), (map {$1: True}, paths).size(), "no record is returned twice across pages");
+
+        # the search continuation is a different endpoint from the search itself, and a wrong one is a 404
+        AbstractDataProvider search = prov.getChildProviderEx("search");
+        assertEq(True, search.getInfo().supports_read, "the search is also a record source");
+        # search for a term drawn from what the account actually holds, so a match is expected
+        string name = basename(paths[0]);
+        string term = (name =~ x/^([A-Za-z0-9]{3,})/)[0] ?? name;
+        AbstractDataProviderRecordIterator si = search.searchRecords(NOTHING, {
+            "query": term,
+            "page_size": 1,
+        });
+        list<auto> matches = ();
+        while (si.next() && matches.size() < 3) {
+            matches += si.getValue().path;
+        }
+        # Dropbox indexes asynchronously, so a match is not guaranteed; what must hold is that walking the
+        # results did not raise, which is what the wrong continuation endpoint did
+        assertEq(matches.size(), (map {$1: True}, matches).size(),
+            sprintf("the search walked %d matches for %y without repeating one", matches.size(), term));
     }
 
     #! Round-trips the server-side and bulk operations against the live service
