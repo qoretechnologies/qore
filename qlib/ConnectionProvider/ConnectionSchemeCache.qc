@@ -177,6 +177,7 @@ public class ConnectionSchemeCache {
             "qdrantrests": "QdrantDataProvider",
 
             "gcal": "GoogleRestClient",
+            "gdrive": "GoogleRestClient",
             "gmail": "GoogleRestClient",
             "grests": "GoogleRestClient",
 

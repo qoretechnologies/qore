@@ -3571,6 +3571,7 @@ qore_user_module("qlib/SegmentDataProvider" "segment-logo.svg")
 
 # base 9 modules
 qore_user_module("qlib/GoogleCalendarDataProvider" "google-calendar-logo.svg")
+qore_user_module("qlib/GoogleDriveDataProvider" "google-drive-logo.svg")
 qore_user_module("qlib/GmailDataProvider" "gmail-logo.svg")
 qore_user_module("qlib/ZohoBooksDataProvider" "zohobooks-logo.svg")
 qore_user_module("qlib/ZohoInventoryDataProvider" "zohoinventory-logo.svg")
