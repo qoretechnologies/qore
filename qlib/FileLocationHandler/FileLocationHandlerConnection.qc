@@ -229,44 +229,30 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
         if (redirect) {
             AbstractFileLocationHandler handler = FileLocationHandler::getHandler(redirect.scheme);
 
-            # options declared by this handler are consumed here; everything else is passed through to the target
-            hash<auto> pass = opts - (keys ConnectionLocationOpts);
-            # ... except options that this handler and the target both declare, which must be forwarded
-            *hash<string, hash<FileHandlerOptionInfo>> target_opt_info = write
-                ? handler.getWriteOptions()
-                : handler.getReadOptions();
-            if (exists opts.encoding && target_opt_info.encoding) {
-                pass.encoding = opts.encoding;
-            }
-
-            # NOTE: options from the location string take precedence over options supplied by the connection; the
-            # caller wrote the former explicitly
-            # NOTE: the redirect location may carry credentials, so the original location is used to identify the
-            # request in any option error raised here
-            *hash<auto> target_opts = FileLocationHandler::checkOptions(
-                sprintf("%s://%s/%s", scheme, conn_name, path), handler, redirect.opts + pass, !write);
-
             return <ResolvedLocation>{
                 "handler": handler,
                 "scheme": redirect.scheme,
                 "location": redirect.location,
-                "opts": target_opts,
+                "opts": passOptions(scheme, conn_name, path, handler, opts, write, redirect.opts),
             };
         }
 
         # tier 1b: the connection provides a native handler object
         if (conn.supportsFileLocations()) {
-            object handler = conn.getFileLocationHandler();
-            if (!(handler instanceof AbstractFileLocationHandler)) {
+            object obj = conn.getFileLocationHandler();
+            if (!(obj instanceof AbstractFileLocationHandler)) {
                 throw "LOCATION-ERROR", sprintf("connection %y (type %y) returned a file location handler of class "
                     "%y, which does not inherit AbstractFileLocationHandler", conn_name, conn.getType(),
-                    handler.className());
+                    obj.className());
             }
+            AbstractFileLocationHandler handler = cast<AbstractFileLocationHandler>(obj);
             return <ResolvedLocation>{
-                "handler": cast<AbstractFileLocationHandler>(handler),
+                "handler": handler,
                 "scheme": scheme,
                 "location": path,
-                "opts": opts,
+                # options are validated against the native handler here, exactly as for a tier 1a redirect; the
+                # framework skipped its own check because this handler declares that it validates its own options
+                "opts": passOptions(scheme, conn_name, path, handler, opts, write),
             };
         }
 
@@ -290,6 +276,40 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
             app.val()
                 ? sprintf("application %y has not registered a data provider file API", app)
                 : "the connection serves no data provider application");
+    }
+
+    #! Validates and returns the options to pass on to a resolved target handler
+    /** @param scheme the scheme being used
+        @param conn_name the connection name
+        @param path the path within the connection
+        @param handler the target handler
+        @param opts the location options
+        @param write @ref True if the location will be written to
+        @param add options supplied by the connection, which the location options override
+
+        @return the options to pass to the target handler
+
+        @throw LOCATION-ERROR an option is not supported by the target handler
+
+        @note The location reported in an option error is built from the connection name and path rather than
+        from the target location, which may carry credentials
+    */
+    private *hash<auto> passOptions(string scheme, string conn_name, string path,
+            AbstractFileLocationHandler handler, *hash<auto> opts, bool write, *hash<auto> add) {
+        # options declared by this handler are consumed here; everything else is passed through to the target
+        hash<auto> pass = (opts ?? {}) - (keys ConnectionLocationOpts);
+        # ... except options that this handler and the target both declare, which must be forwarded
+        *hash<string, hash<FileHandlerOptionInfo>> target_opt_info = write
+            ? handler.getWriteOptions()
+            : handler.getReadOptions();
+        if (exists opts.encoding && target_opt_info.encoding) {
+            pass.encoding = opts.encoding;
+        }
+
+        # NOTE: options from the location string take precedence over options supplied by the connection; the
+        # caller wrote the former explicitly
+        return FileLocationHandler::checkOptions(sprintf("%s://%s/%s", scheme, conn_name, path), handler,
+            add + pass, !write);
     }
 
     #! Returns the file API registered for the given application, if any

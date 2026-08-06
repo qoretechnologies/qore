@@ -25,9 +25,42 @@
 #! Contains all public definitions in the FileLocationHandler module
 public namespace FileLocationHandler {
 #! The class for handling "rest(s)://"" locations
-/** @note This class does not support writing to output streams
+/** A handler normally builds its own client for each request from the location URL.  It can instead be bound to
+    an already-authenticated client, in which case the location is a URI path on that client's target rather than
+    a URL; this is how a REST connection provides a native file location handler without reimplementing
+    authentication, connection pooling, or token refresh.
+
+    @note An unbound handler does not support writing to output streams; a bound handler does, by buffering the
+    data written and sending it when the stream is closed
+
+    @see @ref FileLocationHandler::FileLocationHandler::getRestHandlerForClient() "FileLocationHandler::getRestHandlerForClient()"
 */
 class FileLocationHandlerRest inherits AbstractFileLocationHandler {
+    private {
+        #! The already-authenticated client this handler is bound to, if any
+        *object bound_client;
+    }
+
+    #! Creates a handler that builds a client for each request from the location URL
+    constructor() {
+    }
+
+    #! Creates a handler bound to an already-authenticated client
+    /** @param client the client to use for every request; must implement the
+        \c RestClient::AbstractRestClient API
+
+        @note When bound, the location is a URI path on the client's target rather than a URL, and the handler
+        neither configures nor closes the client
+    */
+    constructor(object client) {
+        bound_client = client;
+    }
+
+    #! Returns @ref True if this handler is bound to an already-authenticated client
+    bool isBound() {
+        return exists bound_client;
+    }
+
     public {
         #! Valid REST location options
         /** @see @ref RestClient::RestClient::constructor() "RestClient::constructor()" for supported options
@@ -126,6 +159,19 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
                 "desc": "I/O timeout in milliseconds",
             },
         };
+
+        #! Location options supported when the handler is bound to a client
+        /** Every other option in @ref RestClientLocationOpts configures the construction of a client, which a
+            bound handler does not do; accepting one would silently ignore it
+        */
+        const BoundLocationOpts = {
+            "encoding": <FileHandlerOptionInfo>{
+                "type": "string",
+                "desc": "The string encoding for any strings returned or sent",
+            },
+            "headers": RestClientLocationOpts.headers,
+            "method": RestClientLocationOpts.method,
+        };
     }
 
     #! Retrieves a text file from the given location
@@ -146,7 +192,8 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             opts.headers.Accept = "*/*";
         }
         object hc = getRestClient(scheme, location, opts, \path);
-        auto val = hc.doRequest(opts.method ? opts.method.upr() : "GET", path).body;
+        auto val = hc.doRequest(opts.method ? opts.method.upr() : "GET", path, NOTHING, NOTHING, True,
+            opts.headers).body;
         if (!exists val) {
             return "";
         }
@@ -172,7 +219,8 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
         string path;
         object client = getRestClient(scheme, location, opts, \path);
-        auto val = client.doRequest(opts.method ? opts.method.upr() : "GET", path).body;
+        auto val = client.doRequest(opts.method ? opts.method.upr() : "GET", path, NOTHING, NOTHING, True,
+            opts.headers).body;
         if (!exists val) {
             return binary();
         }
@@ -197,7 +245,8 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             *hash<auto> opts) {
         string path;
         object client = getRestClient(scheme, location, opts, \path, False);
-        return new HttpPollWrapper(client.startPollSendRecv(opts.method ? opts.method.upr() : "GET", path));
+        return new HttpPollWrapper(client.startPollSendRecv(opts.method ? opts.method.upr() : "GET", path, NOTHING,
+            opts.headers));
     }
 
     #! Returns a stream reader for the file's data at the given location
@@ -241,35 +290,65 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
         string path;
         object client = getRestClient(scheme, location, opts, \path);
-        client.doRequest(opts.method ? opts.method.upr() : "POST", path, contents);
+        client.doRequest(opts.method ? opts.method.upr() : "POST", path, contents, NOTHING, True, opts.headers);
     }
 
-    #! This method only throws a \c STREAM-WRITE-ERROR exception
+    #! Returns an output stream for writing data to the given location
     /** @param scheme the scheme being used
         @param location the location string without the scheme
         @param opts write options
 
-        @return always throws an exception
+        @return an output stream for writing to the file
 
-        @throw STREAM-WRITE-ERROR rest(s):// locations do not support writing to output streams
+        @throw STREAM-WRITE-ERROR an unbound \c rest(s):// location does not support writing to an output stream
+
+        @note
+        - Only a handler bound to a client supports this; an unbound \c rest(s):// location has no authenticated
+          client to send to and throws \c STREAM-WRITE-ERROR, directing the caller to \c http(s):// instead
+        - REST is request/response, so the data written is buffered and sent when the stream is closed;
+          OutputStreamWrapper::close() must be called, and OutputStreamWrapper::waitForIo() rethrows any error
+          raised by the request
     */
     private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
-        throw "STREAM-WRITE-ERROR", sprintf("%s:// locations do not support writing with an output stream; use "
-            "http(s):// locations instead", scheme);
+        if (!bound_client) {
+            throw "STREAM-WRITE-ERROR", sprintf("%s:// locations do not support writing with an output stream; use "
+                "http(s):// locations instead", scheme);
+        }
+
+        StreamPipe pipe(sync_close: False);
+
+        WaitGroup io_counter();
+        io_counter.add();
+        OutputStreamWrapper rv(pipe.getOutputStream(), io_counter);
+
+        background sub () {
+            # NOTE: done() must fire after the catch block records the error, so that waitForIo() observes the
+            # error before the wait group drops to zero
+            on_exit io_counter.done();
+            try {
+                StreamReader reader(pipe.getInputStream());
+                *binary content = reader.readBinary();
+                writeFileImpl(scheme, location, content ?? binary(), opts);
+            } catch (hash<ExceptionInfo> ex) {
+                rv.setIoError(ex);
+            }
+        }();
+
+        return rv;
     }
 
     #! Gets supported read options
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return RestClientLocationOpts;
+        return bound_client ? BoundLocationOpts : RestClientLocationOpts;
     }
 
     #! Gets supported write options
     /** @return supported write options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() {
-        return RestClientLocationOpts;
+        return bound_client ? BoundLocationOpts : RestClientLocationOpts;
     }
 
     #! Returns a RestClient object for the given location
@@ -278,6 +357,12 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     */
     private object getRestClient(string scheme, string location, *hash<auto> opts, reference<string> path,
             bool do_connect = True) {
+        if (bound_client) {
+            # the client already targets the right host; the location is a URI path on it
+            path = AbstractFileLocationHandler::getUriPath(location);
+            return bound_client;
+        }
+
         # dynamically load the module to avoid a circular module dependency
         load_module("RestClient");
 

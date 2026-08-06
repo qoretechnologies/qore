@@ -481,6 +481,15 @@ Live credentials will not be in CI, so split each suite:
   `examples/test/qlib/AwsRestClient/`. Never a catch-all `try`/`catch` skip —
   that hides real regressions.
 
+**Status.** Both suites exist and cover the always-run half: connection
+construction and scheme registration, app and action catalog shape, every action
+path resolving through the root `ChildMap`, an action advertising options if and
+only if its request type has fields, and the file API registration naming
+actions and options that exist. Writing them found three real defects in phase C
+that offline "the module loads" checking had missed — see the phase F commit.
+Request-construction and response-parsing cases against captured fixtures, which
+`DropboxDataProvider.qtest` has for every action, are still missing for both.
+
 ---
 
 ## Phase D — `conn://` tier 2 declarative file API
@@ -581,17 +590,80 @@ registration; tests as in C.4.
 
 ## Phase F — tier 1b native handlers
 
-- Refactor `FileLocationHandlerHttp` and `FileLocationHandlerRest` to accept an
-  injected, already-authenticated client object, so a connection's handler is a
-  short subclass rather than a reimplementation.
-- Implement `supportsFileLocationsImpl()` / `getFileLocationHandlerImpl()` on
-  `AwsS3RestConnection`, `GoogleDriveRestConnection`, `DropboxRestConnection`,
-  and the generic REST connection — giving real streaming (S3 multipart, Drive
-  resumable, Dropbox upload sessions) instead of request/response dispatch.
-- Poller support for `DPFR_URL` reads: resolve the URL with a blocking action
-  call, then return the HTTP handler's poller for it.
-- Tests: a tier 1b connection streams without buffering the whole object, and
-  tier 1b takes precedence over tier 2 when both are available.
+**Status: partially done.** What landed, and what is left, in order:
+
+**Done — client injection.** `FileLocationHandlerHttp` and
+`FileLocationHandlerRest` each take an optional already-authenticated client. A
+bound handler treats the location as a URI path on the client's target rather
+than as a URL, sends request headers per request rather than reconfiguring the
+shared client, and advertises only the options that still apply
+(`encoding`, `headers`, `method`) — every other option configures the
+construction of a client, which a bound handler does not do. Bound handlers are
+obtained through `FileLocationHandler::getHttpHandlerForClient()` /
+`getRestHandlerForClient()`, since the concrete handler classes are
+module-private. A bound REST handler also supports output streams (buffered and
+sent on close), which an unbound one cannot.
+
+**Done — generic REST connection.** `RestConnection::supportsFileLocationsImpl()`
+returns `True` **only when the connection serves no data provider application**,
+and `getFileLocationHandlerImpl()` returns a bound `FileLocationHandlerRest`.
+The gate matters: tier 1b takes precedence over tier 2, so returning `True`
+unconditionally would replace every application's file API with a bare `GET` on
+the location path — Drive needs an opaque ID and `?alt=media`, Dropbox serves
+content from another host with its arguments in a header, and S3 needs a bucket
+as well as a key. A subclass that can genuinely transfer files natively
+overrides both methods together.
+
+**Done — tier 1b option validation.** Options are now validated against the
+connection's own handler exactly as they are against a tier 1a redirect target;
+they were previously passed through unchecked, because the `conn://` handler
+declares that it validates its own options.
+
+**Done — `DPFR_URL` pollers.** `FileLocationHandlerDataProvider` resolves the URL
+with one blocking action call and returns the poller for the URL's own scheme, so
+the transfer — the part with the volume — is non-blocking. It still throws
+`UNIMPLEMENTED`, with a message saying why, for an application that returns the
+data inline (nothing to poll) and when `follow_url` is `False` (the caller asked
+for the URL, not its contents).
+
+**Done — Dropbox native handler.** `DropboxFileLocationHandler` transfers through
+the Dropbox content endpoints. Writing through an output stream drives an upload
+session from the stream itself, sending each chunk as it is written, so a file
+larger than memory can be written; content that ends within the first chunk is
+sent in a single request instead, saving two round trips. Reads take the bytes
+from the response body rather than base64-encoded into a JSON field.
+
+**Remaining — S3 and Google Drive native handlers.** Both are the same shape as
+the Dropbox one and the same size:
+
+- `AwsS3RestConnection`: a `GET` on `/{bucket}/{key}` for reads, and a multipart
+  upload (`CreateMultipartUpload` / `UploadPart` / `CompleteMultipartUpload`)
+  driven from an input stream for writes. Each part is a separate signed request
+  with a known body, so SigV4 needs no streaming-signature work — one part is
+  buffered at a time, with the 5 MB minimum part size as the floor. The bucket
+  comes from the `container` option or the first path segment.
+- `GoogleDriveRestConnection`: `?alt=media` for reads, and a resumable upload
+  (`POST ?uploadType=resumable`, then `PUT` with `Content-Range`) driven from an
+  input stream for writes.
+
+Both need `supportsFileLocationsImpl()` overridden to `True` on their
+connections, since the base class leaves an application connection to its
+application's file API.
+
+**Remaining — event providers for all three modules.** `DPAT_EVENT` watch
+providers replacing the TypeScript triggers (S3 `new-bucket` /
+`new-or-updated-file`, Drive `new-file` / `new-folder` via `changes.list`,
+Dropbox `new-file` / `new-folder` / `file-modified` via
+`/2/files/list_folder/longpoll` or cursor polling) were not built in phase C or
+E and are outstanding for all three.
+
+**Done — tests.** Tier 1b read, write, streams, and error propagation; tier 1b
+takes precedence over tier 2 for a connection where both apply; options are
+validated against the native handler's own set; a connection returning something
+that is not a handler is rejected; bound handlers advertise the reduced option
+set; `DPFR_URL` pollers and both `UNIMPLEMENTED` cases; and, for Dropbox,
+single-request versus upload-session selection, chunk offsets, byte accounting,
+and error propagation through `waitForIo()`.
 
 ---
 

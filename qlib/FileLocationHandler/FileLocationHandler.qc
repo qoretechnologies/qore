@@ -178,6 +178,22 @@ public class AbstractFileLocationHandler {
         return str;
     }
 
+    #! Returns a location as an absolute URI path
+    /** Used by handlers bound to an already-authenticated client, where the location is a path on that client's
+        target rather than a URL.  A leading slash is added if missing, since HTTP/2 and HTTP/3 require the
+        \c :path pseudo-header to be absolute and a relative path would otherwise be rejected at the transport
+        layer rather than reported here.
+
+        @param location the location string
+
+        @return the location as an absolute URI path
+
+        @since FileLocationHandler 3.0
+    */
+    private static string getUriPath(string location) {
+        return location =~ /^\// ? location : "/" + location;
+    }
+
     #! Retrieves a text file from the given location
     /** @param scheme the scheme being used
         @param location the location string without the scheme
@@ -531,6 +547,39 @@ getHandlerNames
                 keys cache);
         }
         return handler;
+    }
+
+    #! Returns a file location handler bound to an already-authenticated HTTP client
+    /** The returned handler treats a location as a URI path on the client's target rather than as a URL, and
+        neither configures nor closes the client.  Intended for
+        \c ConnectionProvider::AbstractConnection::getFileLocationHandler() implementations, so that a connection
+        supplies a native file location handler without reimplementing the transport.
+
+        @param client the client to bind; must be a @ref Qore::HTTPClient "HTTPClient" or a subclass of it
+
+        @return a file location handler bound to \a client
+
+        @note The client is shared with everything else using the connection, so the handler sends any request
+        headers per request rather than changing the client's own defaults
+
+        @since FileLocationHandler 3.0
+    */
+    static AbstractFileLocationHandler getHttpHandlerForClient(object client) {
+        return new FileLocationHandlerHttp(client);
+    }
+
+    #! Returns a file location handler bound to an already-authenticated REST client
+    /** As @ref getHttpHandlerForClient(), but driving the client through the \c RestClient::AbstractRestClient
+        API, so that the client's authentication, token refresh, and connection pooling apply to every request.
+
+        @param client the client to bind; must implement the \c RestClient::AbstractRestClient API
+
+        @return a file location handler bound to \a client
+
+        @since FileLocationHandler 3.0
+    */
+    static AbstractFileLocationHandler getRestHandlerForClient(object client) {
+        return new FileLocationHandlerRest(client);
     }
 
     #! Validates and normalizes location options for the given handler

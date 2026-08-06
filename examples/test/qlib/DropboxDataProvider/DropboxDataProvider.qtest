@@ -33,6 +33,7 @@
 %requires ConnectionProvider
 %requires RestClient
 %requires RestClientIo
+%requires FileLocationHandler
 %requires DropboxRestClient
 %requires DropboxDataProvider
 
@@ -192,6 +193,8 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         addTestCase("error reporting", \errorReportingTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("native file location handler", \nativeHandlerTest());
+        addTestCase("native streaming upload", \nativeStreamUploadTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
         addTestCase("live list folder", \liveListFolderTest());
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
@@ -964,6 +967,138 @@ public class DropboxDataProviderTest inherits QUnit::Test {
 
         # the factory registered for the scheme must be the one this module provides
         assertEq("dropbox", (new DropboxDataProviderFactory()).getName());
+    }
+
+    #! The connection's own handler reads and writes through the content endpoints
+    nativeHandlerTest() {
+        FakeDropboxRestClientIo rest();
+        DropboxFileLocationHandler handler(rest);
+
+        # the option set is the handler's own, not the conn:// handler's; an option that does not apply must be
+        # rejected rather than silently ignored
+        assertEq(("autorename", "encoding", "mode", "mute"), sort(keys handler.getReadOptions()));
+        assertEq(("autorename", "encoding", "mode", "mute"), sort(keys handler.getWriteOptions()));
+
+        binary content = binary("native content");
+        rest.setResponse(content, {"dropbox-api-result": make_json({"name": "n.txt"})});
+        assertEq(content, handler.getBinaryFile("conn", "/d/n.txt", {}));
+        hash<DropboxRequestInfo> req = rest.last();
+        assertEq(True, req.content, "the read went to a content endpoint");
+        assertEq("/2/files/download", req.path);
+        assertEq("{\"path\":\"/d/n.txt\"}", req.hdr{DropboxRestClientBase::ApiArgHeader});
+        # the bytes arrive as the response body, not base64-encoded into a JSON field as the action returns them
+        assertEq("native content", handler.getTextFile("conn", "d/n.txt", {}));
+
+        # writes default to replacing an existing file, as they do for every other file location scheme
+        rest.setResponse({".tag": "file", "id": "id:1"});
+        handler.writeFile("conn", "/d/w.txt", "written", {});
+        req = rest.last();
+        assertEq("/2/files/upload", req.path);
+        assertEq(binary("written"), req.body);
+        hash<auto> arg = parse_json(req.hdr{DropboxRestClientBase::ApiArgHeader});
+        assertEq("/d/w.txt", arg.path);
+        assertEq("overwrite", arg.mode);
+
+        # an explicit mode is honored, and an unknown one is refused before anything is sent
+        handler.writeFile("conn", "/d/w.txt", "written", {"mode": "add", "autorename": True});
+        arg = parse_json(rest.last().hdr{DropboxRestClientBase::ApiArgHeader});
+        assertEq("add", arg.mode);
+        assertEq(True, arg.autorename);
+        int before = rest.requests.size();
+        assertThrows("LOCATION-ERROR", "write mode", sub () {
+            handler.writeFile("conn", "/d/w.txt", "x", {"mode": "bogus"});
+        });
+        assertEq(before, rest.requests.size(), "an unknown write mode is refused before any request");
+
+        # the account root is not a file
+        assertThrows("LOCATION-ERROR", "not a file", sub () { handler.getBinaryFile("conn", "/", {}); });
+
+        # non-blocking I/O is not available for the content endpoints, and says so
+        assertThrows("UNIMPLEMENTED", "non-blocking I/O", sub () {
+            handler.getIoPollerForLocation("conn", "/d/n.txt", {});
+        });
+
+        # a Dropbox connection claims native support, overriding the base class rule that leaves an application
+        # connection to its application's file API
+        # the connection carries a token, as an authorized one does; without one, acquiring the client correctly
+        # refuses, since the authorization_code grant cannot obtain a token without a browser
+        DropboxRestConnection conn("dropbox-test", "test connection", DropboxRestConnection::DefaultUrl, {},
+            TestClientOptions);
+        assertEq(True, conn.supportsFileLocations(),
+            "a Dropbox connection transfers files itself rather than through its application's file API");
+
+        # the object the connection hands to the conn:// scheme must be this handler, bound to the connection's
+        # own client; anything else is rejected by the scheme as not a file location handler
+        object from_conn = conn.getFileLocationHandler();
+        assertTrue(from_conn instanceof DropboxFileLocationHandler,
+            "the connection returns its own file location handler");
+        assertTrue(from_conn instanceof AbstractFileLocationHandler,
+            "the handler is one the conn:// scheme can use");
+    }
+
+    #! Writing through an output stream drives an upload session without buffering the file
+    nativeStreamUploadTest() {
+        # content that ends within the first chunk is sent in one request; opening a session would cost two
+        # extra round trips for nothing
+        FakeDropboxRestClientIo rest();
+        DropboxFileLocationHandler handler(rest);
+        rest.setResponse({".tag": "file", "id": "id:2"});
+
+        OutputStreamWrapper os = handler.getOutputStream("conn", "/small.bin", {});
+        os.write(binary("small payload"));
+        os.close();
+        os.waitForIo();
+        assertEq(1, rest.requests.size(), "a small file is sent in a single request");
+        assertEq("/2/files/upload", rest.requests[0].path);
+        assertEq(binary("small payload"), rest.requests[0].body);
+
+        # content larger than one chunk opens a session and sends each chunk as it is written, so the whole file
+        # is never held in memory
+        FakeDropboxRestClientIo rest2();
+        DropboxFileLocationHandler handler2(rest2);
+        rest2.setResponses(({"session_id": "SESSION2"}, {".tag": "file", "id": "id:3"}));
+
+        int extra = 5000;
+        binary chunk1 = binary(strmul("a", UploadChunkSize));
+        binary tail = binary(strmul("b", extra));
+        OutputStreamWrapper os2 = handler2.getOutputStream("conn", "/big.bin", {"mode": "add"});
+        # written in small pieces, as a caller streaming a file would: the handler must reassemble full chunks
+        # rather than sending one request per write
+        os2.write(chunk1);
+        os2.write(tail);
+        os2.close();
+        os2.waitForIo();
+
+        assertEq(2, rest2.requests.size(), "the session is opened with the first chunk and closed with the last");
+        assertEq("/2/files/upload_session/start", rest2.requests[0].path);
+        assertEq(UploadChunkSize, rest2.requests[0].body.size(), "the first chunk is a full chunk");
+        assertEq("/2/files/upload_session/finish", rest2.requests[1].path);
+        assertEq(extra, rest2.requests[1].body.size(), "the last chunk is the remainder");
+        hash<auto> arg = parse_json(rest2.requests[1].hdr{DropboxRestClientBase::ApiArgHeader});
+        assertEq("SESSION2", arg.cursor.session_id);
+        assertEq(UploadChunkSize, arg.cursor.offset);
+        assertEq("/big.bin", arg.commit.path);
+        assertEq("add", arg.commit.mode);
+        # every byte must be accounted for exactly once
+        assertEq(UploadChunkSize + extra, rest2.requests[0].body.size() + rest2.requests[1].body.size());
+
+        # an error raised by the upload must reach the caller through waitForIo() rather than being swallowed by
+        # the background thread
+        FakeDropboxRestClientIo rest3();
+        DropboxFileLocationHandler handler3(rest3);
+        rest3.throw_error = {"err": "REST-RESPONSE-ERROR", "desc": "HTTP status 409 received",
+            "arg": {"response-body": {"error_summary": "path/conflict/file/"}}};
+        OutputStreamWrapper os3 = handler3.getOutputStream("conn", "/fail.bin", {});
+        os3.write(binary("x"));
+        os3.close();
+        assertThrows("REST-RESPONSE-ERROR", \os3.waitForIo());
+
+        # a stream read may return less than asked for without being at the end; the chunk assembler must not
+        # mistake that for the end of the file, which would truncate the upload
+        BinaryInputStream is(binary(strmul("z", 10)));
+        assertEq(4, DropboxFileLocationHandler::readExactly(is, 4).size());
+        assertEq(6, DropboxFileLocationHandler::readExactly(is, 100).size(), "a short read at the end is not padded");
+        assertEq(0, DropboxFileLocationHandler::readExactly(is, 100).size(), "reading past the end yields nothing");
     }
 
     # --- live tests (require -c <connection>) ---

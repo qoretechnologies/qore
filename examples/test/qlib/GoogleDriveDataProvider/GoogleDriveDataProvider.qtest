@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** GoogleDriveDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClientIo
+%requires GoogleRestClient
+%requires GoogleDriveDataProvider
+
+%exec-class GoogleDriveDataProviderTest
+
+public class GoogleDriveDataProviderTest inherits QUnit::Test {
+    public {
+        #! the application name
+        const App = GoogleDriveDataProvider::AppName;
+
+        #! the action the framework injects into every app served by a REST connection
+        const FrameworkAction = "make-api-call";
+
+        #! connection options sufficient to construct a connection without contacting Google
+        const TestConnOptions = {
+            "oauth2_client_id": "test-id",
+            "oauth2_client_secret": "test-secret",
+            "oauth2_redirect_url": "https://localhost:8011/oauth2-callback",
+            "token": "test-token",
+            "token_type": "Bearer",
+        };
+    }
+
+    constructor() : Test("GoogleDriveDataProvider Test", "1.0") {
+        addTestCase("connection", \connectionTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("file API registration", \fileApiTest());
+
+        set_return_value(main());
+    }
+
+    connectionTest() {
+        *hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("gdrive");
+        assertTrue(exists scheme, "the gdrive scheme is registered");
+        # the narrower scope reaches only files the application created, and is the better default for a new
+        # deployment; both must be offered, or changing the scope later forces a re-consent cycle
+        assertEq(("drive", "drive-file"), (map $1.value, scheme.options.api_profile.allowed_values));
+        assertEq("drive", scheme.options.api_profile.default_value);
+
+        GoogleDriveRestConnection conn("gdrive-test", "test connection",
+            GoogleDriveRestConnection::DefaultConnectionUrl, {}, TestConnOptions);
+        assertEq("gdrive", conn.getType());
+        assertEq(App, conn.getAppName());
+        assertEq(True, conn.hasDataProvider());
+        # an application connection leaves file locations to its application's file API rather than claiming
+        # native support: Drive addresses a file by an opaque ID and needs "?alt=media", which a bare GET on the
+        # location path would not produce
+        assertEq(False, conn.supportsFileLocations());
+
+        assertEq("gdrive", (new GoogleDriveDataProviderFactory()).getName());
+    }
+
+    actionCatalogTest() {
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(App);
+        assertEq("GoogleDrive", app.name);
+        assertEq("gdrive", app.scheme);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        assertTrue(app.logo.val(), "the logo was loaded from its file");
+
+        # the root provider is built directly from an unconnected client, so that every action's own request
+        # type can be compared against the options the catalog advertises for it
+        GoogleRestClientIo client(TestConnOptions + {"api_profile": "drive"});
+        on_exit client.close();
+        GoogleDriveDataProvider::GoogleDriveDataProvider root(client);
+
+        hash<string, bool> children = map {$1: True},
+            keys GoogleDriveDataProvider::GoogleDriveDataProvider::DefaultChildMap;
+        hash<string, bool> seen;
+        int actions = 0;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsEx(App)) {
+            if (action.action == FrameworkAction) {
+                continue;
+            }
+            ++actions;
+            string path = action.path;
+            path =~ s/^\///;
+            seen{path} = True;
+            # an action path that does not resolve through the root ChildMap leaves the action's provider null:
+            # reference data returns nothing and doRequest() is never reached, with no error anywhere
+            assertTrue(children{path}, sprintf("action %y path %y resolves through the root ChildMap",
+                action.action, action.path));
+            assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
+            assertTrue(action.short_desc.length() < 80, sprintf("action %y short_desc is under 80 chars",
+                action.action));
+
+            # an action whose request type has fields must advertise options for them, or it renders with no
+            # form fields and cannot be used
+            *AbstractDataProvider dp = root.getChildProvider(path);
+            assertTrue(exists dp, sprintf("action %y has a child provider", action.action));
+            *AbstractDataProviderType rt = dp.getRequestType();
+            int fields = rt ? rt.getFields().size() : 0;
+            assertEq(fields > 0, action.options.size() > 0,
+                sprintf("action %y advertises options if and only if its request type has fields (%d fields, "
+                    "%d options)", action.action, fields, action.options.size()));
+        }
+        assertEq(children.size(), actions, "every child has a registered action and vice versa");
+        assertEq((), keys (children - (keys seen)), "every child has a registered action");
+
+        # download-file and export-file close the gap that made Drive unusable as a file location: the
+        # TypeScript application returned metadata only, with no way to retrieve a file's bytes at all
+        assertTrue(exists DataProviderActionCatalog::getAppAction(App, "download-file"));
+        assertTrue(exists DataProviderActionCatalog::getAppAction(App, "export-file"));
+        hash<DataProviderActionInfo> ex = DataProviderActionCatalog::getAppActionEx(App, "export-file");
+        assertTrue(ex.options.mime_type.allowed_values.size() > 0,
+            "the export formats are declared as allowed values rather than described in prose");
+    }
+
+    fileApiTest() {
+        *hash<DataProviderFileApiInfo> fapi = DataProviderActionCatalog::getAppFileApi(App);
+        assertTrue(exists fapi, "the app registers a file API for conn:// locations");
+        # Drive addresses a file by an immutable ID, and addresses a new file by parent folder plus name
+        assertEq(True, fapi.path_is_id);
+        assertEq(True, fapi.write_path_is_parent);
+
+        # the declared actions and options must exist, or the file API silently fails at use time
+        hash<DataProviderActionInfo> read = DataProviderActionCatalog::getAppActionEx(App, fapi.read_action);
+        assertTrue(exists read.options{fapi.read_path_option}, "the read path option exists on the read action");
+        hash<DataProviderActionInfo> write = DataProviderActionCatalog::getAppActionEx(App, fapi.write_action);
+        assertTrue(exists write.options{fapi.write_path_option},
+            "the write path option exists on the write action");
+        assertTrue(exists write.options{fapi.write_data_option},
+            "the write data option exists on the write action");
+        # write_path_is_parent requires the file format, since no other format carries a filename
+        assertEq(DPFW_FILE, fapi.write_data_format);
+    }
+}

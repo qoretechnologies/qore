@@ -46,7 +46,13 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         addTestCase("redirect construction", \redirectConstructionTest());
         addTestCase("tier 2 data provider read", \tier2ReadTest());
         addTestCase("tier 2 data provider write", \tier2WriteTest());
+        addTestCase("tier 2 url poller", \tier2UrlPollerTest());
         addTestCase("tier 2 negative", \tier2NegativeTest());
+        addTestCase("tier 1b native handler", \tier1bTest());
+        addTestCase("tier 1b precedence over tier 2", \tier1bPrecedenceTest());
+        addTestCase("tier 1b option validation", \tier1bOptionTest());
+        addTestCase("tier 1b negative", \tier1bNegativeTest());
+        addTestCase("client-bound handlers", \boundHandlerTest());
         addTestCase("negative", \negativeTest());
 
         setupConnectionProvider();
@@ -485,6 +491,197 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         os.close();
         os.waitForIo();
         assertEq(binary(FileContents), TestStore::files."streamed.txt");
+    }
+
+    #! A non-blocking poller is available when the application's read action returns a URL
+    tier2UrlPollerTest() {
+        on_exit DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        TestStore::reset();
+
+        TmpFile url_file("flh-poll-", ".txt");
+        {
+            File f();
+            f.open2(url_file.path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("POLLED\n");
+        }
+
+        # the URL is resolved with one blocking action call, and the transfer it names is then polled
+        TestStore::read_url = "file://" + url_file.path;
+        setFileApi({"read_mode": DPFR_URL, "read_data_field": "url"});
+        AbstractPollOperation op = FileLocationHandler::getIoPollerForLocation("conn://testapp/anything");
+        assertEq("read-file", TestStore::last_action, "the URL was resolved through the read action");
+        assertEq("POLLED\n", runPoller(op).toString(), "the poller retrieved the data the URL named");
+
+        # asking for the URL itself leaves nothing to transfer, so there is nothing to poll
+        assertThrows("UNIMPLEMENTED", "nothing to poll", \FileLocationHandler::getIoPollerForLocation(),
+            "conn://testapp/anything{follow_url=false}");
+
+        # an empty URL must be reported rather than passed on to the location handler
+        TestStore::empty_url = True;
+        assertThrows("LOCATION-ERROR", "empty URL", \FileLocationHandler::getIoPollerForLocation(),
+            "conn://testapp/anything");
+        assertThrows("LOCATION-ERROR", "empty URL", \FileLocationHandler::getTextFileFromLocation(),
+            "conn://testapp/anything");
+        TestStore::empty_url = False;
+        remove TestStore::read_url;
+
+        # an application returning the data inline has nothing to poll either
+        setFileApi({});
+        assertThrows("UNIMPLEMENTED", "returning the data itself",
+            \FileLocationHandler::getIoPollerForLocation(), "conn://testapp/docs/report.txt");
+    }
+
+    #! Drives a poll operation to completion and returns its output
+    private auto runPoller(AbstractPollOperation op, timeout to = 20s) {
+        int start = clock_getmicros_monotonic();
+        int limit_us = to * 1000;
+        while (!op.goalReached()) {
+            if ((clock_getmicros_monotonic() - start) > limit_us) {
+                throw "POLL-TIMEOUT", sprintf("poll operation timed out in state %y", op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            list<hash<SocketPollInfo>> poll_list = (pi,);
+            Socket::poll(poll_list, 5s);
+        }
+        return op.getOutput();
+    }
+
+    #! Reads and writes through a connection's own file location handler
+    tier1bTest() {
+        TestStore::reset();
+        TestNativeFileLocationHandler::reset();
+
+        FileLocationHandler::writeFileToLocation("conn://native/docs/native.txt", FileContents);
+        assertEq(1, TestNativeFileLocationHandler::calls, "the connection's own handler serviced the write");
+        assertEq("docs/native.txt", TestNativeFileLocationHandler::last_location,
+            "the handler receives the path within the connection, without the scheme or connection name");
+        assertEq(FileContents, TestStore::files."docs/native.txt");
+        assertEq(NOTHING, TestStore::last_action, "no data provider action was invoked");
+
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("conn://native/docs/native.txt"));
+        assertEq(binary(FileContents),
+            FileLocationHandler::getBinaryFileFromLocation("conn://native/docs/native.txt"));
+        assertEq(FileContents,
+            FileLocationHandler::getStreamReaderFromLocation("conn://native/docs/native.txt").readString());
+        assertEq(binary(FileContents), (new StreamReader(FileLocationHandler::getBinaryStreamFromLocation(
+            "conn://native/docs/native.txt"))).readBinary());
+
+        # output streams reach the handler's own implementation
+        OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation("conn://native/streamed.txt");
+        os.write(binary(FileContents));
+        os.close();
+        os.waitForIo();
+        assertEq(binary(FileContents), TestStore::files."streamed.txt");
+
+        # an error raised by the handler reaches the caller
+        assertThrows("TEST-NATIVE-ERROR", "no such file", \FileLocationHandler::getTextFileFromLocation(),
+            "conn://native/missing.txt");
+    }
+
+    #! A connection's own handler is used in preference to its application's declared file API
+    tier1bPrecedenceTest() {
+        on_exit DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        TestStore::reset();
+        TestNativeFileLocationHandler::reset();
+
+        # the "native" connection serves the test application as well, so both tiers apply to it; the file API
+        # is registered here so that tier 2 would work if it were reached
+        setFileApi({});
+        TestStore::files."both.txt" = FileContents;
+
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("conn://native/both.txt"));
+        assertEq(1, TestNativeFileLocationHandler::calls, "the native handler serviced the read");
+        assertEq(NOTHING, TestStore::last_action, "the application's file API was not used");
+
+        # the same application reached through a connection with no native handler does use the file API
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("conn://testapp/both.txt"));
+        assertEq(1, TestNativeFileLocationHandler::calls, "the native handler was not used for that connection");
+        assertEq("read-file", TestStore::last_action, "the application's file API was used instead");
+    }
+
+    #! Options are validated against the connection's own handler, not against the conn:// handler
+    tier1bOptionTest() {
+        TestStore::reset();
+        TestNativeFileLocationHandler::reset();
+        TestStore::files."p-opt.txt" = FileContents;
+
+        # an option the native handler declares is forwarded to it
+        assertEq(FileContents,
+            FileLocationHandler::getTextFileFromLocation("conn://native/opt.txt{prefix=p-}"));
+        assertEq("p-", TestNativeFileLocationHandler::last_opts.prefix);
+
+        # "encoding" is declared by both the conn:// handler and the native handler, so it is forwarded
+        assertEq(FileContents,
+            FileLocationHandler::getTextFileFromLocation("conn://native/opt.txt{prefix=p-,encoding=UTF-8}"));
+        assertEq("UTF-8", TestNativeFileLocationHandler::last_opts.encoding);
+
+        # options the conn:// handler consumes are not forwarded
+        assertEq(FileContents,
+            FileLocationHandler::getTextFileFromLocation("conn://native/opt.txt{prefix=p-,path_is_id=true}"));
+        assertEq(False, TestNativeFileLocationHandler::last_opts.hasKey("path_is_id"));
+
+        # an option neither handler declares is rejected rather than silently ignored, and the error names the
+        # native handler's own option set rather than the conn:// handler's
+        assertThrows("LOCATION-ERROR", "unsupported read option.*prefix",
+            \FileLocationHandler::getTextFileFromLocation(), "conn://native/opt.txt{no_such_option=1}");
+        # ... and writes are validated against the write option set
+        assertThrows("LOCATION-ERROR", "unsupported write option.*prefix",
+            \FileLocationHandler::writeFileToLocation(), ("conn://native/opt.txt{no_such_option=1}", "data"));
+    }
+
+    #! A connection returning something that is not a handler is rejected with a clear error
+    tier1bNegativeTest() {
+        assertThrows("LOCATION-ERROR", "does not inherit AbstractFileLocationHandler",
+            \FileLocationHandler::getTextFileFromLocation(), "conn://bad-native/x.txt");
+    }
+
+    #! Handlers bound to an already-authenticated client accept only the options that still apply
+    boundHandlerTest() {
+        # a bound handler is what a connection returns from getFileLocationHandler(); binding a client here
+        # directly is the same thing without needing a server to authenticate against
+        HTTPClient hc({"url": "http://localhost:1"});
+        AbstractFileLocationHandler http_handler = FileLocationHandler::getHttpHandlerForClient(hc);
+        assertTrue(http_handler.isBound(), "the handler reports that it is bound");
+
+        # options that configure the construction of a client no longer apply, since there is nothing to
+        # construct; accepting one would silently ignore it
+        hash<string, hash<FileHandlerOptionInfo>> ropts = http_handler.getReadOptions();
+        assertEq(("encoding", "headers", "method"), sort(keys ropts));
+        assertEq(("encoding", "headers", "method"), sort(keys http_handler.getWriteOptions()));
+
+        # an unbound handler keeps the full set
+        AbstractFileLocationHandler unbound = FileLocationHandler::getHandler("http");
+        assertEq(False, unbound.isBound(), "the registered scheme handler is not bound");
+        assertTrue(unbound.getReadOptions().hasKey("ssl_verify_cert"), "an unbound handler builds its own client");
+
+        load_module("RestClient");
+        object rc = create_object("RestClient", {"url": "http://localhost:1", "data": "json"}, True);
+        AbstractFileLocationHandler rest_handler = FileLocationHandler::getRestHandlerForClient(rc);
+        assertTrue(rest_handler.isBound());
+        assertEq(("encoding", "headers", "method"), sort(keys rest_handler.getReadOptions()));
+
+        # an unbound rest:// location cannot write to an output stream, but a bound one can, since it has a
+        # client to send the buffered data to
+        assertThrows("STREAM-WRITE-ERROR", "do not support writing with an output stream",
+            \FileLocationHandler::getOutputStreamForLocation(), "rest://localhost:1/x");
+
+        OutputStreamWrapper bound_os = rest_handler.getOutputStream("rest", "/x", {});
+        assertTrue(bound_os instanceof OutputStreamWrapper, "a bound REST handler supports output streams");
+        # the stream must always be closed: the data is sent by a background thread that blocks until the
+        # writing end is closed, and leaving it open would hold the thread open with it
+        bound_os.write(binary("data"));
+        bound_os.close();
+        # nothing is listening on the client's port, so the buffered write fails; the point of the case is that
+        # the failure reaches the caller through waitForIo() instead of being swallowed by the background thread
+        try {
+            bound_os.waitForIo();
+            fail("the buffered write should have failed against a port with no listener");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err.val(), "the write error reached the caller: " + ex.err);
+        }
     }
 
     #! Negative cases for the declared file API

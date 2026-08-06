@@ -47,6 +47,7 @@ module AwsRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("awsrests", AwsRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("s3", AwsS3RestConnection::ConnectionScheme);
     };
 }
 
@@ -1497,8 +1498,7 @@ public class AwsS3RestConnection inherits AwsRestConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
-            : AwsRestConnection(name, description, url.val() ? url : DefaultUrl, attributes,
-                AwsS3RestConnection::getS3Options(options)) {
+            : AwsRestConnection(name, description, url.val() ? url : DefaultUrl, attributes, options) {
     }
 
     #! creates the AwsS3RestConnection object
@@ -1517,7 +1517,6 @@ public class AwsS3RestConnection inherits AwsRestConnection {
     constructor(hash<auto> config, *hash<auto> attr)
             : AwsRestConnection(config + {
                 "url": config.url.val() ? config.url : DefaultUrl,
-                "opts": AwsS3RestConnection::getS3Options(config.opts),
             }, attr) {
     }
 
@@ -1550,17 +1549,22 @@ public class AwsS3RestConnection inherits AwsRestConnection {
         } + constructor_options);
     }
 
-    #! Pins the AWS service and S3 encoding options
-    /** @param options the options supplied by the caller
+    #! Returns client options with the AWS service and S3 encoding options pinned
+    /** @param rtopts runtime options
 
-        @return the options with the S3-specific values applied
+        @return the client options with the S3-specific values applied
 
         @note \c aws_service and \c aws_s3 are set unconditionally; a connection of this type is by definition an
         S3 connection, and allowing either to be overridden would produce requests signed for the wrong service
         or with the wrong URI encoding, which fail with an opaque signature mismatch
+
+        @note They are applied here, where the client is configured, rather than stored in the connection's own
+        options: this class removes both from its declared option set so that neither appears as something a user
+        may set, and a connection option that is not declared is rejected as unknown when the connection is
+        validated
     */
-    static hash<auto> getS3Options(*hash<auto> options) {
-        return (options ?? {}) + {
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return AwsRestConnection::getConnectionOptions(rtopts) + {
             "aws_service": AwsService,
             "aws_s3": True,
         };

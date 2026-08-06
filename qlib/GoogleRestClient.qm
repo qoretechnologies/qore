@@ -208,7 +208,17 @@ public class GoogleRestClientBase {
     }
 
     #! returns options for the Google REST client constructors
-    static hash<auto> getOptions(hash<auto> opts) {
+    /** @param opts0 the options supplied by the caller
+
+        @return the options with the API profile's own options applied
+
+        @note \c "auto!" disables type narrowing on the copy.  A caller passing a uniformly-typed option hash -
+        all strings, which is what an OAuth2 client id, secret, redirect URL, and token amount to - would
+        otherwise produce a \c hash<string, string> here, and the profile below adds a list-valued
+        \c "oauth2_scopes" that such a hash rejects at runtime
+    */
+    static hash<auto> getOptions(hash<auto> opts0) {
+        hash<auto!> opts = opts0;
         if (*string prof = opts.api_profile) {
             *hash<auto> conf = ApiProfiles{prof};
             if (!exists conf) {

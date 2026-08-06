@@ -27,6 +27,8 @@
 
 %requires ConnectionProvider
 %requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires FsUtil
 
 module FileLocationTestConnectionProvider {
     version = "1.0";
@@ -152,6 +154,25 @@ hash<string, hash<auto>> sub ConnectionMap() {
                 "url": "nofiles://testapp",
             },
         },
+        # a connection that provides a native handler AND serves the test application, so that tier 1b can be
+        # shown to take precedence over tier 2
+        "native": {
+            "cls": Class::forName("FileLocationTestConnectionProvider::NativeFileConnection"),
+            "config": {
+                "name": "native",
+                "desc": "connection providing a native file location handler",
+                "url": "nativefiles://localhost",
+            },
+        },
+        # a connection whose native handler is not a handler at all
+        "bad-native": {
+            "cls": Class::forName("FileLocationTestConnectionProvider::BadNativeFileConnection"),
+            "config": {
+                "name": "bad-native",
+                "desc": "connection returning an object that is not a file location handler",
+                "url": "nativefiles://localhost",
+            },
+        },
     };
 }
 
@@ -188,6 +209,9 @@ public class TestStore {
         #! when set, the read action omits every data field
         static bool omit_data_field = False;
 
+        #! when set, the read action returns a URL field that is present but empty
+        static bool empty_url = False;
+
         #! mirrors the file API's write_path_is_parent; the test sets it alongside the registration
         /** A real application knows from its own API contract whether it receives a whole path or a parent plus
             a name; this stub is driven by whatever mapping the test registers, so it has to be told
@@ -202,6 +226,7 @@ public class TestStore {
         remove last_action;
         remove read_url;
         omit_data_field = False;
+        empty_url = False;
         write_path_is_parent = False;
     }
 
@@ -243,6 +268,10 @@ public class TestReadDataProvider inherits DataProvider::AbstractDataProvider {
 
         if (TestStore::omit_data_field) {
             return {"name": "x"};
+        }
+        if (TestStore::empty_url) {
+            # a URL field that is present but empty, which is not the same as one that is absent
+            return {"name": "x", "url": ""};
         }
         if (TestStore::read_url.val()) {
             return {"name": "x", "url": TestStore::read_url};
@@ -355,6 +384,180 @@ public class TestAppConnection inherits ConnectionProvider::AbstractConnection {
 
     private object getImpl(bool connect = True, *hash<auto> rtopts) {
         throw "TEST-CONNECTION-ERROR", "this test connection cannot be acquired";
+    }
+}
+
+#! A connection providing a native file location handler as well as serving the test application
+/** Both tier 1b and tier 2 apply to this connection, so it also shows which one wins
+*/
+public class NativeFileConnection inherits ConnectionProvider::AbstractConnection {
+    constructor(hash<auto> config, *hash<auto> attr) : ConnectionProvider::AbstractConnection(config, attr) {
+    }
+
+    string getType() {
+        return "nativefiles";
+    }
+
+    *string getAppName() {
+        return TestAppName;
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        return new FileLocationTestDataProvider::TestAppRootDataProvider();
+    }
+
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    private object getFileLocationHandlerImpl() {
+        return new FileLocationTestDataProvider::TestNativeFileLocationHandler();
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        throw "TEST-CONNECTION-ERROR", "this test connection cannot be acquired";
+    }
+}
+
+#! A connection whose native file location handler is not a file location handler
+/** Used to verify that the class is checked rather than assumed
+*/
+public class BadNativeFileConnection inherits ConnectionProvider::AbstractConnection {
+    constructor(hash<auto> config, *hash<auto> attr) : ConnectionProvider::AbstractConnection(config, attr) {
+    }
+
+    string getType() {
+        return "nativefiles";
+    }
+
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    private object getFileLocationHandlerImpl() {
+        return new Mutex();
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        throw "TEST-CONNECTION-ERROR", "this test connection cannot be acquired";
+    }
+}
+}
+
+public namespace FileLocationTestDataProvider {
+#! A native file location handler serving the in-memory store
+/** Exercises tier 1b: a connection that transfers files itself rather than through a data provider action.
+    Every call is recorded so that the test can tell which tier serviced a request.
+*/
+public class TestNativeFileLocationHandler inherits FileLocationHandler::AbstractFileLocationHandler {
+    public {
+        #! Options this handler accepts; deliberately different from the conn:// handler's own set
+        const NativeOpts = {
+            "encoding": <FileHandlerOptionInfo>{
+                "type": "string",
+                "desc": "the encoding of the file's data",
+            },
+            "prefix": <FileHandlerOptionInfo>{
+                "type": "string",
+                "desc": "a prefix applied to the storage key",
+            },
+        };
+
+        #! The number of requests this handler has serviced
+        static int calls = 0;
+
+        #! The location passed to the last request
+        static *string last_location;
+
+        #! The options passed to the last request
+        static *hash<auto> last_opts;
+    }
+
+    #! Resets the recorded state
+    static reset() {
+        calls = 0;
+        remove last_location;
+        remove last_opts;
+    }
+
+    private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
+        data rv = get(location, opts);
+        return rv.typeCode() == NT_STRING ? rv : rv.toString();
+    }
+
+    private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
+        data rv = get(location, opts);
+        return rv.typeCode() == NT_BINARY ? rv : binary(rv);
+    }
+
+    private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
+            *hash<auto> opts) {
+        throw "UNIMPLEMENTED", "the test native handler does not support non-blocking I/O";
+    }
+
+    private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+    }
+
+    private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
+        return new BinaryInputStream(getBinaryFileImpl(scheme, location, opts));
+    }
+
+    private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
+        record(location, opts);
+        TestStore::files{key(location, opts)} = contents;
+    }
+
+    private FileLocationHandler::OutputStreamWrapper getOutputStreamImpl(string scheme, string location,
+            *hash<auto> opts) {
+        StreamPipe pipe(sync_close: False);
+        WaitGroup io_counter();
+        io_counter.add();
+        FileLocationHandler::OutputStreamWrapper rv(pipe.getOutputStream(), io_counter);
+        background sub () {
+            on_exit io_counter.done();
+            try {
+                StreamReader reader(pipe.getInputStream());
+                writeFileImpl(scheme, location, reader.readBinary() ?? binary(), opts);
+            } catch (hash<ExceptionInfo> ex) {
+                rv.setIoError(ex);
+            }
+        }();
+        return rv;
+    }
+
+    private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
+        return NativeOpts;
+    }
+
+    private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() {
+        return NativeOpts;
+    }
+
+    #! Returns the stored value for the given location
+    private data get(string location, *hash<auto> opts) {
+        record(location, opts);
+        string k = key(location, opts);
+        if (!TestStore::files.hasKey(k)) {
+            throw "TEST-NATIVE-ERROR", sprintf("no such file %y in the native test store", k);
+        }
+        return TestStore::files{k};
+    }
+
+    #! Records that this handler serviced a request
+    private record(string location, *hash<auto> opts) {
+        ++calls;
+        last_location = location;
+        last_opts = opts;
+    }
+
+    #! Returns the storage key for the given location
+    private string key(string location, *hash<auto> opts) {
+        return (opts.prefix ?? "") + location;
     }
 }
 }

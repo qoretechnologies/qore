@@ -83,11 +83,35 @@ class FileLocationHandlerDataProvider inherits AbstractFileLocationHandler {
         return rv.typeCode() == NT_BINARY ? rv : binary(rv);
     }
 
-    #! Not supported; this handler is request/response based
+    #! Returns an I/O poller for the file's data at the given location
+    /** Only supported when the application's read action returns a URL rather than the data itself: the URL is
+        resolved with one blocking action call, and the poller for the URL's own scheme is then returned, so the
+        transfer itself - which is the part with the volume - is non-blocking.
+
+        An application whose read action returns the data inline has nothing to poll: the data arrives with the
+        action's response, and there is no separate transfer to overlap with other work.
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return an I/O poller retrieving the file's data from the URL returned by the read action
+
+        @throw UNIMPLEMENTED the read action returns the data inline, or \c follow_url is set to @ref False
+    */
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
-        throw "UNIMPLEMENTED", sprintf("connection %y (application %y) reads files through a request/response "
-            "data provider action; non-blocking I/O is not supported for such connections", conn_name, app);
+        if (file_api.read_mode != "url") {
+            throw "UNIMPLEMENTED", sprintf("connection %y (application %y) reads files through a request/response "
+                "data provider action returning the data itself; non-blocking I/O is not supported for such "
+                "connections", conn_name, app);
+        }
+        if (exists opts.follow_url && !opts.follow_url) {
+            throw "UNIMPLEMENTED", sprintf("connection %y (application %y): \"follow_url\" is set to False, so the "
+                "read returns the URL itself rather than its contents; there is nothing to poll", conn_name, app);
+        }
+        # the URL is resolved with a blocking call; only the transfer it points at is polled
+        return FileLocationHandler::getIoPollerForLocation(getReadUrl(location, opts));
     }
 
     #! Returns a stream reader for the file's data at the given location
@@ -154,8 +178,15 @@ class FileLocationHandlerDataProvider inherits AbstractFileLocationHandler {
         return True;
     }
 
-    #! Reads the file at the given path through the application's declared read action
-    private data read(string path, *hash<auto> opts) {
+    #! Invokes the application's declared read action and returns the value of its data field
+    /** @param path the path within the connection
+        @param opts read options
+
+        @return the value of the field the file API declares as holding the data or the URL
+
+        @throw LOCATION-ERROR the action's response has no such field
+    */
+    private auto readValue(string path, *hash<auto> opts) {
         hash<auto> req = {
             file_api.read_path_option: path,
         } + file_api.options_add;
@@ -170,20 +201,37 @@ class FileLocationHandlerDataProvider inherits AbstractFileLocationHandler {
                 "returned fields: %y", conn_name, app, file_api.read_action, file_api.read_data_field,
                 resp.typeCode() == NT_HASH ? keys resp : resp.type());
         }
-        auto value = resp{file_api.read_data_field};
+        return resp{file_api.read_data_field};
+    }
 
+    #! Returns the URL the application's read action reports for the file at the given path
+    /** @param path the path within the connection
+        @param opts read options
+
+        @return the URL the file can be retrieved from
+
+        @throw LOCATION-ERROR the action returned an empty URL
+    */
+    private string getReadUrl(string path, *hash<auto> opts) {
+        auto value = readValue(path, opts);
+        if (!value.val()) {
+            throw "LOCATION-ERROR", sprintf("connection %y (application %y): action %y returned an empty URL "
+                "in %y", conn_name, app, file_api.read_action, file_api.read_data_field);
+        }
+        return value.toString();
+    }
+
+    #! Reads the file at the given path through the application's declared read action
+    private data read(string path, *hash<auto> opts) {
         if (file_api.read_mode == "url") {
-            if (!value.val()) {
-                throw "LOCATION-ERROR", sprintf("connection %y (application %y): action %y returned an empty URL "
-                    "in %y", conn_name, app, file_api.read_action, file_api.read_data_field);
-            }
             if (exists opts.follow_url && !opts.follow_url) {
                 # the caller asked for the URL itself rather than its contents
-                return value.toString();
+                return getReadUrl(path, opts);
             }
-            return FileLocationHandler::getBinaryFileFromLocation(value.toString());
+            return FileLocationHandler::getBinaryFileFromLocation(getReadUrl(path, opts));
         }
 
+        auto value = readValue(path, opts);
         if (!exists value) {
             throw "LOCATION-ERROR", sprintf("connection %y (application %y): action %y returned no data in %y",
                 conn_name, app, file_api.read_action, file_api.read_data_field);

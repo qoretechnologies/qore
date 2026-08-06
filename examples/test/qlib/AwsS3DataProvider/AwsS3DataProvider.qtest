@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** AwsS3DataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires DataProvider
+%requires ConnectionProvider
+%requires AwsRestClient
+%requires AwsS3DataProvider
+
+%exec-class AwsS3DataProviderTest
+
+public class AwsS3DataProviderTest inherits QUnit::Test {
+    public {
+        #! the application name
+        const App = AwsS3DataProvider::AppName;
+
+        #! the action the framework injects into every app served by a REST connection
+        const FrameworkAction = "make-api-call";
+
+        #! connection options sufficient to construct a connection without contacting AWS
+        const TestConnOptions = {
+            "aws_keyid": "AKIAIOSFODNN7EXAMPLE",
+            "aws_secret": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "aws_region": "eu-central-1",
+        };
+    }
+
+    constructor() : Test("AwsS3DataProvider Test", "1.0") {
+        addTestCase("connection construction", \connectionConstructionTest());
+        addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("file API registration", \fileApiTest());
+
+        set_return_value(main());
+    }
+
+    #! The connection must be constructible through both constructor forms
+    /** Regression: the connection used to inject "aws_service" and "aws_s3" into its own option hash while
+        removing both from its declared option set, so validation rejected them as unknown options and the
+        connection could not be created at all
+    */
+    connectionConstructionTest() {
+        AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
+            TestConnOptions);
+        assertEq("s3", conn.getType());
+        assertEq(App, conn.getAppName());
+        assertEq(True, conn.hasDataProvider());
+
+        AwsS3RestConnection conn2({
+            "name": "s3-test-2",
+            "desc": "test connection",
+            "url": AwsS3RestConnection::DefaultUrl,
+            "opts": TestConnOptions,
+        });
+        assertEq("s3", conn2.getType());
+
+        # neither option may appear in the connection's own options, since neither is a user-settable option
+        assertEq(False, conn.getInfo().opts.hasKey("aws_service"));
+        assertEq(False, conn.getInfo().opts.hasKey("aws_s3"));
+
+        # ... but the client built from the connection must still be configured for S3; a wrong value here
+        # signs requests for the wrong service and fails with an opaque signature mismatch
+        *hash<auto> copts = conn.getConnectionOptions();
+        assertEq("s3", copts.aws_service);
+        assertEq(True, copts.aws_s3);
+        assertEq("eu-central-1", copts.aws_region);
+
+        AwsRestClient client = cast<AwsRestClient>(conn.get(False));
+        assertEq("s3", client.getAwsService());
+        assertEq("eu-central-1", client.getAwsRegion());
+
+        # the application file API and the data provider must agree that this connection serves S3
+        assertEq(False, conn.supportsFileLocations(),
+            "an application connection leaves file locations to its application's file API");
+    }
+
+    connectionSchemeTest() {
+        *hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("s3");
+        assertTrue(exists scheme, "the s3 scheme is registered");
+        assertEq("aws_keyid,aws_secret,aws_region", scheme.required_options);
+        # both are pinned by the connection and must not be offered as options
+        assertEq(False, scheme.options.hasKey("aws_service"));
+        assertEq(False, scheme.options.hasKey("aws_s3"));
+        assertTrue(scheme.options.hasKey("path_style"));
+
+        assertEq("s3", (new AwsS3DataProviderFactory()).getName());
+    }
+
+    actionCatalogTest() {
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(App);
+        assertEq("AmazonS3", app.name);
+        assertEq("s3", app.scheme);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        assertTrue(app.logo.val(), "the logo was loaded from its file");
+
+        # the root provider is built directly from an unconnected client, so that every action's own request
+        # type can be compared against the options the catalog advertises for it
+        AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
+            TestConnOptions);
+        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.get(False)});
+
+        hash<string, bool> children = map {$1: True}, keys AwsS3DataProvider::AwsS3DataProvider::DefaultChildMap;
+        hash<string, bool> seen;
+        int actions = 0;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsEx(App)) {
+            if (action.action == FrameworkAction) {
+                continue;
+            }
+            ++actions;
+            string path = action.path;
+            path =~ s/^\///;
+            seen{path} = True;
+            # an action path that does not resolve through the root ChildMap leaves the action's provider null:
+            # reference data returns nothing and doRequest() is never reached, with no error anywhere
+            assertTrue(children{path}, sprintf("action %y path %y resolves through the root ChildMap",
+                action.action, action.path));
+            assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
+            assertTrue(action.short_desc.length() < 80, sprintf("action %y short_desc is under 80 chars",
+                action.action));
+
+            # an action whose request type has fields must advertise options for them, or it renders with no
+            # form fields and cannot be used; an action that genuinely takes no input needs none
+            *AbstractDataProvider dp = root.getChildProvider(path);
+            assertTrue(exists dp, sprintf("action %y has a child provider", action.action));
+            *AbstractDataProviderType rt = dp.getRequestType();
+            int fields = rt ? rt.getFields().size() : 0;
+            assertEq(fields > 0, action.options.size() > 0,
+                sprintf("action %y advertises options if and only if its request type has fields (%d fields, "
+                    "%d options)", action.action, fields, action.options.size()));
+        }
+        assertEq(children.size(), actions, "every child has a registered action and vice versa");
+        assertEq((), keys (children - (keys seen)), "every child has a registered action");
+    }
+
+    fileApiTest() {
+        *hash<DataProviderFileApiInfo> fapi = DataProviderActionCatalog::getAppFileApi(App);
+        assertTrue(exists fapi, "the app registers a file API for conn:// locations");
+
+        # the declared actions and options must exist, or the file API silently fails at use time
+        hash<DataProviderActionInfo> read = DataProviderActionCatalog::getAppActionEx(App, fapi.read_action);
+        assertTrue(exists read.options{fapi.read_path_option}, "the read path option exists on the read action");
+        if (fapi.read_container_option.val()) {
+            assertTrue(exists read.options{fapi.read_container_option},
+                "the read container option exists on the read action");
+        }
+        if (fapi.write_action.val()) {
+            hash<DataProviderActionInfo> write = DataProviderActionCatalog::getAppActionEx(App, fapi.write_action);
+            assertTrue(exists write.options{fapi.write_path_option},
+                "the write path option exists on the write action");
+            assertTrue(exists write.options{fapi.write_data_option},
+                "the write data option exists on the write action");
+            if (fapi.write_container_option.val()) {
+                assertTrue(exists write.options{fapi.write_container_option},
+                    "the write container option exists on the write action");
+            }
+        }
+    }
+}
