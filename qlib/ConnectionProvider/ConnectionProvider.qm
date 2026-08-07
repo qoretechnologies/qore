@@ -130,6 +130,21 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @section connectionproviderrelnotes Release Notes
 
     @subsection connectionprovider_3_1 ConnectionProvider 3.1
+    - added support for named-connection file locations (\c "conn://" in the \c FileLocationHandler module):
+      - @ref ConnectionProvider::FileLocationRedirect "FileLocationRedirect"
+      - @ref ConnectionProvider::AbstractConnection::getFileLocationRedirect()
+        "AbstractConnection::getFileLocationRedirect()"
+      - @ref ConnectionProvider::AbstractConnection::supportsFileLocations()
+        "AbstractConnection::supportsFileLocations()"
+      - @ref ConnectionProvider::AbstractConnection::getFileLocationHandler()
+        "AbstractConnection::getFileLocationHandler()"
+      - @ref ConnectionProvider::AbstractConnection::getConfinedFileLocationPath()
+        "AbstractConnection::getConfinedFileLocationPath()"
+      \n
+      implemented for @ref ConnectionProvider::FilesystemConnection "FilesystemConnection",
+      @ref ConnectionProvider::FtpConnection "FtpConnection", and
+      @ref ConnectionProvider::HttpConnection "HttpConnection"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - the HTTP connection \c ssl_cert_path and \c ssl_key_path options are now
       declared as \c "file-as-string" + \c freeform, advertising that the value
       (already resolved with \c FileLocationHandler) may be a bare path or any
@@ -563,6 +578,30 @@ public hashdecl ConnectionDataInfo {
 
     #! if the data provider or any of its children support transaction management
     bool children_can_support_transactions = False;
+}
+
+#! Describes how to satisfy a file location through an existing file location handler scheme
+/** As returned by @ref ConnectionProvider::AbstractConnection::getFileLocationRedirect()
+    "AbstractConnection::getFileLocationRedirect()"
+
+    Connections that map cleanly onto a scheme already supported by the \c FileLocationHandler module return this
+    hash instead of implementing file I/O themselves; the \c "conn://" location handler then re-enters normal
+    dispatch for the target scheme, reusing that handler's blocking, streaming, and polling implementations.
+
+    @since ConnectionProvider 3.1
+*/
+public hashdecl FileLocationRedirect {
+    #! The target file location scheme; ex: \c "sftp"
+    string scheme;
+
+    #! The location string for the target scheme, without the scheme prefix
+    /** @note This value may contain password information; never include it in error messages or log output; use
+        @ref ConnectionProvider::AbstractConnection::getSafeUrl() "AbstractConnection::getSafeUrl()" instead
+    */
+    string location;
+
+    #! Options to merge into the request options, if any
+    *hash<auto> opts;
 }
 
 #! config informaton

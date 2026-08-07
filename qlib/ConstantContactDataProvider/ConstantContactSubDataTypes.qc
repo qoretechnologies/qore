@@ -317,7 +317,7 @@ public class ConstantContactEmailCampaignActivityDataType inherits HashDataType 
                 ),
             },
             "from_email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "From Email",
                 "short_desc": "The sender email address",
                 "desc": "The email address used as the sender",
@@ -331,7 +331,7 @@ public class ConstantContactEmailCampaignActivityDataType inherits HashDataType 
                 "example_value": "My Company Newsletter",
             },
             "reply_to_email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Reply-To Email",
                 "short_desc": "The reply-to email address",
                 "desc": "The email address for replies",
@@ -817,13 +817,13 @@ public class ConstantContactCompanyLogoDataType inherits HashDataType {
     public {
         const Fields = {
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URL",
                 "short_desc": "Constant Contact hosted logo URL",
                 "desc": "The Constant Contact hosted URL for the company logo",
             },
             "external_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "External URL",
                 "short_desc": "External logo URL",
                 "desc": "An external URL for the company logo",

@@ -30,7 +30,7 @@ public class GorgiasCreateCustomerRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Customer email address",
                 "desc": "The primary email address of the customer",

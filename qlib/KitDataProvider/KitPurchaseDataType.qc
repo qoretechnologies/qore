@@ -43,7 +43,7 @@ public class KitPurchaseDataType inherits HashDataType {
                 "desc": "The external transaction identifier for the purchase",
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email Address",
                 "short_desc": "The buyer's email address",
                 "desc": "The email address of the buyer",

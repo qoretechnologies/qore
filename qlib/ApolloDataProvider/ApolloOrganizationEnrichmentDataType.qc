@@ -43,7 +43,7 @@ public class ApolloOrganizationEnrichmentDataType inherits HashDataType {
                 "desc": "The name of the company",
             },
             "website_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Website URL",
                 "short_desc": "Website",
                 "desc": "The website URL of the organization",

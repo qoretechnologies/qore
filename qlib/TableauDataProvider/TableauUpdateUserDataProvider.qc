@@ -47,7 +47,7 @@ public class TableauUpdateUserRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The user's email address",
                 "desc": "The new email address of the user",

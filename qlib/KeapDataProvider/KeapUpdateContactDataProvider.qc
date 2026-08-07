@@ -49,7 +49,7 @@ public class KeapUpdateContactRequestDataType inherits HashDataType {
                 "desc": "The new family (last) name of the contact",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The contact's email address",
                 "desc": "The contact's email address. Converted to the API's `email_addresses` "

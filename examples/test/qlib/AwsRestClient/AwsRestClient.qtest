@@ -87,6 +87,7 @@ class AwsTest inherits QUnit::Test {
         addTestCase("IMDSv2 end-to-end against fake server", \imdsE2ETest());
         addTestCase("aws_imds_disabled skips IMDS", \imdsDisabledTest());
         addTestCase("IMDS probe is bounded by its timeout", \imdsTimeoutTest());
+        addTestCase("S3 requests carry x-amz-content-sha256", \s3ContentSha256Test());
         set_return_value(main());
     }
 
@@ -463,6 +464,75 @@ class AwsTest inherits QUnit::Test {
                 "aws_imds_disabled": True,
             });
         });
+    }
+
+    #! S3 rejects any request without the payload hash in a header
+    /** Regression: the payload hash was computed for the canonical request but never sent, so every S3 request
+        failed with "InvalidRequest: Missing required header for this request: x-amz-content-sha256".  The
+        header must also be covered by the signature, or AWS rejects the request as a signature mismatch
+        instead.
+    */
+    s3ContentSha256Test() {
+        HttpServer srv(\log(), \log());
+        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit srv.stop();
+        srv.setDefaultHandler("cap", new HeaderCaptureHandler());
+
+        AwsRestClient rest({
+            "url": "http://localhost:" + port,
+            "aws_keyid": "AKIAEXAMPLE",
+            "aws_secret": "secret",
+            "aws_region": "us-east-1",
+            "aws_service": "s3",
+            "aws_s3": True,
+            "aws_imds_disabled": True,
+        });
+        on_exit rest.disconnect();
+
+        rest.get("/");
+        *hash<auto> hdr = HeaderCaptureHandler::last_hdr;
+        assertTrue(exists hdr, "the request reached the server");
+
+        # the header must be present and hold the SHA-256 of the payload; for a GET the payload is empty
+        string empty_hash = digest(CRYPTO_DIGEST_SHA256, "").toHex();
+        assertEq(empty_hash, hdr."x-amz-content-sha256", "the empty-payload hash is sent");
+        # ... and it must be covered by the signature, or AWS reports a signature mismatch
+        assertRegex("SignedHeaders=[^,]*x-amz-content-sha256", hdr.authorization,
+            "the header is included in the signed headers");
+
+        # a request with a body must send that body's hash, not the empty one
+        remove HeaderCaptureHandler::last_hdr;
+        rest.put("/bucket/key", "some content");
+        assertNeq(empty_hash, HeaderCaptureHandler::last_hdr."x-amz-content-sha256",
+            "a request with a body sends that body's hash");
+
+        # a non-S3 AWS service must be unaffected: the header is required by S3 only
+        AwsRestClient other({
+            "url": "http://localhost:" + port,
+            "aws_keyid": "AKIAEXAMPLE",
+            "aws_secret": "secret",
+            "aws_region": "us-east-1",
+            "aws_service": "iam",
+            "aws_imds_disabled": True,
+        });
+        on_exit other.disconnect();
+        remove HeaderCaptureHandler::last_hdr;
+        other.get("/");
+        assertEq(NOTHING, HeaderCaptureHandler::last_hdr."x-amz-content-sha256",
+            "a non-S3 service does not send the S3-only header");
+    }
+}
+
+#! Records the headers of the last request, so that what is actually signed and sent can be asserted
+class HeaderCaptureHandler inherits AbstractHttpRequestHandler {
+    public {
+        static *hash<auto> last_hdr;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        last_hdr = hdr;
+        return makeResponse(200, "<?xml version=\"1.0\"?><ListAllMyBucketsResult></ListAllMyBucketsResult>",
+            {"Content-Type": "application/xml"});
     }
 }
 

@@ -149,7 +149,7 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
     */
     private pollOnce() {
         if (!form_id) {
-            error("Cannot poll for submissions: form_id not set");
+            LoggerWrapper::error("Cannot poll for submissions: form_id not set");
             return;
         }
         try {
@@ -182,7 +182,7 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
             }
             commitCheckpoint(records.size() ? records.last().id : last_submission_id, delivered);
         } catch (hash<ExceptionInfo> ex) {
-            error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc));
         }
     }
 

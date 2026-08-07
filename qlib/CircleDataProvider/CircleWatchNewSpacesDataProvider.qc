@@ -90,7 +90,7 @@ public class CircleSpaceDataType inherits HashDataType {
                 "desc": "The ID of the community this space belongs to",
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URL",
                 "short_desc": "Space URL",
                 "desc": "The URL of the space",

@@ -34,7 +34,7 @@ public class FirecrawlCrawlRequestDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The starting URL to crawl",
                 "desc": "The starting URL of the website to crawl",
-                "type": StringType,
+                "type": UriType,
                 "required": True,
                 "example_value": "https://example.com",
             },

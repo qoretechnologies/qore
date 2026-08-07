@@ -147,6 +147,24 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
             },
         };
 
+        #! Connection options understood by the \c FileLocationHandler HTTP location handler
+        /** Forwarded by @ref getFileLocationRedirect() so that \c "conn://" locations resolved through this
+            connection honor the TLS settings, timeouts, and proxy configured on the connection
+
+            @since ConnectionProvider 3.1
+        */
+        const HttpFileLocationOptions = (
+            "connect_timeout",
+            "proxy",
+            "ssl_cert_data",
+            "ssl_cert_path",
+            "ssl_key_data",
+            "ssl_key_password",
+            "ssl_key_path",
+            "ssl_verify_cert",
+            "timeout",
+        );
+
         #! Connection entry info
         const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "HTTP Connection",
@@ -523,6 +541,54 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "HttpConnection returns raw HTTPClient objects, which do not support negotiate_auth; use "
                 "RestConnection for Kerberos/SPNEGO HTTP Negotiate authentication";
         }
+    }
+
+    #! Returns an \c "http" or \c "https" scheme redirect for the given path
+    /** @param path the path relative to any path in the connection URL
+        @param write @ref True if the location will be written to
+
+        @return a @ref FileLocationRedirect hash for the connection's HTTP scheme
+
+        Connection options that the \c FileLocationHandler HTTP handler also understands are forwarded in the
+        redirect so that TLS settings, timeouts, and any proxy configured on the connection are honored.
+
+        @note
+        - Kerberos/SPNEGO connections are not redirected; \c negotiate_auth cannot be expressed in a location string
+          and raw \c HTTPClient paths reject it in any case.  Such connections fall through to the next resolution
+          tier
+        - The returned location may carry credentials; it must never appear in error messages or log output
+
+        @since ConnectionProvider 3.1
+    */
+    private *hash<FileLocationRedirect> getFileLocationRedirectImpl(string path, bool write) {
+        # negotiate_auth cannot be expressed in a location string; let a later tier handle these connections
+        if (opts.negotiate_auth) {
+            return;
+        }
+
+        string file_path = AbstractConnection::getConfinedFileLocationPath(name, urlh.path ?? "/", path);
+
+        string authority = urlh.username.val() && urlh.password.val()
+            ? sprintf("%s:%s@%s", urlh.username, urlh.password, urlh.host)
+            : urlh.host;
+        if (urlh.port) {
+            authority += sprintf(":%d", urlh.port);
+        }
+
+        # forward only options that are actually set; a hash slice would include unset keys with no value, which
+        # the target handler would then treat as explicitly-supplied values
+        return <FileLocationRedirect>{
+            "scheme": urlh.protocol.val() ? urlh.protocol : "http",
+            "location": authority + file_path,
+            "opts": map {$1: opts{$1}}, HttpFileLocationOptions, exists opts{$1},
+        };
+    }
+
+    #! Returns connection features
+    private *hash<string, bool> getFeaturesImpl() {
+        return {
+            AbstractConnection::CF_FILE_LOCATIONS: True,
+        };
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

@@ -30,7 +30,7 @@ public class ApolloEnrichOrganizationRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "domain": {
-                "type": StringType,
+                "type": HostnameType,
                 "display_name": "Domain",
                 "short_desc": "The organization domain",
                 "desc": "The organization domain to enrich",

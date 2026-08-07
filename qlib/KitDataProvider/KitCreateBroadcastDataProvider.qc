@@ -54,7 +54,7 @@ public class KitCreateBroadcastRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email Address",
                 "short_desc": "The sender email address",
                 "desc": "The email address used as the sender for the broadcast",
@@ -91,7 +91,7 @@ public class KitCreateBroadcastRequestDataType inherits HashDataType {
                 "desc": "The alternative text for the broadcast thumbnail image",
             },
             "thumbnail_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Thumbnail URL",
                 "short_desc": "The thumbnail URL",
                 "desc": "The URL of the broadcast thumbnail image",

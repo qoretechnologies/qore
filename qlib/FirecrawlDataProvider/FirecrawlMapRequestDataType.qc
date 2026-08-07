@@ -34,7 +34,7 @@ public class FirecrawlMapRequestDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The URL to map",
                 "desc": "The starting URL of the website to map",
-                "type": StringType,
+                "type": UriType,
                 "required": True,
                 "example_value": "https://example.com",
             },

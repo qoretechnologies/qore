@@ -53,7 +53,7 @@ public class ClickFunnelsFormDataType inherits HashDataType {
                 "desc": "The name of the form",
             },
             "redirect_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Redirect URL",
                 "short_desc": "The redirect URL after submission",
                 "desc": "The URL to redirect to after form submission",

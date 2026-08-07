@@ -12016,10 +12016,20 @@ void SocketPollSocketOperationBase::abort(ExceptionSink* xsink) {
 
 void SocketPollSocketOperationBase::abortLocked(ExceptionSink* xsink) {
     assert(sock->priv->m.trylock());
+    // abortNeedsClose() must be evaluated BEFORE poll_state.reset(): every override that
+    // distinguishes a recoverable abort from an unrecoverable one does so by asking the poll state how
+    // many bytes it already consumed, and they all report "close" when there is no poll state at all.
+    // Resetting first therefore turns every abort into a close, which makes an ordinary recoverable
+    // timeout -- Socket::recv(count, timeout) with no data available, aborted by the async I/O
+    // controller when the deadline expires -- tear down a perfectly healthy socket, so the caller that
+    // catches SOCKET-TIMEOUT and retries gets SOCKET-NOT-OPEN instead.
+    // SocketReadHttpChunkedBodyPollOperation::abort() open-codes this same ordering rather than
+    // delegating here.
+    bool needs_close = abortNeedsClose();
     poll_state.reset();
     if (set_non_block) {
         sock->priv->clearNonBlock(non_block_direction);
-        if (abortNeedsClose()) {
+        if (needs_close) {
             qore_socket_close_from_controller(sock->priv->socket);
         }
         set_non_block = false;

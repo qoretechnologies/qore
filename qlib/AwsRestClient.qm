@@ -47,6 +47,8 @@ module AwsRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("awsrests", AwsRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("s3", AwsS3RestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("s3compatible", AwsS3CompatibleRestConnection::ConnectionScheme);
     };
 }
 
@@ -92,6 +94,12 @@ printf("%Y\n", ans.body);
     @section Awsrestclientrelnotes Release Notes
 
     @subsection awsrestclientv1_3 AwsRestClient v1.3
+    - added @ref AwsRestClient::AwsS3RestConnection "AwsS3RestConnection" for Amazon S3, which needs no URL -
+      the endpoint is derived from the region - and offers the AWS regions as a list
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - added @ref AwsRestClient::AwsS3CompatibleRestConnection "AwsS3CompatibleRestConnection" for S3-compatible
+      storage that is not Amazon, such as MinIO and Ceph, which is reached at a URL of its own
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - bounded the IMDS credential probe with its own timeout (\c aws_imds_timeout, default
       @ref AwsRestClient::AwsRestClientBase::ImdsTimeoutMs "ImdsTimeoutMs"); off AWS the
       link-local metadata address is routed rather than rejected on some platforms, so the probe
@@ -165,6 +173,197 @@ public class AwsRestClientBase {
 
         #! Fixed termination string
         const AwsTermination = "aws4_request";
+
+        #! The payload hash placeholder used when signing a request whose body is not known
+        /** A presigned URL is made before the body exists -- and for a download there is no body at all -- so
+            the payload cannot be hashed into the signature
+        */
+        const UnsignedPayload = "UNSIGNED-PAYLOAD";
+
+        #! The longest lifetime AWS accepts for a presigned URL, in seconds (7 days)
+        const MaxPresignedUrlSeconds = 604800;
+
+        #! The content type assumed for an S3 response body that arrives without one
+        /** S3 answers some operations with XML and no \c Content-Type header; it never returns anything else
+            in that position
+        */
+        const AssumedS3ContentType = "text/xml";
+    }
+
+    private {
+        #! the AWS access key ID
+        string aws_keyid;
+
+        #! the AWS secret access key
+        string aws_secret;
+
+        #! the AWS region
+        string aws_region;
+
+        #! the AWS service
+        string aws_service;
+
+        #! is this client signing requests for AWS S3?
+        bool aws_s3 = False;
+
+        #! temporary session token
+        string aws_token;
+
+        #! credential scope suffix: \c "<region>/<service>/aws4_request"
+        string credential_scope_suffix;
+    }
+
+    #! Returns the value this client sends in the \c host header
+    /** Query-string signing signs \c host and nothing else, so a presigned URL is only valid if this matches
+        the header the recipient's own request will carry.
+
+        The two clients derive it differently -- the synchronous client asks the underlying
+        @ref Qore::HTTPClient "HTTPClient", while the async client parses it from the URL when it is
+        constructed -- so it is supplied by the subclass.
+    */
+    private abstract string getAwsHostHeaderValue();
+
+    #! Returns the \c scheme://host[:port] prefix that a presigned URL is built on
+    private abstract string getAwsBaseUrl();
+
+    #! Returns the AWS region this client signs requests for
+    /** @return the AWS region this client signs requests for
+
+        Callers that must include the region in a request payload rather than in the signature need this; the
+        S3 \c CreateBucket operation carries the region in its body, for example.
+
+        @since AwsRestClient 1.3
+    */
+    string getAwsRegion() {
+        return aws_region;
+    }
+
+    #! Returns the AWS service this client signs requests for
+    /** @return the AWS service this client signs requests for
+
+        @since AwsRestClient 1.3
+    */
+    string getAwsService() {
+        return aws_service;
+    }
+
+    #! Returns a presigned URL carrying its own AWS Signature V4 authorization in the query string
+    /** A presigned URL grants whoever holds it the one operation it was signed for, until it expires, with no
+        AWS credentials of their own.  That is what makes it useful -- an object can be handed to a system that
+        cannot authenticate to AWS at all -- and also what makes it sensitive: **the URL is the credential**,
+        so it should be given the shortest lifetime that serves the purpose and never logged.
+
+        This is query-string signing, which differs from the header signing every other request here uses:
+
+        - the authorization travels as \c X-Amz-* query parameters rather than in an \c Authorization header,
+          because the recipient sends no headers of ours;
+        - only the \c host header is signed, for the same reason;
+        - the payload is signed as \c UNSIGNED-PAYLOAD, since the body is not known when the URL is made.
+
+        @param http_method the HTTP method the URL is signed for; a URL signed for one method does not work
+        with another
+        @param path the URI path, which may carry its own query arguments
+        @param expires how long the URL remains valid; AWS rejects anything over 7 days
+        @param query additional query arguments to sign into the URL
+
+        @return the presigned URL
+
+        @throw AWS-PRESIGN-ERROR the expiry is not a positive duration, or exceeds the AWS maximum of 7 days
+
+        @note The URL is only valid while the credentials that signed it are; one signed with temporary
+        session credentials stops working when they expire, whatever lifetime was asked for here.
+
+        @note **Fetching the URL with @ref Qore::HTTPClient requires the \c pre_encoded_urls option.**  By
+        default the HTTP client percent-encodes the URI path of a request, and the credential scope in a
+        presigned URL contains \c %%2F separators that AWS re-encodes when it verifies the signature; encoding
+        them a second time produces \c %%252F on the wire, which AWS rejects as a malformed credential rather
+        than as a bad signature.  Any client that sends the target verbatim works unchanged -- which includes
+        @ref RestClientIo::RestClientIo "RestClientIo" and everything built on it.
+        synchronous and async clients cannot drift apart in how they sign
+    */
+    string getPresignedUrl(string http_method, string path, date expires, *hash<auto> query) {
+        int secs = expires.durationSeconds();
+        if (secs <= 0) {
+            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL must be given a positive lifetime; got %y",
+                expires);
+        }
+        if (secs > MaxPresignedUrlSeconds) {
+            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL cannot be valid for longer than %d seconds "
+                "(7 days), which is the AWS maximum; got %y", MaxPresignedUrlSeconds, expires);
+        }
+
+        date gmtime = Qore::gmtime();
+        string gmdate = gmtime.format("YYYYMMDD");
+        string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
+        string scope = sprintf("%s/%s", gmdate, credential_scope_suffix);
+
+        # arguments already on the path are signed along with the ones added here; a URL whose signature did
+        # not cover them would be rejected the moment the recipient used it
+        hash<UriQueryInfo> uri_info = parse_uri_query(path);
+        hash<auto> params = (uri_info.params ?? {}) + (query ?? {}) + {
+            "X-Amz-Algorithm": AwsSignatureAlgorithm,
+            "X-Amz-Credential": sprintf("%s/%s", aws_keyid, scope),
+            "X-Amz-Date": aws_date,
+            "X-Amz-Expires": secs,
+            "X-Amz-SignedHeaders": "host",
+        };
+        # temporary credentials carry a session token, and it has to be presented with them
+        if (aws_token.val()) {
+            params."X-Amz-Security-Token" = aws_token;
+        }
+
+        string canonical_query = AwsRestClientBase::getCanonicalQueryString(params);
+
+        string uri = uri_info.method ?? "/";
+        if (!aws_s3) {
+            uri = normalize_dir_unix(uri, "/");
+        }
+        uri = encode_url(uri, False);
+        # every service other than S3 encodes the canonical URI twice
+        if (!aws_s3) {
+            uri = encode_url(uri, False);
+        }
+
+        # the canonical request, with only "host" signed and the payload left unsigned
+        string cstr = http_method + "\n"
+            + uri + "\n"
+            + canonical_query + "\n"
+            + "host:" + getAwsHostHeaderValue() + "\n\n"
+            + "host\n"
+            + UnsignedPayload;
+
+        string req_string = AwsSignatureAlgorithm + "\n"
+            + aws_date + "\n"
+            + scope + "\n"
+            + digest(QoreDigest, cstr).toHex();
+
+        binary signing_key = hmac(QoreDigest, gmdate, "AWS4" + aws_secret);
+        signing_key = hmac(QoreDigest, aws_region, signing_key);
+        signing_key = hmac(QoreDigest, aws_service, signing_key);
+        signing_key = hmac(QoreDigest, AwsTermination, signing_key);
+        string sig = hmac(QoreDigest, req_string, signing_key).toHex();
+
+        return sprintf("%s%s?%s&X-Amz-Signature=%s", getAwsBaseUrl(), uri_info.method ?? "/", canonical_query,
+            sig);
+    }
+
+    #! Returns the canonical query string for AWS Signature V4
+    /** Parameters are sorted by name and each name and value URI-encoded; AWS rebuilds the same string when it
+        verifies the signature, so any difference in order or encoding is a signature mismatch rather than a
+        readable error.
+
+        @param params the query parameters
+
+        @return the canonical query string
+
+        @since AwsRestClient 1.3
+    */
+    static string getCanonicalQueryString(hash<auto> params) {
+        return (foldl $1 + "&" + $2, (
+            map sprintf("%s=%s", encode_url($1, True),
+                params{$1} === True ? "" : encode_url(params{$1}.toString(), True)),
+            sort(keys params)
+        )) ?? "";
     }
 
     static private string trimall(string str) {
@@ -714,22 +913,9 @@ public class AwsRestClientBase {
     - \c aws_service
 */
 public class AwsRestClient inherits RestClient::RestClient, AwsRestClientBase {
-    private:internal {
-        # the AWS access key ID
-        string aws_keyid;
-        # the AWS secret access key
-        string aws_secret;
-        # the AWS region
-        string aws_region;
-        # the AWS service
-        string aws_service;
-        # is this request for AWS S3?
-        bool aws_s3 = False;
-        # temporary session token
-        string aws_token;
-        # credential scope suffix
-        string credential_scope_suffix;
-    }
+    # NOTE: the AWS credential and scope members live in AwsRestClientBase, where getPresignedUrl() can
+    # reach them; they were previously declared "private:internal" in each client, which is what forced
+    # query-string signing to be written twice
 
     #! creates the object with the given options
     /**
@@ -798,7 +984,23 @@ AwsRestClient rest({
 
         @note the \c data option is always set to \c "json"
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(opts + {"data": "json"}, do_not_connect) {
+    /** @note \c data defaults to \c "json" but is no longer forced: it was applied on the right-hand side of
+        the option hash, so it overrode whatever the caller asked for.  S3 sends and receives raw bytes and
+        asks for \c "bin"; with the option overridden, every upload body was serialized into a JSON document
+        and objects were stored as a quoted base64 string rather than as their content.
+
+        @note For S3, \c pre_encoded_urls is forced on and is not a user option.  S3 URIs are URI-encoded
+        exactly once and the signature covers the target as it is built, so the target must reach the server
+        unchanged; without this the HTTP client percent-encodes the path again on the way out, turning a
+        signed \c %%2F into \c %%252F on the wire, and every request whose path or query carries a reserved
+        character is rejected with \c SignatureDoesNotMatch.
+
+        It is applied only for S3.  Every other AWS service URI-encodes twice and its callers pass unencoded
+        paths, so their existing behavior is unchanged.
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient({"data": "json"} + opts
+                + (opts.aws_s3 ? {"pre_encoded_urls": True} : {}), do_not_connect) {
         # AWS does not support basic authentication
         hash<UrlInfo> url_info = parse_url(opts.url);
         if (url_info{"username", "password"}) {
@@ -851,6 +1053,49 @@ AwsRestClient rest({
             aws_token = opts.aws_token;
             headers."X-Amz-Security-Token" = aws_token;
         }
+    }
+
+    #! Sends a request, assuming an XML response body when the server sends one with no content type
+    /** Amazon S3 answers several operations -- \c CreateMultipartUpload and \c CompleteMultipartUpload among
+        them -- with an XML document and **no \c Content-Type header at all**.  The REST client will not
+        deserialize a body whose type it has not been told, so such a response fails with
+        \c DESERIALIZATION-ERROR even though it is a perfectly good `200`.
+
+        S3 only ever returns XML in that position, so it is assumed here.  A response that does carry a
+        content type is unaffected: the assumption is applied only when the header is absent, so an object
+        download still arrives as whatever type it was stored with.
+
+        @param m the HTTP method
+        @param path the URI path
+        @param body the request body, if any
+        @param info an optional reference to request and response information
+        @param decode_errors decode the response body on an error status
+        @param hdr any additional request headers
+
+        @return the response
+
+        @since AwsRestClient 1.3
+    */
+    hash<auto> doRequestAssumingXml(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        checkLogin(\info);
+        return doRequestIntern(m, path, body, \info, decode_errors, hdr, AssumedS3ContentType);
+    }
+
+    #! Returns the value this client sends in the "host" header
+    /** Supplied to @ref AwsRestClientBase::getPresignedUrl() "getPresignedUrl()", which signs \c host and
+        nothing else; the underlying @ref Qore::HTTPClient "HTTPClient" already knows it.
+    */
+    private string getAwsHostHeaderValue() {
+        return getHostHeaderValue();
+    }
+
+    #! Returns the "scheme://host[:port]" prefix a presigned URL is built on
+    /** An AWS URL carries no credentials -- the constructor rejects one that does -- so the safe URL and the
+        real URL are the same string here.
+    */
+    private string getAwsBaseUrl() {
+        return getSafeURL();
     }
 
     hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,
@@ -925,6 +1170,14 @@ AwsRestClient rest({
         # get AWS date value
         string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
         hdr."X-Amz-Date" = aws_date;
+        # S3 requires the payload hash to be sent in a header as well as included in the canonical request, and
+        # rejects any request without it: "InvalidRequest: Missing required header for this request:
+        # x-amz-content-sha256".  It is set here, before the canonical headers are built, so that it is signed
+        # as well as sent; setting it afterwards would produce a signature that does not cover it and AWS would
+        # reject the request as a signature mismatch instead
+        if (aws_s3) {
+            hdr."X-Amz-Content-Sha256" = digest(QoreDigest, body ?? "").toHex();
+        }
         string csig = getCanonicalSignature(http_method, path, hdr, body, \signed_headers);
 
         string msg = AwsSignatureAlgorithm + "\n"
@@ -947,16 +1200,21 @@ AwsRestClient rest({
         # 2: canonical URI parameter
         string uri = uri_info.method ?? "/";
 
-        # normalize the path if not an S3 request
+        # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here.
+        #
+        # S3 URI-encodes the canonical path once, every other service twice
+        # (https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html).  An S3 caller
+        # builds an already-encoded path -- it has to, since a key may contain any character and "/" separates
+        # path segments rather than being data -- and "pre_encoded_urls" sends that path verbatim.  Encoding it
+        # again here would sign "%2520" while the wire carried "%20", which AWS reports as
+        # SignatureDoesNotMatch: that is how an object key containing a space and a listing continuation token
+        # containing "/" both failed.
+        #
+        # Other services keep the previous behavior exactly: their callers pass unencoded paths, which are
+        # normalized and then encoded twice.
         if (!aws_s3) {
             uri = normalize_dir_unix(uri, "/");
-        }
-
-        # URI-encode the path
-        uri = encode_url(uri, False);
-        # non-AWS-S3 requests must be URI-encoded twice
-        # https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
-        if (!aws_s3) {
+            uri = encode_url(uri, False);
             uri = encode_url(uri, False);
         }
         # add to canonical string
@@ -1219,21 +1477,9 @@ public class AwsRestConnection inherits RestClient::RestConnection {
     @see AwsRestClient for more information
 */
 public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientBase {
+    # NOTE: the AWS credential and scope members live in AwsRestClientBase; only the host parsed from the
+    # URL is specific to this client, since there is no HTTPClient underneath to ask for it
     private:internal {
-        #! the AWS access key ID
-        string aws_keyid;
-        #! the AWS secret access key
-        string aws_secret;
-        #! the AWS region
-        string aws_region;
-        #! the AWS service
-        string aws_service;
-        #! is this request for AWS S3?
-        bool aws_s3 = False;
-        #! temporary session token
-        string aws_token;
-        #! credential scope suffix
-        string credential_scope_suffix;
         #! parsed host from URL
         string aws_host;
     }
@@ -1243,7 +1489,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(AwsRestClientIo::stripAwsOptions(opts) + {"data": "json"}, shared_mgr) {
+            : RestClientIo({"data": "json"} + AwsRestClientIo::stripAwsOptions(opts), shared_mgr) {
         hash<UrlInfo> url_info = parse_url(opts.url);
         if (url_info{"username", "password"}) {
             throw "AWSRESTCLIENT-ERROR", sprintf("AWS URL must not contain a username or password; URL: %y",
@@ -1305,9 +1551,88 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         return opts - (keys AwsRestClientBase::AwsOptions);
     }
 
+    #! Returns the value this client sends in the "host" header
+    /** Supplied to @ref AwsRestClientBase::getPresignedUrl() "getPresignedUrl()", which signs \c host and
+        nothing else.  There is no @ref Qore::HTTPClient "HTTPClient" underneath to ask, so this is the value
+        parsed from the URL when the client was constructed -- the same one @ref signRequest() signs.
+    */
+    private string getAwsHostHeaderValue() {
+        return aws_host;
+    }
+
+    #! Returns the "scheme://host[:port]" prefix a presigned URL is built on
+    /** An AWS URL carries no credentials -- the constructor rejects one that does -- so the URL and the safe
+        URL are the same string here.
+    */
+    private string getAwsBaseUrl() {
+        return getUrl();
+    }
+
     #! Sends a generic REST request with AWS Signature V4 signing
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
             *hash<auto> hdr) {
+        return restDoRequestIntern(method, path, body, hdr);
+    }
+
+    #! Sends a signed REST request, assuming an XML response body when the server sends no content type
+    /** S3 answers \c CreateMultipartUpload and \c CompleteMultipartUpload with an XML document and no
+        \c Content-Type header at all.  Without one the REST client has nothing to deserialize against and
+        leaves the body as raw data, so a caller reading the upload ID out of the document gets
+        @ref nothing -- and a multipart upload cannot be opened.
+
+        S3 only ever returns XML in that position, so it is assumed here.  A response that does carry a
+        content type is unaffected: the assumption is applied only when the header is absent, so an object
+        download still arrives as whatever type it was stored with.
+
+        This is the async counterpart of
+        @ref AwsRestClient::doRequestAssumingXml() "AwsRestClient::doRequestAssumingXml()".
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the request body, if any
+        @param hdr any additional request headers
+
+        @return the deserialized @ref RestClient::RestResponseInfo hash
+    */
+    hash<RestClient::RestResponseInfo> restDoRequestAssumingXml(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequestIntern(method, path, body, hdr, AwsRestClientBase::AssumedS3ContentType);
+    }
+
+    #! Applies AWS Signature V4 to every asynchronous request attempt
+    /** Overrides @ref RestClientIo::RestClientIo::prepareAsyncRequestAttempt() so that the async paths --
+        @ref RestClientIo::RestClientIo::restDoRequestAsync() "restDoRequestAsync()",
+        @ref RestClientIo::RestClientIo::startPollRequest() "startPollRequest()", and everything else built on
+        @ref RestClientIo::RestClientIoAsyncRequestOperation "RestClientIoAsyncRequestOperation" -- sign
+        their requests exactly as @ref restDoRequest() does.
+
+        Without this they do not sign at all: @ref signRequest() was only ever called from
+        @ref restDoRequest(), so an async AWS request went out with no \c authorization header and AWS
+        rejected it.  The generic \a signer hook cannot serve here, because it sets a single header, while
+        SigV4 sets \c host, \c x-amz-date, \c x-amz-content-sha256 and \c authorization together, each of
+        which is part of what the others sign.
+
+        @note The signature covers the **effective** path, which is why this signs after the base class has
+        prepared the request: \a path is updated by reference there to include any connection path, and
+        signing the pre-prepared path would produce a signature for a URI the request does not use.
+    */
+    hash<auto> prepareAsyncRequestAttempt(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr, bool raw, reference<*auto> negotiate_context, *string shdr,
+            *code signer) {
+        hash<auto> prepared = RestClientIo::prepareAsyncRequestAttempt(method, \path, body, \hdr, raw,
+            \negotiate_context, shdr, signer);
+        signRequest(method, path, prepared.serialized_body, \hdr);
+        return prepared + {
+            "request_headers": hdr,
+        };
+    }
+
+    #! Internal: signs and sends a request, optionally assuming a content type for an untyped response
+    /** @param assume_content_type the content type to attribute to a response that arrives without one; the
+        header is only supplied when the server sent none, so a typed response is never reinterpreted
+    */
+    private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
+            *hash<auto> hdr, *string assume_content_type) {
         # Prepare request (serialize body, merge headers)
         hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
 
@@ -1317,6 +1642,11 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         # Make HTTP request via multiplexed connection manager
         hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
             prepared.serialized_body);
+
+        if (assume_content_type.val() && !raw.headers."content-type".val()) {
+            log(LoggerLevel::DEBUG, "missing content-type from response; assuming %y", assume_content_type);
+            raw.headers."content-type" = assume_content_type;
+        }
 
         # Deserialize and return
         return buildResponse(raw, prepared.error_passthru,
@@ -1341,6 +1671,13 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         # Get AWS date value
         string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
         hdr."x-amz-date" = aws_date;
+
+        # S3 requires the payload hash in a header as well as in the canonical request; see the note in
+        # AwsRestClient::getRequestString().  It must be set before the canonical headers are built so that it
+        # is signed as well as sent
+        if (aws_s3) {
+            hdr."x-amz-content-sha256" = digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
+        }
 
         # Build canonical signature
         string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers);
@@ -1371,11 +1708,14 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         hash<UriQueryInfo> uri_info = parse_uri_query(path);
         string uri = uri_info.method ?? "/";
 
+        # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here; see the same
+        # decision in AwsRestClient::getCanonicalSignature().  An S3 caller builds an already-encoded path,
+        # and encoding it again would sign "%2520" where the wire carried "%20", which AWS reports as
+        # SignatureDoesNotMatch.  Other services keep the previous behavior: their callers pass unencoded
+        # paths, which are normalized and then encoded twice
         if (!aws_s3) {
             uri = normalize_dir_unix(uri, "/");
-        }
-        uri = encode_url(uri, False);
-        if (!aws_s3) {
+            uri = encode_url(uri, False);
             uri = encode_url(uri, False);
         }
         cstr += uri + "\n";
@@ -1410,6 +1750,421 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         cstr += digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
 
         return digest(AwsRestClientBase::QoreDigest, cstr).toHex();
+    }
+}
+
+#! Common base class for Amazon S3 and S3-compatible connections
+/** Pins the AWS service to \c s3 and enables the S3 request-encoding mode, so that a connection can be created
+    without the caller having to know which AWS options S3 requires.
+
+    S3 signs requests differently from every other AWS service: request URIs are URI-encoded once rather than
+    twice and paths are not normalized.  @ref AwsRestClient implements that rule; it is selected by the
+    \c aws_s3 option, which this class sets and does not allow to be overridden.
+
+    Two connection types are built on this: @ref AwsS3RestConnection for Amazon S3 itself, which needs no URL
+    and offers a list of AWS regions, and @ref AwsS3CompatibleRestConnection for an S3-compatible service such
+    as MinIO or Ceph, which is reached at a URL of its own.
+
+    @since AwsRestClient 1.3
+*/
+public class AwsS3RestConnectionBase inherits AwsRestConnection {
+    public {
+        #! The AWS service name for S3
+        const AwsService = "s3";
+    }
+
+    #! creates the object
+    constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
+            : AwsRestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the object
+    constructor(hash<auto> config, *hash<auto> attr) : AwsRestConnection(config, attr) {
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "AmazonS3";
+    }
+
+    #! returns @ref True, as this connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns an AwsS3DataProvider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return an AwsS3DataProvider object for this connection
+    */
+    /** @note The provider is given the **async** client.  The S3 provider drives every request through
+        @ref RestClientIo::RestClientIo "RestClientIo" so that its pollers are genuinely non-blocking; handing
+        it the synchronous client would compile and then block an I/O thread at runtime
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, the data provider module is loaded and the object created dynamically
+        load_module("AwsS3DataProvider");
+        return create_object("AwsS3DataProvider", {
+            "restclient": getAsync(),
+            "path_style": opts.path_style ?? True,
+        } + constructor_options);
+    }
+
+    #! Returns client options with the AWS service and S3 encoding options pinned
+    /** @param rtopts runtime options
+
+        @return the client options with the S3-specific values applied
+
+        @note \c aws_service and \c aws_s3 are set unconditionally; a connection of this type is by definition an
+        S3 connection, and allowing either to be overridden would produce requests signed for the wrong service
+        or with the wrong URI encoding, which fail with an opaque signature mismatch
+
+        @note They are applied here, where the client is configured, rather than stored in the connection's own
+        options: these classes remove both from their declared option set so that neither appears as something a
+        user may set, and a connection option that is not declared is rejected as unknown when the connection is
+        validated
+
+        @note \c data is pinned to \c "bin" for the same reason.  S3 sends and receives object content as raw
+        bytes; with the client left on its JSON default, every upload body was serialized into a JSON document
+        and objects were stored as a quoted base64 string rather than as their content
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return AwsRestConnection::getConnectionOptions(rtopts) + {
+            "aws_service": AwsService,
+            "aws_s3": True,
+            "data": "bin",
+        };
+    }
+
+    #! Returns @ref True; Amazon S3 connections transfer objects natively
+    /** Overrides the base class, which leaves file locations to the application's file API for a connection
+        that serves an application.  S3 can do better than that API: an upload can be driven straight from an
+        output stream through a multipart upload, without holding the object in memory, and a download arrives
+        as the response body rather than base64-encoded into a JSON field.
+
+        @see @ref getFileLocationHandlerImpl()
+
+        @since AwsRestClient 1.3
+    */
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    #! Returns a file location handler transferring objects through Amazon S3 directly
+    /** @return an \c AwsS3DataProvider::AwsS3FileLocationHandler object bound to this connection's client
+
+        @note The data provider module is loaded dynamically to avoid a circular module dependency, exactly as
+        @ref getDataProvider() does
+
+        @since AwsRestClient 1.3
+    */
+    private object getFileLocationHandlerImpl() {
+        load_module("AwsS3DataProvider");
+        # the async client, so that getIoPollerForLocation() can return a poller that actually polls
+        return create_object("AwsS3DataProvider::AwsS3FileLocationHandler", getAsync(False), True);
+    }
+}
+
+#! Class for Amazon S3 connections; returns @ref AwsRestClient objects configured for S3
+/** Creating one of these needs an access key ID, a secret access key, and the region the buckets live in;
+    everything else is supplied by this class.  In particular **no URL is required**: Amazon serves every region
+    at a well-known endpoint, so the URL is derived from the region rather than asked for.  The region is offered
+    as a list of the AWS regions, and a region not in the list is still accepted, since AWS adds regions over
+    time.
+
+    Use @ref AwsS3CompatibleRestConnection instead for an S3-compatible service that is not Amazon; those are
+    reached at a URL of their own, which this class does not accept.
+
+    @since AwsRestClient 1.3
+*/
+public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
+    public {
+        #! The AWS regions offered when creating a connection
+        /** Not exhaustive by design: AWS adds regions, so \c allowed_values_creatable is set on the option and a
+            region that is not listed here is still accepted
+        */
+        const AwsRegions = (
+            <AllowedValueInfo>{"value": "us-east-1", "display_name": "US East (N. Virginia)",
+                "desc": "US East (N. Virginia)"},
+            <AllowedValueInfo>{"value": "us-east-2", "display_name": "US East (Ohio)",
+                "desc": "US East (Ohio)"},
+            <AllowedValueInfo>{"value": "us-west-1", "display_name": "US West (N. California)",
+                "desc": "US West (N. California)"},
+            <AllowedValueInfo>{"value": "us-west-2", "display_name": "US West (Oregon)",
+                "desc": "US West (Oregon)"},
+            <AllowedValueInfo>{"value": "af-south-1", "display_name": "Africa (Cape Town)",
+                "desc": "Africa (Cape Town)"},
+            <AllowedValueInfo>{"value": "ap-east-1", "display_name": "Asia Pacific (Hong Kong)",
+                "desc": "Asia Pacific (Hong Kong)"},
+            <AllowedValueInfo>{"value": "ap-south-1", "display_name": "Asia Pacific (Mumbai)",
+                "desc": "Asia Pacific (Mumbai)"},
+            <AllowedValueInfo>{"value": "ap-south-2", "display_name": "Asia Pacific (Hyderabad)",
+                "desc": "Asia Pacific (Hyderabad)"},
+            <AllowedValueInfo>{"value": "ap-northeast-1", "display_name": "Asia Pacific (Tokyo)",
+                "desc": "Asia Pacific (Tokyo)"},
+            <AllowedValueInfo>{"value": "ap-northeast-2", "display_name": "Asia Pacific (Seoul)",
+                "desc": "Asia Pacific (Seoul)"},
+            <AllowedValueInfo>{"value": "ap-northeast-3", "display_name": "Asia Pacific (Osaka)",
+                "desc": "Asia Pacific (Osaka)"},
+            <AllowedValueInfo>{"value": "ap-southeast-1", "display_name": "Asia Pacific (Singapore)",
+                "desc": "Asia Pacific (Singapore)"},
+            <AllowedValueInfo>{"value": "ap-southeast-2", "display_name": "Asia Pacific (Sydney)",
+                "desc": "Asia Pacific (Sydney)"},
+            <AllowedValueInfo>{"value": "ap-southeast-3", "display_name": "Asia Pacific (Jakarta)",
+                "desc": "Asia Pacific (Jakarta)"},
+            <AllowedValueInfo>{"value": "ap-southeast-4", "display_name": "Asia Pacific (Melbourne)",
+                "desc": "Asia Pacific (Melbourne)"},
+            <AllowedValueInfo>{"value": "ca-central-1", "display_name": "Canada (Central)",
+                "desc": "Canada (Central)"},
+            <AllowedValueInfo>{"value": "ca-west-1", "display_name": "Canada West (Calgary)",
+                "desc": "Canada West (Calgary)"},
+            <AllowedValueInfo>{"value": "eu-central-1", "display_name": "Europe (Frankfurt)",
+                "desc": "Europe (Frankfurt)"},
+            <AllowedValueInfo>{"value": "eu-central-2", "display_name": "Europe (Zurich)",
+                "desc": "Europe (Zurich)"},
+            <AllowedValueInfo>{"value": "eu-west-1", "display_name": "Europe (Ireland)",
+                "desc": "Europe (Ireland)"},
+            <AllowedValueInfo>{"value": "eu-west-2", "display_name": "Europe (London)",
+                "desc": "Europe (London)"},
+            <AllowedValueInfo>{"value": "eu-west-3", "display_name": "Europe (Paris)",
+                "desc": "Europe (Paris)"},
+            <AllowedValueInfo>{"value": "eu-north-1", "display_name": "Europe (Stockholm)",
+                "desc": "Europe (Stockholm)"},
+            <AllowedValueInfo>{"value": "eu-south-1", "display_name": "Europe (Milan)",
+                "desc": "Europe (Milan)"},
+            <AllowedValueInfo>{"value": "eu-south-2", "display_name": "Europe (Spain)",
+                "desc": "Europe (Spain)"},
+            <AllowedValueInfo>{"value": "il-central-1", "display_name": "Israel (Tel Aviv)",
+                "desc": "Israel (Tel Aviv)"},
+            <AllowedValueInfo>{"value": "me-south-1", "display_name": "Middle East (Bahrain)",
+                "desc": "Middle East (Bahrain)"},
+            <AllowedValueInfo>{"value": "me-central-1", "display_name": "Middle East (UAE)",
+                "desc": "Middle East (UAE)"},
+            <AllowedValueInfo>{"value": "sa-east-1", "display_name": "South America (São Paulo)",
+                "desc": "South America (São Paulo)"},
+        );
+
+        #! The default AWS region
+        const DefaultRegion = "us-east-1";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Amazon S3",
+            "short_desc": "A connection to Amazon S3 object storage",
+            "desc": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\n"
+                "Requires an AWS access key ID and secret access key with permission for the buckets to be "
+                "used, plus the region the buckets live in.  The URL is derived from the region, and the AWS "
+                "service and S3 request-encoding options are set automatically.\n\n"
+                "Use an **S3-Compatible Storage** connection instead for MinIO, Ceph, or another service that "
+                "speaks the S3 protocol but is not Amazon",
+            "cls": Class::forName("AwsS3RestConnection"),
+            # the URL is derived from the region, so the user is never asked for one
+            "auto_url": True,
+            "schemes": {
+                "s3": True,
+            },
+            "base_scheme_map": {
+                "https": "s3",
+            },
+            # "path_style" is not offered: path-style addressing is currently the only mode the data provider
+            # module implements, so it is not a choice the user can meaningfully make
+            "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
+                "aws_region": AwsRestConnection::ConnectionScheme.options.aws_region + <ConnectionOptionInfo>{
+                    "desc": "The AWS region holding the buckets to be used; this also selects the endpoint the "
+                        "connection is made to, so a region other than the one the buckets live in produces "
+                        "redirects and signature errors",
+                    "default_value": DefaultRegion,
+                    "allowed_values": AwsRegions,
+                    # AWS adds regions, so a region not in the list must still be accepted
+                    "allowed_values_creatable": True,
+                },
+            },
+            "required_options": "aws_keyid,aws_secret,aws_region",
+        };
+
+        #! The URL used when no region is set
+        /** @note carries the \c "s3" connection scheme rather than \c "https".  A connection stores this URL and
+            is rebuilt from it, and the scheme is what identifies the connection class; storing \c "https" would
+            make every reload resolve to the generic HTTP connection instead, which then rejects every AWS
+            option as unknown.  @ref ConnectionProvider::AbstractConnection::getRealUrl() "getRealUrl()" maps it
+            back to \c "https" for the client through @ref ConnectionScheme's \c base_scheme_map
+        */
+        const DefaultUrl = "s3://s3.amazonaws.com";
+    }
+
+    #! creates the AwsS3RestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url this argument is ignored; the URL is derived from the \c aws_region option
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl, hash<auto> attributes = {},
+            hash<auto> options = {})
+            : AwsS3RestConnectionBase(name, description, AwsS3RestConnection::getRegionUrl(options.aws_region),
+                attributes, options) {
+    }
+
+    #! creates the AwsS3RestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (optional string): ignored; the URL is derived from the \c aws_region option
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : AwsS3RestConnectionBase(config + {
+                "url": AwsS3RestConnection::getRegionUrl(config.opts.aws_region),
+            }, attr) {
+    }
+
+    #! returns \c "s3"
+    string getType() {
+        return "s3";
+    }
+
+    #! Returns the Amazon S3 endpoint URL for the given region
+    /** Amazon serves every region at a well-known endpoint, so asking the user for a URL adds a way to get the
+        connection wrong without adding anything they can usefully choose.  The regional endpoint is used rather
+        than the global \c s3.amazonaws.com one, which answers a request for a bucket in another region with a
+        redirect that has to be re-signed.
+
+        @param region the AWS region, if set
+
+        @return the endpoint URL for the region
+    */
+    static string getRegionUrl(*string region) {
+        return region.val()
+            ? sprintf("s3://s3.%s.amazonaws.com", region)
+            : DefaultUrl;
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! Class for connections to S3-compatible storage that is not Amazon S3
+/** For MinIO, Ceph, and other services that speak the S3 protocol.  Unlike @ref AwsS3RestConnection these are
+    reached at a URL of their own, so a URL is required; the region is free-form, since such a service accepts
+    whatever region it was configured with, and path-style addressing is offered because most of them require it.
+
+    @since AwsRestClient 1.3
+*/
+public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "S3-Compatible Storage",
+            "short_desc": "A connection to S3-compatible object storage such as MinIO or Ceph",
+            "desc": "A connection to object storage that speaks the Amazon S3 protocol but is not Amazon S3, "
+                "such as [MinIO](https://min.io) or [Ceph](https://ceph.io).\n\n"
+                "Requires the URL the service is reached at, plus an access key ID and secret access key.  The "
+                "region is whatever the service was configured with, and is often left at `us-east-1`, which is "
+                "what most S3-compatible services default to.\n\n"
+                "Use an **Amazon S3** connection instead for Amazon S3 itself; that one derives its URL from "
+                "the region and needs no URL at all",
+            "cls": Class::forName("AwsS3CompatibleRestConnection"),
+            # both a TLS and a non-TLS scheme, since an S3-compatible service is often reached over plain HTTP
+            # on an internal network; the connection scheme is what a stored connection is rebuilt from
+            "schemes": {
+                "s3compatible": True,
+                "s3compatibles": True,
+            },
+            "base_scheme_map": {
+                "http": "s3compatible",
+                "https": "s3compatibles",
+            },
+            "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
+                "aws_region": AwsRestConnection::ConnectionScheme.options.aws_region + <ConnectionOptionInfo>{
+                    "desc": "The region the service was configured with; most S3-compatible services default to "
+                        "`us-east-1` and ignore the value beyond using it to sign requests",
+                    "default_value": "us-east-1",
+                },
+                "path_style": <ConnectionOptionInfo>{
+                    "display_name": "Path-Style Addressing",
+                    "short_desc": "Address buckets in the URI path rather than in the hostname",
+                    "type": "bool",
+                    "desc": "Address buckets in the URI path (`https://<host>/<bucket>/<key>`) rather than in "
+                        "the hostname (`https://<bucket>.<host>/<key>`).\n\n"
+                        "This is the default and currently the only supported mode: virtual-host addressing "
+                        "needs a separate endpoint per bucket, which the data provider module does not yet "
+                        "create.  Most S3-compatible services require path-style addressing in any case",
+                    "default_value": True,
+                },
+            },
+            "required_options": "aws_keyid,aws_secret",
+        };
+    }
+
+    #! creates the AwsS3CompatibleRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url the URL the S3-compatible service is reached at
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url, hash<auto> attributes = {},
+            hash<auto> options = {})
+            : AwsS3RestConnectionBase(name, description,
+                AwsS3CompatibleRestConnection::getStorageUrl(url), attributes, options) {
+    }
+
+    #! creates the AwsS3CompatibleRestConnection object
+    /** @param config the connection configuration hash
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : AwsS3RestConnectionBase(config + (config.url.val()
+                ? {"url": AwsS3CompatibleRestConnection::getStorageUrl(config.url)}
+                : NOTHING), attr) {
+    }
+
+    #! returns \c "s3compatible"
+    string getType() {
+        return "s3compatible";
+    }
+
+    #! Returns the URL to store for the given URL, carrying this connection's own scheme
+    /** A connection is rebuilt from the URL it stores, and the URL's scheme is what identifies the connection
+        class.  A URL stored as \c "https://..." would therefore be rebuilt as the generic HTTP connection,
+        which then rejects every AWS option as unknown; an \c http(s) URL supplied by the caller is mapped to
+        the matching connection scheme here so that it survives a reload.
+
+        @param url the URL supplied by the caller
+
+        @return the URL with this connection's scheme, preserving whether TLS is used
+    */
+    static string getStorageUrl(string url) {
+        if (url =~ /^https:\/\//) {
+            return regex_subst(url, "^https", "s3compatibles");
+        }
+        if (url =~ /^http:\/\//) {
+            return regex_subst(url, "^http", "s3compatible");
+        }
+        return url;
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
     }
 }
 }

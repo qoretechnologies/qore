@@ -180,7 +180,7 @@ public class PdfCoImageAnnotationDataType inherits HashDataType {
     public {
         const Fields = {
             "url": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "Image URL",
                 "short_desc": "URL of the image to insert",
                 "desc": "URL of the image to insert",

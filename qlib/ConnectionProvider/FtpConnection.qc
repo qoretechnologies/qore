@@ -265,6 +265,48 @@ public class FtpConnection inherits AbstractConnectionWithInfo {
         return fc;
     }
 
+    #! Returns an \c "ftp" or \c "ftps" scheme redirect for the given path
+    /** @param path the path relative to any path in the connection URL
+        @param write @ref True if the location will be written to
+
+        @return a @ref FileLocationRedirect hash for the connection's FTP scheme
+
+        @throw LOCATION-ERROR empty path; path resolves outside the connection's base path
+
+        @note The returned location carries credentials; it must never appear in error messages or log output
+
+        @since ConnectionProvider 3.1
+    */
+    private *hash<FileLocationRedirect> getFileLocationRedirectImpl(string path, bool write) {
+        string file_path = AbstractConnection::getConfinedFileLocationPath(name, urlh.path ?? "/", path);
+
+        # build the authority, merging in credentials from options when the URL does not carry them; this mirrors
+        # the URL handling in getImpl()
+        string authority;
+        if (opts.username.val() && opts.password.val() && (!urlh.username.val() || !urlh.password.val())) {
+            authority = sprintf("%s:%s@%s", opts.username, opts.password, urlh.host);
+        } else if (urlh.username.val() && urlh.password.val()) {
+            authority = sprintf("%s:%s@%s", urlh.username, urlh.password, urlh.host);
+        } else {
+            authority = urlh.host;
+        }
+        if (urlh.port) {
+            authority += sprintf(":%d", urlh.port);
+        }
+
+        return <FileLocationRedirect>{
+            "scheme": urlh.protocol.val() ? urlh.protocol : "ftp",
+            "location": authority + file_path,
+        };
+    }
+
+    #! Returns connection features
+    private *hash<string, bool> getFeaturesImpl() {
+        return {
+            AbstractConnection::CF_FILE_LOCATIONS: True,
+        };
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;

@@ -752,7 +752,7 @@ public class GrokResponseInputItemDataType inherits HashDataType {
                 "desc": "URL or base64 data URL for an image input. Supported formats: JPEG, PNG. "
                     "Max size: 20 MiB. If both text and image are provided, they are sent together "
                     "as a multimodal message",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
                 "attr": {
                     "required_groups": ("message_content",),
                 },
@@ -1142,7 +1142,7 @@ public class GrokUrlCitationAnnotationDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The source URL",
                 "desc": "The source URL for the citation",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "start_index": {
                 "display_name": "Start Index",

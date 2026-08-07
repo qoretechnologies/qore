@@ -49,7 +49,7 @@ public class SquareUpdateCustomerRequestDataType inherits HashDataType {
                 "desc": "The new family (last) name of the customer",
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The customer's email address",
                 "desc": "The new email address of the customer",

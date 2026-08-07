@@ -55,7 +55,7 @@ public class KatanaWatchSalesOrderDeletedDataProvider inherits KatanaWebhookEven
             }
             return deleted;
         } catch (hash<ExceptionInfo> ex) {
-            error("Error fetching deleted sales orders: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error fetching deleted sales orders: %s: %s", ex.err, ex.desc));
             return ();
         }
     }

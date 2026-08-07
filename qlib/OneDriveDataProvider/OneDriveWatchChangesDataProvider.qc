@@ -195,7 +195,11 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
                 commitCheckpoint(next_delta_link);
             }
         } catch (hash<ExceptionInfo> ex) {
-            error("Error polling for %s events: %s: %s", EVENT_FILE_CHANGE, ex.err, ex.desc);
+            # NOTE: "LoggerWrapper::error()", not a bare "error()"; AbstractDataProvider declares
+            # "error(string err, string fmt, ...)", which throws rather than logging and wins overload
+            # resolution, so a bare call would raise an exception from the handler that reports the error
+            LoggerWrapper::error(sprintf("Error polling for %s events: %s: %s", EVENT_FILE_CHANGE, ex.err,
+                ex.desc));
         }
     }
 

@@ -83,7 +83,7 @@ public class ClickFunnelsProductDataType inherits HashDataType {
                 "desc": "The SEO meta description for the product page",
             },
             "seo_image_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "SEO Image URL",
                 "short_desc": "The SEO image URL",
                 "desc": "The SEO image URL for the product page",

@@ -124,7 +124,7 @@ public class SquarePaymentDataType inherits HashDataType {
                 "desc": "The receipt number for the payment",
             },
             "receipt_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Receipt URL",
                 "short_desc": "The receipt URL",
                 "desc": "The URL for the payment receipt",

@@ -43,7 +43,7 @@ public class CircleMemberDataType inherits HashDataType {
                 "desc": "The display name of the member",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Member email address",
                 "desc": "The email address of the member",
@@ -61,7 +61,7 @@ public class CircleMemberDataType inherits HashDataType {
                 "desc": "The biography of the member",
             },
             "avatar_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Avatar URL",
                 "short_desc": "URL of the member avatar",
                 "desc": "The URL of the member's avatar image",

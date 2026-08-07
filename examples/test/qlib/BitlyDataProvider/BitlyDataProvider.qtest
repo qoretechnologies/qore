@@ -63,6 +63,7 @@ public class BitlyDataProviderTest inherits QUnit::Test {
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("data type tests", \dataTypeTests());
+        addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("connection tests", \connectionTests());
 
         # Integration tests (require Bitly credentials)
@@ -251,6 +252,51 @@ public class BitlyDataProviderTest inherits QUnit::Test {
         assertEq(True, dlfields.hasKey("app_uri_path"), "deeplink type has app_uri_path field");
         assertEq(True, dlfields.hasKey("install_url"), "deeplink type has install_url field");
         assertEq(True, dlfields.hasKey("install_type"), "deeplink type has install_type field");
+    }
+
+    semanticStringTypeTests() {
+        # response side: metadata only -- Bitly returns absolute URLs for both link fields
+        BitlyDataProvider::BitlyBitlinkDataType bitlink_type();
+        hash<string, AbstractDataField> bf = bitlink_type.getFields();
+        assertEq("uri", bf.link.getType().getTag("qore.external_name"), "link is typed as a uri");
+        assertEq("uri", bf.long_url.getType().getTag("qore.external_name"), "long_url is typed as a uri");
+        assertEq("string", bf.link.getType().getBaseTypeName(), "the uri type stays string-backed");
+        # "id" is "bit.ly/abc123" -- a bare host+path with no scheme, so it stays a plain string
+        assertNothing(bf.id.getType().getTag("qore.external_name"),
+            "the scheme-less bitlink id is deliberately left as a plain string");
+
+        # a branded short domain is a bare hostname
+        BitlyDataProvider::BitlyBsdDataType bsd_type();
+        assertEq("hostname", bsd_type.getFields().domain.getType().getTag("qore.external_name"),
+            "the branded short domain is typed as a hostname");
+
+        # Bitly GUIDs are opaque base62 ids ("Bg7ay8wPvXW"), NOT RFC-4122, so they must NOT be
+        # typed as uuid; assert they still accept a Bitly-shaped id
+        BitlyDataProvider::BitlyGroupDataType group_type();
+        AbstractDataProviderType guid_type = group_type.getFields().guid.getType();
+        assertNothing(guid_type.getTag("qore.external_name"),
+            "a Bitly GUID is deliberately left as a plain string");
+        assertEq("Bg7ay8wPvXW", guid_type.acceptsValue("Bg7ay8wPvXW"),
+            "a Bitly GUID value is accepted unchanged");
+
+        # request side: Bitly redirects to long_url, so it must carry a scheme
+        BitlyDataProvider::BitlyCreateBitlinkRequestDataType req();
+        AbstractDataProviderType lu = req.getFields().long_url.getType();
+        assertEq("uri", lu.getTag("qore.external_name"), "the long_url request field is typed as a uri");
+        assertEq("https://example.com/p", lu.acceptsValue("https://example.com/p"),
+            "an absolute long_url is accepted");
+        # intentional rejection: Bitly cannot shorten a scheme-less value
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            lu.acceptsValue("www.example.com");
+        }, NOTHING, "a scheme-less long_url is rejected");
+
+        # the short domain sent on a create request is a bare hostname, not a URL
+        AbstractDataProviderType dom = req.getFields().domain.getType();
+        assertEq("hostname", dom.getTag("qore.external_name"), "the domain request field is a hostname");
+        assertEq("bit.ly", dom.acceptsValue("bit.ly"), "a bare short domain is accepted");
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            dom.acceptsValue("https://bit.ly");
+        }, NOTHING, "a scheme-bearing value is rejected for a bare-domain field");
     }
 
     connectionTests() {

@@ -97,6 +97,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("negative tests", \negativeTests());
 
         # Integration tests (require PDFCO_API_KEY)
@@ -569,6 +570,36 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
     }
 
     #! Negative tests - verify error handling
+    semanticStringTypeTests() {
+        checkJson();
+
+        # PDF.co fetches every source document from the supplied URL, so the URL must carry a
+        # scheme for the operation to work at all; the "uri" type makes that explicit and rejects
+        # a scheme-less value client-side instead of failing at the API
+        PdfCoDataProvider::PdfCoSplitPdfRequestDataType req();
+        AbstractDataProviderType url_type = req.getFields().url.getType();
+        assertEq("uri", url_type.getTag("qore.external_name"), "source url field is typed as a uri");
+        assertEq("string", url_type.getBaseTypeName(), "the uri type is still string-backed on the wire");
+
+        assertEq("https://example.com/a.pdf", url_type.acceptsValue("https://example.com/a.pdf"),
+            "an absolute source URL is accepted");
+        # this rejection is intentional: PDF.co cannot fetch a scheme-less value
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            url_type.acceptsValue("www.example.com");
+        }, NOTHING, "a scheme-less source URL is rejected");
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            url_type.acceptsValue("/local/path/file.pdf");
+        }, NOTHING, "a bare filesystem path is rejected as a source URL");
+
+        # a link authored INTO the generated PDF is not fetched by PDF.co, so it stays a plain
+        # string and keeps accepting whatever the caller wants to embed
+        PdfCoDataProvider::PdfCoTextAnnotationDataType el();
+        assertNothing(el.getFields().link.getType().getTag("qore.external_name"),
+            "an authored PDF link is deliberately left as a plain string");
+        assertEq("#page2", el.getFields().link.getType().acceptsValue("#page2"),
+            "an authored PDF link still accepts a non-URI value");
+    }
+
     negativeTests() {
         checkJson();
 

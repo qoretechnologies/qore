@@ -4640,6 +4640,41 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return True;
     }
 
+    #! Returns @ref True if this connection can serve \c "conn://" file locations natively
+    /** A plain REST connection can: a location path is a URI path on the connection's target, and the
+        connection's own client already carries the authentication, token refresh, and connection pooling that a
+        file transfer needs.
+
+        A connection that serves a data provider application cannot, and this returns @ref False for one.  Such a
+        connection's file semantics are defined by its application's file API (its download and upload actions and
+        their options), not by its base URL: Google Drive addresses a file by an opaque ID and needs
+        \c "?alt=media", Dropbox serves content from a different host with its arguments in a header, and Amazon
+        S3 needs a bucket as well as a key.  Since a native handler takes precedence over the application file
+        API, returning @ref True here unconditionally would replace each of those with a bare \c GET on the path
+        and break every application connection.  A subclass that can transfer files natively overrides this and
+        @ref getFileLocationHandlerImpl() together.
+
+        @return @ref True if this connection can serve file locations natively
+
+        @since %RestClient 2.7
+    */
+    private bool supportsFileLocationsImpl() {
+        return !getAppName().val();
+    }
+
+    #! Returns a file location handler bound to this connection's authenticated client
+    /** @return a \c FileLocationHandler::AbstractFileLocationHandler object driving this connection's client
+
+        @note The \c FileLocationHandler module is loaded dynamically; it is a leaf utility that sits below this
+        module, so declaring a dependency on it here would invert the dependency graph
+
+        @since %RestClient 2.7
+    */
+    private object getFileLocationHandlerImpl() {
+        load_module("FileLocationHandler");
+        return call_static_method("FileLocationHandler::FileLocationHandler", "getRestHandlerForClient", get());
+    }
+
     #! Called to start a non-blocking polling ping operation on the remote REST server
     /**
         @return a socket poll operation object that will allow the connection goal to be reached with polling
@@ -5112,9 +5147,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         load_module("RestClientIo");
-        # Http1OnlyOptions are HTTPClient-specific URI/encoding workarounds (inherited by the
-        # sync RestClient via HTTPClient) that do not carry over to the HttpClientIo-based
-        # RestClientIo transport — strip them from the RestClientIo option set
+        # Http1OnlyOptions are HTTPClient-specific URI/encoding workarounds (inherited by the sync
+        # RestClient via HTTPClient) that have no counterpart on the HttpClientIo-based RestClientIo
+        # transport, which sends the request target verbatim: there is no getMsgPath()-style rewrite
+        # between the caller's path and the H1 request line or the H2/H3 ":path" pseudo-header, so a
+        # path the caller has already percent-encoded reaches the wire unchanged.  That is what
+        # "pre_encoded_urls" buys on HTTPClient, and it is why callers that sign the request target
+        # (AWS SigV4, for one) need no opt-out here.  Passing any of these keys to RestClientIo
+        # directly raises RESTCLIENTIO-OPTION-ERROR, so strip them from the option set.
         hash<auto> opts = getConnectionOptions(rtopts) - keys AbstractRestClient::Http1OnlyOptions;
         return create_object("RestClientIo::RestClientIo", opts);
     }

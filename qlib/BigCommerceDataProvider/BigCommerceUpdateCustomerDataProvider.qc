@@ -52,7 +52,7 @@ public class BigCommerceUpdateCustomerRequestDataType inherits HashDataType {
             "email": {
                 "display_name": "Email",
                 "short_desc": "Customer email address",
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "desc": "The customer's email address",
             },
             "company": {

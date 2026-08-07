@@ -32,7 +32,7 @@ public class TallyQuestionFieldDataType inherits HashDataType {
                 "display_name": "Field UUID",
                 "short_desc": "Unique field identifier",
                 "desc": "The unique identifier for the question field",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uuid",
                 "example_value": "21dd98ef-4c54-4e77-bcc6-7ec79409b3ea",
             },
             "type": {

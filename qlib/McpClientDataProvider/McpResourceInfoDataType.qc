@@ -30,7 +30,7 @@ public class McpResourceInfoDataType inherits HashDataType {
         #! Field descriptions
         const Fields = {
             "uri": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "URI",
                 "short_desc": "Resource URI",
                 "desc": "The unique URI identifying the resource",

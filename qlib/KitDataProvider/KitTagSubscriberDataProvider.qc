@@ -40,7 +40,7 @@ public class KitTagSubscriberRequestDataType inherits HashDataType {
                 "ref_data": "tags",
             },
             "email_address": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email Address",
                 "short_desc": "The subscriber's email address",
                 "desc": "The email address of the subscriber to tag",

@@ -60,7 +60,7 @@ public class McpResourceReadRequestDataType inherits HashDataType {
         #! Field descriptions
         const Fields = {
             "uri": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "URI",
                 "short_desc": "Resource URI",
                 "desc": "The URI of the resource to read",

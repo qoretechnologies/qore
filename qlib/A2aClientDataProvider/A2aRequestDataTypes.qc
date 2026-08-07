@@ -159,7 +159,7 @@ public class A2aAgentCardResultDataType inherits HashDataType {
                 "desc": "A description of the A2A agent",
             },
             "url": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "URL",
                 "short_desc": "Agent URL",
                 "desc": "The URL of the A2A agent",

@@ -39,7 +39,7 @@ public class BitlyUpdateBitlinkRequestDataType inherits HashDataType {
                 "ref_data": "bitlinks",
             },
             "long_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Long URL",
                 "short_desc": "New destination URL",
                 "desc": "The new destination URL for the bitlink",

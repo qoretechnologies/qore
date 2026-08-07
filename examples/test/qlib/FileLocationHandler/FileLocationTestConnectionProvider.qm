@@ -1,0 +1,596 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file FileLocationTestConnectionProvider.qm test connection provider for conn:// file locations
+
+/*  FileLocationTestConnectionProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires ConnectionProvider
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires FsUtil
+
+module FileLocationTestConnectionProvider {
+    version = "1.0";
+    desc = "test connection provider for conn:// file locations";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        # register the in-memory test application used to exercise tier 2 of the conn:// scheme
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": TestAppName,
+            "display_name": "File Location Test App",
+            "short_desc": "In-memory test application for conn:// tier 2 resolution",
+            "desc": "An in-memory application used by the `FileLocationHandler` test suite to exercise tier 2 "
+                "of the `conn://` file location scheme without contacting a remote service.",
+            "logo": TestLogo,
+            "logo_file_name": "test-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CloudStorage,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TestAppName,
+            "path": "/read-file",
+            "action": "read-file",
+            "display_name": "Read File",
+            "short_desc": "Read a file from the in-memory store",
+            "desc": "Reads a file from the in-memory test store.",
+            "action_code": DPAT_API,
+            "cls": "FileLocationTestDataProvider::TestReadDataProvider",
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TestAppName,
+            "path": "/write-file",
+            "action": "write-file",
+            "display_name": "Write File",
+            "short_desc": "Write a file to the in-memory store",
+            "desc": "Writes a file to the in-memory test store.",
+            "action_code": DPAT_API,
+            "cls": "FileLocationTestDataProvider::TestWriteDataProvider",
+        });
+
+        # the file API is registered by the test itself, so that each case can declare a different mapping
+    };
+}
+
+/*  The root directory served by the "files" connection is passed in the FLH_TEST_ROOT environment variable.
+
+    NOTE: getenv() is used rather than the ENV hash.  ENV is a per-Program snapshot taken when the Program is
+    created and is not updated by setenv(); this module is loaded into a fresh Program by
+    ConnectionProvider::get_connection(), so a value set by the running test would not appear in ENV.  getenv()
+    reads the real process environment and does see it.
+*/
+
+public ConnectionProvider::AbstractConnection sub get_mod_connection(string name) {
+    *hash<auto> conf = ConnectionMap(){name};
+    if (!conf) {
+        throw "CONNECTION-ERROR", sprintf("connection %y is unknown to the test connection provider; known "
+            "connections: %y", name, keys ConnectionMap());
+    }
+    return conf.cls.newObject(conf.config);
+}
+
+public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connections() {
+    # NOTE: built explicitly rather than with map; a hash produced by map is typed "hash", which does not satisfy
+    # the declared complex return type
+    hash<string, ConnectionProvider::AbstractConnection> rv();
+    foreach hash<auto> i in (ConnectionMap().pairIterator()) {
+        rv{i.key} = i.value.cls.newObject(i.value.config);
+    }
+    return rv;
+}
+
+#! Returns the test connection configuration
+/** Built on each call so that the test can change FLH_TEST_ROOT between test cases
+*/
+hash<string, hash<auto>> sub ConnectionMap() {
+    string root = getenv("FLH_TEST_ROOT") ?? "/nonexistent-flh-test-root";
+    return {
+        # a filesystem connection rooted at the test directory
+        "files": {
+            "cls": Class::forName("ConnectionProvider::FilesystemConnection"),
+            "config": {
+                "name": "files",
+                "desc": "test filesystem connection",
+                "url": "file://" + root,
+            },
+        },
+        # a read-only filesystem connection over the same directory
+        "files-ro": {
+            "cls": Class::forName("ConnectionProvider::FilesystemConnection"),
+            "config": {
+                "name": "files-ro",
+                "desc": "read-only test filesystem connection",
+                "url": "file://" + root,
+                "opts": {"readonly": True},
+            },
+        },
+        # an FTP connection whose URL carries a password; used to verify that credentials never appear in errors
+        "ftp-secret": {
+            "cls": Class::forName("ConnectionProvider::FtpConnection"),
+            "config": {
+                "name": "ftp-secret",
+                "desc": "test FTP connection with a password in the URL",
+                "url": "ftp://ftpuser:" + PasswordMarker + "@localhost:1/base",
+            },
+        },
+        # a connection type with no file location support at all
+        "no-files": {
+            "cls": Class::forName("FileLocationTestConnectionProvider::NoFileConnection"),
+            "config": {
+                "name": "no-files",
+                "desc": "connection with no file location support",
+                "url": "nofiles://localhost",
+            },
+        },
+        # a connection serving the in-memory test application; resolves through tier 2
+        "testapp": {
+            "cls": Class::forName("FileLocationTestConnectionProvider::TestAppConnection"),
+            "config": {
+                "name": "testapp",
+                "desc": "connection serving the in-memory test application",
+                "url": "nofiles://testapp",
+            },
+        },
+        # a connection that provides a native handler AND serves the test application, so that tier 1b can be
+        # shown to take precedence over tier 2
+        "native": {
+            "cls": Class::forName("FileLocationTestConnectionProvider::NativeFileConnection"),
+            "config": {
+                "name": "native",
+                "desc": "connection providing a native file location handler",
+                "url": "nativefiles://localhost",
+            },
+        },
+        # a connection whose native handler is not a handler at all
+        "bad-native": {
+            "cls": Class::forName("FileLocationTestConnectionProvider::BadNativeFileConnection"),
+            "config": {
+                "name": "bad-native",
+                "desc": "connection returning an object that is not a file location handler",
+                "url": "nativefiles://localhost",
+            },
+        },
+    };
+}
+
+#! A distinctive password value so tests can assert it never leaks into error output
+public const PasswordMarker = "sup3rs3cr3tpw";
+
+#! The in-memory test application name
+public const TestAppName = "FileLocationTestApp";
+
+#! A placeholder logo; registerApp() requires one
+public const TestLogo = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" width=\"16\" "
+    "height=\"16\"><rect width=\"16\" height=\"16\" fill=\"#888\"/></svg>";
+
+#! In-memory data provider application used to exercise tier 2 of the conn:// scheme
+/** The store, the responses, and the last request made are all inspectable and settable from the test, so every
+    branch of \c FileLocationHandlerDataProvider can be driven deterministically without a remote service.
+*/
+public namespace FileLocationTestDataProvider {
+#! In-memory state shared between the test and the providers
+public class TestStore {
+    public {
+        #! key -> content
+        static hash<string, data> files;
+
+        #! the request hash passed to the last action invoked
+        static *hash<auto> last_request;
+
+        #! the name of the last action invoked
+        static *string last_action;
+
+        #! when set, reads return this value in the \c url field rather than content
+        static *string read_url;
+
+        #! when set, the read action omits every data field
+        static bool omit_data_field = False;
+
+        #! when set, the read action returns a URL field that is present but empty
+        static bool empty_url = False;
+
+        #! mirrors the file API's write_path_is_parent; the test sets it alongside the registration
+        /** A real application knows from its own API contract whether it receives a whole path or a parent plus
+            a name; this stub is driven by whatever mapping the test registers, so it has to be told
+        */
+        static bool write_path_is_parent = False;
+    }
+
+    #! Resets all state
+    static reset() {
+        files = {};
+        remove last_request;
+        remove last_action;
+        remove read_url;
+        omit_data_field = False;
+        empty_url = False;
+        write_path_is_parent = False;
+    }
+
+    #! Builds the storage key, including the container when one was supplied
+    static string getKey(*string container, string path) {
+        return container.val() ? container + ":" + path : path;
+    }
+}
+
+#! Read action provider
+public class TestReadDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "read-file",
+            "type": "TestReadDataProvider",
+            "supports_request": True,
+        };
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() { return ProviderInfo.name; }
+    private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
+        return AbstractDataProviderTypeMap."hash";
+    }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return AbstractDataProviderTypeMap."hash";
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        TestStore::last_action = "read-file";
+        TestStore::last_request = req;
+
+        if (TestStore::omit_data_field) {
+            return {"name": "x"};
+        }
+        if (TestStore::empty_url) {
+            # a URL field that is present but empty, which is not the same as one that is absent
+            return {"name": "x", "url": ""};
+        }
+        if (TestStore::read_url.val()) {
+            return {"name": "x", "url": TestStore::read_url};
+        }
+
+        string key = TestStore::getKey(req.bucket, req.path);
+        if (!TestStore::files.hasKey(key)) {
+            throw "TEST-NOT-FOUND", sprintf("no such test file: %y; have: %y", key, keys TestStore::files);
+        }
+        data content = TestStore::files{key};
+        return {
+            "name": key,
+            "content": make_base64_string(content),
+            "raw": content,
+            "mime": "text/plain",
+        };
+    }
+}
+
+#! Write action provider
+public class TestWriteDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "write-file",
+            "type": "TestWriteDataProvider",
+            "supports_request": True,
+        };
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() { return ProviderInfo.name; }
+    private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
+        return AbstractDataProviderTypeMap."hash";
+    }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return AbstractDataProviderTypeMap."hash";
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        TestStore::last_action = "write-file";
+        TestStore::last_request = req;
+
+        auto value = exists req.data ? req.data : req.file;
+        data content;
+        string key = req.path ?? "";
+        if (value.typeCode() == NT_HASH) {
+            content = parse_base64_string(value.content);
+            # when the write path is a parent, the filename travels in the file hash
+            if (TestStore::write_path_is_parent && value.name.val()) {
+                key = key.val() ? key + "/" + value.name : value.name;
+            }
+        } else {
+            content = value;
+        }
+
+        TestStore::files{TestStore::getKey(req.bucket, key)} = content;
+        return {"path": key};
+    }
+}
+}
+
+#! Test namespace
+public namespace FileLocationTestConnectionProvider {
+#! A connection that supports neither a file location redirect nor a native file location handler
+/** Used to verify that such connections are rejected with a clear error rather than failing obscurely
+*/
+public class NoFileConnection inherits ConnectionProvider::AbstractConnection {
+    constructor(hash<auto> config, *hash<auto> attr) : ConnectionProvider::AbstractConnection(config, attr) {
+    }
+
+    string getType() {
+        return "nofiles";
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        throw "TEST-CONNECTION-ERROR", "this test connection cannot be acquired";
+    }
+}
+
+#! A connection serving the in-memory test application
+/** Provides no file location redirect and no native handler, so \c "conn://" locations naming it resolve through
+    tier 2: the application's declared file API
+*/
+public class TestAppConnection inherits ConnectionProvider::AbstractConnection {
+    constructor(hash<auto> config, *hash<auto> attr) : ConnectionProvider::AbstractConnection(config, attr) {
+    }
+
+    string getType() {
+        return "testapp";
+    }
+
+    *string getAppName() {
+        return TestAppName;
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        return new FileLocationTestDataProvider::TestAppRootDataProvider();
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        throw "TEST-CONNECTION-ERROR", "this test connection cannot be acquired";
+    }
+}
+
+#! A connection providing a native file location handler as well as serving the test application
+/** Both tier 1b and tier 2 apply to this connection, so it also shows which one wins
+*/
+public class NativeFileConnection inherits ConnectionProvider::AbstractConnection {
+    constructor(hash<auto> config, *hash<auto> attr) : ConnectionProvider::AbstractConnection(config, attr) {
+    }
+
+    string getType() {
+        return "nativefiles";
+    }
+
+    *string getAppName() {
+        return TestAppName;
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        return new FileLocationTestDataProvider::TestAppRootDataProvider();
+    }
+
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    private object getFileLocationHandlerImpl() {
+        return new FileLocationTestDataProvider::TestNativeFileLocationHandler();
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        throw "TEST-CONNECTION-ERROR", "this test connection cannot be acquired";
+    }
+}
+
+#! A connection whose native file location handler is not a file location handler
+/** Used to verify that the class is checked rather than assumed
+*/
+public class BadNativeFileConnection inherits ConnectionProvider::AbstractConnection {
+    constructor(hash<auto> config, *hash<auto> attr) : ConnectionProvider::AbstractConnection(config, attr) {
+    }
+
+    string getType() {
+        return "nativefiles";
+    }
+
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    private object getFileLocationHandlerImpl() {
+        return new Mutex();
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        throw "TEST-CONNECTION-ERROR", "this test connection cannot be acquired";
+    }
+}
+}
+
+public namespace FileLocationTestDataProvider {
+#! A native file location handler serving the in-memory store
+/** Exercises tier 1b: a connection that transfers files itself rather than through a data provider action.
+    Every call is recorded so that the test can tell which tier serviced a request.
+*/
+public class TestNativeFileLocationHandler inherits FileLocationHandler::AbstractFileLocationHandler {
+    public {
+        #! Options this handler accepts; deliberately different from the conn:// handler's own set
+        const NativeOpts = {
+            "encoding": <FileHandlerOptionInfo>{
+                "type": "string",
+                "desc": "the encoding of the file's data",
+            },
+            "prefix": <FileHandlerOptionInfo>{
+                "type": "string",
+                "desc": "a prefix applied to the storage key",
+            },
+        };
+
+        #! The number of requests this handler has serviced
+        static int calls = 0;
+
+        #! The location passed to the last request
+        static *string last_location;
+
+        #! The options passed to the last request
+        static *hash<auto> last_opts;
+    }
+
+    #! Resets the recorded state
+    static reset() {
+        calls = 0;
+        remove last_location;
+        remove last_opts;
+    }
+
+    private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
+        data rv = get(location, opts);
+        return rv.typeCode() == NT_STRING ? rv : rv.toString();
+    }
+
+    private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
+        data rv = get(location, opts);
+        return rv.typeCode() == NT_BINARY ? rv : binary(rv);
+    }
+
+    private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
+            *hash<auto> opts) {
+        throw "UNIMPLEMENTED", "the test native handler does not support non-blocking I/O";
+    }
+
+    private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+    }
+
+    private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
+        return new BinaryInputStream(getBinaryFileImpl(scheme, location, opts));
+    }
+
+    private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
+        record(location, opts);
+        TestStore::files{key(location, opts)} = contents;
+    }
+
+    private FileLocationHandler::OutputStreamWrapper getOutputStreamImpl(string scheme, string location,
+            *hash<auto> opts) {
+        StreamPipe pipe(sync_close: False);
+        WaitGroup io_counter();
+        io_counter.add();
+        FileLocationHandler::OutputStreamWrapper rv(pipe.getOutputStream(), io_counter);
+        background sub () {
+            on_exit io_counter.done();
+            try {
+                StreamReader reader(pipe.getInputStream());
+                writeFileImpl(scheme, location, reader.readBinary() ?? binary(), opts);
+            } catch (hash<ExceptionInfo> ex) {
+                rv.setIoError(ex);
+            }
+        }();
+        return rv;
+    }
+
+    private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
+        return NativeOpts;
+    }
+
+    private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() {
+        return NativeOpts;
+    }
+
+    #! Returns the stored value for the given location
+    private data get(string location, *hash<auto> opts) {
+        record(location, opts);
+        string k = key(location, opts);
+        if (!TestStore::files.hasKey(k)) {
+            throw "TEST-NATIVE-ERROR", sprintf("no such file %y in the native test store", k);
+        }
+        return TestStore::files{k};
+    }
+
+    #! Records that this handler serviced a request
+    private record(string location, *hash<auto> opts) {
+        ++calls;
+        last_location = location;
+        last_opts = opts;
+    }
+
+    #! Returns the storage key for the given location
+    private string key(string location, *hash<auto> opts) {
+        return (opts.prefix ?? "") + location;
+    }
+}
+}
+
+public namespace FileLocationTestDataProvider {
+#! Root provider for the in-memory test application
+public class TestAppRootDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "filelocationtestapp",
+            "type": "TestAppRootDataProvider",
+            "supports_children": True,
+            "children_can_support_apis": True,
+        };
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
+        const ChildMap = {
+            "read-file": Class::forName("FileLocationTestDataProvider::TestReadDataProvider"),
+            "write-file": Class::forName("FileLocationTestDataProvider::TestWriteDataProvider"),
+        };
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() { return ProviderInfo.name; }
+    private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+    private *list<string> getChildProviderNamesImpl() { return keys ChildMap; }
+
+    private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
+        *Class cls = ChildMap{name};
+        return cls ? cls.newObject(NOTHING) : NOTHING;
+    }
+}
+}

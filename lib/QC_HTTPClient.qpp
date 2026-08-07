@@ -227,7 +227,7 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     For new code that requires multiplexed connections, connection pooling, or high-concurrency HTTP,
     consider using the @ref httpclientiointro "HttpClientIo" module and the
-    @ref restclientio_intro "RestClientIo" module instead. These modules are built on the
+    @ref restclientiointro "RestClientIo" module instead. These modules are built on the
     @ref asyncsocketiointro "AsyncSocketIo" event loop and provide:
 
     - True HTTP/2 and HTTP/3 multiplexing: multiple concurrent streams on a single connection without
@@ -246,7 +246,7 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     @see
     - @ref httpclientiointro "HttpClientIo module"
-    - @ref restclientio_intro "RestClientIo module"
+    - @ref restclientiointro "RestClientIo module"
     - @ref asyncsocketiointro "AsyncSocketIo module"
 
     @since %Qore 3.0

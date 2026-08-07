@@ -39,7 +39,7 @@ public class KitBulkCreateSubscribersRequestDataType inherits HashDataType {
                 "required": True,
             },
             "callback_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Callback URL",
                 "short_desc": "URL to receive completion callback",
                 "desc": "A URL that will receive a webhook when the bulk operation completes",

@@ -61,7 +61,7 @@ public class SystemeIoContactDataType inherits HashDataType {
                 "desc": "The unique identifier of the contact",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Email address",
                 "desc": "The email address of the contact",
@@ -128,7 +128,7 @@ public class SystemeIoCreateContactRequestDataType inherits HashDataType {
         #! Field definitions for creating a contact
         const Fields = {
             "email": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email",
                 "short_desc": "Email address",
                 "desc": "The email address of the contact to create",

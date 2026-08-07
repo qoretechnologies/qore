@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore WaveDataProvider module definition
 
-/*  WaveCustomerDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  WaveCustomerDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -180,7 +180,7 @@ public class WaveCustomerCreateDataType inherits HashDataType {
                 "example_value": "Doe",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The customer email",
                 "desc": "The email address of the customer",
@@ -278,7 +278,7 @@ public class WaveCustomerUpdateDataType inherits HashDataType {
                 "example_value": "Doe",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The customer email",
                 "desc": "The new email address of the customer",

@@ -81,6 +81,8 @@ public class ConnectionSchemeCache {
             "assemblyai": "AssemblyAiRestClient",
 
             "awsrests": "AwsRestClient",
+            "s3": "AwsRestClient",
+            "s3compatible": "AwsRestClient",
 
             "aws-textract": "AwsTextractRestClient",
 
@@ -141,6 +143,8 @@ public class ConnectionSchemeCache {
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
 
+            "dropbox": "DropboxRestClient",
+
             "elevenlabs": "ElevenLabsRestClient",
 
             "ds": "DataStreamClient",
@@ -176,6 +180,7 @@ public class ConnectionSchemeCache {
             "qdrantrests": "QdrantDataProvider",
 
             "gcal": "GoogleRestClient",
+            "gdrive": "GoogleRestClient",
             "gmail": "GoogleRestClient",
             "grests": "GoogleRestClient",
 

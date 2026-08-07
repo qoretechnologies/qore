@@ -25,7 +25,38 @@
 #! Contains all public definitions in the FileLocationHandler module
 public namespace FileLocationHandler {
 #! The class for handling http(s):// locations
+/** A handler normally builds its own client for each request from the location URL.  It can instead be bound to
+    an already-authenticated client, in which case the location is a URI path on that client's target rather than
+    a URL; this is how a connection provides a native file location handler without reimplementing the transport.
+
+    @see @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "FileLocationHandler::getHttpHandlerForClient()"
+*/
 class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
+    private {
+        #! The already-authenticated client this handler is bound to, if any
+        *object bound_client;
+    }
+
+    #! Creates a handler that builds a client for each request from the location URL
+    constructor() {
+    }
+
+    #! Creates a handler bound to an already-authenticated client
+    /** @param client the client to use for every request; must be a
+        @ref Qore::HTTPClient "HTTPClient" or a subclass of it
+
+        @note When bound, the location is a URI path on the client's target rather than a URL, and the handler
+        neither configures nor closes the client
+    */
+    constructor(object client) {
+        bound_client = client;
+    }
+
+    #! Returns @ref True if this handler is bound to an already-authenticated client
+    bool isBound() {
+        return exists bound_client;
+    }
+
     public {
         #! Valid HTTP location options
         /** @see @ref Qore::HTTPClient::constructor() "HTTPClient::constructor()" for supported options
@@ -101,6 +132,19 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
                 "desc": "I/O timeout in milliseconds",
             },
         };
+
+        #! Location options supported when the handler is bound to a client
+        /** Every other option in @ref HttpClientLocationOpts configures the construction of a client, which a
+            bound handler does not do; accepting one would silently ignore it
+        */
+        const BoundLocationOpts = {
+            "encoding": HttpClientLocationOpts.encoding,
+            "headers": <FileHandlerOptionInfo>{
+                "type": "hash",
+                "desc": "an optional hash of headers to send with the request",
+            },
+            "method": HttpClientLocationOpts.method,
+        };
     }
 
     #! Retrieves a text file from the given location
@@ -119,7 +163,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
             opts.headers.Accept = "*/*";
         }
         HTTPClient hc = getHttpClient(scheme, location, opts, \path);
-        return hc.send(NOTHING, opts.method ? opts.method.upr() : "GET", path).body ?? "";
+        return hc.send(NOTHING, opts.method ? opts.method.upr() : "GET", path, opts.headers).body ?? "";
     }
 
     #! Retrieves a binary file from the given location
@@ -134,7 +178,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
         string path;
         HTTPClient hc = getHttpClient(scheme, location, opts, \path);
-        *string body = hc.send(NOTHING, opts.method ? opts.method.upr() : "GET", path).body;
+        *string body = hc.send(NOTHING, opts.method ? opts.method.upr() : "GET", path, opts.headers).body;
         return exists body ? body.toBinary() : binary();
     }
 
@@ -149,7 +193,8 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
             *hash<auto> opts) {
         string path;
         object client = getHttpClient(scheme, location, opts, \path, False);
-        return new HttpPollWrapper(client.startPollSendRecv(opts.method ? opts.method.upr() : "GET", path));
+        return new HttpPollWrapper(client.startPollSendRecv(opts.method ? opts.method.upr() : "GET", path, NOTHING,
+            opts.headers));
     }
 
     #! Returns a stream reader for the file's data at the given location
@@ -171,7 +216,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         background sub () {
             try {
                 OutputStream os = pipe.getOutputStream();
-                hc.send(os, NOTHING, opts.method ? opts.method.upr() : "GET", path);
+                hc.send(os, NOTHING, opts.method ? opts.method.upr() : "GET", path, opts.headers);
                 os.close();
             } catch (hash<ExceptionInfo> ex) {
             }
@@ -199,7 +244,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         background sub () {
             try {
                 OutputStream os = pipe.getOutputStream();
-                hc.send(os, NOTHING, opts.method ? opts.method.upr() : "GET", path);
+                hc.send(os, NOTHING, opts.method ? opts.method.upr() : "GET", path, opts.headers);
                 os.close();
             } catch (hash<ExceptionInfo> ex) {
             }
@@ -219,7 +264,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
         string path;
         HTTPClient hc = getHttpClient(scheme, location, opts, \path);
-        hc.send(contents, opts.method ? opts.method.upr() : "POST", path);
+        hc.send(contents, opts.method ? opts.method.upr() : "POST", path, opts.headers);
     }
 
     #! Returns an output stream for writing data to the given location
@@ -254,7 +299,8 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
             on_exit io_counter.done();
             try {
                 Qore::InputStream is = pipe.getInputStream();
-                hc.sendChunked(new BinaryOutputStream(), is, opts.method ? opts.method.upr() : "POST", NOTHING, path);
+                hc.sendChunked(new BinaryOutputStream(), is, opts.method ? opts.method.upr() : "POST", NOTHING, path,
+                    opts.headers);
             } catch (hash<ExceptionInfo> ex) {
                 # Record the error so OutputStreamWrapper::waitForIo()
                 # can rethrow it to the caller — see FTP handler comment.
@@ -269,14 +315,14 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return HttpClientLocationOpts;
+        return bound_client ? BoundLocationOpts : HttpClientLocationOpts;
     }
 
     #! Gets supported write options
     /** @return supported write options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() {
-        return HttpClientLocationOpts;
+        return bound_client ? BoundLocationOpts : HttpClientLocationOpts;
     }
 
     #! Returns an HTTP client for the given location
@@ -285,6 +331,12 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     */
     private HTTPClient getHttpClient(string scheme, string location, *hash<auto> opts, reference<string> path,
             bool do_connect = True) {
+        if (bound_client) {
+            # the client already targets the right host; the location is a URI path on it
+            path = AbstractFileLocationHandler::getUriPath(location);
+            return cast<HTTPClient>(bound_client);
+        }
+
         location = scheme + "://" + location;
 
         hash<UrlInfo> url_info = parse_url(location);

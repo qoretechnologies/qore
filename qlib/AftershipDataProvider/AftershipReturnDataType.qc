@@ -116,7 +116,7 @@ public class AftershipReturnDataType inherits HashDataType {
                 "display_name": "Customer Email",
                 "short_desc": "Customer email address",
                 "desc": "Email address of the customer who filed the return",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*email",
             },
             "customer_name": {
                 "display_name": "Customer Name",

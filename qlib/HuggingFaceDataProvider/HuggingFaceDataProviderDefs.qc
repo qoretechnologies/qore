@@ -557,7 +557,7 @@ public class HuggingFaceRepoResponseDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "Repository URL",
                 "desc": "The URL of the repository",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "repoUrl": {
                 "display_name": "Repository URL",

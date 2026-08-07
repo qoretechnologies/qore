@@ -163,7 +163,7 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
         if (RetrySet{ex.err}) {
             if (++retries == MaxIoRetries) {
-                error("maximum retries exceeded (%d)", retries);
+                LoggerWrapper::error(sprintf("maximum retries exceeded (%d)", retries));
                 return False;
             }
             warn("technical error making REST call: %s: %s; retrying", ex.err, ex.desc);

@@ -151,12 +151,47 @@ public class AbstractFileLocationHandler {
         return getWriteOptionsImpl();
     }
 
+    #! Returns @ref True if the handler validates location options itself
+    /** Handlers that return @ref True are responsible for validating location options themselves;
+        @ref FileLocationHandler::FileLocationHandler::getInfo() "FileLocationHandler::getInfo()" will not reject
+        unknown options before dispatching to the handler.
+
+        This is required by handlers that cannot know the effective set of supported options until the location has
+        been resolved; @ref FileLocationHandler::FileLocationHandlerConnection "FileLocationHandlerConnection" is the
+        motivating case, as the options accepted depend on the connection named in the location string.
+
+        Default value processing and required option checks are performed for all handlers regardless of this value.
+
+        @return @ref True if the handler validates location options itself
+
+        @since FileLocationHandler 3.0
+    */
+    bool selfValidatesOptions() {
+        return selfValidatesOptionsImpl();
+    }
+
     #! Returns a string tagged with the given encoding, if any
     private static string forceEncoding(string str, *string encoding) {
         if (encoding && encoding.lwr() != str.encoding().lwr()) {
             return force_encoding(str, encoding);
         }
         return str;
+    }
+
+    #! Returns a location as an absolute URI path
+    /** Used by handlers bound to an already-authenticated client, where the location is a path on that client's
+        target rather than a URL.  A leading slash is added if missing, since HTTP/2 and HTTP/3 require the
+        \c :path pseudo-header to be absolute and a relative path would otherwise be rejected at the transport
+        layer rather than reported here.
+
+        @param location the location string
+
+        @return the location as an absolute URI path
+
+        @since FileLocationHandler 3.0
+    */
+    private static string getUriPath(string location) {
+        return location =~ /^\// ? location : "/" + location;
     }
 
     #! Retrieves a text file from the given location
@@ -237,6 +272,18 @@ public class AbstractFileLocationHandler {
     /** @return supported write options
     */
     private abstract hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl();
+
+    #! Returns @ref True if the handler validates location options itself
+    /** The default implementation returns @ref False; override in handlers that must validate options after
+        resolving the location
+
+        @return @ref False in the base class
+
+        @since FileLocationHandler 3.0
+    */
+    private bool selfValidatesOptionsImpl() {
+        return False;
+    }
 }
 
 #! The main class
@@ -252,11 +299,19 @@ public class FileLocationHandler {
 
         #! Flag for dynamic initialization
         static bool dynamic_init;
+
+        #! The connection filter, if any; see setConnectionFilter()
+        static *code<bool(string, bool)> connection_filter;
+
+        #! Flag for connection filter initialization from the environment
+        static bool connection_filter_init;
     }
 
     #! Initializes default handlers
     static init() {
         # register default handlers
+        FileLocationHandler::registerHandler("conn", new FileLocationHandlerConnection());
+        FileLocationHandler::registerHandler("connection", new FileLocationHandlerConnection());
         FileLocationHandler::registerHandler("data", new FileLocationHandlerData());
         FileLocationHandler::registerHandler("file", new FileLocationHandlerFile());
         FileLocationHandler::registerHandler("ftp", new FileLocationHandlerFtp());
@@ -472,6 +527,187 @@ getHandlerNames
         };
     }
 
+    #! Returns the location handler registered for the given scheme
+    /** @param scheme the scheme to return the handler for
+
+        @return the location handler registered for the given scheme
+
+        @throw SCHEME-ERROR unsupported or invalid scheme
+
+        @note Primarily for handlers that delegate to another scheme's handler; see
+        @ref FileLocationHandler::FileLocationHandlerConnection "FileLocationHandlerConnection"
+
+        @since FileLocationHandler 3.0
+    */
+    static AbstractFileLocationHandler getHandler(string scheme) {
+        FileLocationHandler::checkDynamicInit();
+        *AbstractFileLocationHandler handler = cache{scheme};
+        if (!handler) {
+            throw "SCHEME-ERROR", sprintf("unknown location scheme %y; known location schemes: %y", scheme,
+                keys cache);
+        }
+        return handler;
+    }
+
+    #! Returns a file location handler bound to an already-authenticated HTTP client
+    /** The returned handler treats a location as a URI path on the client's target rather than as a URL, and
+        neither configures nor closes the client.  Intended for
+        \c ConnectionProvider::AbstractConnection::getFileLocationHandler() implementations, so that a connection
+        supplies a native file location handler without reimplementing the transport.
+
+        @param client the client to bind; must be a @ref Qore::HTTPClient "HTTPClient" or a subclass of it
+
+        @return a file location handler bound to \a client
+
+        @note The client is shared with everything else using the connection, so the handler sends any request
+        headers per request rather than changing the client's own defaults
+
+        @since FileLocationHandler 3.0
+    */
+    static AbstractFileLocationHandler getHttpHandlerForClient(object client) {
+        return new FileLocationHandlerHttp(client);
+    }
+
+    #! Returns a file location handler bound to an already-authenticated REST client
+    /** As @ref getHttpHandlerForClient(), but driving the client through the \c RestClient::AbstractRestClient
+        API, so that the client's authentication, token refresh, and connection pooling apply to every request.
+
+        @param client the client to bind; must implement the \c RestClient::AbstractRestClient API
+
+        @return a file location handler bound to \a client
+
+        @since FileLocationHandler 3.0
+    */
+    static AbstractFileLocationHandler getRestHandlerForClient(object client) {
+        return new FileLocationHandlerRest(client);
+    }
+
+    #! Validates and normalizes location options for the given handler
+    /** Performs the unknown-option check (optionally), converts option values to their declared types, applies
+        default values, and enforces required options.
+
+        @param location the location string with any option string already removed; used in error messages only
+        @param handler the handler whose option declarations will be used
+        @param opts the options parsed from the location string, if any
+        @param read @ref True for read options, @ref False for write options
+        @param validate_unknown if @ref True then unknown options cause an exception to be thrown
+
+        @return the normalized options
+
+        @throw LOCATION-ERROR unsupported option (only if \a validate_unknown is @ref True); missing required option
+
+        @since FileLocationHandler 3.0
+    */
+    static *hash<auto> checkOptions(string location, AbstractFileLocationHandler handler, *hash<auto> opts,
+            bool read, bool validate_unknown = True) {
+        *hash<string, hash<FileHandlerOptionInfo>> handler_opts = read
+            ? handler.getReadOptions()
+            : handler.getWriteOptions();
+
+        # check for unknown options
+        if (validate_unknown && opts && (*hash<auto> erropts = opts - (keys handler_opts))) {
+            throw "LOCATION-ERROR", sprintf("file location %y has unsupported %s option(s): %y; supported "
+                "options: %y", location, read ? "read" : "write", keys erropts, keys handler_opts);
+        }
+
+        # check for required and default option values; fix types
+        foreach hash<auto> i in (handler_opts.pairIterator()) {
+            if (exists opts{i.key}) {
+                switch (i.value.type) {
+                    case "int":
+                        opts{i.key} = opts{i.key}.toInt();
+                        break;
+                    case "bool":
+                        opts{i.key} = parse_boolean(opts{i.key});
+                        break;
+                }
+            } else {
+                if (exists i.value.default_value) {
+                    opts{i.key} = i.value.default_value;
+                } else if (i.value.required) {
+                    throw "LOCATION-ERROR", sprintf("file location %y is missing required option %y", location,
+                        i.key);
+                }
+            }
+        }
+
+        return opts;
+    }
+
+    #! Sets a filter determining which connections may be used in \c "conn://" locations
+    /** @param filter a closure or call reference taking the connection name and a boolean write flag and returning
+        @ref True if the connection may be used; pass @ref nothing to remove any filter
+
+        Named-connection locations widen what a location string can reach; location strings are frequently derived
+        from user or partner data.  Applications that accept untrusted location strings should set a filter here.
+
+        If no filter is set, the \c QORE_FILE_LOCATION_CONNECTIONS environment variable is used instead; when set, it
+        provides a list of allowed connection names separated by @ref Qore::PathSep "PathSep" characters.  If neither
+        is set, all connections are allowed.
+
+        @since FileLocationHandler 3.0
+    */
+    static setConnectionFilter(*code<bool(string, bool)> filter) {
+        handler_lock.lock();
+        on_exit handler_lock.unlock();
+
+        connection_filter = filter;
+        # a filter set in code supersedes the environment variable
+        connection_filter_init = True;
+    }
+
+    #! Returns the current connection filter, if any
+    /** @return the current connection filter, if any
+
+        @since FileLocationHandler 3.0
+    */
+    static *code<bool(string, bool)> getConnectionFilter() {
+        handler_lock.lock();
+        on_exit handler_lock.unlock();
+
+        FileLocationHandler::checkConnectionFilterInit();
+        return connection_filter;
+    }
+
+    #! Returns @ref True if the given connection may be used in a file location
+    /** @param name the connection name
+        @param write @ref True for write access, @ref False for read access
+
+        @return @ref True if the given connection may be used in a file location
+
+        @since FileLocationHandler 3.0
+    */
+    static bool connectionAllowed(string name, bool write) {
+        *code<bool(string, bool)> filter;
+        {
+            handler_lock.lock();
+            on_exit handler_lock.unlock();
+
+            FileLocationHandler::checkConnectionFilterInit();
+            filter = connection_filter;
+        }
+        # NOTE: the filter is called outside the lock; it is user code and may do I/O or call back into this class
+        return filter ? filter(name, write) : True;
+    }
+
+    #! Initializes the connection filter from the environment; must be called with the handler lock held
+    private static checkConnectionFilterInit() {
+        if (connection_filter_init) {
+            return;
+        }
+        connection_filter_init = True;
+
+        *string allowed = ENV.QORE_FILE_LOCATION_CONNECTIONS;
+        if (!allowed.val()) {
+            return;
+        }
+
+        hash<string, bool> allow_map = map {$1: True}, allowed.split(PathSep), $1.val();
+        connection_filter = bool sub (string name, bool write) {
+            return allow_map{name} ?? False;
+        };
+    }
+
     #! Returns info about the requested location
     /** @param location the location string
         @param read if the location is meant for reading
@@ -495,36 +731,15 @@ getHandlerNames
         }
         info.handler = handler;
 
-        *hash<string, hash<FileHandlerOptionInfo>> handler_opts = read
-            ? handler.getReadOptions()
-            : handler.getWriteOptions();
+        # NOTE: the option string must be stripped from the location before the location is used in any error
+        # message, so this cannot be folded into the checkOptions() call below; argument evaluation order would
+        # capture the unstripped location
         info.opts = FileLocationHandler::getOptions(\location);
-        # check for unknown options
-        if (info.opts && (*hash<auto> erropts = info.opts - (keys handler_opts))) {
-            throw "LOCATION-ERROR", sprintf("file location %y has unsupported %s option(s): %y; supported "
-                "options: %y", location, read ? "read" : "write", keys erropts, keys handler_opts);
-        }
-
-        # check for required and default option values; fix types
-        foreach hash<auto> i in (handler_opts.pairIterator()) {
-            if (exists info.opts{i.key}) {
-                switch (i.value.type) {
-                    case "int":
-                        info.opts{i.key} = info.opts{i.key}.toInt();
-                        break;
-                    case "bool":
-                        info.opts{i.key} = parse_boolean(info.opts{i.key});
-                        break;
-                }
-            } else {
-                if (exists i.value.default_value) {
-                    info.opts{i.key} = i.value.default_value;
-                } else if (i.value.required) {
-                    throw "LOCATION-ERROR", sprintf("file location %y is missing required option %y", location,
-                        i.key);
-                }
-            }
-        }
+        # NOTE: handlers that report selfValidatesOptions() perform the unknown-option check themselves after
+        # resolving the location; they cannot know the effective option set until then.  Default value and required
+        # option processing is always performed
+        info.opts = FileLocationHandler::checkOptions(location, handler, info.opts, read,
+            !handler.selfValidatesOptions());
 
         # remove the scheme from the location
         if (exists scheme) {

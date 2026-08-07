@@ -38,7 +38,7 @@ public class PdfCoDocumentClassifierRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source document",
                 "desc": "URL to the source document",

@@ -142,6 +142,35 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         } + constructor_options);
     }
 
+    #! Returns a \c "file" scheme redirect for the given path
+    /** @param path the path relative to the connection's directory
+        @param write @ref True if the location will be written to
+
+        @return a @ref FileLocationRedirect hash for the \c "file" scheme
+
+        @throw LOCATION-ERROR empty path; path resolves outside the connection's directory
+        @throw CONNECTION-ERROR the connection is read-only and \a write is @ref True
+
+        @since ConnectionProvider 3.1
+    */
+    private *hash<FileLocationRedirect> getFileLocationRedirectImpl(string path, bool write) {
+        if (write && opts.readonly) {
+            throw "CONNECTION-ERROR", sprintf("connection %y is read-only; cannot write to a file location in it",
+                name);
+        }
+        return <FileLocationRedirect>{
+            "scheme": "file",
+            "location": AbstractConnection::getConfinedFileLocationPath(name, urlh.path ?? "/", path),
+        };
+    }
+
+    #! Returns connection features
+    private *hash<string, bool> getFeaturesImpl() {
+        return {
+            AbstractConnection::CF_FILE_LOCATIONS: True,
+        };
+    }
+
     #! Common constructor initialization
     private setupFsOpts() {
         # the URL hash is parsed with parse_url() which will put a string in the

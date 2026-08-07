@@ -49,7 +49,7 @@ public class ApolloUpdateContactRequestDataType inherits HashDataType {
                 "desc": "The new last name of the contact",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The contact's email address",
                 "desc": "The new email address of the contact",

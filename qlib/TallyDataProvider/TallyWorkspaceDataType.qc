@@ -38,7 +38,7 @@ public class TallyWorkspaceInviteDataType inherits HashDataType {
                 "display_name": "Email",
                 "short_desc": "Invited email address",
                 "desc": "The email address that was invited",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*email",
             },
             "workspaceIds": {
                 "display_name": "Workspace IDs",

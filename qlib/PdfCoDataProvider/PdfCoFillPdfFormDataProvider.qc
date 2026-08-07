@@ -38,7 +38,7 @@ public class PdfCoFillPdfFormRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source PDF form",
                 "desc": "URL to the source PDF form",

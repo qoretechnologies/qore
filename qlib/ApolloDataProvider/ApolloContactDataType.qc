@@ -57,7 +57,7 @@ public class ApolloContactDataType inherits HashDataType {
                 "desc": "The full name of the contact",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Primary email",
                 "desc": "The primary email address of the contact",
@@ -107,13 +107,13 @@ public class ApolloContactDataType inherits HashDataType {
                 "desc": "The professional headline of the contact",
             },
             "linkedin_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "LinkedIn URL",
                 "short_desc": "LinkedIn profile URL",
                 "desc": "The LinkedIn profile URL of the contact",
             },
             "photo_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Photo URL",
                 "short_desc": "Profile photo URL",
                 "desc": "The URL of the contact's profile photo",
@@ -149,7 +149,7 @@ public class ApolloContactDataType inherits HashDataType {
                 "desc": "The timezone of the contact",
             },
             "sanitized_phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone",
                 "short_desc": "Phone number",
                 "desc": "The sanitized phone number of the contact",

@@ -120,7 +120,7 @@ public class SquareInvoiceDataType inherits HashDataType {
                 "desc": "The timestamp when the invoice was last updated (RFC 3339 format)",
             },
             "public_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Public URL",
                 "short_desc": "The public URL for the invoice",
                 "desc": "The URL where the customer can view and pay the invoice",

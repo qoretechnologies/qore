@@ -677,7 +677,7 @@ public class PerplexityChatSearchResultDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The URL of the search result",
                 "desc": "The URL of the search result page",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
             },
             "snippet": {
                 "display_name": "Snippet",

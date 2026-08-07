@@ -109,7 +109,7 @@ public class OneDriveCopyItemResultDataType inherits HashDataType {
                 "short_desc": "URL to monitor copy progress",
                 "desc": "A URL to monitor the progress of the asynchronous copy operation. Use HTTP GET "
                     "on this URL to check the status, percentage complete, and final result",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
         };
     }

@@ -38,7 +38,7 @@ public class KatanaWatchNewStockAdjustmentsDataProvider inherits KatanaWatchData
         try {
             return doGetList(getEndpoint(), params);
         } catch (hash<ExceptionInfo> ex) {
-            error("Error fetching new stock adjustments: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error fetching new stock adjustments: %s: %s", ex.err, ex.desc));
             return ();
         }
     }

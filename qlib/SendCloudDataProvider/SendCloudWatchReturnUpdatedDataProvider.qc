@@ -71,7 +71,8 @@ public class SendCloudWatchReturnUpdatedDataProvider inherits SendCloudWatchData
         try {
             return_list = fetchAllCursorPages("returns", "returns", params);
         } catch (hash<ExceptionInfo> ex) {
-            error("SendCloudWatchReturnUpdated: error fetching returns: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("SendCloudWatchReturnUpdated: error fetching returns: %s: %s", ex.err,
+                ex.desc));
             return ();
         }
         # client-side filter: returns with updated_at > since (or created_at if updated_at absent)

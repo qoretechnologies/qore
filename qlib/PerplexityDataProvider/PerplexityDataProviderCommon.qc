@@ -119,7 +119,7 @@ public class PerplexityDataProviderCommon inherits DataProvider::AbstractDataPro
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
         if (RetrySet{ex.err}) {
             if (++retries == MaxIoRetries) {
-                error("Maximum retries exceeded (%d)", retries);
+                LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;
             }
             warn("Technical error making REST call: %s: %s; retrying", ex.err, ex.desc);

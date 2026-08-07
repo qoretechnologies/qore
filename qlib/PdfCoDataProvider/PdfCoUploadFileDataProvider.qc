@@ -39,7 +39,7 @@ public class PdfCoUploadFileRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL of the file to upload",
                 "desc": "URL of the file to upload to PDF.co temporary storage. "

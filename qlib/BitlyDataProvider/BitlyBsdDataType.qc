@@ -31,7 +31,7 @@ public class BitlyBsdDataType inherits HashDataType {
         #! Field definitions for BSDs
         const Fields = {
             "domain": {
-                "type": StringType,
+                "type": HostnameType,
                 "display_name": "Domain",
                 "short_desc": "The branded short domain",
                 "desc": "The branded short domain name (e.g., `myco.link`)",

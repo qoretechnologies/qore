@@ -54,7 +54,7 @@ public class DeelCreateContractRequestDataType inherits HashDataType {
                 "example_value": "Software Engineer - Backend",
             },
             "worker_email": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Worker Email",
                 "short_desc": "The worker's email address",
                 "desc": "The email address of the contractor or employee",

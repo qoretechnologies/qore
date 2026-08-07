@@ -38,7 +38,7 @@ public class PdfCoReadBarcodeRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source file containing barcodes",
                 "desc": "URL to the source file containing barcodes",

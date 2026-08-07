@@ -49,7 +49,7 @@ public class TableauUserDataType inherits HashDataType {
                 "desc": "The full name of the user",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The email address",
                 "desc": "The email address of the user",

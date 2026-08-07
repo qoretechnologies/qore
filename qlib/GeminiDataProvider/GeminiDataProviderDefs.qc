@@ -941,7 +941,7 @@ public class GeminiFileInfoDataType inherits HashDataType {
                 "display_name": "URI",
                 "short_desc": "The URI of the file",
                 "desc": "The URI of the file",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "state": {
                 "display_name": "State",

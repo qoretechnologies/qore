@@ -39,7 +39,7 @@ public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URL",
                 "short_desc": "URL of the web page to convert",
                 "desc": "URL of the web page to convert (requires `source_type` set to `url`)",

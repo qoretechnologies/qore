@@ -37,7 +37,7 @@ public class BigCommerceCustomerDataType inherits HashDataType {
             },
             "email": {
                 "display_name": "Email",
-                "type": StringType,
+                "type": EmailType,
                 "desc": "Email address of the customer",
             },
             "first_name": {

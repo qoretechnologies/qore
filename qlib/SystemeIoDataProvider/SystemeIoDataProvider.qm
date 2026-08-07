@@ -739,7 +739,7 @@ module SystemeIoDataProvider {
 
     @tableofcontents
 
-    @section systemeio_dataproviderintro SystemeIoDataProvider Module Introduction
+    @section systemeiodataproviderintro SystemeIoDataProvider Module Introduction
 
     The %SystemeIoDataProvider module provides a data provider API for Systeme.io,
     an all-in-one online marketing platform.

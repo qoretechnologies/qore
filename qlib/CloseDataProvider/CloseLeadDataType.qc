@@ -62,7 +62,7 @@ public class CloseLeadDataType inherits HashDataType {
                 "desc": "A text description of the lead with additional context or notes",
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URL",
                 "short_desc": "The lead URL",
                 "desc": "The website URL associated with the lead",
@@ -134,7 +134,7 @@ public class CloseLeadDataType inherits HashDataType {
                 "desc": "The timestamp when the lead was last updated (ISO 8601 format)",
             },
             "html_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "HTML URL",
                 "short_desc": "The Close web UI URL for this lead",
                 "desc": "The URL to view this lead in the Close web application",

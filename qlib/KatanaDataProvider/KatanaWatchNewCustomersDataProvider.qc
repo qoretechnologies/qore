@@ -38,7 +38,7 @@ public class KatanaWatchNewCustomersDataProvider inherits KatanaWatchDataProvide
         try {
             return doGetList(getEndpoint(), params);
         } catch (hash<ExceptionInfo> ex) {
-            error("Error fetching new customers: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error fetching new customers: %s: %s", ex.err, ex.desc));
             return ();
         }
     }

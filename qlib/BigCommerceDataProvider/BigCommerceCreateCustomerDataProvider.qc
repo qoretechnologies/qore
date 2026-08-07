@@ -48,7 +48,7 @@ public class BigCommerceCreateCustomerRequestDataType inherits HashDataType {
             "email": {
                 "display_name": "Email",
                 "short_desc": "Customer email address",
-                "type": StringType,
+                "type": EmailType,
                 "desc": "The customer's email address",
                 "required": True,
                 "example_value": "john@example.com",

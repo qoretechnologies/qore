@@ -1,0 +1,1411 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** GoogleDriveDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClientIo
+%requires GoogleRestClient
+%requires GoogleDriveDataProvider
+
+%exec-class GoogleDriveDataProviderTest
+
+#! Answers Drive requests from a script rather than reaching Google
+#! A poll operation that answers from a canned response without performing any I/O
+/** Lets the offline suite drive a real poller to completion, so the code that reads the response, converts
+    it, and retries is exercised without a network.
+
+    \a attempt is called on the first \c continuePoll() and stands for the request reaching the wire: it
+    returns the response, or throws to model an attempt that failed.  Nothing happens when the operation is
+    *built*, which is what the real client does -- it prepares the request and sends nothing until polled --
+    and what lets the suite assert that a poller makes no request until it is driven.
+*/
+class FakePollOperation inherits AbstractPollOperation<auto> {
+    private {
+        #! called on the first continuePoll(); returns the response or throws
+        code<hash<RestClient::RestResponseInfo>()> attempt;
+
+        #! the response, once the attempt has produced one
+        *hash<RestClient::RestResponseInfo> resp;
+
+        #! set once the response has been delivered
+        bool done = False;
+    }
+
+    constructor(code<hash<RestClient::RestResponseInfo>()> attempt) {
+        self.attempt = attempt;
+    }
+
+    string getGoal() { return "fake poll"; }
+    string getState() { return done ? "complete" : "ready"; }
+    bool goalReached() { return done; }
+
+    *hash<SocketPollInfo> continuePoll() {
+        # the request reaches the "wire" here, not when the operation was built
+        resp = attempt();
+        done = True;
+        return NOTHING;
+    }
+
+    auto getOutput() { return resp; }
+    abort() {}
+}
+
+class FakeGoogleRestClientIo inherits GoogleRestClient::GoogleRestClientIo {
+    public {
+        #! response bodies to return, in order; the last one is reused once the list is exhausted
+        list<auto> bodies = ({},);
+
+        #! response headers to return, in order; the last one is reused once the list is exhausted
+        /** NOTE: not "headers"; RestClient already declares a private member of that name, and a subclass
+            may not redeclare it
+        */
+        list<hash<auto>> resp_headers = ({},);
+
+        #! every request made, oldest first
+        list<hash<auto>> requests = ();
+
+        #! the number of responses already handed out
+        int served = 0;
+
+        #! response status codes to return, in order; the last one is reused once the list is exhausted
+        /** A status \>= 300 is **thrown** as \c REST-RESPONSE-ERROR carrying the response, exactly as the
+            real client does.  A resumable upload depends on that behaviour: Drive answers every chunk but the
+            last with \c 308, so a fake that answers \c 200 tests a conversation that never happens
+        */
+        list<int> statuses = (200,);
+
+        #! how many successive poll attempts fail before one is allowed to answer
+        int poll_fail_attempts = 0;
+
+        #! the error each failing attempt raises
+        hash<ExceptionInfo> poll_error = <ExceptionInfo>{
+            "err": "SOCKET-CLOSED",
+            "desc": "connection closed",
+        };
+
+        #! requests a poll operation issued after its first
+        /** Drive uses the retry entry point for every request after the first, which is both a retry *and*
+            the content request that follows the metadata request -- both are issued from inside
+            continuePoll() and must skip the OAuth2 token check
+        */
+        int poll_followups = 0;
+    }
+
+    constructor() : GoogleRestClientIo(GoogleDriveDataProviderTest::TestConnOptions
+        + {"api_profile": "drive"}) {
+    }
+
+    #! NOTE: the poll entry points must be overridden too
+    /** The module reads a "conn://" location through startPollRequest(), and each request after the first --
+        the content request that follows the metadata request, and any retry -- through startPollRetry().  A
+        fake that left either inherited would make real requests against Drive from the "offline" suite.
+    */
+    Qore::AbstractPollOperation startPollRequest(string method, string path, auto body, *hash<auto> hdr) {
+        return recordPoll(method, path, hdr);
+    }
+
+    Qore::AbstractPollOperation startPollRetry(string method, string path, auto body, *hash<auto> hdr) {
+        ++poll_followups;
+        return recordPoll(method, path, hdr);
+    }
+
+    #! Records a polled request and returns a poller over the next canned response
+    /** Nothing is recorded or consumed until the poller is driven: a real attempt sends its request on the
+        first continuePoll(), not when the operation is built.  An attempt scripted to fail records its
+        request but does **not** consume a canned response -- consuming here would hand the retry the *next*
+        scripted response, which is how the first version of this fake made a two-request Drive read answer
+        its metadata request with the content body.
+    */
+    private Qore::AbstractPollOperation recordPoll(string method, string path, *hash<auto> hdr) {
+        bool fail = poll_fail_attempts > 0;
+        if (fail) {
+            --poll_fail_attempts;
+        }
+        return new FakePollOperation(hash<RestClient::RestResponseInfo> sub () {
+            if (fail) {
+                requests += {"method": method, "path": path, "body": NOTHING, "hdr": hdr};
+                throw poll_error.err, poll_error.desc, poll_error.arg;
+            }
+            # NOTE: record() throws on a >= 300 status, exactly as the real client does
+            return record(method, path, NOTHING, hdr);
+        });
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body, *hash<auto> hdr) {
+        requests += {"method": method, "path": path, "body": body, "hdr": hdr};
+        int i = served < bodies.size() ? served : bodies.size() - 1;
+        int j = served < resp_headers.size() ? served : resp_headers.size() - 1;
+        ++served;
+        int k = served <= statuses.size() ? served - 1 : statuses.size() - 1;
+        hash<RestClient::RestResponseInfo> resp = <RestClient::RestResponseInfo>{
+            "status_code": statuses[k],
+            "body": bodies[i],
+            "headers": resp_headers[j] ?? {},
+        };
+        if (resp.status_code >= 300) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.status_code), resp;
+        }
+        return resp;
+    }
+
+    #! Returns the last request made
+    hash<auto> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no request was made";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+}
+
+public class GoogleDriveDataProviderTest inherits QUnit::Test {
+    public {
+        #! the application name
+        const App = GoogleDriveDataProvider::AppName;
+
+        #! the action the framework injects into every app served by a REST connection
+        const FrameworkAction = "make-api-call";
+
+        #! command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! Width of the option column in the usage text
+        const OptionColumn = 22;
+
+        #! How many times the live change-feed test looks for its change before giving up
+        /** Drive's change feed is eventually consistent, so a change is not guaranteed to be visible the
+            instant the write that caused it returns
+        */
+        const LiveChangeFeedAttempts = 10;
+
+        #! How long the live change-feed test waits between attempts
+        const LiveChangeFeedInterval = 2s;
+
+        #! connection options sufficient to construct a connection without contacting Google
+        const TestConnOptions = {
+            "oauth2_client_id": "test-id",
+            "oauth2_client_secret": "test-secret",
+            "oauth2_redirect_url": "https://localhost:8011/oauth2-callback",
+            "token": "test-token",
+            "token_type": "Bearer",
+        };
+    }
+
+    constructor() : Test("GoogleDriveDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("connection", \connectionTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("file API registration", \fileApiTest());
+        addTestCase("shared drive support", \sharedDriveTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("change classification", \changeClassificationTest());
+        addTestCase("resumable upload", \resumableUploadTest());
+        addTestCase("native file location handler", \nativeHandlerTest());
+        addTestCase("poller", \pollerTest());
+        addTestCase("live connection", \liveConnectionTest());
+        addTestCase("live shared drives", \liveSharedDriveTest());
+        addTestCase("live change feed", \liveChangeFeedTest());
+        addTestCase("live file lifecycle", \liveFileLifecycleTest());
+        addTestCase("live folder operations", \liveFolderOperationsTest());
+        addTestCase("live extended operations", \liveExtendedOperationsTest());
+        addTestCase("live record iterator", \liveRecordIteratorTest());
+        addTestCase("live native handler", \liveNativeHandlerTest());
+
+        set_return_value(main());
+    }
+
+    connectionTest() {
+        *hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("gdrive");
+        assertTrue(exists scheme, "the gdrive scheme is registered");
+        # the narrower scope reaches only files the application created, and is the better default for a new
+        # deployment; both must be offered, or changing the scope later forces a re-consent cycle
+        assertEq(("drive", "drive-file"), (map $1.value, scheme.options.api_profile.allowed_values));
+        assertEq("drive", scheme.options.api_profile.default_value);
+
+        GoogleDriveRestConnection conn("gdrive-test", "test connection",
+            GoogleDriveRestConnection::DefaultConnectionUrl, {}, TestConnOptions);
+        assertEq("gdrive", conn.getType());
+        assertEq(App, conn.getAppName());
+        assertEq(True, conn.hasDataProvider());
+        # tier 1b: Drive transfers files natively for "conn://" locations rather than leaving them to the
+        # application file API, because it can do better -- a resumable upload driven from an output stream,
+        # and a download that arrives as the response body rather than base64-encoded into a JSON field
+        assertEq(True, conn.supportsFileLocations(), "Drive connections transfer files natively");
+        object handler = conn.getFileLocationHandler();
+        assertTrue(handler instanceof GoogleDriveFileLocationHandler, "the native Drive handler is returned");
+
+        assertEq("gdrive", (new GoogleDriveDataProviderFactory()).getName());
+    }
+
+    actionCatalogTest() {
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(App);
+        assertEq("GoogleDrive", app.name);
+        assertEq("gdrive", app.scheme);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        assertTrue(app.logo.val(), "the logo was loaded from its file");
+
+        # the root provider is built directly from an unconnected client, so that every action's own request
+        # type can be compared against the options the catalog advertises for it
+        GoogleRestClientIo client(TestConnOptions + {"api_profile": "drive"});
+        on_exit client.close();
+        GoogleDriveDataProvider::GoogleDriveDataProvider root(client);
+
+        hash<string, bool> children = map {$1: True},
+            keys GoogleDriveDataProvider::GoogleDriveDataProvider::DefaultChildMap;
+        hash<string, bool> seen;
+        int actions = 0;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsEx(App)) {
+            if (action.action == FrameworkAction) {
+                continue;
+            }
+            ++actions;
+            string path = action.path;
+            path =~ s/^\///;
+            # the first segment must name a root child; an action path that does not resolve leaves the
+            # action's provider null: reference data returns nothing and doRequest() is never reached, with no
+            # error anywhere
+            string root_child = (path =~ x/^([^\/]+)/)[0];
+            seen{root_child} = True;
+            assertTrue(children{root_child}, sprintf("action %y path %y resolves through the root ChildMap",
+                action.action, action.path));
+            assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
+            assertTrue(action.short_desc.length() < 80, sprintf("action %y short_desc is under 80 chars",
+                action.action));
+
+            # ... and the whole path must resolve, not just its first segment: an event action addresses a
+            # provider nested under the events container
+            *AbstractDataProvider dp = root.getChildProviderPath(path);
+            assertTrue(exists dp, sprintf("action %y has a child provider", action.action));
+
+            if (action.action_code == DPAT_EVENT) {
+                # the event name the action advertises must be one the provider actually raises, or a trigger
+                # configured from the catalog waits for an event that never arrives
+                assertTrue(dp.getInfo().supports_observable,
+                    sprintf("event action %y has an observable provider", action.action));
+                assertTrue(exists dp.getEventTypes(){action.action_val},
+                    sprintf("event action %y action_val %y is an event the provider raises", action.action,
+                        action.action_val));
+                continue;
+            }
+
+            if (action.action_code == DPAT_FIND) {
+                # a find reads the provider as a record source, so it must have one, and every option it
+                # advertises must exist in the provider's own search options -- an option the provider does
+                # not declare is rejected as unknown the moment the action is used
+                assertTrue(dp.getInfo().supports_read,
+                    sprintf("find action %y has a record source", action.action));
+                assertTrue(exists dp.getRecordType(),
+                    sprintf("find action %y describes its records", action.action));
+                hash<string, bool> search_opts = map {$1: True}, keys dp.getInfo().search_options;
+                foreach string opt in (keys action.options) {
+                    assertTrue(search_opts{opt},
+                        sprintf("find action %y option %y exists in the provider's search options",
+                            action.action, opt));
+                }
+                continue;
+            }
+
+            # an action whose request type has fields must advertise options for them, or it renders with no
+            # form fields and cannot be used
+            *AbstractDataProviderType rt = dp.getRequestType();
+            int fields = rt ? rt.getFields().size() : 0;
+            assertEq(fields > 0, action.options.size() > 0,
+                sprintf("action %y advertises options if and only if its request type has fields (%d fields, "
+                    "%d options)", action.action, fields, action.options.size()));
+        }
+        assertEq((), keys (children - (keys seen)), "every child has a registered action");
+
+        # download-file and export-file close the gap that made Drive unusable as a file location: the
+        # TypeScript application returned metadata only, with no way to retrieve a file's bytes at all
+        assertTrue(exists DataProviderActionCatalog::getAppAction(App, "download-file"));
+        assertTrue(exists DataProviderActionCatalog::getAppAction(App, "export-file"));
+        hash<DataProviderActionInfo> ex = DataProviderActionCatalog::getAppActionEx(App, "export-file");
+        assertTrue(ex.options.mime_type.allowed_values.size() > 0,
+            "the export formats are declared as allowed values rather than described in prose");
+    }
+
+    fileApiTest() {
+        *hash<DataProviderFileApiInfo> fapi = DataProviderActionCatalog::getAppFileApi(App);
+        assertTrue(exists fapi, "the app registers a file API for conn:// locations");
+        # Drive addresses a file by an immutable ID, and addresses a new file by parent folder plus name
+        assertEq(True, fapi.path_is_id);
+        assertEq(True, fapi.write_path_is_parent);
+
+        # the declared actions and options must exist, or the file API silently fails at use time
+        hash<DataProviderActionInfo> read = DataProviderActionCatalog::getAppActionEx(App, fapi.read_action);
+        assertTrue(exists read.options{fapi.read_path_option}, "the read path option exists on the read action");
+        hash<DataProviderActionInfo> write = DataProviderActionCatalog::getAppActionEx(App, fapi.write_action);
+        assertTrue(exists write.options{fapi.write_path_option},
+            "the write path option exists on the write action");
+        assertTrue(exists write.options{fapi.write_data_option},
+            "the write data option exists on the write action");
+        # write_path_is_parent requires the file format, since no other format carries a filename
+        assertEq(DPFW_FILE, fapi.write_data_format);
+    }
+    #! Shared-drive (Team Drive) support must reach every request that addresses a file
+    /** Without \c supportsAllDrives a business account cannot see shared-drive content at all, and the API
+        answers as though the item did not exist -- so the failure is indistinguishable from a missing file.
+        The parameter is therefore added centrally rather than at each call site, and this checks that the
+        central rule covers the endpoints it must and leaves the others alone.
+    */
+    sharedDriveTest() {
+        # every Drive endpoint that addresses a file, a permission, or a change carries the parameter
+        foreach string path in (("/drive/v3/files", "/drive/v3/files/abc",
+                "/drive/v3/files/abc/permissions", "/drive/v3/changes", "/upload/drive/v3/files")) {
+            assertRegex("supportsAllDrives=true",
+                GoogleDriveDataProviderBase::addSharedDriveSupport(path),
+                sprintf("%y carries shared drive support", path));
+        }
+        # the existing query string is preserved rather than replaced
+        assertEq("/drive/v3/files?fields=id&supportsAllDrives=true",
+            GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/files?fields=id"));
+        # a caller that set the parameter itself is left alone, rather than having it sent twice
+        assertEq("/drive/v3/files?supportsAllDrives=false",
+            GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/files?supportsAllDrives=false"));
+        # the shared-drive collection endpoint itself takes no such parameter
+        assertEq("/drive/v3/drives", GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/drives"));
+        assertEq("/drive/v3/about", GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/about"));
+        # ... and neither is a resumable upload session URI, which the server generated
+        assertEq("/upload/drive/v3/files?uploadType=resumable&upload_id=U1",
+            GoogleDriveDataProviderBase::addSharedDriveSupport(
+                "/upload/drive/v3/files?uploadType=resumable&upload_id=U1"));
+
+        # a listing needs more than "supportsAllDrives": without "includeItemsFromAllDrives" shared-drive
+        # content never appears in the results, whatever the account can reach
+        assertEq("&includeItemsFromAllDrives=true", GoogleDriveListFilesDataProvider::getSharedDriveQuery({}));
+        assertEq("", GoogleDriveListFilesDataProvider::getSharedDriveQuery({"include_shared_drives": False}));
+        # naming a shared drive selects that collection, since Drive rejects "corpora=drive" without a "driveId"
+        assertEq("&includeItemsFromAllDrives=true&driveId=d1&corpora=drive",
+            GoogleDriveListFilesDataProvider::getSharedDriveQuery({"drive_id": "d1"}));
+        assertEq("&includeItemsFromAllDrives=true&corpora=allDrives",
+            GoogleDriveListFilesDataProvider::getSharedDriveQuery({"corpora": "allDrives"}));
+        # ... and an explicit collection is not overridden by the presence of a drive ID
+        assertEq("&includeItemsFromAllDrives=true&driveId=d1&corpora=allDrives",
+            GoogleDriveListFilesDataProvider::getSharedDriveQuery({
+                "drive_id": "d1",
+                "corpora": "allDrives",
+            }));
+        # asking for one shared drive without saying which one is reported here rather than as an API error
+        assertThrows("GOOGLE-DRIVE-ERROR", "drive_id",
+            \GoogleDriveListFilesDataProvider::getSharedDriveQuery(), ({"corpora": "drive"},));
+
+        # the shared drive picker must be offered, or a business user has no way to choose one
+        GoogleRestClientIo client(TestConnOptions + {"api_profile": "drive"});
+        on_exit client.close();
+        GoogleDriveDataProvider::GoogleDriveDataProvider root(client);
+        assertEq(True, root.getSupportedReferenceData().shared_drives);
+        hash<DataProviderActionInfo> list = DataProviderActionCatalog::getAppActionEx(App, "list-files");
+        assertEq("shared_drives", list.options.drive_id.ref_data);
+        assertTrue(list.options.corpora.allowed_values.size() > 0,
+            "the collections to search are declared as allowed values rather than described in prose");
+
+        # renaming had no action at all: move-file only changes a file's parents and replace-file only its
+        # content, so a name could not be changed through this module
+        hash<DataProviderActionInfo> rename = DataProviderActionCatalog::getAppActionEx(App, "rename-file");
+        assertEq(DPAT_API, rename.action_code);
+        assertEq(True, rename.options.name.required);
+        assertEq("files", rename.options.file_id.ref_data);
+    }
+
+    #! The module must offer triggers, not only actions
+    /** The TypeScript application being replaced had triggers for new files and new folders; a module that is
+        100% DPAT_API is a functional regression against it however complete its action list is.
+    */
+    eventProviderTest() {
+        GoogleRestClientIo client(TestConnOptions + {"api_profile": "drive"});
+        on_exit client.close();
+        GoogleDriveDataProvider::GoogleDriveDataProvider root(client);
+
+        AbstractDataProvider events = root.getChildProviderEx("events");
+        assertEq("events", events.getName());
+        assertTrue(events.getInfo().children_can_support_observers,
+            "the events container advertises observable children");
+        assertEq(("new-file", "new-folder"), events.getChildProviderNames());
+        assertEq(2, events.getChildProviderSummaryInfo().size(), "every event child has summary info");
+
+        foreach string name in (("new-file", "new-folder")) {
+            AbstractDataProvider w = events.getChildProviderEx(name);
+            assertEq(name, w.getName());
+            assertTrue(w.getInfo().supports_observable, sprintf("%y is observable", name));
+            hash<string, hash<DataProviderMessageInfo>> types = w.getEventTypes();
+            assertEq((name,), keys types, sprintf("%y raises the event it is named for", name));
+            assertTrue(types{name}.desc.val(), sprintf("%y describes its event", name));
+
+            # example data must be produced without a working connection: the form that shows a trigger's
+            # output fields is rendered before any credentials are exercised
+            auto ex = w.getExampleEventData(name);
+            assertEq(NT_HASH, ex.typeCode(), sprintf("%y provides example event data", name));
+            # ... and it must match the declared type, or the field list the user maps against is wrong
+            foreach string f in (keys types{name}.type.getFields()) {
+                assertTrue(ex.hasKey(f), sprintf("%y example data has the declared field %y", name, f));
+            }
+            # the two watches must not produce the same example, or the folder trigger shows a file
+            assertEq(name == "new-folder", ex.is_folder,
+                sprintf("%y example data is %sa folder", name, name == "new-folder" ? "" : "not "));
+        }
+
+        # a shared drive keeps its own change feed, so the drive selects the feed and a change to it must
+        # start a new cursor rather than resume against a different drive
+        GoogleDriveWatchNewFileDataProvider w1(client, {});
+        GoogleDriveWatchNewFileDataProvider w2(client, {"drive_id": "d1"});
+        assertNeq(w1.getWatchStreamIdentity(), w2.getWatchStreamIdentity(),
+            "watching a shared drive is a different feed");
+        # ... and so must a folder filter, since a cursor established under one has already passed over what
+        # the other would have wanted
+        GoogleDriveWatchNewFileDataProvider w3(client, {"folder_id": "f1"});
+        assertNeq(w1.getWatchStreamIdentity(), w3.getWatchStreamIdentity(),
+            "filtering to a folder is a different feed");
+        # ... while the poll interval only changes how often the same feed is read
+        GoogleDriveWatchNewFileDataProvider w4(client, {"poll_interval": 300});
+        assertEq(w1.getWatchStreamIdentity(), w4.getWatchStreamIdentity(),
+            "tuning the poll interval does not discard the cursor");
+        assertEq(300, w4.getPollIntervalSeconds());
+        assertEq(MinPollInterval, (new GoogleDriveWatchNewFileDataProvider(client,
+            {"poll_interval": 1})).getPollIntervalSeconds());
+
+        # the file and folder watches read the same feed, so their cursors must not be shared
+        GoogleDriveWatchNewFolderDataProvider wf(client, {});
+        assertNeq(w1.getWatchStreamIdentity(), wf.getWatchStreamIdentity(),
+            "the file and folder watches keep separate cursors");
+    }
+
+    #! Telling a creation from a modification is the whole difficulty of a "new file" trigger on a change feed
+    /** Drive's `changes.list` reports creations and modifications alike, and a change entry carries nothing
+        that says which it is.  Against the live feed an ordinary working day produces changes to files
+        created years earlier, so without this rule `new-file` would fire on every edit in the drive.
+    */
+    changeClassificationTest() {
+        date cursor = 2026-06-01T00:00:00Z;
+
+        hash<auto> new_file = {
+            "fileId": "f1",
+            "removed": False,
+            "file": {
+                "id": "f1",
+                "name": "new.txt",
+                "mimeType": "text/plain",
+                "createdTime": "2026-06-02T10:00:00Z",
+                "parents": ("folder1",),
+                "trashed": False,
+            },
+        };
+        # a file created after the cursor was established is new
+        *hash<auto> m = GoogleDriveWatchDataProviderBase::matchChange(new_file, False, cursor);
+        assertTrue(exists m, "a file created after the cursor is reported");
+        assertEq("new.txt", m.name);
+        assertEq(False, m.is_folder);
+
+        # ... but the same change seen by the folder watch is not a folder
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(new_file, True, cursor),
+            "a file is not reported as a new folder");
+
+        # a file created before the cursor and merely edited since is a modification, not a creation; this is
+        # the case that dominates a real change feed
+        hash<auto> edited = new_file;
+        edited.file.createdTime = "2024-02-07T14:54:18Z";
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(edited, False, cursor),
+            "an edit to a pre-existing file is not reported as a new file");
+
+        # a removal carries no file resource at all
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange({
+            "fileId": "f1",
+            "removed": True,
+        }, False, cursor), "a removal is not reported");
+
+        # a trashed file is a deletion as far as a user is concerned
+        hash<auto> trashed = new_file;
+        trashed.file.trashed = True;
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(trashed, False, cursor),
+            "a trashed file is not reported as new");
+
+        # a new folder is reported by the folder watch and not by the file watch
+        hash<auto> new_folder = new_file;
+        new_folder.file.mimeType = FolderMimeType;
+        new_folder.file.name = "New Folder";
+        m = GoogleDriveWatchDataProviderBase::matchChange(new_folder, True, cursor);
+        assertTrue(exists m, "a folder created after the cursor is reported by the folder watch");
+        assertEq(True, m.is_folder);
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(new_folder, False, cursor),
+            "a folder is not reported as a new file");
+
+        # the folder filter is applied here, since Drive cannot narrow the change feed at the server
+        assertTrue(exists GoogleDriveWatchDataProviderBase::matchChange(new_file, False, cursor, "folder1"),
+            "an item in the watched folder is reported");
+        assertEq(NOTHING,
+            GoogleDriveWatchDataProviderBase::matchChange(new_file, False, cursor, "other-folder"),
+            "an item outside the watched folder is not reported");
+
+        # before the cursor is established nothing is filtered out by age, since there is no age to compare to
+        assertTrue(exists GoogleDriveWatchDataProviderBase::matchChange(edited, False),
+            "with no cursor yet, age does not exclude an item");
+    }
+
+    #! A large file is sent as a resumable upload rather than as one request
+    /** A single-request upload of a large file has to be retried from the beginning if the connection drops.
+        The threshold constant had been defined and never used, so every upload was a single request whatever
+        its size.
+    */
+    resumableUploadTest() {
+        FakeGoogleRestClientIo rest();
+        GoogleDriveFileTransferProvider prov(rest);
+
+        # below the threshold: one multipart request, no session
+        rest.bodies = ({"id": "f1", "name": "small.txt"},);
+        prov.put("small.txt", NOTHING, binary("small"), "text/plain");
+        assertEq(1, rest.requests.size(), "a small file is stored in a single request");
+        assertRegex("uploadType=multipart", rest.last().path);
+
+        # above it: open a session, then send the content in chunks against the session URI
+        FakeGoogleRestClientIo rest2();
+        int chunks = 2;
+        rest2.bodies = ({}, {}, {"id": "f2", "name": "big.bin"});
+        # Drive answers every chunk but the last with "308 Resume Incomplete" and a Range header reporting
+        # what it holds; the last one gets a 2xx carrying the file metadata
+        rest2.statuses = (200, 308, 200);
+        rest2.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U1"},
+            {"range": sprintf("bytes=0-%d", ResumableChunkSize - 1)},
+            {},
+        );
+        GoogleDriveFileTransferProvider prov2(rest2);
+        prov2.put("big.bin", "folder1", binary(strmul("y", ResumableChunkSize * chunks)),
+            MimeTypeOctetStream);
+
+        assertEq(1 + chunks, rest2.requests.size(), "the session plus one request per chunk");
+        assertRegex("uploadType=resumable", rest2.requests[0].path, "the session is opened first");
+        assertEq("POST", rest2.requests[0].method);
+        assertEq(("folder1",), rest2.requests[0].body.parents, "the metadata names the folder");
+        assertEq(MimeTypeOctetStream, rest2.requests[0].hdr."X-Upload-Content-Type");
+
+        # only the path of the absolute session URI is used, since the client already targets that host --
+        # and it is used exactly as the server gave it, with nothing appended: the shared drive was settled
+        # when the session was opened, so the central shared-drive rewrite must leave a session URI alone
+        assertEq("/upload/drive/v3/files?uploadType=resumable&upload_id=U1", rest2.requests[1].path);
+        assertEq("PUT", rest2.requests[1].method);
+        # each chunk declares the byte range it carries; the last one declares the total
+        assertEq(sprintf("bytes 0-%d/*", ResumableChunkSize - 1), rest2.requests[1].hdr."Content-Range");
+        assertEq(sprintf("bytes %d-%d/%d", ResumableChunkSize, ResumableChunkSize * 2 - 1,
+            ResumableChunkSize * 2), rest2.requests[2].hdr."Content-Range");
+
+        # Drive is authoritative about what it holds.  When it acknowledges less than was sent, the rest of
+        # that chunk -- which is still in hand -- has to be sent again rather than skipped: continuing from
+        # our own byte count would leave a gap, and the upload would then complete into a file of exactly the
+        # right length holding the wrong bytes.
+        FakeGoogleRestClientIo rest2b();
+        rest2b.bodies = ({}, {}, {}, {"id": "f2b", "name": "partial.bin"});
+        rest2b.statuses = (200, 308, 308, 200);
+        int half = ResumableChunkSize / 2;
+        rest2b.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U2"},
+            {"range": sprintf("bytes=0-%d", half - 1)},
+            {"range": sprintf("bytes=0-%d", ResumableChunkSize - 1)},
+            {},
+        );
+        GoogleDriveFileTransferProvider prov2b(rest2b);
+        prov2b.put("partial.bin", NOTHING, binary(strmul("z", ResumableChunkSize * 2)), MimeTypeOctetStream);
+
+        assertEq(4, rest2b.requests.size(), "the unacknowledged tail of the chunk is sent again");
+        assertEq(sprintf("bytes %d-%d/*", half, ResumableChunkSize - 1),
+            rest2b.requests[2].hdr."Content-Range", "the resend covers exactly what was not acknowledged");
+        assertEq(ResumableChunkSize - half, rest2b.requests[2].body.size(),
+            "the resend carries only the bytes Drive did not acknowledge");
+        assertEq(sprintf("bytes %d-%d/%d", ResumableChunkSize, ResumableChunkSize * 2 - 1,
+            ResumableChunkSize * 2), rest2b.requests[3].hdr."Content-Range",
+            "the chunk after it still declares the real total");
+
+        # ... and a chunk Drive acknowledges nothing of must fail rather than be retried forever
+        FakeGoogleRestClientIo rest2c();
+        rest2c.bodies = ({}, {}, {});
+        rest2c.statuses = (200, 308, 308);
+        rest2c.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U3"},
+            {}, {},
+        );
+        GoogleDriveFileTransferProvider prov2c(rest2c);
+        assertThrows("GOOGLE-DRIVE-ERROR", "stalled", sub () {
+            prov2c.put("stalled.bin", NOTHING, binary(strmul("z", ResumableChunkSize * 2)),
+                MimeTypeOctetStream);
+        });
+
+        # an intermediate chunk answered with a 2xx cannot be taken for progress: Drive was told the total is
+        # unknown, so it cannot have completed the upload, and continuing would drop the rest of the content
+        FakeGoogleRestClientIo rest2d();
+        rest2d.bodies = ({}, {"id": "early"}, {});
+        rest2d.statuses = (200, 200, 200);
+        rest2d.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U4"},
+            {}, {},
+        );
+        GoogleDriveFileTransferProvider prov2d(rest2d);
+        assertThrows("GOOGLE-DRIVE-ERROR", "rather than 308", sub () {
+            prov2d.put("early.bin", NOTHING, binary(strmul("z", ResumableChunkSize * 2)),
+                MimeTypeOctetStream);
+        });
+
+        # a stream that ends within the first chunk is sent as a single request, saving the session round
+        # trips -- the same choice S3 and Dropbox make, and what keeps an empty stream from producing a
+        # meaningless byte range
+        FakeGoogleRestClientIo rest3();
+        rest3.bodies = ({"id": "f3"},);
+        GoogleDriveFileTransferProvider prov3(rest3);
+        prov3.putStream("s.bin", NOTHING, new BinaryInputStream(binary("abc")), MimeTypeOctetStream);
+        assertEq(1, rest3.requests.size(), "a short stream is stored in a single request");
+        assertRegex("uploadType=multipart", rest3.last().path);
+
+        # ... including an empty one, which has no byte range to declare at all
+        FakeGoogleRestClientIo rest3b();
+        rest3b.bodies = ({"id": "f3b"},);
+        GoogleDriveFileTransferProvider prov3b(rest3b);
+        prov3b.putStream("empty.bin", NOTHING, new BinaryInputStream(binary()), MimeTypeOctetStream);
+        assertEq(1, rest3b.requests.size(), "an empty stream is stored in a single request");
+
+        # a session URI is required; without one there is nothing to send the content to
+        FakeGoogleRestClientIo rest4();
+        rest4.bodies = ({},);
+        rest4.resp_headers = ({},);
+        GoogleDriveFileTransferProvider prov4(rest4);
+        assertThrows("GOOGLE-DRIVE-ERROR", "session URI", sub () {
+            prov4.putStream("x.bin", NOTHING,
+                new BinaryInputStream(binary(strmul("q", ResumableChunkSize + 1))), MimeTypeOctetStream);
+        });
+
+        assertEq("/upload/x?upload_id=U2",
+            GoogleDriveDataProviderBase::getSessionPath("https://www.googleapis.com/upload/x?upload_id=U2"));
+    }
+
+    #! The native file location handler transfers files through Drive rather than through the actions
+    nativeHandlerTest() {
+        FakeGoogleRestClientIo rest();
+        GoogleDriveFileLocationHandler handler(rest);
+
+        assertEq(("container", "content_type", "encoding", "export_mime_type"),
+            sort(keys handler.getReadOptions()));
+
+        # Drive addresses a file by an immutable ID, so a read location is an ID
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, binary("native content"));
+        assertEq(binary("native content"), handler.getBinaryFile("conn", "f1", {}));
+        assertRegex("alt=media", rest.last().path, "the content is read directly rather than as metadata");
+
+        # a Google-native document has no byte content, and says so rather than failing obscurely
+        FakeGoogleRestClientIo rest2();
+        rest2.bodies = ({"id": "d1", "name": "Doc", "mimeType": "application/vnd.google-apps.document"},);
+        GoogleDriveFileLocationHandler h2(rest2);
+        assertThrows("GOOGLE-DRIVE-ERROR", "export_mime_type", sub () {
+            h2.getBinaryFile("conn", "d1", {});
+        });
+        # ... and with a format it is exported instead
+        rest2.bodies = (binary("exported"),);
+        rest2.served = 0;
+        assertEq(binary("exported"),
+            h2.getBinaryFile("conn", "d1", {"export_mime_type": "application/pdf"}));
+        assertRegex("/export\\?mimeType=", rest2.last().path);
+
+        # a write location is a name, since the file being written does not exist yet
+        assertEq("f.txt", GoogleDriveFileLocationHandler::getName("f.txt"));
+        assertEq("f.txt", GoogleDriveFileLocationHandler::getName("/f.txt"));
+        assertEq("f.txt", GoogleDriveFileLocationHandler::getName("ignored/dirs/f.txt"));
+        assertThrows("LOCATION-ERROR", "must name a file", sub () {
+            GoogleDriveFileLocationHandler::getName("/");
+        });
+
+        FakeGoogleRestClientIo rest3();
+        rest3.bodies = ({"id": "n1", "name": "w.txt"},);
+        GoogleDriveFileLocationHandler h3(rest3);
+        h3.writeFile("conn", "w.txt", "written", {"container": "folder9"});
+        assertEq("w.txt", rest3.last().body.name ?? parseMultipartName(rest3.last().body));
+
+        # a poller is prepared without issuing the request: nothing reaches the wire until the caller polls it
+        AbstractPollOperation op = handler.getIoPollerForLocation("conn", "f1", {});
+        assertRegex("Google Drive read \"f1\"", op.getGoal(), "the poller names the file it will read");
+        assertEq(GoogleDrivePollOperation::SPS_METADATA, op.getState(),
+            "a read with no export format starts by fetching the metadata, which decides whether the file "
+            "has byte content at all");
+        assertEq(False, op.goalReached(), "the poller has not read anything before it is polled");
+
+        # naming an export format makes the read a single request; there is nothing for the metadata to decide
+        AbstractPollOperation eop = handler.getIoPollerForLocation("conn", "f1",
+            {"export_mime_type": "application/pdf"});
+        assertEq(GoogleDrivePollOperation::SPS_CONTENT, eop.getState(),
+            "an export goes straight to the content request");
+    }
+
+    #! Drives the Drive poller to completion offline, including its two-request shape and retry paths
+    /** The live suite proves the poller against Drive; this proves the parts a live test cannot reach on
+        demand -- a transient socket error part-way through and the retry limit -- and proves the
+        metadata-then-content conversation without a network.
+    */
+    pollerTest() {
+        FakeGoogleRestClientIo rest();
+        # first response: the metadata that decides the file has byte content; second: the content itself
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, binary("polled content"));
+        GoogleDriveFileLocationHandler handler(rest);
+
+        assertEq(binary("polled content"), runPoller(handler.getIoPollerForLocation("conn", "f1", {})),
+            "the poller reads the file");
+        assertEq(2, rest.requests.size(), "a read with no export format is two requests");
+        assertRegex("/drive/v3/files/f1\\?fields=", rest.requests[0].path,
+            "the first request fetches the metadata");
+        assertRegex("/drive/v3/files/f1\\?alt=media", rest.requests[1].path,
+            "the second request fetches the content");
+        assertEq("*/*", rest.requests[1].hdr.Accept,
+            "the content request accepts any type; without this Drive answers with a JSON error");
+
+        # an export is a single request to the export endpoint
+        rest.requests = ();
+        rest.served = 0;
+        rest.bodies = (binary("exported"),);
+        assertEq(binary("exported"), runPoller(handler.getIoPollerForLocation("conn", "f1",
+            {"export_mime_type": "text/plain"})), "an export reads the exported bytes");
+        assertEq(1, rest.requests.size(), "an export is a single request");
+        assertRegex("/export\\?mimeType=text%2Fplain", rest.requests[0].path,
+            "the export endpoint is addressed with the requested format");
+
+        # a Google-native document has no byte content, and is reported precisely rather than as the API's
+        # generic "Only files with binary content can be downloaded"
+        rest.requests = ();
+        rest.served = 0;
+        rest.bodies = ({"id": "d1", "name": "doc", "mimeType": "application/vnd.google-apps.document"},);
+        assertThrows("GOOGLE-DRIVE-ERROR", "no byte content of its own", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "d1", {}));
+        });
+        assertEq(1, rest.requests.size(),
+            "the content request is never made for a document that has no content");
+
+        # --- retry: a transient I/O error is retried rather than surfaced ---
+        rest.requests = ();
+        rest.served = 0;
+        rest.poll_followups = 0;
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, binary("polled content"));
+        rest.poll_fail_attempts = 1;
+        assertEq(binary("polled content"), runPoller(handler.getIoPollerForLocation("conn", "f1", {})),
+            "a transient I/O error is retried and the read still succeeds");
+        assertEq(2, rest.poll_followups,
+            "two requests followed the first: the retried metadata request, and the content request after "
+            "it -- both are issued from inside continuePoll(), so both must skip the token check");
+
+        # --- retry limit: past MaxIoRetries the error is reported ---
+        rest.served = 0;
+        rest.poll_followups = 0;
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"},);
+        rest.poll_fail_attempts = GoogleDriveDataProviderBase::MaxIoRetries + 1;
+        assertThrows("GOOGLE-DRIVE-ERROR", "SOCKET-CLOSED", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "f1", {}));
+        }, NOTHING, "a persistent I/O error is reported once the retry limit is reached");
+        assertEq(GoogleDriveDataProviderBase::MaxIoRetries, rest.poll_followups,
+            "no more than MaxIoRetries retries are made; the content request is never reached");
+
+        # --- a Drive error response is unpacked rather than reported as an HTTP status ---
+        rest.served = 0;
+        rest.poll_followups = 0;
+        rest.poll_fail_attempts = 0;
+        rest.bodies = ({"error": {"code": 404, "message": "File not found: f9.",
+            "errors": ({"reason": "notFound"},)}},);
+        rest.statuses = (404,);
+        assertThrows("GOOGLE-DRIVE-ERROR", "notFound", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "f9", {}));
+        }, NOTHING, "the Drive error document is unpacked");
+        assertEq(0, rest.poll_followups, "a response error is not retried");
+    }
+
+
+    #! Returns the file name from a Drive multipart upload body
+    private *string parseMultipartName(auto body) {
+        *string s = body.typeCode() == NT_BINARY ? body.toString() : body;
+        return s ? (s =~ x/"name":"([^"]+)"/)[0] : NOTHING;
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
+    }
+
+    #! Returns the connection named on the command line, or skips the test
+    #! Drives the native file location handler and a real resumable upload against the live service
+    /** The offline tests drive both against a fake client; this covers what only Google can answer -- that a
+        resumable upload actually assembles into the file it claims, and that the native handler reads back
+        exactly what it wrote.
+
+        The stream write is deliberately larger than @ref GoogleDriveDataProvider::ResumableChunkSize, so that
+        more than one chunk is sent.  That is where this can go wrong quietly: each chunk carries a
+        \c Content-Range naming its own byte range and the total, and ranges that are individually well-formed
+        but collectively wrong yield a file of the right size holding the wrong bytes.
+
+        This writes to the account under test; exclude it with `--exclude="live native handler"`.
+    */
+    liveNativeHandlerTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        assertEq(True, conn.supportsFileLocations(), "the live connection transfers files natively");
+        GoogleDriveFileLocationHandler handler =
+            cast<GoogleDriveFileLocationHandler>(conn.getFileLocationHandler());
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        string stamp = sprintf("%d", clock_getmicros());
+        string name = sprintf("qore-native-%s.txt", stamp);
+        string content = "written through the native Google Drive file location handler";
+
+        # a write location is a name: the file does not exist yet, so it has no ID to be addressed by
+        handler.writeFile("conn", name, content, {});
+        string id = findFileId(prov, name);
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({"file_id": id, "permanently_delete": True});
+        }
+
+        # ... while a read location is the ID Drive assigned it
+        assertEq(content, handler.getTextFile("conn", id, {}), "the handler reads back exactly what it wrote");
+        assertEq(binary(content), handler.getBinaryFile("conn", id, {}));
+
+        # the write must also have carried the MIME type inferred from the name, rather than a generic one
+        assertEq("text/plain", prov.getChildProviderEx("get-file").doRequest({"file_id": id}).mime_type,
+            "the MIME type was inferred from the file name");
+
+        # a stream larger than one chunk exercises the real resumable path: session, chunks, completion
+        string big_name = sprintf("qore-native-%s.bin", stamp);
+        int size = ResumableChunkSize + 1024;
+        binary payload = binary(strmul("Q", size));
+
+        OutputStreamWrapper os = handler.getOutputStream("conn", big_name, {});
+        os.write(payload);
+        os.close();
+        os.waitForIo();
+        string big_id = findFileId(prov, big_name);
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({"file_id": big_id, "permanently_delete": True});
+        }
+
+        binary read_back = handler.getBinaryFile("conn", big_id, {});
+        assertEq(size, read_back.size(), "the resumable upload stored every byte");
+        assertEq(payload, read_back, "the chunks were assembled in order");
+
+        # ... and Drive agrees on the size, which is written when the upload is completed
+        assertEq(size, prov.getChildProviderEx("get-file").doRequest({"file_id": big_id}).size,
+            "Drive reports the size that the stream wrote");
+    }
+
+    #! Returns the ID of a file the native handler created
+    /** The handler addresses a file by name on write, because a new file has no ID until Drive assigns one.
+    */
+    private string findFileId(AbstractDataProvider prov, string name) {
+        hash<auto> found = prov.getChildProviderEx("list-files").doRequest({"name": name});
+        if (found.files.size() != 1) {
+            throw "TEST-ERROR", sprintf("expecting exactly one file named %y; got %d", name,
+                found.files.size());
+        }
+        return found.files[0].id;
+    }
+
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn ?? ENV.GOOGLE_DRIVE_CONNECTION;
+        if (!conn_name.val()) {
+            testSkip("no connection specified; use -c,--connection=ARG or set GOOGLE_DRIVE_CONNECTION");
+            return;
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        if (conn.getType() != "gdrive") {
+            throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting \"gdrive\"", conn_name,
+                conn.getType());
+        }
+        return conn;
+    }
+
+    #! Exercises the connection against the live service
+    liveConnectionTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+
+        hash<auto> ping = conn.ping(True);
+        assertEq(True, ping.ok, sprintf("ping succeeded: %s", ping.info));
+
+        AbstractDataProvider dp = conn.getDataProvider().getChildProvider("list-files");
+        hash<auto> resp = dp.doRequest({});
+        assertEq(NT_LIST, resp.files.typeCode(), "list-files returned a list");
+        if (m_options.verbose > 0) {
+            printf("list-files: %d files\n", resp.files.size());
+            foreach auto e in (resp.files) {
+                printf("  %y\n", e.name);
+            }
+        }
+    }
+
+    #! Reads Drive as a record source, across page boundaries
+    /** The point of the record source is that the caller never sees the pagination, so the test forces more
+        than one page: `page_size` is set to `2`, which makes anything past the second record cross a boundary.
+
+        This only reads; it is safe against any account.
+    */
+    liveRecordIteratorTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider dp = conn.getDataProvider().getChildProviderEx("list-files");
+        assertEq(True, dp.getInfo().supports_read, "the listing is also a record source");
+        assertTrue(exists dp.getRecordType().id, "the record type describes the file ID");
+
+        AbstractDataProviderRecordIterator i = dp.searchRecords(NOTHING, {"page_size": 2});
+        list<auto> ids = ();
+        while (i.next() && ids.size() < 7) {
+            ids += i.getValue().id;
+        }
+        if (!ids) {
+            testSkip("the account holds no files to read");
+            return;
+        }
+        # each ID appears once: a page boundary handled wrongly repeats the last record of a page or skips it
+        assertEq(ids.size(), (map {$1: True}, ids).size(), "no record is returned twice across pages");
+        if (ids.size() > 2) {
+            assertTrue(True, sprintf("the walk crossed %d page boundaries", (ids.size() - 1) / 2));
+        }
+    }
+
+    #! Exercises shared-drive addressing against the live service
+    /** The account under test may own no shared drives at all, which is the normal case for a personal
+        account; the point of the test is that the shared-drive parameters are accepted and that the picker
+        resolves, not that any particular drive exists.
+    */
+    liveSharedDriveTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        # the picker must resolve rather than raising; an account with no shared drives yields an empty list
+        *list<hash<AllowedValueInfo>> drives = prov.getReferenceData("shared_drives");
+        assertEq(NT_LIST, drives.typeCode(), "the shared drive picker resolves");
+        if (m_options.verbose > 0) {
+            printf("shared drives: %d\n", drives.size());
+            foreach hash<AllowedValueInfo> d in (drives) {
+                printf("  %y (%y)\n", d.display_name, d.value);
+            }
+        }
+
+        # Drive must accept the whole shared-drive parameter set; a rejected parameter is a 400, which is how
+        # this would fail if the combination were wrong
+        AbstractDataProvider dp = prov.getChildProvider("list-files");
+        hash<auto> resp = dp.doRequest({
+            "corpora": "allDrives",
+            "include_shared_drives": True,
+            "page_size": 5,
+        });
+        assertEq(NT_LIST, resp.files.typeCode(), "a listing across every drive is accepted");
+
+        # each named shared drive must actually be listable through the same action
+        foreach hash<AllowedValueInfo> d in (drives) {
+            hash<auto> dresp = dp.doRequest({
+                "drive_id": d.value,
+                "page_size": 5,
+            });
+            assertEq(NT_LIST, dresp.files.typeCode(), sprintf("shared drive %y is listable", d.display_name));
+        }
+    }
+
+    #! Creates, renames, reads back, and removes a file on the live service
+    /** This writes to the account under test; exclude it with \c --exclude="live file lifecycle" when that is
+        not wanted.  The file is created in the trash-recoverable state and removed outright on exit.
+    */
+    #! Proves the change feed end to end: a file created now is seen, and classified as new
+    /** The offline test covers the classification rule against constructed entries; this covers the part that
+        only the live service can answer -- that a file created through this module actually turns up in
+        `changes.list` after the token taken just before it, carrying the `createdTime` the rule depends on.
+
+        This writes to the account under test; exclude it with `--exclude="live change feed"`.
+
+        @note The retry is not a poll for convenience: Drive's change feed is eventually consistent, so a
+        change is not guaranteed to be visible the instant the write returns.  There is no deterministic
+        signal to wait on, so the budget is bounded and exceeding it fails the test rather than passing it
+        quietly.
+    */
+    liveChangeFeedTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider call = prov.getChildProviderEx("__call__");
+
+        # take the cursor first, so the file created below is unambiguously after it
+        date cursor = now_us();
+        hash<auto> start = call.doRequest({
+            "method": "GET",
+            "path": "/drive/v3/changes/startPageToken?supportsAllDrives=true",
+        });
+        string token = start.body.startPageToken;
+        assertTrue(token.val(), "the change feed supplied a start page token");
+
+        string name = sprintf("qore-watch-test-%d.txt", clock_getmicros());
+        hash<auto> created = prov.getChildProviderEx("create-text-file").doRequest({
+            "name": name,
+            "content": "created by the Qore GoogleDriveDataProvider watch test",
+        });
+        assertEq(name, created.name);
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": created.id,
+                "permanently_delete": True,
+            });
+        }
+
+        string fields = "nextPageToken,newStartPageToken,changes(fileId,removed,time,changeType,file("
+            + GoogleDriveDataProviderBase::getFileFields() + "))";
+        *hash<auto> found;
+        int attempts;
+        while (!found && ++attempts <= LiveChangeFeedAttempts) {
+            string page = token;
+            while (True) {
+                hash<auto> resp = call.doRequest({
+                    "method": "GET",
+                    "path": sprintf("/drive/v3/changes?pageToken=%s&pageSize=100&includeRemoved=true"
+                        "&includeItemsFromAllDrives=true&supportsAllDrives=true&fields=%s",
+                        encode_url(page, True), encode_url(fields, True)),
+                });
+                foreach hash<auto> change in (resp.body.changes) {
+                    if (change.fileId != created.id) {
+                        continue;
+                    }
+                    # the classification rule must call this new: it was created after the cursor
+                    found = GoogleDriveWatchDataProviderBase::matchChange(change, False, cursor);
+                }
+                if (!resp.body.nextPageToken.val()) {
+                    break;
+                }
+                page = resp.body.nextPageToken;
+            }
+            if (!found && attempts < LiveChangeFeedAttempts) {
+                usleep(LiveChangeFeedInterval);
+            }
+        }
+
+        assertTrue(exists found, sprintf("the newly created file appeared in the change feed and was "
+            "classified as new (after %d attempt%s)", attempts, attempts == 1 ? "" : "s"));
+        assertEq(name, found.name, "the change carries the file created");
+        assertEq(False, found.is_folder, "the change is classified as a file rather than a folder");
+        # the folder watch must not claim the same change
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange({
+            "fileId": created.id,
+            "removed": False,
+            "file": {"id": created.id, "name": name, "mimeType": "text/plain", "trashed": False},
+        }, True, cursor), "the folder watch does not claim a new file");
+    }
+
+    liveFileLifecycleTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string name = sprintf("qore-test-%d.txt", clock_getmicros());
+        string content = "created by the Qore GoogleDriveDataProvider test suite";
+
+        hash<auto> created = prov.getChildProvider("create-text-file").doRequest({
+            "name": name,
+            "content": content,
+        });
+        assertEq(name, created.name, "the file was created with the requested name");
+        assertTrue(created.id.val(), "the new file has an ID");
+        on_exit {
+            prov.getChildProvider("delete-file").doRequest({
+                "file_id": created.id,
+                "permanently_delete": True,
+            });
+        }
+
+        # renaming is the gap this closes: neither move-file nor replace-file can change a name
+        string new_name = name + ".renamed";
+        hash<auto> renamed = prov.getChildProvider("rename-file").doRequest({
+            "file_id": created.id,
+            "name": new_name,
+            "description": "renamed by the Qore test suite",
+        });
+        assertEq(new_name, renamed.name, "rename-file returned the new name");
+        assertEq(created.id, renamed.id, "the file keeps its ID across a rename");
+
+        # ... and the new name must be what the service actually holds, not just what the response echoed
+        hash<auto> meta = prov.getChildProvider("get-file").doRequest({"file_id": created.id});
+        assertEq(new_name, meta.name, "the new name is persisted");
+        assertEq("renamed by the Qore test suite", meta.description, "the new description is persisted");
+
+        hash<auto> downloaded = prov.getChildProvider("download-file").doRequest({"file_id": created.id});
+        assertEq(content, parse_base64_string(downloaded.content).toString(),
+            "the content read back matches the content written");
+
+        # ... and the same file must be readable with non-blocking I/O, which is what a "conn://" location
+        # naming this connection now gets.  The poller makes two requests -- metadata, then content -- and
+        # both are polled; a poller that returned nothing, or that blocked, would pass neither assertion
+        object handler = conn.getFileLocationHandler();
+        assertEq(binary(content), runPoller(handler.getIoPollerForLocation("conn", created.id, {})),
+            "the poller returns the bytes the blocking read returns");
+
+        # A Google-native document has no byte content of its own, and the poller must say so precisely
+        # rather than pass on the API's generic "Only files with binary content can be downloaded".  The
+        # subject has to be a real Doc: a *folder* is deliberately not classified as a Google-native document
+        # by getFileInfo(), so it would exercise the generic path instead.  No action creates one, so it is
+        # created through the connection's own client.
+        object rest = conn.getAsync();
+        string doc_id = rest.restDoRequest("POST", "/drive/v3/files", {
+            "name": sprintf("qore-poll-doc-%d", clock_getmicros()),
+            "mimeType": "application/vnd.google-apps.document",
+        }, NOTHING).body.id;
+        assertTrue(doc_id.val(), "a Google-native document was created to read");
+        on_exit {
+            prov.getChildProvider("delete-file").doRequest({
+                "file_id": doc_id,
+                "permanently_delete": True,
+            });
+        }
+        assertThrows("GOOGLE-DRIVE-ERROR", "no byte content of its own", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", doc_id, {}));
+        });
+
+        # ... and naming an export format makes the same document readable, in one request rather than two
+        auto exported = runPoller(handler.getIoPollerForLocation("conn", doc_id,
+            {"export_mime_type": "text/plain"}));
+        assertEq(NT_BINARY, exported.typeCode(),
+            "an export format makes a Google-native document readable, and it arrives as bytes");
+        assertEq(exported, handler.getBinaryFile("conn", doc_id, {"export_mime_type": "text/plain"}),
+            "the exported bytes are the ones the blocking read returns");
+
+        # the blocking read must report the identical error, or the two paths disagree about the same file
+        assertThrows("GOOGLE-DRIVE-ERROR", "no byte content of its own", sub () {
+            handler.getBinaryFile("conn", doc_id, {});
+        });
+
+        # a file ID that does not exist must be reported as a Drive error rather than as an empty read
+        assertThrows("GOOGLE-DRIVE-ERROR", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "qore-no-such-file-id", {}));
+        });
+    }
+
+    #! Drives a poll operation to completion and returns its output
+    /** The contract a poller must satisfy: no work happens until it is polled, every wait is expressed as a
+        @ref SocketPollInfo for the caller's own poll loop rather than blocking the calling thread, and the
+        data is available from getOutput() once goalReached() is True.
+    */
+    private auto runPoller(AbstractPollOperation op, timeout to = 60s) {
+        int start = clock_getmicros_monotonic();
+        int limit_us = to * 1000;
+        while (!op.goalReached()) {
+            if ((clock_getmicros_monotonic() - start) > limit_us) {
+                throw "POLL-TIMEOUT", sprintf("poll operation %y timed out in state %y", op.getGoal(),
+                    op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            list<hash<SocketPollInfo>> poll_list = (pi,);
+            Socket::poll(poll_list, 5s);
+        }
+        return op.getOutput();
+    }
+
+    #! Round-trips the sharing, shortcut, revision, and trash operations against the live service
+    /** Sharing used to be add-only -- access could be granted but neither seen nor withdrawn -- and there was
+        no way to recover a trashed file or to reach an earlier revision.  Each of these is only meaningfully
+        tested against the real service, since what matters is that Drive accepts the request and that the
+        change is actually there afterwards.
+
+        This writes to the account under test; exclude it with `--exclude="live extended operations"`.
+    */
+    liveExtendedOperationsTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string stamp = sprintf("%d", clock_getmicros());
+
+        hash<auto> file = prov.getChildProviderEx("create-text-file").doRequest({
+            "name": "qore-ext-" + stamp + ".txt",
+            "content": "first version",
+        });
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": file.id,
+                "permanently_delete": True,
+            });
+        }
+
+        # --- sharing: grant, see, withdraw ---
+        hash<auto> perm = prov.getChildProviderEx("share-file").doRequest({
+            "file_id": file.id,
+            "role": "reader",
+            "type": "anyone",
+        });
+        assertTrue(perm.id.val(), "the permission was created");
+
+        hash<auto> perms = prov.getChildProviderEx("list-permissions").doRequest({"file_id": file.id});
+        hash<string, bool> ids = map {$1.id: True}, perms.permissions;
+        assertTrue(ids{perm.id}, "the granted permission is listed");
+        assertTrue(perms.permissions.size() >= 2, "the owner's permission is listed alongside it");
+
+        prov.getChildProviderEx("remove-permission").doRequest({
+            "file_id": file.id,
+            "permission_id": perm.id,
+        });
+        # ... and the withdrawal must be real, not just accepted
+        perms = prov.getChildProviderEx("list-permissions").doRequest({"file_id": file.id});
+        ids = map {$1.id: True}, perms.permissions;
+        assertEq(NOTHING, ids{perm.id}, "the withdrawn permission is gone");
+
+        # --- revisions: an earlier version survives a replace ---
+        prov.getChildProviderEx("replace-file").doRequest({
+            "file_id": file.id,
+            "file": {
+                "name": "qore-ext-" + stamp + ".txt",
+                "content": make_base64_string(binary("second version")),
+                "mime_type": "text/plain",
+            },
+        });
+        hash<auto> revs = prov.getChildProviderEx("list-revisions").doRequest({"file_id": file.id});
+        assertTrue(revs.revisions.size() >= 2, sprintf("replacing the content kept the earlier revision "
+            "(%d revisions)", revs.revisions.size()));
+        hash<auto> rev = prov.getChildProviderEx("get-revision").doRequest({
+            "file_id": file.id,
+            "revision_id": revs.revisions[0].id,
+        });
+        assertEq(revs.revisions[0].id, rev.id, "the revision can be addressed individually");
+        assertTrue(exists rev.modified, "the revision carries a modification time");
+
+        # --- shortcut: one file reachable from another place ---
+        hash<auto> shortcut = prov.getChildProviderEx("create-shortcut").doRequest({
+            "name": "qore-shortcut-" + stamp,
+            "target_id": file.id,
+        });
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": shortcut.id,
+                "permanently_delete": True,
+            });
+        }
+        assertEq(True, shortcut.is_shortcut, "the item is a shortcut");
+        assertEq(file.id, shortcut.shortcut_target_id, "the shortcut points at the file");
+
+        # --- trash and restore ---
+        prov.getChildProviderEx("delete-file").doRequest({"file_id": file.id});
+        hash<auto> trashed = prov.getChildProviderEx("get-file").doRequest({"file_id": file.id});
+        assertEq(True, trashed.trashed, "the file is in the trash");
+
+        hash<auto> restored = prov.getChildProviderEx("untrash").doRequest({"file_id": file.id});
+        assertEq(False, restored.trashed, "untrash reported the file as restored");
+        # ... and again, the change must be what the service actually holds
+        assertEq(False, prov.getChildProviderEx("get-file").doRequest({"file_id": file.id}).trashed,
+            "the file is out of the trash");
+    }
+
+    #! Exercises the folder-scoped operations, which a type-narrowing defect had made unusable
+    /** Regression: `create-folder`, `upload-file`, and `create-text-file` each built their request body as a
+        `hash<auto>` literal whose values were all strings, which narrows to `hash<string, string>` at
+        runtime -- so assigning the `parents` list raised `RUNTIME-TYPE-ERROR` and **every one of these
+        operations failed whenever a folder was named**.  Only the no-folder path had been exercised.
+
+        This writes to the account under test; exclude it with `--exclude="live folder operations"`.
+    */
+    liveFolderOperationsTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string stamp = sprintf("%d", clock_getmicros());
+
+        hash<auto> parent = prov.getChildProviderEx("create-folder").doRequest({
+            "name": "qore-test-parent-" + stamp,
+        });
+        assertTrue(parent.id.val(), "the parent folder was created");
+        on_exit {
+            # removing the parent removes everything created inside it
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": parent.id,
+                "permanently_delete": True,
+            });
+        }
+
+        # a folder created inside another folder: the "parents" list is what used to fail
+        hash<auto> child = prov.getChildProviderEx("create-folder").doRequest({
+            "name": "qore-test-child-" + stamp,
+            "parent_folder_id": parent.id,
+        });
+        assertEq(True, child.is_folder, "the child is a folder");
+        assertTrue(inlist(parent.id, child.parents), "the child folder is held by the parent");
+
+        # a text file created inside a folder
+        hash<auto> text = prov.getChildProviderEx("create-text-file").doRequest({
+            "name": "in-folder-" + stamp + ".txt",
+            "content": "written into a folder by the Qore test suite",
+            "folder_id": parent.id,
+        });
+        assertTrue(inlist(parent.id, text.parents), "the text file is held by the folder it named");
+
+        # an uploaded file inside a folder, with a description as well
+        hash<auto> uploaded = prov.getChildProviderEx("upload-file").doRequest({
+            "file": {
+                "name": "uploaded-" + stamp + ".txt",
+                "content": make_base64_string(binary("uploaded into a folder by the Qore test suite")),
+                "mime_type": "text/plain",
+            },
+            "folder_id": parent.id,
+            "description": "uploaded by the Qore test suite",
+        });
+        assertTrue(inlist(parent.id, uploaded.parents), "the uploaded file is held by the folder it named");
+        assertEq("uploaded by the Qore test suite", uploaded.description);
+
+        # ... and the folder really holds what was put in it
+        hash<auto> listing = prov.getChildProviderEx("list-files").doRequest({"folder_id": parent.id});
+        hash<string, bool> names = map {$1.name: True}, listing.files;
+        assertTrue(names{"qore-test-child-" + stamp}, "the listing shows the child folder");
+        assertTrue(names{"in-folder-" + stamp + ".txt"}, "the listing shows the text file");
+        assertTrue(names{"uploaded-" + stamp + ".txt"}, "the listing shows the uploaded file");
+    }
+}

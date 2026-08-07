@@ -57,13 +57,13 @@ public class GoHighLevelContactDataType inherits HashDataType {
                 "desc": "The contact's full name",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The contact's email address",
                 "desc": "The contact's email address",
             },
             "phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone",
                 "short_desc": "The contact's phone number",
                 "desc": "The contact's phone number",

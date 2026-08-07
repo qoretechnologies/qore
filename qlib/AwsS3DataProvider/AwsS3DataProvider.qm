@@ -1,0 +1,611 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AwsS3DataProvider.qm Qore user module providing a data provider API for Amazon S3
+
+/*  AwsS3DataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires AwsRestClient
+%requires FileLocationHandler
+
+# NOTE: the Amazon S3 API speaks XML, so this module needs the xml module to function.  It is declared with
+# %try-module rather than %requires because the xml module is built from a separate repository and is not
+# guaranteed to be installed: a hard dependency would stop this module loading at all on such installations, and
+# with it the S3 application and its actions would disappear from the catalog.  With the soft dependency the
+# module still loads and its metadata remains visible; every request path funnels through
+# AwsS3DataProviderBase::parseXml(), which raises one clear error naming the requirement.
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
+module AwsS3DataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Amazon S3 object storage";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new AwsS3DataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AwsS3DataProvider::AppName,
+            "display_name": "Amazon S3",
+            "short_desc": "Amazon S3 object storage",
+            "desc": "Provides access to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\n"
+                "S3 stores objects in buckets addressed by a flat key rather than by a directory tree; a `/` in "
+                "a key is an ordinary character, though listing with a prefix and a delimiter makes a bucket "
+                "browsable as though it had folders.\n\n"
+                "**Common use cases**:\n"
+                "- **File exchange**: publish files for partners to collect, or collect files partners deposit\n"
+                "- **Archival**: retain documents and records at low cost using the archive storage classes\n"
+                "- **Data staging**: land extracts for downstream processing, then remove them when consumed\n"
+                "- **Backups**: store generated reports, exports, and backups durably off-host\n\n"
+                "Also works with S3-compatible services such as MinIO and Ceph; those generally require the "
+                "`path_style` connection option.\n\n"
+                "Amazon Web Services and Amazon S3 are trademarks of Amazon.com, Inc. or its affiliates",
+            "scheme": "s3",
+            "logo": AmazonS3Logo,
+            "logo_file_name": "amazon-s3-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CloudStorage,),
+        });
+
+        # declare how these actions map onto single-file read and write operations, so that "conn://" file
+        # locations can read and write objects through an S3 connection
+        DataProviderActionCatalog::registerAppFileApi(AwsS3DataProvider::AppName, <DataProviderFileApiInfo>{
+            "read_action": "download-file",
+            "read_path_option": "object_key",
+            "read_container_option": "bucket",
+            "read_mode": DPFR_DATA,
+            "read_data_field": "content",
+            "read_data_encoding": "base64",
+            "read_mime_type_field": "mime_type",
+            "write_action": "upload-file",
+            "write_path_option": "object_key",
+            "write_container_option": "bucket",
+            "write_data_option": "file",
+            "write_data_format": DPFW_FILE,
+        });
+
+        # --- Bucket actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/list-buckets",
+            "action": "list-buckets",
+            "display_name": "List Buckets",
+            "short_desc": "List the buckets owned by the account",
+            "desc": "Lists every bucket owned by the authenticated account, with the date each was created.",
+            "action_code": DPAT_API,
+            "groups": ("Buckets",),
+            "output_type": AwsS3ListBucketsResponseDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/create-bucket",
+            "action": "create-bucket",
+            "display_name": "Create Bucket",
+            "short_desc": "Create a new bucket",
+            "desc": "Creates a new bucket in the connection's region.\n\n"
+                "Bucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case "
+                "names, so a name already taken by another account is rejected.",
+            "action_code": DPAT_API,
+            "groups": ("Buckets",),
+            "output_type": AwsS3BucketResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3CreateBucketRequestDataType::Fields{"bucket",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3CreateBucketRequestDataType::Fields - "bucket"
+            ),
+        });
+
+        # --- Object actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/list-objects",
+            "action": "list-objects",
+            "display_name": "List Objects",
+            "short_desc": "List the objects in a bucket",
+            "desc": "Lists the objects in a bucket.\n\n"
+                "Set `prefix` to restrict the listing to keys beginning with a given string, and set "
+                "`delimiter` to `/` as well to list one level of a key hierarchy rather than every key below "
+                "it - together these make a bucket browsable as though it had folders.\n\n"
+                "A listing is capped at `1000` keys; when the response is `truncated`, pass its "
+                "`next_continuation_token` back in `continuation_token` to retrieve the following page.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ListObjectsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectsRequestDataType::Fields{"bucket",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectsRequestDataType::Fields - "bucket"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/get-object",
+            "action": "get-object",
+            "display_name": "Get Object",
+            "short_desc": "Retrieve an object and its metadata",
+            "desc": "Retrieves an object's metadata and, unless `include_content` is cleared, its content.\n\n"
+                "Clear `include_content` to check an object's size, type, or modification time without "
+                "transferring it, which is much cheaper for large objects.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3GetObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3GetObjectRequestDataType::Fields{"bucket", "object_key"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3GetObjectRequestDataType::Fields - ("bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/download-file",
+            "action": "download-file",
+            "display_name": "Download File",
+            "short_desc": "Download an object's content",
+            "desc": "Downloads an object's content along with its metadata.\n\n"
+                "Use `get-object` with `include_content` cleared instead when only the metadata is needed.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3GetObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DownloadFileRequestDataType::Fields{"bucket", "object_key"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DownloadFileRequestDataType::Fields - ("bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/upload-file",
+            "action": "upload-file",
+            "display_name": "Upload File",
+            "short_desc": "Upload a file to a bucket",
+            "desc": "Uploads a file to a bucket.\n\n"
+                "If `object_key` is not set, the file's own name is used as the key.  The MIME type stored with "
+                "the object is taken from the file when it carries one, and otherwise inferred from the key.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3UploadFileRequestDataType::Fields{"bucket", "file"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3UploadFileRequestDataType::Fields - ("bucket", "file")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/create-text-file",
+            "action": "create-text-file",
+            "display_name": "Create Text Object",
+            "short_desc": "Create an object from text content",
+            "desc": "Creates an object directly from text content, without needing a file.\n\n"
+                "Useful for writing generated reports, manifests, and marker objects.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3CreateTextFileRequestDataType::Fields{"bucket", "object_key", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3CreateTextFileRequestDataType::Fields - ("bucket", "object_key", "content")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/delete-object",
+            "action": "delete-object",
+            "display_name": "Delete Object",
+            "short_desc": "Delete an object from a bucket",
+            "desc": "Deletes an object from a bucket.\n\n"
+                "On a version-enabled bucket this adds a delete marker rather than removing the data, unless a "
+                "specific `version_id` is given.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteObjectRequestDataType::Fields{"bucket", "object_key"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteObjectRequestDataType::Fields - ("bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/copy-object",
+            "action": "copy-object",
+            "display_name": "Copy Object",
+            "short_desc": "Copy an object within or between buckets",
+            "desc": "Copies an object within a bucket or between buckets, without transferring the content "
+                "through the client.\n\n"
+                "Both buckets must be reachable with the connection's credentials.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3CopyObjectRequestDataType::Fields{"source_bucket", "source_key", "bucket", "object_key"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3CopyObjectRequestDataType::Fields - ("source_bucket", "source_key", "bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/presigned-url",
+            "action": "presigned-url",
+            "display_name": "Create Presigned URL",
+            "short_desc": "Create a temporary URL granting access without AWS credentials",
+            "desc": "Creates a URL carrying its own authorization, so that a system that cannot authenticate "
+                "to AWS can still reach the object.\n\n"
+                "This is how a file is handed to an external party: a customer downloading an invoice, a "
+                "partner collecting an export, or a browser uploading directly to the bucket without the "
+                "content passing through this system at all.\n\n"
+                "**The URL is the credential.**  Anyone holding it can perform the operation it was signed "
+                "for until it expires, so give it the shortest useful lifetime and treat it as a secret.\n\n"
+                "No request is made to Amazon S3, so a URL can be created for an object that does not exist "
+                "yet - which is exactly what an upload URL is for.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3PresignedUrlResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PresignedUrlRequestDataType::Fields{"bucket", "object_key", "method"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PresignedUrlRequestDataType::Fields{"expiration_seconds",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PresignedUrlRequestDataType::Fields
+                    - ("bucket", "object_key", "method", "expiration_seconds")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/delete-objects",
+            "action": "delete-objects",
+            "display_name": "Delete Objects",
+            "short_desc": "Delete up to 1000 objects in a single call",
+            "desc": "Deletes up to `1000` objects in a single call.\n\n"
+                "Amazon S3 charges per request, so clearing a large prefix this way costs a fraction of one "
+                "delete per key.\n\n"
+                "**A batch delete does not fail as a whole**: individual keys can be refused - by an "
+                "object-lock retention, or by a policy that allows some prefixes and not others - while the "
+                "request itself succeeds.  Check `errors` rather than assuming everything was removed.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3DeleteObjectsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteObjectsRequestDataType::Fields{"bucket", "object_keys"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteObjectsRequestDataType::Fields - ("bucket", "object_keys")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/move-object",
+            "action": "move-object",
+            "display_name": "Move Object",
+            "short_desc": "Move an object within or between buckets",
+            "desc": "Moves an object to a different key, a different bucket, or both.\n\n"
+                "Amazon S3 has no move operation, so this copies the object and then deletes the original.  "
+                "The copy is performed by Amazon S3 itself, so the content is never transferred through this "
+                "system, and **the original is removed only after the copy has been confirmed** - a failure "
+                "part-way through leaves it in place rather than losing it.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3MoveObjectRequestDataType::Fields{"source_bucket", "source_key", "bucket", "object_key"},
+                {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3MoveObjectRequestDataType::Fields
+                    - ("source_bucket", "source_key", "bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/get-object-tagging",
+            "action": "get-object-tagging",
+            "display_name": "Get Object Tags",
+            "short_desc": "Read the tags stored with an object",
+            "desc": "Reads the tags stored with an object.\n\n"
+                "Object tags drive lifecycle rules, access policies, and cost allocation, so they are how a "
+                "bucket is organized without changing any key.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectTaggingResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3GetObjectTaggingRequestDataType::Fields{"bucket", "object_key"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3GetObjectTaggingRequestDataType::Fields - ("bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/put-object-tagging",
+            "action": "put-object-tagging",
+            "display_name": "Set Object Tags",
+            "short_desc": "Replace the tags stored with an object",
+            "desc": "Replaces the tags stored with an object.\n\n"
+                "**This replaces the whole tag set** rather than adding to it: a tag not listed is removed.  "
+                "Read the existing tags first if some are to be kept.  Amazon S3 allows at most `10` tags per "
+                "object.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectTaggingResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PutObjectTaggingRequestDataType::Fields{"bucket", "object_key", "tags"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PutObjectTaggingRequestDataType::Fields - ("bucket", "object_key", "tags")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/list-object-versions",
+            "action": "list-object-versions",
+            "display_name": "List Object Versions",
+            "short_desc": "List every version of the objects in a bucket",
+            "desc": "Lists every version of the objects in a bucket, along with the delete markers.\n\n"
+                "On a bucket with versioning enabled, deleting an object does not remove the data: it adds a "
+                "marker that hides it.  This shows what is actually there, so an earlier version can be "
+                "retrieved by passing its `version_id` to `get-object` or `download-file`, and a deletion can "
+                "be undone by removing its marker with `delete-object`.\n\n"
+                "A listing is paginated; when `truncated` is set, pass `next_key_marker` and "
+                "`next_version_id_marker` back to retrieve the following page.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ListObjectVersionsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectVersionsRequestDataType::Fields{"bucket",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectVersionsRequestDataType::Fields - "bucket"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/delete-bucket",
+            "action": "delete-bucket",
+            "display_name": "Delete Bucket",
+            "short_desc": "Delete an empty bucket",
+            "desc": "Deletes a bucket.\n\n"
+                "**The bucket must already be empty**, including every non-current version and delete marker "
+                "if it has versioning enabled; Amazon S3 refuses to delete a bucket that still holds "
+                "anything.  Use `delete-objects` to clear it first.",
+            "action_code": DPAT_API,
+            "groups": ("Buckets",),
+            "output_type": AwsS3BucketResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteBucketRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        # NOTE: the same provider serves both this and the "list-objects" API action.  The API action answers
+        # one page and hands back a continuation token, which is what a single call wants; this reads the
+        # bucket as a record source and walks the whole listing itself, which is what a pipeline wants
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/list-objects",
+            "action": "find-objects",
+            "display_name": "Find Objects",
+            "short_desc": "Read the objects in a bucket as records",
+            "desc": "Reads the objects in a bucket as a stream of records.\n\n"
+                "Unlike `list-objects`, which answers one page and leaves the continuation token to the "
+                "caller, this walks the whole listing: pages are fetched as they are reached, so a bucket "
+                "holding more than `1000` keys is read without the caller knowing how Amazon paginates.\n\n"
+                "Narrow the read with `prefix` wherever possible.  It is applied by Amazon S3 rather than "
+                "after the listing arrives, so it reduces what is transferred and paid for.",
+            "action_code": DPAT_FIND,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectRecordDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectsDataProvider::SearchOptions, {"loc": "options"},
+            ),
+        });
+
+        # --- Event actions ---
+
+        # NOTE: Amazon S3 has no push notification a client can subscribe to -- bucket notifications are
+        # configured on the bucket itself and deliver to SNS, SQS, or Lambda -- so both of these are polls
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_BUCKET,
+            "action": EVENT_NEW_BUCKET,
+            "display_name": "New Bucket",
+            "short_desc": "React to a bucket being created in the account",
+            "desc": "Fires when a bucket is created in the account.\n\n"
+                "Amazon S3 offers no change feed, so this checks the account's bucket list at each poll "
+                "interval; a bucket created and removed between two polls is not reported.\n\n"
+                "One request covers the whole account, so this costs the same whatever the account holds.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_BUCKET,
+            "groups": ("Events",),
+            "output_type": AwsS3NewBucketEventDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3WatchNewBucketDataProvider::WatchOptions
+                    - (keys AwsS3DataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_OR_UPDATED_FILE,
+            "action": EVENT_NEW_OR_UPDATED_FILE,
+            "display_name": "New or Updated File",
+            "short_desc": "React to an object being created or updated in a bucket",
+            "desc": "Fires when an object is created or updated in the bucket being watched.\n\n"
+                "Amazon S3 offers no change feed, so this lists the bucket's keys at each poll interval and "
+                "compares their modification times.  Two consequences are worth knowing before pointing this "
+                "at a production bucket:\n"
+                "- **Set `prefix`** whenever the objects of interest share one.  It is applied by S3 rather "
+                "than after the listing arrives, so it reduces what each poll transfers and costs.\n"
+                "- **A poll examines at most `max_scan_keys` keys**, and logs a warning when it reaches that "
+                "bound rather than stopping silently.\n\n"
+                "**Deletions are not reported**: a listing shows what is present, so an object that has gone "
+                "leaves nothing to report.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_OR_UPDATED_FILE,
+            "groups": ("Events",),
+            "output_type": AwsS3ObjectEventDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3WatchObjectsDataProvider::WatchOptions{"bucket",}, {
+                    "loc": "constructor",
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3WatchObjectsDataProvider::WatchOptions
+                    - (keys AwsS3DataProviderBase::ConstructorOptions) - "bucket",
+                {"loc": "constructor"},
+            ),
+        });
+    };
+}
+
+/** @mainpage AwsS3DataProvider Module
+
+    @tableofcontents
+
+    @section awss3dataproviderintro AwsS3DataProvider Module Introduction
+
+    The %AwsS3DataProvider module provides a @ref dataproviderintro "data provider" API for
+    <a href="https://aws.amazon.com/s3/">Amazon S3</a> object storage, and for S3-compatible services such as
+    MinIO and Ceph.
+
+    Requests are signed with AWS Signature Version 4 by the \c AwsRestClient module, which implements the
+    encoding rules S3 requires and which differ from every other AWS service.
+
+    Connections use the \c s3 scheme and are served by \c AwsRestClient::AwsS3RestConnection.
+
+    @section awss3dataprovider_xml XML Requirement
+
+    The Amazon S3 API returns XML, so this module requires the \c xml module to function.  The dependency is
+    declared with \c %%try-module so that the module still loads, and its application and actions remain visible
+    in the data provider catalog, on installations without it; any operation that has to read a response body
+    then fails with \c S3-XML-UNAVAILABLE naming the requirement.
+
+    @section awss3dataprovider_addressing Bucket Addressing
+
+    By default buckets are addressed in the hostname
+    (<tt>https://&lt;bucket&gt;.s3.&lt;region&gt;.amazonaws.com/&lt;key&gt;</tt>), which is the form Amazon S3
+    prefers.  Set the \c path_style connection option to address them in the URI path instead
+    (<tt>https://s3.&lt;region&gt;.amazonaws.com/&lt;bucket&gt;/&lt;key&gt;</tt>); most S3-compatible services
+    require this form.
+
+    @section awss3dataprovider_upload Large Uploads
+
+    A single-request upload has to start again from the beginning if the connection drops, and Amazon S3
+    rejects one above 5 GB outright.  Content above
+    @ref AwsS3DataProvider::MultipartThreshold "MultipartThreshold" is therefore sent as a multipart upload,
+    which commits each part as it arrives.  This is transparent to the caller: \c upload-file and
+    \c create-text-file choose the transfer method from the size of the content.
+
+    An upload that fails part-way through is aborted rather than abandoned; an abandoned multipart upload keeps
+    its parts stored and billed until a lifecycle rule removes them.
+
+    @section awss3dataprovider_filelocations Native File Locations
+
+    An S3 connection transfers objects natively for \c "conn://" file locations, through
+    @ref AwsS3DataProvider::AwsS3FileLocationHandler "AwsS3FileLocationHandler", rather than through the
+    application file API.  Writing drives a multipart upload from the output stream itself, so an object larger
+    than memory can be written, and reading takes the bytes from the response body rather than base64-encoded
+    into a JSON field.
+
+    S3 has no directory structure -- a key is a flat string in which \c "/" is an ordinary character -- so the
+    bucket is taken from the \c container option, or from the first segment of the location when there is
+    none: <tt>conn://s3/bucket/key</tt>.
+
+    @section awss3dataprovider_relnotes Release Notes
+
+    @subsection awss3dataprovider_v1_0 AwsS3DataProvider v1.0
+    - initial release of the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+*/
+
+#! contains all public definitions in the AwsS3DataProvider module
+public namespace AwsS3DataProvider {
+}

@@ -37,7 +37,7 @@ public class GorgiasUserDataType inherits HashDataType {
                 "desc": "The unique identifier of the user (agent)",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "User email address",
                 "desc": "The email address of the user",

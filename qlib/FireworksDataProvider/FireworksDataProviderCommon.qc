@@ -135,7 +135,7 @@ public class FireworksDataProviderCommon inherits DataProvider::AbstractDataProv
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
         if (RetrySet{ex.err}) {
             if (++retries == MaxIoRetries) {
-                error("Maximum retries exceeded (%d)", retries);
+                LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;
             }
             warn("Technical error making REST call: %s: %s; retrying", ex.err, ex.desc);
@@ -143,7 +143,7 @@ public class FireworksDataProviderCommon inherits DataProvider::AbstractDataProv
         }
         if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
             if (++retries == MaxIoRetries) {
-                error("Maximum retries exceeded (%d)", retries);
+                LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;
             }
             *string retry_after = ex.arg.headers."retry-after";

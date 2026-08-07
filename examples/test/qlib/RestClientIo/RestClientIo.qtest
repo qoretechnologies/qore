@@ -92,6 +92,25 @@ class HtmlHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Serves and echoes binary bodies with a non-text Content-Type
+/** Used to verify that binary responses survive the asynchronous transport; see testBinaryBody()
+*/
+class BinaryHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! The body of the last request received
+        static *data last_body;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        last_body = body;
+        # echo the request body back when one is sent, otherwise serve a fixed binary payload
+        return makeResponse(200, body.val() ? binary(body) : <cafebabe0102030405>, {
+            "Content-Type": MimeTypeOctetStream,
+            "X-Test-Marker": "binary-ok",
+        });
+    }
+}
+
 #! Echo handler that includes request headers in the response for verification
 class EchoHeadersHandler inherits AbstractHttpRequestHandler {
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -474,6 +493,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("restPatch", \testRestPatch());
         addTestCase("restDel", \testRestDel());
         addTestCase("restDoRequest", \testRestDoRequest());
+        addTestCase("binary body", \testBinaryBody());
         addTestCase("serialization config", \testSerializationConfig());
         addTestCase("header management", \testHeaderManagement());
         addTestCase("default Accept header sent on wire", \testDefaultAcceptSentOnWire());
@@ -675,6 +695,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         server.setHandler("/error", "/error", MimeTypeJson, new ErrorHandler());
         server.setHandler("/html", "/html", "text/html", new HtmlHandler());
         server.setHandler("/echo", "/echo", MimeTypeJson, new EchoHeadersHandler());
+        server.setHandler("/binary", "/binary", MimeTypeOctetStream, new BinaryHandler());
         server.setHandler("/oauth/token", "/oauth/token", MimeTypeFormUrlEncoded, token_handler);
         server.setHandler("/auth401", "/auth401", MimeTypeJson, auth401_handler);
         server.setHandler("/custom_token", "/custom_token", MimeTypeJson, custom_token_handler);
@@ -841,6 +862,39 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("POST", resp.body.method);
         assertEq(body, resp.body.body);
+    }
+
+    #! Verifies that binary bodies survive the asynchronous transport in both directions
+    /** Regression test for issue #5386: the response deserialization guard in
+        NullRestSchemaValidator::parseResponseImpl() assumed every body arrived as a string, which holds for the
+        synchronous HTTPClient::send() path but not for the asynchronous HttpClientIo path used here.  A
+        non-text Content-Type with a binary body therefore raised DESERIALIZATION-ERROR, making any binary
+        response impossible over this client even though every non-text deserializer accepts binary input.
+    */
+    testBinaryBody() {
+        RestClientIo rest = createClient({"data": "bin"});
+        on_exit rest.close();
+
+        # a binary response body with a non-text Content-Type must be returned as binary, unmodified
+        hash<RestResponseInfo> resp = rest.restDoRequest("GET", "/binary", NOTHING);
+        assertEq(200, resp.status_code);
+        assertEq(NT_BINARY, resp.body.typeCode());
+        assertEq(<cafebabe0102030405>, resp.body);
+        # response headers must remain accessible alongside a binary body; APIs such as Dropbox return
+        # operation metadata in a header when the body is the file content
+        assertEq("binary-ok", resp.headers."x-test-marker");
+
+        # a binary request body must be sent through unmodified and round trip
+        binary payload = <0001020304050607feff>;
+        resp = rest.restDoRequest("POST", "/binary", payload, {"Content-Type": MimeTypeOctetStream});
+        assertEq(payload, BinaryHandler::last_body);
+        assertEq(payload, resp.body);
+
+        # a payload large enough to exercise chunking must arrive intact
+        binary big = binary(strmul("0123456789", 100000));
+        rest.restDoRequest("POST", "/binary", big, {"Content-Type": MimeTypeOctetStream});
+        assertEq(big.size(), BinaryHandler::last_body.size());
+        assertEq(big, BinaryHandler::last_body);
     }
 
     testSerializationConfig() {

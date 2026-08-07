@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FileLocationHandlerFtp.qc module for returning file data from a URL-like location string
 
-/*  FileLocationHandlerFtp Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  FileLocationHandlerFtp Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -48,9 +48,135 @@ class FileLocationHandlerFtpOutputStreamWrapper inherits OutputStreamWrapper {
     }
 }
 
-#! The class for handling "ftp(s)://"" locations
-/** Does not currently support non-blocking I/O operations
+#! Non-blocking retrieval of a single file over FTP
+/** Adapts the composite @ref FtpClientIo::FtpClientPollOperation "FtpClientPollOperation" -- which is driven
+    a phase at a time -- to the single @ref Qore::AbstractPollOperation "AbstractPollOperation" contract the
+    file location handlers expose, and follows the same path as the blocking implementation: log in, change
+    to the file's directory, then retrieve it by name.
 */
+class FileLocationHandlerFtpPollOperation inherits Qore::AbstractPollOperation<auto> {
+    public {
+        #! The default FTP control port
+        const DefaultFtpPort = 21;
+
+        #! Logging in to the server
+        const SPS_LOGIN = "login";
+        #! Changing to the file's directory
+        const SPS_CWD = "cwd";
+        #! Retrieving the file
+        const SPS_GET = "get";
+        #! The file has been retrieved
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        FtpClientIo::FtpClientPollOperation op;
+        string remote_dir;
+        string remote_file;
+        string url;
+        string state = SPS_LOGIN;
+        *binary output;
+    }
+
+    #! Creates the operation; performs no I/O
+    /** @param scheme the scheme being used ("ftp" or "ftps")
+        @param location the location string without the scheme
+
+        @throw LOCATION-ERROR the location does not name a file
+    */
+    constructor(string scheme, string location) {
+        url = scheme + "://" + location;
+        hash<UrlInfo> url_info = parse_url(url);
+        if (url_info.path.val()) {
+            remote_file = basename(url_info.path);
+            remote_dir = dirname(url_info.path);
+        }
+        if (!remote_file.val()) {
+            throw "LOCATION-ERROR", sprintf("FTP location %y missing file path", url);
+        }
+        bool secure = scheme == "ftps";
+        # NOTE: positional arguments are required here; the named form fails with
+        # NAMED-CALL-NOT-SUPPORTED, as the signature is not resolved at parse time
+        op = new FtpClientIo::FtpClientPollOperation(url_info.host, url_info.port ?? DefaultFtpPort, secure,
+            secure, url_info.username, url_info.password);
+    }
+
+    #! Returns the goal of the operation
+    string getGoal() {
+        return sprintf("FTP retrieve %y", url);
+    }
+
+    #! Returns the current state
+    string getState() {
+        return state;
+    }
+
+    #! Returns @ref True when the file has been retrieved
+    bool goalReached() {
+        return state == SPS_COMPLETE;
+    }
+
+    #! Continues the poll operation
+    /** @return a @ref Qore::SocketPollInfo "SocketPollInfo" hash if more I/O is needed, or nothing when the
+        transfer is complete
+    */
+    *hash<SocketPollInfo> continuePoll() {
+        while (True) {
+            AbstractPollOperation cur = op.getCurrentPollOp();
+            *hash<SocketPollInfo> rv = cur.continuePoll();
+            # NOTE: readiness is checked before \a rv is returned, and not after; the poll cycle that
+            # finishes establishing the data connection also starts the transfer, so it returns a
+            # descriptor to wait on that nothing will ever arrive on until the transfer command is sent
+            if (!op.currentOpReady()) {
+                if (!rv) {
+                    throw "FTP-POLL-ERROR", sprintf("FTP operation for %y cannot continue in state %y and "
+                        "has nothing to wait for", url, cur.getState());
+                }
+                return rv;
+            }
+            if (!op.advancePhase()) {
+                continue;
+            }
+            switch (state) {
+                case SPS_LOGIN:
+                    if (remote_dir.val()) {
+                        state = SPS_CWD;
+                        op.submitCommand("CWD", remote_dir);
+                        continue;
+                    }
+                    state = SPS_GET;
+                    op.submitGet(remote_file);
+                    continue;
+
+                case SPS_CWD: {
+                    *hash<FtpClientIo::FtpCommandResult> resp = op.getCommandResult();
+                    if ((resp.code / 100) != 2) {
+                        throw "LOCATION-ERROR", sprintf("cannot change to directory %y for FTP location "
+                            "%y: %s", remote_dir, url, resp.message);
+                    }
+                    state = SPS_GET;
+                    op.submitGet(remote_file);
+                    continue;
+                }
+            }
+            output = op.getTransferResult().data;
+            state = SPS_COMPLETE;
+            return;
+        }
+    }
+
+    #! Returns the file's data
+    auto getOutput() {
+        return output ?? binary();
+    }
+
+    #! Aborts the operation
+    abort() {
+        op.getCurrentPollOp().abort();
+    }
+}
+
+#! The class for handling "ftp(s)://"" locations
 class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
     public {
         #! Valid common file location options
@@ -100,10 +226,14 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         @param opts read options
 
         @return an I/O poller to retrieve the file's data
+
+        @throw LOCATION-ERROR the location does not name a file
+
+        @note No I/O is performed until the returned operation is driven
     */
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
-        throw "UNIMPLEMENTED", "retrieving FTP file data with non-blocking operations is not yet supported";
+        return new FileLocationHandlerFtpPollOperation(scheme, location);
     }
 
     #! Returns a stream reader for the file's data at the given location

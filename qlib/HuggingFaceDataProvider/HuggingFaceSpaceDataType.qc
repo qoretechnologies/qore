@@ -92,7 +92,7 @@ public class HuggingFaceSpaceDataType inherits HashDataType {
                 "display_name": "Host",
                 "short_desc": "Full URL to access the Space",
                 "desc": "The full URL to access the Space application",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "tags": {
                 "display_name": "Tags",

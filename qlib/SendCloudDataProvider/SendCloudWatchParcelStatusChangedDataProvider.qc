@@ -73,7 +73,8 @@ public class SendCloudWatchParcelStatusChangedDataProvider inherits SendCloudWat
         try {
             parcels = fetchAllCursorPages("parcels", "parcels", params);
         } catch (hash<ExceptionInfo> ex) {
-            error("SendCloudWatchParcelStatusChanged: error fetching parcels: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("SendCloudWatchParcelStatusChanged: error fetching parcels: %s: %s",
+                ex.err, ex.desc));
             return ();
         }
 

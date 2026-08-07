@@ -58,6 +58,13 @@ module FileDataProvider {
             "groups": (DataProvider::AppGroup::FileSystem,),
         });
 
+        # NOTE: no DataProviderFileApiInfo is registered for this application deliberately.  A "conn://" file
+        # location naming a filesystem connection resolves through the connection's own file location redirect
+        # (ConnectionProvider::FilesystemConnection::getFileLocationRedirect()), which reaches the "file" location
+        # handler directly and therefore supports streaming and non-blocking I/O.  That path is checked first and
+        # is strictly better than driving these request/response actions, so a file API registration here would be
+        # both redundant and unreachable.  The same reasoning applies to the FTP client data provider.
+
         # register all supported actions
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": FileDataProvider::AppName,

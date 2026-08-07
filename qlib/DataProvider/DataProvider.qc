@@ -91,6 +91,7 @@ public class DataProvider {
 
             "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
+            "s3": "AwsS3DataProvider",
             "aws-textract": "AwsTextractDataProvider",
             "azure-documentintelligence": "AzureDocumentIntelligenceDataProvider",
 
@@ -126,6 +127,7 @@ public class DataProvider {
             "deepseek": "DeepSeekDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",
+            "dropbox": "DropboxDataProvider",
             "easypost": "EasyPostDataProvider",
             "elasticsearch": "ElasticSearchDataProvider",
             "elevenlabs": "ElevenLabsDataProvider",
@@ -157,6 +159,7 @@ public class DataProvider {
             "gorgias": "GorgiasDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
+            "gdrive": "GoogleDriveDataProvider",
             "google-documentai": "GoogleDocumentAiDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
             "generator": "GeneratorDataProvider",

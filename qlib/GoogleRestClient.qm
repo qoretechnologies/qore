@@ -49,6 +49,7 @@ module GoogleRestClient {
         ConnectionSchemeCache::registerScheme("grests", GoogleRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("gcal", GoogleCalendarRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("gmail", GmailRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("gdrive", GoogleDriveRestConnection::ConnectionScheme);
     };
 }
 
@@ -163,6 +164,24 @@ public class GoogleRestClientBase {
                 "ping_path": "/gmail/v1/users/me/settings/language",
                 "ping_headers": DefaultGooglePingHeaders,
             },
+            "drive": {
+                "oauth2_scopes": (
+                    "https://www.googleapis.com/auth/drive",
+                ),
+                "ping_method": DefaultGooglePingMethod,
+                "ping_path": "/drive/v3/about?fields=user",
+                "ping_headers": DefaultGooglePingHeaders,
+            },
+            # as "drive", but limited to files the application itself created or the user explicitly opened with
+            # it; the narrowest scope that still supports uploading and reading back application data
+            "drive-file": {
+                "oauth2_scopes": (
+                    "https://www.googleapis.com/auth/drive.file",
+                ),
+                "ping_method": DefaultGooglePingMethod,
+                "ping_path": "/drive/v3/about?fields=user",
+                "ping_headers": DefaultGooglePingHeaders,
+            },
         };
 
         #! Default Google ping method
@@ -189,7 +208,17 @@ public class GoogleRestClientBase {
     }
 
     #! returns options for the Google REST client constructors
-    static hash<auto> getOptions(hash<auto> opts) {
+    /** @param opts0 the options supplied by the caller
+
+        @return the options with the API profile's own options applied
+
+        @note \c "auto!" disables type narrowing on the copy.  A caller passing a uniformly-typed option hash -
+        all strings, which is what an OAuth2 client id, secret, redirect URL, and token amount to - would
+        otherwise produce a \c hash<string, string> here, and the profile below adds a list-valued
+        \c "oauth2_scopes" that such a hash rejects at runtime
+    */
+    static hash<auto> getOptions(hash<auto> opts0) {
+        hash<auto!> opts = opts0;
         if (*string prof = opts.api_profile) {
             *hash<auto> conf = ApiProfiles{prof};
             if (!exists conf) {
@@ -513,6 +542,170 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
         if (update_options && url != DefaultConnectionUrl) {
             # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
             # beleive that no changes are necessary
+            doUpdateOptions(self, {
+                "url": DefaultConnectionUrl,
+            });
+        }
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! Class for Google Drive connections; returns @ref GoogleRestClient objects
+/** This class implements all options of @ref GoogleRestConnection except \c "api_profile", which is restricted to
+    the Google Drive profiles.
+
+    Two profiles are offered.  \c drive grants full access to the user's Drive, while \c drive-file grants access
+    only to files the application itself created or that the user explicitly opened with it.  The narrower scope is
+    sufficient whenever the integration only reads back what it wrote, and is the better default for a new
+    deployment; the wider one is needed to reach pre-existing user content.
+*/
+public class GoogleDriveRestConnection inherits GoogleRestConnection {
+    public {
+        #! Default Google REST API URL
+        const DefaultConnectionUrl = "gdrive://www.googleapis.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Google Drive REST Connection",
+            "short_desc": "A connection to the Google Drive cloud REST API",
+            "desc": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API",
+            "cls": Class::forName("GoogleDriveRestConnection"),
+            "options": GoogleRestConnection::ConnectionScheme.options + {
+                "api_profile": GoogleRestConnection::ConnectionScheme.options.api_profile + <ConnectionOptionInfo>{
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "display_name": "Full Drive Access",
+                            "short_desc": "Access to all of the user's Drive content",
+                            "desc": "Set client options for the Google Drive API with access to all of the "
+                                "user's Drive content; required to reach files the application did not create",
+                            "value": "drive",
+                        },
+                        <AllowedValueInfo>{
+                            "display_name": "Application Files Only",
+                            "short_desc": "Access only to files this application created or the user opened with it",
+                            "desc": "Set client options for the Google Drive API with access only to files this "
+                                "application created, or that the user explicitly opened with it; **prefer this "
+                                "scope** where the integration only reads back what it wrote",
+                            "value": "drive-file",
+                        },
+                    ),
+                    "default_value": "drive",
+                },
+            },
+            "required_options": GoogleRestConnection::ConnectionScheme.required_options,
+            "auto_url": True,
+            "schemes": {
+                "gdrive": True,
+            },
+            "base_scheme_map": {
+                "https": "gdrive",
+            },
+        };
+    }
+
+    #! creates the GoogleDriveRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url this argument is ignored; the default Google API URL is always used
+        @param attributes various attributes. See below
+        @param options connection options
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = GoogleRestClientBase::DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : GoogleRestConnection(name, description, url, attributes,
+                GoogleRestConnection::getOptions(GoogleDriveRestConnection::getDriveOptions(options))) {
+    }
+
+    #! creates the GoogleDriveRestConnection object
+    /** @param config the connection configuration hash
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : GoogleRestConnection(config + {
+                "opts": GoogleRestConnection::getOptions(
+                    GoogleDriveRestConnection::getDriveOptions(config.opts)),
+            }, attr) {
+    }
+
+    #! returns \c "gdrive"
+    string getType() {
+        return "gdrive";
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "GoogleDrive";
+    }
+
+    #! returns @ref True, as this connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns a GoogleDriveDataProvider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a GoogleDriveDataProvider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, the data provider module is loaded and the object created dynamically
+        load_module("GoogleDriveDataProvider");
+        return create_object("GoogleDriveDataProvider", getAsync());
+    }
+
+    #! Returns @ref True; Google Drive connections transfer files natively
+    /** Overrides the base class, which leaves file locations to the application's file API for a connection
+        that serves an application.  Drive can do better than that API: an upload can be driven straight from
+        an output stream through a resumable upload, without holding the file in memory, and a download
+        arrives as the response body rather than base64-encoded into a JSON field.
+
+        @see @ref getFileLocationHandlerImpl()
+
+        @since %GoogleRestClient 2.1
+    */
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    #! Returns a file location handler transferring files through Google Drive directly
+    /** @return a \c GoogleDriveDataProvider::GoogleDriveFileLocationHandler object bound to this connection's
+        client
+
+        @note The data provider module is loaded dynamically to avoid a circular module dependency, exactly as
+        @ref getDataProvider() does
+
+        @since %GoogleRestClient 2.1
+    */
+    private object getFileLocationHandlerImpl() {
+        load_module("GoogleDriveDataProvider");
+        return create_object("GoogleDriveDataProvider::GoogleDriveFileLocationHandler", getAsync());
+    }
+
+    #! Applies the Drive API profile, defaulting it when the caller did not choose one
+    /** @param options the options supplied by the caller
+
+        @return the options with a Drive profile applied
+    */
+    static hash<auto> getDriveOptions(*hash<auto> options) {
+        options = options ?? {};
+        if (!options.api_profile.val()) {
+            options.api_profile = "drive";
+        }
+        return options;
+    }
+
+    #! Can be called to set or clear a closure or call reference called when options are automatically updated
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options && url != DefaultConnectionUrl) {
             doUpdateOptions(self, {
                 "url": DefaultConnectionUrl,
             });

@@ -62,7 +62,7 @@ public class FirecrawlMetadataDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "Final URL after redirects",
                 "desc": "The final URL after following any redirects",
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
             },
             "keywords": {
                 "display_name": "Keywords",

@@ -1,0 +1,674 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GoogleDriveDataProvider.qm Qore user module providing a data provider API for Google Drive
+
+/*  GoogleDriveDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires GoogleRestClient
+%requires FileLocationHandler
+%requires RestClientIo
+%requires json
+
+module GoogleDriveDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Google Drive";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new GoogleDriveDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GoogleDriveDataProvider::AppName,
+            "display_name": "Google Drive",
+            "short_desc": "Google Drive cloud file storage",
+            "desc": "Provides access to [Google Drive](https://www.google.com/drive/) for cloud file storage "
+                "and sharing.\n\n"
+                "Drive addresses files by an immutable ID rather than by path, so two files in the same folder "
+                "may share a name and renaming a file does not change how it is addressed.\n\n"
+                "**Common use cases**:\n"
+                "- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n"
+                "- **Document automation**: create, replace, and share reports and records\n"
+                "- **Content extraction**: export Google Docs, Sheets, and Slides to PDF or Office formats "
+                "for downstream processing\n"
+                "- **Organization**: create folders, and copy, move, and remove files\n\n"
+                "Google and Google Drive are trademarks of Google LLC",
+            "scheme": "gdrive",
+            "logo": GoogleDriveLogo,
+            "logo_file_name": "google-drive-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CloudStorage, DataProvider::AppGroup::GoogleWorkspace),
+        });
+
+        # declare how these actions map onto single-file read and write operations, so that "conn://" file
+        # locations can read and write files through a Google Drive connection
+        DataProviderActionCatalog::registerAppFileApi(GoogleDriveDataProvider::AppName,
+            <DataProviderFileApiInfo>{
+                "read_action": "download-file",
+                "read_path_option": "file_id",
+                "read_mode": DPFR_DATA,
+                "read_data_field": "content",
+                "read_data_encoding": "base64",
+                "read_mime_type_field": "mime_type",
+                "write_action": "upload-file",
+                "write_path_option": "folder_id",
+                "write_data_option": "file",
+                "write_data_format": DPFW_FILE,
+                # Drive addresses an existing file by ID, but a new one by parent folder plus name
+                "write_path_is_parent": True,
+                "path_is_id": True,
+            });
+
+        # --- File actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-files",
+            "action": "list-files",
+            "display_name": "List Files",
+            "short_desc": "List or search files and folders",
+            "desc": "Lists or searches files and folders.\n\n"
+                "Set `folder_id` to list one folder, `name` to match on name, or `custom_query` to use a raw "
+                "Drive query expression when the other options are not enough.\n\n"
+                "Results are paginated; when `next_page_token` is returned, pass it back in `page_token` to "
+                "retrieve the following page.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveListFilesResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListFilesRequestDataType::Fields
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/get-file",
+            "action": "get-file",
+            "display_name": "Get File Info",
+            "short_desc": "Get a file's metadata",
+            "desc": "Retrieves a file's metadata: its name, type, size, timestamps, parents, and links.\n\n"
+                "Use `download-file` to retrieve the content itself.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveGetFileRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/download-file",
+            "action": "download-file",
+            "display_name": "Download File",
+            "short_desc": "Download a file's content",
+            "desc": "Downloads a file's content.\n\n"
+                "Google-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be "
+                "downloaded; use `export-file` to convert one to a concrete format instead.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveContentResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveDownloadFileRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/export-file",
+            "action": "export-file",
+            "display_name": "Export Document",
+            "short_desc": "Export a Google-native document to a concrete format",
+            "desc": "Exports a Google-native document (Docs, Sheets, Slides) to a concrete format such as PDF "
+                "or a Microsoft Office format.\n\n"
+                "The formats available depend on the document type; exporting a Sheet to `text/csv` returns the "
+                "first sheet only.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveContentResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveExportFileRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/upload-file",
+            "action": "upload-file",
+            "display_name": "Upload File",
+            "short_desc": "Upload a file to Drive",
+            "desc": "Uploads a file to Drive.\n\n"
+                "If `name` is not set, the file's own name is used.  Drive does not require names to be unique, "
+                "so uploading twice creates two files; use `replace-file` to update an existing one instead.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveUploadFileRequestDataType::Fields{"file",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveUploadFileRequestDataType::Fields - "file"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/create-text-file",
+            "action": "create-text-file",
+            "display_name": "Create Text File",
+            "short_desc": "Create a file from text content",
+            "desc": "Creates a file directly from text content, without needing a file.\n\n"
+                "Useful for writing generated reports, manifests, and notes.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateTextFileRequestDataType::Fields{"name", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateTextFileRequestDataType::Fields - ("name", "content")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/replace-file",
+            "action": "replace-file",
+            "display_name": "Replace File Content",
+            "short_desc": "Replace an existing file's content",
+            "desc": "Replaces an existing file's content while keeping its ID, name, and sharing settings.\n\n"
+                "Use this rather than uploading again when consumers hold a link to the file, since a new "
+                "upload creates a new file with a new ID.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveReplaceFileRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        # --- Organization actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/create-folder",
+            "action": "create-folder",
+            "display_name": "Create Folder",
+            "short_desc": "Create a folder",
+            "desc": "Creates a folder, optionally inside another folder.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateFolderRequestDataType::Fields{"name",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateFolderRequestDataType::Fields - "name"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/copy-file",
+            "action": "copy-file",
+            "display_name": "Copy File",
+            "short_desc": "Copy a file",
+            "desc": "Copies a file, optionally renaming it or placing the copy in a different folder.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCopyFileRequestDataType::Fields{"file_id",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCopyFileRequestDataType::Fields - "file_id"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/move-file",
+            "action": "move-file",
+            "display_name": "Move File",
+            "short_desc": "Move a file to a different folder",
+            "desc": "Moves a file to a different folder, removing it from the folders it is currently in.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveMoveFileRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/rename-file",
+            "action": "rename-file",
+            "display_name": "Rename File",
+            "short_desc": "Change a file's name",
+            "desc": "Changes a file's name, keeping its ID, its location, and its sharing settings.\n\n"
+                "Drive addresses files by an immutable ID rather than by path, so renaming a file leaves every "
+                "link to it working.  Drive does not require names to be unique either, so a name already used "
+                "in the same folder is accepted.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRenameFileRequestDataType::Fields{"file_id", "name"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRenameFileRequestDataType::Fields - ("file_id", "name")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/delete-file",
+            "action": "delete-file",
+            "display_name": "Delete File",
+            "short_desc": "Delete a file or move it to the trash",
+            "desc": "Moves a file to the trash, where it can still be recovered.\n\n"
+                "Set `permanently_delete` to remove it outright instead; **that cannot be undone**.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveDeleteResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveDeleteFileRequestDataType::Fields{"file_id",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveDeleteFileRequestDataType::Fields - "file_id"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/share-file",
+            "action": "share-file",
+            "display_name": "Share File",
+            "short_desc": "Grant access to a file",
+            "desc": "Grants access to a file, to a user, a group, everyone in a domain, or anyone with the "
+                "link.\n\n"
+                "**Granting access to `anyone` makes the file reachable without signing in**; use the narrowest "
+                "grantee type that serves the purpose.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": GoogleDrivePermissionResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveShareFileRequestDataType::Fields{"file_id", "role", "type"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveShareFileRequestDataType::Fields - ("file_id", "role", "type")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/untrash",
+            "action": "untrash",
+            "display_name": "Restore from Trash",
+            "short_desc": "Restore a file from the trash",
+            "desc": "Restores a file from the trash, putting it back where it was.\n\n"
+                "`delete-file` moves a file to the trash by default precisely so that it can be recovered; "
+                "this is what recovers it.  A file removed with `permanently_delete` cannot be restored.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveUntrashRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/create-shortcut",
+            "action": "create-shortcut",
+            "display_name": "Create Shortcut",
+            "short_desc": "Create a shortcut pointing at a file or folder",
+            "desc": "Creates a shortcut pointing at a file or folder.\n\n"
+                "A shortcut lets one file appear in several places without being copied, so the content stays "
+                "in one place and every route to it stays current.  Deleting a shortcut does not affect the "
+                "file it points at.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateShortcutRequestDataType::Fields{"name", "target_id"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateShortcutRequestDataType::Fields - ("name", "target_id")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-shared-drives",
+            "action": "list-shared-drives",
+            "display_name": "List Shared Drives",
+            "short_desc": "List the shared drives the account can reach",
+            "desc": "Lists the shared drives (formerly \"Team Drives\") the account is a member of.\n\n"
+                "A business account keeps most of its content on shared drives rather than in any one "
+                "person's `My Drive`, so this is how the drive to work in is discovered.  Pass a drive's `id` "
+                "as `drive_id` to `list-files` to work within it.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveListSharedDrivesResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListSharedDrivesRequestDataType::Fields
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/get-storage-quota",
+            "action": "get-storage-quota",
+            "display_name": "Get Storage Quota",
+            "short_desc": "Get how much of the account's storage is in use",
+            "desc": "Returns how much of the account's storage is in use, and how much is available.\n\n"
+                "Useful before a large upload: Drive rejects one that would exceed the quota, and reports it "
+                "as an ordinary write failure rather than as a capacity problem.  Files in the trash still "
+                "count against the quota, so `usage_in_drive_trash` is what emptying it would recover.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveStorageQuotaDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-permissions",
+            "action": "list-permissions",
+            "display_name": "List Permissions",
+            "short_desc": "List who has access to a file",
+            "desc": "Lists the permissions granted on a file: who has access, and at what level.\n\n"
+                "Each permission carries the `id` needed to withdraw it with `remove-permission`.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": GoogleDriveListPermissionsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListPermissionsRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/remove-permission",
+            "action": "remove-permission",
+            "display_name": "Remove Permission",
+            "short_desc": "Withdraw someone's access to a file",
+            "desc": "Withdraws a permission, so that whoever held it can no longer reach the file.\n\n"
+                "Use `list-permissions` to find the `permission_id`.  Withdrawing the `anyone` permission is "
+                "how a file that was made public is made private again.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": GoogleDriveSuccessResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRemovePermissionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-revisions",
+            "action": "list-revisions",
+            "display_name": "List File Revisions",
+            "short_desc": "List the earlier versions Drive holds for a file",
+            "desc": "Lists the revisions Drive holds for a file.\n\n"
+                "Drive keeps earlier versions, so a document replaced by `replace-file` is recoverable.  "
+                "**Drive removes older revisions on its own** unless they are marked `keep_forever`, so a "
+                "revision listed here is not guaranteed to remain indefinitely.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveListRevisionsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListRevisionsRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/get-revision",
+            "action": "get-revision",
+            "display_name": "Get File Revision",
+            "short_desc": "Get the details of one revision of a file",
+            "desc": "Returns the details of one revision of a file: when it was made, how large it is, and "
+                "whether Drive will keep it indefinitely.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveRevisionDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRevisionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/delete-revision",
+            "action": "delete-revision",
+            "display_name": "Delete File Revision",
+            "short_desc": "Remove one earlier version of a file",
+            "desc": "Removes one revision of a file, freeing the storage it occupied.\n\n"
+                "**This cannot be undone**, and the file's current content is unaffected.  Drive refuses to "
+                "remove the only remaining revision.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveSuccessResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRevisionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        # NOTE: the same provider serves both this and the "list-files" API action.  The API action answers
+        # one page and hands back a page token, which is what a single call wants; this reads Drive as a record
+        # source and walks the whole result itself, which is what a pipeline wants.  Every option here exists
+        # in the provider's SearchOptions, which is what DPAT_FIND requires
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-files",
+            "action": "find-files",
+            "display_name": "Find Files",
+            "short_desc": "Search Drive and read the results as records",
+            "desc": "Searches Drive and reads the results as a stream of records.\n\n"
+                "Unlike `list-files`, which answers one page and leaves the page token to the caller, this "
+                "walks the whole result: pages are fetched as they are reached, so a drive holding more files "
+                "than fit in one page is read without the caller knowing how Drive paginates.\n\n"
+                "Narrow the search with `folder_id`, `name`, or `mime_type`; Drive applies these itself, so "
+                "they reduce what is transferred rather than only what is examined.  Use `custom_query` for "
+                "anything the other options cannot express.",
+            "action_code": DPAT_FIND,
+            "groups": ("Files",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListFilesDataProvider::SearchOptions, {"loc": "options"},
+            ),
+        });
+
+        # --- Event actions ---
+
+        # NOTE: both watches read Drive's own change feed rather than polling a listing, so the cost does not
+        # grow with the size of the drive, and a change to a file in a folder the watch was never told about
+        # is still seen
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FILE,
+            "action": EVENT_NEW_FILE,
+            "display_name": "New File",
+            "short_desc": "React to a file being created in Drive",
+            "desc": "Fires when a file is created in the drive being watched.\n\n"
+                "Uses Drive's own change feed, so the cost of a poll does not grow with the size of the "
+                "drive.\n\n"
+                "A file that already existed and has merely been edited is **not** reported, and neither is a "
+                "folder; use `new-folder` for those.  Set `folder_id` to report only files created directly "
+                "in one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FILE,
+            "groups": ("Events",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveWatchNewFileDataProvider::WatchOptions
+                    - (keys GoogleDriveDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FOLDER,
+            "action": EVENT_NEW_FOLDER,
+            "display_name": "New Folder",
+            "short_desc": "React to a folder being created in Drive",
+            "desc": "Fires when a folder is created in the drive being watched.\n\n"
+                "Uses Drive's own change feed, so the cost of a poll does not grow with the size of the "
+                "drive.\n\n"
+                "A folder that already existed and has merely been renamed or moved is **not** reported.  Set "
+                "`folder_id` to report only folders created directly inside one folder, or `drive_id` to "
+                "watch a shared drive instead of `My Drive`.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FOLDER,
+            "groups": ("Events",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveWatchNewFolderDataProvider::WatchOptions
+                    - (keys GoogleDriveDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+    };
+}
+
+/** @mainpage GoogleDriveDataProvider Module
+
+    @tableofcontents
+
+    @section googledrivedataproviderintro GoogleDriveDataProvider Module Introduction
+
+    The %GoogleDriveDataProvider module provides a @ref dataproviderintro "data provider" API for
+    <a href="https://www.google.com/drive/">Google Drive</a>.
+
+    Connections use the \c gdrive scheme and are served by \c GoogleRestClient::GoogleDriveRestConnection.
+
+    @section googledrivedataprovider_ids Files Are Addressed by ID
+
+    Drive addresses files by an immutable identifier rather than by path.  Two files in the same folder may share
+    a name, and renaming a file does not change how it is addressed.  Every action here therefore takes a file
+    ID; use \c list-files to find one by name.
+
+    @section googledrivedataprovider_native Google-Native Documents
+
+    Google Docs, Sheets, and Slides have no byte content of their own, so \c download-file cannot retrieve them
+    and reports this rather than failing obscurely.  Use \c export-file to convert one to a concrete format such
+    as PDF or a Microsoft Office format instead.
+
+    @section googledrivedataprovider_scopes OAuth2 Scopes
+
+    Two API profiles are offered on the connection.  \c drive grants access to all of the user's Drive content,
+    while \c drive-file grants access only to files the application itself created or that the user explicitly
+    opened with it.  The narrower scope is sufficient whenever the integration only reads back what it wrote, and
+    is the better choice for a new deployment.
+
+    @section googledrivedataprovider_upload Large Uploads
+
+    A single-request upload has to start again from the beginning if the connection drops.  Content above
+    @ref GoogleDriveDataProvider::ResumableThreshold "ResumableThreshold" is therefore sent as a resumable
+    upload, which sends the content in chunks against a session the server holds open.  This is transparent to
+    the caller: \c upload-file, \c create-text-file, and \c replace-file choose the transfer method from the
+    size of the content.
+
+    @section googledrivedataprovider_filelocations Native File Locations
+
+    A Drive connection transfers files natively for \c "conn://" file locations, through
+    @ref GoogleDriveDataProvider::GoogleDriveFileLocationHandler "GoogleDriveFileLocationHandler", rather than
+    through the application file API.  Writing drives a resumable upload from the output stream itself, so a
+    file larger than memory can be written, and reading takes the bytes from the response body rather than
+    base64-encoded into a JSON field.
+
+    Drive addresses a file by an immutable ID, so a **read** location is a file ID.  A **write** location is a
+    name, since the file does not exist yet; the folder to create it in comes from the \c container option,
+    and without one the user's \c "My Drive" root is used.  A Google-native document has no byte content of
+    its own and needs the \c export_mime_type option to be read at all.
+
+    @section googledrivedataprovider_relnotes Release Notes
+
+    @subsection googledrivedataprovider_v1_0 GoogleDriveDataProvider v1.0
+    - initial release of the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+*/
+
+#! contains all public definitions in the GoogleDriveDataProvider module
+public namespace GoogleDriveDataProvider {
+}

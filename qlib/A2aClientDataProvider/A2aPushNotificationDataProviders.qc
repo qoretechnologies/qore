@@ -79,7 +79,7 @@ public class A2aPushNotificationSetRequestDataType inherits HashDataType {
                 "example_value": "task-123",
             },
             "url": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "Webhook URL",
                 "short_desc": "Push notification webhook URL",
                 "desc": "The URL to receive push notifications for task events",
