@@ -180,6 +180,15 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
         int return_expires_in = 3600;
         #! If True, return an error
         bool return_error = False;
+        #! If True, nest the token fields under an \c OAuth key
+        /** This is the shape a token response takes when the server answers with XML rather than
+            JSON -- the Salesforce OAuth2 token endpoint does exactly this whenever the request's
+            \c Accept header allows XML -- because parsing the document puts every field one level
+            down, under its root element.  It is delivered here as JSON so that the test does not
+            depend on the optional \c xml module; the client-side code path under test is the
+            envelope unwrapping, which is identical either way.
+        */
+        bool return_wrapped = False;
     }
 
     constructor(*string expected_client_id, *string expected_client_secret) {
@@ -217,6 +226,10 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
 
     setReturnError(bool val) {
         self.return_error = val;
+    }
+
+    setReturnWrapped(bool val) {
+        self.return_wrapped = val;
     }
 
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -264,6 +277,10 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
         };
         if (return_refresh_token) {
             resp.refresh_token = return_refresh_token;
+        }
+
+        if (return_wrapped) {
+            return makeResponse(200, make_json({"OAuth": resp}), {"Content-Type": MimeTypeJson});
         }
 
         return makeResponse(200, make_json(resp), {"Content-Type": MimeTypeJson});
@@ -546,6 +563,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("oauth2 invalid options", \testOAuth2InvalidOptions());
         addTestCase("oauth2 authorization_code throws", \testOAuth2AuthCodeThrows());
         addTestCase("oauth2 refresh failure", \testOAuth2RefreshFailure());
+        addTestCase("oauth2 wrapped envelope response", \testOAuth2WrappedEnvelopeResponse());
         addTestCase("oauth2 async", \testOAuth2Async());
         addTestCase("oauth2 pool", \testOAuth2Pool());
         # Phase 1: Simple additions
@@ -1941,6 +1959,39 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Force a new token (need to wait past MinimumTokenRefresh)
         # Since token_timestamp was just set, we need to test that it throws
         assertThrows("OAUTH2-ERROR", "rate limit", \rest.getNewToken());
+    }
+
+    #! A token response wrapped in an \c OAuth envelope must still yield a token
+    /** Salesforce answers its token endpoint with XML whenever the request's \c Accept header
+        allows it, and parsing that document nests every token field under its root element:
+        <tt>{"OAuth": {"access_token": ..., "token_type": ...}}</tt>.  Reading \c access_token at
+        the top level then finds nothing, so a perfectly good token response was rejected as
+        invalid -- which made every token refresh fail and left the client retrying with the
+        expired token and receiving 401s indefinitely.  The blocking
+        @ref RestClient::RestClient "RestClient" has always unwrapped this envelope.
+    */
+    testOAuth2WrappedEnvelopeResponse() {
+        OAuth2TokenHandler wrapped_handler();
+        wrapped_handler.setReturnToken("wrapped-envelope-token");
+        wrapped_handler.setReturnRefreshToken("wrapped-envelope-refresh");
+        wrapped_handler.setReturnWrapped(True);
+        server.setHandler("/oauth/wrapped", "/oauth/wrapped", MimeTypeFormUrlEncoded,
+            wrapped_handler);
+
+        RestClientIo::RestClientIo rest = createOAuth2Client({
+            "oauth2_token_url": "/oauth/wrapped",
+        });
+        on_exit rest.close();
+
+        assertEq(1, wrapped_handler.getRequestCount(), "the token endpoint was called once");
+        assertEq("wrapped-envelope-token", rest.getToken(),
+            "the token is read from inside the envelope");
+        assertEq("Bearer", rest.getTokenType());
+
+        # the token actually authenticates a subsequent request
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq(1, wrapped_handler.getRequestCount(), "no extra token requests were needed");
     }
 
     testOAuth2BasicAuth() {

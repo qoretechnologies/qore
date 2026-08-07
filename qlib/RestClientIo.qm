@@ -3894,6 +3894,15 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @throw OAUTH2-ERROR if the response is invalid
         */
         private hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+            # An OAuth2 server that answers the token request with XML rather than JSON produces a
+            # hash wrapped in its root element, <OAuth>...</OAuth>, so the token fields are one
+            # level down.  The Salesforce token endpoint does this.  Without unwrapping, a
+            # perfectly good token response is rejected as invalid and every refresh fails --
+            # leaving the client to retry with the expired token and get 401s forever.  Mirrors
+            # @ref RestClient::RestClient::gotOAuth2LoginInfo() "RestClient::gotOAuth2LoginInfo()".
+            if (h.OAuth.typeCode() == NT_HASH) {
+                h = h.OAuth;
+            }
             if (h.token_type.typeCode() != NT_STRING || h.access_token.typeCode() != NT_STRING) {
                 throw "OAUTH2-ERROR", sprintf("OAuth2 response is invalid, needs both token_type "
                     "(%y) and access_token (%y): %y", h.token_type, h.access_token, h);
