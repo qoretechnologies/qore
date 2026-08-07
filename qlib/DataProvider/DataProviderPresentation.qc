@@ -270,6 +270,75 @@ public class DataProviderPresentation {
         return baseLocale(requested) == baseLocale(source);
     }
 
+    #! Discovers every native locale file available for one catalog domain
+    /** Both supported native layouts are inspected: @c domain/locale.json and
+        @c domain.locale.json. Locale identities come from the catalog files
+        themselves; no language list or language-family heuristic is used.
+
+        @param domain native catalog domain
+        @param discovery_opts options accepted by
+            @ref I18n::get_catalog_search_path()
+        @return canonical locale tags in stable order, with @c root first when
+            it is present
+
+        @throw I18N-CATALOG-ERROR if @p domain, discovery options, or a locale
+            filename is invalid
+        @throw I18N-LOCALE-ERROR if a locale filename is not a valid BCP-47 tag
+
+        @par Example
+        If @c data-provider.UW9yZQ contains @c root.json, @c ja.json, and
+        @c pt.json, this method returns @c root, @c ja, and @c pt without the
+        caller naming those languages.
+        @note Only regular JSON files in the native catalog search path are
+            considered. Locale filenames must already use their canonical
+            BCP-47 spelling so subsequent native discovery resolves the same
+            file.
+
+        @since %DataProvider 3.7
+    */
+    static list<string> discoverCatalogLocales(string domain,
+            *hash<auto> discovery_opts = NOTHING) {
+        # Reuse the native domain-validation authority without performing any
+        # filesystem access.
+        list<string> unused = I18n::discover_catalog_files(domain,
+            RootLocale, {"search_path": ()});
+        hash<string, bool> locales;
+        foreach string search_root in (
+                I18n::get_catalog_search_path(discovery_opts)) {
+            string nested_dir = search_root + DirSep + domain;
+            foreach string file in (glob(nested_dir + DirSep + "*.json")) {
+                if (!is_file(file)) {
+                    continue;
+                }
+                string name = basename(file);
+                addDiscoveredCatalogLocale(\locales,
+                    name.substr(0, name.length() - 5), file);
+            }
+
+            string flat_prefix = domain + ".";
+            foreach string file in (glob(search_root + DirSep
+                    + flat_prefix + "*.json")) {
+                if (!is_file(file)) {
+                    continue;
+                }
+                string name = basename(file);
+                addDiscoveredCatalogLocale(\locales,
+                    name.substr(flat_prefix.length(),
+                        name.length() - flat_prefix.length() - 5), file);
+            }
+        }
+        list<string> rv = ();
+        if (locales{RootLocale}) {
+            rv += RootLocale;
+        }
+        foreach string locale in (sort(keys locales)) {
+            if (locale != RootLocale) {
+                rv += locale;
+            }
+        }
+        return rv;
+    }
+
     private static string identitySegment(string identity) {
         if (!identity.val()) {
             throw "DATA-PROVIDER-PRESENTATION-ERROR",
@@ -296,6 +365,22 @@ public class DataProviderPresentation {
         list<string> chain = I18n::get_locale_fallback_chain(
             I18n::canonicalize_locale(locale));
         return chain.size() > 1 ? chain[chain.size() - 2] : chain[0];
+    }
+
+    private static addDiscoveredCatalogLocale(
+            reference<hash<string, bool>> locales, string raw_locale,
+            string file) {
+        if (raw_locale == RootLocale) {
+            locales{RootLocale} = True;
+            return;
+        }
+        string locale = I18n::canonicalize_locale(raw_locale);
+        if (locale != raw_locale) {
+            throw "I18N-CATALOG-ERROR", sprintf(
+                "catalog locale filename %y is not canonical; use %y",
+                file, locale + ".json");
+        }
+        locales{locale} = True;
     }
 
     private static addOptionMapMessages(reference<hash<auto>> messages,
@@ -589,6 +674,178 @@ public class DataProviderPresentationCatalog {
             delete rv.presentation_incomplete;
         }
         return rv;
+    }
+}
+
+#! Cached multilingual embedding projection for one provider application
+/** This class discovers every locale shipped by a provider and constructs at
+    most one immutable @ref DataProviderPresentationCatalog per catalog domain
+    and locale. Canonical provider metadata remains separate; returned text is
+    suitable only for semantic retrieval documents.
+
+    @since %DataProvider 3.7
+*/
+public class DataProviderPresentationEmbeddingCatalog {
+    private {
+        hash<auto> app;
+        *hash<auto> discovery_opts;
+        Mutex cache_lock();
+        hash<string, list<DataProviderPresentationCatalog>> catalog_cache;
+    }
+
+    #! Creates a cached application embedding projector
+    /** @param app registered provider application metadata
+        @param discovery_opts native catalog discovery options
+
+        @throw DATA-PROVIDER-PRESENTATION-ERROR if the app identity is empty
+        @throw I18N-CATALOG-ERROR if discovery options are invalid
+
+        @par Example
+        @code{.py}
+        DataProviderPresentationEmbeddingCatalog embedding(app);
+        hash<auto> info = embedding.projectAction(action);
+        @endcode
+    */
+    constructor(hash<auto> app, *hash<auto> discovery_opts = NOTHING) {
+        # Validate the identity before retaining the record.
+        DataProviderPresentation::appCatalogDomain(app);
+        self.app = app;
+        self.discovery_opts = discovery_opts;
+    }
+
+    #! Builds a bounded multilingual embedding document for one action
+    /** The document contains exact app/action identities, producer app/action
+        presentation, and every distinct requested-locale app/action
+        presentation found in source-owned catalogs. It never reconstructs,
+        classifies, tokenizes, or translates producer prose.
+
+        @param action registered provider action metadata
+        @param max_description_chars maximum Unicode characters retained from
+            each long @c desc field; @c 0 omits long descriptions
+        @return a hash containing @c embedding_text and
+            @c embedding_language; the latter is @c mul only when at least one
+            distinct catalog translation contributes text, otherwise it is the
+            declared producer locale or @c und
+
+        @throw DATA-PROVIDER-PRESENTATION-ERROR if an exact identity is empty
+        @throw DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR if
+            @p max_description_chars is negative or @p action belongs to a
+            different app
+        @throw I18N-CATALOG-ERROR if a discovered catalog is invalid
+        @throw I18N-LOCALE-ERROR if a declared or discovered locale is invalid
+
+        @par Example
+        A Qore @c histogram record with Japanese and Portuguese catalogs keeps
+        @c Qore and @c histogram in the document alongside all three producer
+        and translated descriptions while returning @c mul.
+        @note The result contains retrieval context only. Routing,
+            authorization, schema selection, and execution must continue to use
+            the original exact @p action record.
+    */
+    hash<auto> projectAction(hash<auto> action,
+            int max_description_chars = 200) {
+        if (max_description_chars < 0) {
+            throw "DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR",
+                "max_description_chars cannot be negative";
+        }
+        if (action.app.toString() != app.name.toString()) {
+            throw "DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR", sprintf(
+                "action %y belongs to app %y, not %y", action.action,
+                action.app, app.name);
+        }
+        # Validate the exact action identity even when no locale catalog is
+        # installed.
+        DataProviderPresentation::actionMessageId(app.name, action.action,
+            "display_name");
+
+        list<string> lines = ();
+        hash<string, bool> seen;
+        addEmbeddingIdentity(\lines, \seen, app.name);
+        addEmbeddingPresentation(\lines, \seen, app,
+            max_description_chars);
+        addEmbeddingIdentity(\lines, \seen, action.action);
+        addEmbeddingPresentation(\lines, \seen, action,
+            max_description_chars);
+
+        bool translated = False;
+        string domain = DataProviderPresentation::actionCatalogDomain(app,
+            action);
+        foreach DataProviderPresentationCatalog catalog in (
+                getCatalogs(domain)) {
+            hash<auto> localized_app = catalog.projectApp(app);
+            hash<auto> localized_action = catalog.projectAction(app, action);
+            if (addEmbeddingPresentation(\lines, \seen, localized_app,
+                    max_description_chars)) {
+                translated = True;
+            }
+            if (addEmbeddingPresentation(\lines, \seen, localized_action,
+                    max_description_chars)) {
+                translated = True;
+            }
+        }
+        return {
+            "embedding_text": lines.join("\n"),
+            "embedding_language": translated ? "mul"
+                : DataProviderPresentation::actionSourceLocale(app, action),
+        };
+    }
+
+    private list<DataProviderPresentationCatalog> getCatalogs(string domain) {
+        cache_lock.lock();
+        on_exit cache_lock.unlock();
+        if (exists catalog_cache{domain}) {
+            return catalog_cache{domain};
+        }
+        list<DataProviderPresentationCatalog> catalogs = ();
+        foreach string locale in (
+                DataProviderPresentation::discoverCatalogLocales(domain,
+                    discovery_opts)) {
+            if (locale != DataProviderPresentation::RootLocale) {
+                catalogs += new DataProviderPresentationCatalog(domain,
+                    locale, discovery_opts);
+            }
+        }
+        catalog_cache{domain} = catalogs;
+        return catalogs;
+    }
+
+    private static addEmbeddingIdentity(reference<list<string>> lines,
+            reference<hash<string, bool>> seen, auto value) {
+        if (value.typeCode() != NT_STRING) {
+            return;
+        }
+        string text = value.toString();
+        if (text.val() && !seen{text}) {
+            seen{text} = True;
+            lines += text;
+        }
+    }
+
+    private static bool addEmbeddingPresentation(
+            reference<list<string>> lines,
+            reference<hash<string, bool>> seen, hash<auto> record,
+            int max_description_chars) {
+        bool added = False;
+        foreach string field in (("display_name", "short_desc", "desc")) {
+            if (record{field}.typeCode() != NT_STRING) {
+                continue;
+            }
+            string text = record{field}.toString();
+            if (field == "desc") {
+                if (!max_description_chars) {
+                    continue;
+                }
+                if (text.length() > max_description_chars) {
+                    text = text.substr(0, max_description_chars);
+                }
+            }
+            if (text.val() && !seen{text}) {
+                seen{text} = True;
+                lines += text;
+                added = True;
+            }
+        }
+        return added;
     }
 }
 }

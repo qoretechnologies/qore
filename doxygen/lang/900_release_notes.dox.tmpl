@@ -1370,6 +1370,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - application, action, option, and allowed-value presentation metadata can now be localized through
         source-owned native catalogs while exact technical identifiers remain unchanged; the
         \c qore-data-provider-i18n tool generates and verifies provider source catalogs
+      - added native catalog-locale discovery and a cached multilingual action embedding projection, allowing
+        semantic indexes to include every shipped source-owned provider translation without maintaining a
+        language list or changing exact application and action identities
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration

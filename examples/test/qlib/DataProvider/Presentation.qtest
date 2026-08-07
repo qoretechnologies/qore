@@ -56,6 +56,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \checkedInLocaleCatalogTest());
         addTestCase("missing translations never claim source prose is localized",
             \missingTranslationTest());
+        addTestCase("catalog discovery builds multilingual embedding context",
+            \multilingualEmbeddingTest());
         set_return_value(main());
     }
 
@@ -139,6 +141,35 @@ class DataProviderPresentationTest inherits QUnit::Test {
         }));
         file.close();
         return root;
+    }
+
+    private hash<auto> arabicMessages() {
+        return {
+            DataProviderPresentation::appMessageId(App, "display_name"):
+                {"source": "Poštovní služba", "message": "خدمة البريد"},
+            DataProviderPresentation::appMessageId(App, "short_desc"):
+                {"source": "Zpracovává poštu", "message": "تعالج البريد"},
+            DataProviderPresentation::appMessageId(App, "desc"):
+                {"source": "Poskytuje poštovní operace.",
+                    "message": "توفر عمليات البريد."},
+            DataProviderPresentation::actionMessageId(App, Action,
+                "display_name"):
+                {"source": "Odeslat zprávu", "message": "إرسال رسالة"},
+            DataProviderPresentation::actionMessageId(App, Action,
+                "short_desc"):
+                {"source": "Odešle jednu zprávu",
+                    "message": "ترسل رسالة واحدة"},
+            DataProviderPresentation::actionMessageId(App, Action, "desc"):
+                {"source": "Odešle zprávu přes vybraný účet.",
+                    "message": "ترسل رسالة عبر الحساب المحدد."},
+        };
+    }
+
+    private writeJson(string path, hash<auto> value) {
+        File file();
+        file.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write(make_json(value));
+        file.close();
     }
 
     stableIdentityTest() {
@@ -454,6 +485,74 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "complex values without stable catalog ids do not leak source prose");
         assertTrue(complex.presentation_incomplete,
             "untranslatable complex values are marked incomplete");
+    }
+
+    multilingualEmbeddingTest() {
+        string root = make_tmp_dir("data-provider-presentation-embedding-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        hash<string, hash<auto>> source_catalogs =
+            DataProviderPresentation::buildSourceCatalogs(app(), (action(),));
+        writeJson(root + DirSep + Domain + DirSep + "root.json",
+            source_catalogs{Domain});
+        writeJson(root + DirSep + Domain + DirSep + "ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": messages()}},
+        });
+        writeJson(root + DirSep + Domain + ".ar-EG.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ar-EG": {"messages": arabicMessages()}},
+        });
+
+        hash<auto> opts = {"search_path": (root,)};
+        assertEq(("root", "ar-EG", "ja"),
+            DataProviderPresentation::discoverCatalogLocales(Domain, opts),
+            "locale discovery uses both native layouts without a locale list");
+
+        DataProviderPresentationEmbeddingCatalog embedding(app(), opts);
+        hash<auto> info = embedding.projectAction(action());
+        assertEq("mul", info.embedding_language,
+            "distinct source-owned translations mark the document multilingual");
+        foreach string expected in ((App, Action, "Poštovní služba",
+                "Odeslat zprávu", "メールサービス", "メッセージを送信",
+                "خدمة البريد", "إرسال رسالة")) {
+            assertTrue(info.embedding_text.find(expected) >= 0,
+                sprintf("the embedding document contains %y", expected));
+        }
+
+        hash<auto> bounded = embedding.projectAction(action(), 0);
+        assertEq(-1, bounded.embedding_text.find(
+                "Odešle zprávu přes vybraný účet."),
+            "zero description characters omits producer long descriptions");
+        assertTrue(bounded.embedding_text.find("Odešle jednu zprávu") >= 0,
+            "bounding long descriptions preserves short descriptions");
+
+        string root_only = make_tmp_dir(
+            "data-provider-presentation-embedding-root-");
+        on_exit remove_tree(root_only);
+        mkdir(root_only + DirSep + Domain);
+        writeJson(root_only + DirSep + Domain + DirSep + "root.json",
+            source_catalogs{Domain});
+        writeJson(root_only + DirSep + Domain + DirSep + "sk.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"sk": {"messages": {}}},
+        });
+        DataProviderPresentationEmbeddingCatalog source_embedding(app(), {
+            "search_path": (root_only,),
+        });
+        hash<auto> source_info = source_embedding.projectAction(action());
+        assertEq("cs-CZ", source_info.embedding_language,
+            "a catalog without usable translations declares its producer "
+                "language");
+        assertEq(-1, source_info.embedding_text.find("メールサービス"),
+            "a source-only catalog does not invent translated text");
+
+        assertThrows("DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR", sub () {
+            embedding.projectAction(action(), -1);
+        }, NOTHING, "negative description bounds are rejected");
+        assertThrows("DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR", sub () {
+            embedding.projectAction(action() + {"app": "別のアプリ"});
+        }, NOTHING, "cross-app action records are rejected");
     }
 
     private string shellQuote(string value) {
