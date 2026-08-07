@@ -426,13 +426,36 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
 
     #! creates the OneDriveRestConnection object
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(OneDriveRestConnection::getConfig(config), attr) {
+            : RestConnection(OneDriveRestConnection::getConfig(config, DefaultUrl), attr) {
+    }
+
+    #! creates a subclass of this connection serving a different scheme on the same host
+    /** @param config the connection configuration
+        @param attr the connection attributes
+        @param default_url the URL the subclass normalizes to
+
+        A subclass cannot rely on the two-argument constructor above: the URL normalization is
+        necessarily \c static (it runs while evaluating the base constructor's arguments, before
+        there is an object to dispatch on), so a \c static that read \a DefaultUrl would always read
+        *this* class's constant and rewrite the subclass's scheme back to \c "onedrive://".  The
+        subclass therefore passes the URL it wants to normalize to.
+
+        @since %OneDriveRestClient 1.1
+    */
+    constructor(hash<auto> config, *hash<auto> attr, string default_url)
+            : RestConnection(OneDriveRestConnection::getConfig(config, default_url), attr) {
     }
 
     #! returns config with the correct URL
-    private static hash<auto> getConfig(hash<auto> config) {
-        if (!config.url || config.url != DefaultUrl) {
-            config.url = DefaultUrl;
+    /** @param config the connection configuration
+        @param default_url the URL to normalize to
+
+        @note \a default_url is a parameter rather than a read of @ref DefaultUrl so that a
+        subclass keeps its own scheme; see the three-argument constructor above
+    */
+    private static hash<auto> getConfig(hash<auto> config, string default_url) {
+        if (!config.url || config.url != default_url) {
+            config.url = default_url;
         }
         return config;
     }
@@ -515,12 +538,33 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
         return status_code == 401;
     }
 
+    #! Returns the canonical URL for this connection type
+    /** Read through a method rather than as the @ref DefaultUrl constant because a constant
+        reference is resolved **lexically**, at parse time, to the constant of the class whose body
+        contains it: it does not dispatch on the subclass.  An inherited method that read
+        \c DefaultUrl directly therefore saw OneDrive's value even for a SharePoint connection.
+
+        That matters most in @ref setUpdateOptionsCode(), which is how a connection writes corrected
+        options **back to the configuration store**: reading the wrong constant there did not merely
+        misreport the URL, it persisted \c "onedrive://graph.microsoft.com" over the connection's own
+        scheme every time the connection was loaded, so the correction survived restarts and came
+        back after any manual edit.
+
+        @return the canonical URL for this connection type
+
+        @since %OneDriveRestClient 1.1
+    */
+    string getDefaultUrl() {
+        return DefaultUrl;
+    }
+
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options) {
             hash<auto> update;
-            if (url != DefaultUrl) {
-                update.url = DefaultUrl;
+            string default_url = getDefaultUrl();
+            if (url != default_url) {
+                update.url = default_url;
             }
             if (opts.ping_path =~ /^\//) {
                 update.ping_path = opts.ping_path.substr(1);
@@ -575,6 +619,20 @@ public class SharePointRestConnection inherits OneDriveRestConnection {
         #! Default SharePoint REST API URL
         const DefaultUrl = "sharepoint://graph.microsoft.com";
 
+        #! The URL used when a connection for this app is created with a generated URL
+        /** Qorus creates an app connection with \c auto_url by reading a URL constant off the
+            connection class **by reflection**, and it looks for \c DefaultConnectionUrl before
+            \c DefaultUrl - precisely so that a class in a hierarchy where \c DefaultUrl is
+            shadowed can state its URL unambiguously rather than depending on which of the two
+            constants a hierarchy walk happens to return.
+
+            This class shadows @ref OneDriveRestConnection::DefaultUrl, so it says so explicitly
+            here instead of relying on that resolution.
+
+            @since %OneDriveRestClient 1.1
+        */
+        const DefaultConnectionUrl = DefaultUrl;
+
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Microsoft SharePoint",
@@ -613,16 +671,21 @@ public class SharePointRestConnection inherits OneDriveRestConnection {
     }
 
     #! creates the SharePointRestConnection object
+    /** The URL to normalize to is passed explicitly: the base class normalizes in a \c static, so
+        it would otherwise rewrite this connection's scheme back to \c "onedrive://"
+    */
     constructor(hash<auto> config, *hash<auto> attr)
-            : OneDriveRestConnection(SharePointRestConnection::getConfig(config), attr) {
+            : OneDriveRestConnection(config, attr, SharePointRestConnection::DefaultUrl) {
     }
 
-    #! returns config with the correct URL
-    private static hash<auto> getConfig(hash<auto> config) {
-        if (!config.url || config.url != DefaultUrl) {
-            config.url = DefaultUrl;
-        }
-        return config;
+    #! Returns \c "sharepoint://graph.microsoft.com"
+    /** Overridden because the inherited implementation reads a constant, and a constant reference
+        resolves lexically to the class whose body contains it rather than dispatching on the
+        subclass; without this a SharePoint connection has its URL rewritten to OneDrive's and
+        persisted by @ref setUpdateOptionsCode()
+    */
+    string getDefaultUrl() {
+        return DefaultUrl;
     }
 
     #! returns \c "sharepoint"
