@@ -3175,6 +3175,7 @@ set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/avro
     ${CMAKE_BINARY_DIR}/modules/json
     ${CMAKE_BINARY_DIR}/modules/reflection
+    ${CMAKE_BINARY_DIR}/modules/i18n
     ${CMAKE_BINARY_DIR}/modules/logger_bin
     ${CMAKE_BINARY_DIR}/modules/linenoise
     ${CMAKE_BINARY_DIR}/modules/krb5
@@ -3213,7 +3214,7 @@ set(QORE_QM_METADATA_ENV
     "QORE_INCLUDE_DIR="
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser avro json reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
+foreach(_qore_build_module astparser avro json reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
     if(TARGET ${_qore_build_module})
         list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
     endif()
