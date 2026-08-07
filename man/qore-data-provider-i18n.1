@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2026 Qore Technologies, s.r.o.
 .\"
-.TH QORE-DATA-PROVIDER-I18N 1 "2026 August 6" "Qore 3.0" "Qore Programming Language"
+.TH QORE-DATA-PROVIDER-I18N 1 "2026 August 7" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qore\-data\-provider\-i18n \- extract source-owned data-provider presentation catalogs
 .SH SYNOPSIS
@@ -35,7 +35,11 @@ are extracted.
 .TP
 .BR \-\-check
 Do not write files.  Exit with status 2 if a generated root catalog is missing
-or differs semantically from the checked-in file.
+or differs semantically from the checked-in file.  Every discovered sibling
+translation is also checked for a canonical locale filename, a valid native
+catalog shape, current producer source text, and message identifiers that are
+still present in the generated root catalog.  Partial translations and
+translated text identical to the producer text remain valid.
 .TP
 .BR \-v ", " \-\-verbose
 Show loaded modules and written files.

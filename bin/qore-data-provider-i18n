@@ -110,7 +110,7 @@ class QoreDataProviderI18nCmd {
                     actions));
         }
 
-        int stale;
+        int stale = 0;
         foreach string domain in (sort(keys catalogs)) {
             # Reuse the native validation boundary before treating a domain as
             # a directory name. An empty search path performs no file access.
@@ -127,6 +127,9 @@ class QoreDataProviderI18nCmd {
                     ++stale;
                     stderr.printf("%s %s\n", color.error("STALE:"), path);
                 }
+                stale += checkTranslations(domain,
+                    catalogs{domain}.locales.root.messages, opt.output,
+                    opt.verbose);
                 continue;
             }
             mkdir_ex(dirname(path), 0755, True);
@@ -142,6 +145,82 @@ class QoreDataProviderI18nCmd {
         printf("%s %d app(s), %d catalog domain(s)\n",
             opt.check ? "verified" : "extracted", app_names.size(),
             catalogs.size());
+    }
+
+    private int checkTranslations(string domain, hash<auto> root_messages,
+            string output, *int verbose) {
+        int stale = 0;
+        int translation_count = 0;
+        hash<auto> discovery_opts = {"search_path": (output,)};
+        foreach string locale in (
+                DataProviderPresentation::discoverCatalogLocales(domain,
+                    discovery_opts)) {
+            if (locale == DataProviderPresentation::RootLocale) {
+                continue;
+            }
+            foreach string path in (translationCatalogPaths(output, domain,
+                    locale)) {
+                if (!is_file(path)) {
+                    continue;
+                }
+                # Constructing the native catalog validates the JSON schema and
+                # every message entry. Provider prose is opaque, so braces are
+                # literal rather than format placeholders.
+                hash<auto> catalog = I18n::load_native_catalog(path);
+                I18n::MessageCatalog validated(catalog,
+                    {"literal_messages": True});
+                if (sort(keys catalog.locales) != (locale,)) {
+                    ++stale;
+                    stderr.printf("%s %s must contain only locale %y\n",
+                        color.error("STALE:"), path, locale);
+                    continue;
+                }
+                hash<auto> messages = catalog.locales{locale}.messages;
+                foreach hash<auto> entry in (messages.pairIterator()) {
+                    ++translation_count;
+                    string reason = translationEntryProblem(entry.key,
+                        entry.value, root_messages);
+                    if (reason.val()) {
+                        ++stale;
+                        stderr.printf("%s %s: %s: %s\n",
+                            color.error("STALE:"), path, entry.key, reason);
+                    }
+                }
+            }
+        }
+        if (verbose) {
+            printf("checked %d translation(s) for %s\n",
+                translation_count, color.key(domain));
+        }
+        return stale;
+    }
+
+    private list<string> translationCatalogPaths(string output,
+            string domain, string locale) {
+        return (
+            join_paths(output, domain, locale + ".json"),
+            join_paths(output, domain + "." + locale + ".json")
+        );
+    }
+
+    private string translationEntryProblem(string id, auto entry,
+            hash<auto> root_messages) {
+        if (!exists root_messages{id}) {
+            return "message id is not present in the generated root catalog";
+        }
+        if (entry.typeCode() != NT_HASH) {
+            return "provider translations must carry their producer source";
+        }
+        if (entry.source.typeCode() != NT_STRING) {
+            return "translation source must be a string";
+        }
+        if (entry.source != root_messages{id}.source) {
+            return "translation source no longer matches provider metadata";
+        }
+        if (entry.message.typeCode() != NT_STRING || !entry.message.val()) {
+            return "translation message must be a non-empty string";
+        }
+        return "";
     }
 
     private mergeCatalogs(reference<hash<string, hash<auto>>> target,

@@ -58,6 +58,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \missingTranslationTest());
         addTestCase("catalog discovery builds multilingual embedding context",
             \multilingualEmbeddingTest());
+        addTestCase("catalog checks reject stale translations without rejecting cognates",
+            \sourceCatalogTranslationCheckTest());
         set_return_value(main());
     }
 
@@ -388,6 +390,79 @@ class DataProviderPresentationTest inherits QUnit::Test {
             shellQuote(root + DirSep + "qlib/DataProvider/i18n"));
         assertEq(0, system(cmd),
             "qore-data-provider-i18n --check accepts the source catalog");
+    }
+
+    sourceCatalogTranslationCheckTest() {
+        string root = normalize_dir(dirname(get_script_path()) + DirSep
+            + "../../../..");
+        string qore_bin = root + DirSep + "build/qore";
+        if (!is_executable(qore_bin)) {
+            testSkip("built qore executable not available");
+            return;
+        }
+
+        hash<auto> qore_app = DataProviderActionCatalog::getAppEx("Qore");
+        hash<string, hash<auto>> catalogs =
+            DataProviderPresentation::buildSourceCatalogs(qore_app,
+                DataProviderActionCatalog::getActions("Qore", False));
+        string domain = DataProviderPresentation::appCatalogDomain(qore_app);
+        string output = make_tmp_dir("data-provider-i18n-check-");
+        on_exit remove_tree(output);
+        mkdir(output + DirSep + domain);
+        writeJson(output + DirSep + domain + DirSep + "root.json",
+            catalogs{domain});
+
+        string id = DataProviderPresentation::appMessageId("Qore",
+            "display_name");
+        string source = catalogs{domain}.locales.root.messages{id}.source;
+        writeJson(output + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                id: {"source": "outdated", "message": "Qore"},
+            }}},
+        });
+        assertEq(2, runCatalogCheck(root, qore_bin, output),
+            "a stale producer source fails catalog verification");
+
+        writeJson(output + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                id: {"source": source, "message": source},
+            }}},
+        });
+        assertEq(0, runCatalogCheck(root, qore_bin, output),
+            "an identical translated brand or cognate remains valid");
+
+        writeJson(output + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                "removed.message": {
+                    "source": "Removed", "message": "Odstraněno",
+                },
+            }}},
+        });
+        assertEq(2, runCatalogCheck(root, qore_bin, output),
+            "a translation for a removed message id fails verification");
+    }
+
+    private int runCatalogCheck(string root, string qore_bin,
+            string output) {
+        list<string> module_path = (
+            root + DirSep + "build/qlib-qmod",
+            root + DirSep + "build/modules/i18n",
+            root + DirSep + "build/modules/json",
+            root + DirSep + "qlib"
+        );
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        return system(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s -a Qore >/dev/null",
+            shellQuote(module_path.join(PathSep)),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
+            shellQuote(output)));
     }
 
     checkedInLocaleCatalogTest() {

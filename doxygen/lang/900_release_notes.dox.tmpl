@@ -1373,6 +1373,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - added native catalog-locale discovery and a cached multilingual action embedding projection, allowing
         semantic indexes to include every shipped source-owned provider translation without maintaining a
         language list or changing exact application and action identities
+      - the \c qore-data-provider-i18n catalog check now validates every discovered sibling translation against
+        current producer metadata, rejecting removed message ids and stale source text while allowing partial
+        catalogs and identical brand names or cognates
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
