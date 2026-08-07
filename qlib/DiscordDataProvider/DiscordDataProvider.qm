@@ -47,6 +47,7 @@ module DiscordDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": DiscordDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Discord",
             "short_desc": "Discord messaging services",
             "desc": "Discord messaging services",

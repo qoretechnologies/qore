@@ -812,6 +812,12 @@ static bool i18n_append_env_catalog_search_path(std::vector<std::string>& paths,
     return i18n_split_catalog_path_list(paths, tmp->c_str(), xsink);
 }
 
+static void i18n_append_standard_catalog_search_path(std::vector<std::string>& paths) {
+#ifdef QORE_CATALOG_DIR
+    i18n_push_catalog_search_path(paths, QORE_CATALOG_DIR);
+#endif
+}
+
 static std::vector<std::string> i18n_get_catalog_search_paths(const QoreHashNode* opts, ExceptionSink* xsink) {
     std::vector<std::string> paths;
 
@@ -819,8 +825,13 @@ static std::vector<std::string> i18n_get_catalog_search_paths(const QoreHashNode
         if (!i18n_append_catalog_paths_option(paths, opts, "search_path", xsink)) {
             return paths;
         }
-    } else if (!i18n_append_env_catalog_search_path(paths, xsink)) {
-        return paths;
+    } else {
+        if (!i18n_append_env_catalog_search_path(paths, xsink)) {
+            return paths;
+        }
+        if (paths.empty()) {
+            i18n_append_standard_catalog_search_path(paths);
+        }
     }
 
     i18n_append_catalog_paths_option(paths, opts, "override_path", xsink);
@@ -2177,8 +2188,10 @@ string negotiate_locale(string header, list<string> available, string default_lo
 }
 
 //! Returns the configured native catalog search path.
-/** If \c opts.search_path is present, it is returned instead of \c QORE_CATALOG_DIR. \c opts.override_path entries are
-    appended after the base search path and therefore have higher precedence for catalog composition.
+/** If \c opts.search_path is present, it is returned instead of \c QORE_CATALOG_DIR.  Otherwise the environment
+    variable is used when set, followed by the configured system catalog directory when the environment variable is
+    unset. \c opts.override_path entries are appended after the base search path and therefore have higher precedence
+    for catalog composition.
 
     @param opts optional hash with \c search_path and \c override_path string or list<string> entries
     @return search path entries in low-to-high precedence order

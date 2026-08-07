@@ -1,0 +1,462 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+
+%exec-class DataProviderPresentationTest
+
+class DataProviderPresentationTest inherits QUnit::Test {
+    private {
+        const App = "メール";
+        const Action = "送信";
+        const Option = "宛先";
+        const PathVar = "アカウント";
+        const AllowedValue = "doručit";
+        const Domain = "test.data-provider.presentation";
+    }
+
+    constructor() : Test("DataProvider presentation catalog test", "1.0") {
+        addTestCase("technical identities produce stable catalog keys",
+            \stableIdentityTest());
+        addTestCase("catalog projection is locale-aware and identity-safe",
+            \localizedProjectionTest());
+        addTestCase("catalog projection preserves literal braces",
+            \literalPresentationTest());
+        addTestCase("source catalogs cover provider presentation metadata",
+            \sourceCatalogTest());
+        addTestCase("the checked-in Qore source catalog is synchronized",
+            \sourceCatalogSyncTest());
+        addTestCase("the checked-in provider locale projects exact identities",
+            \checkedInLocaleCatalogTest());
+        addTestCase("missing translations never claim source prose is localized",
+            \missingTranslationTest());
+        set_return_value(main());
+    }
+
+    private hash<auto> app() {
+        return {
+            "name": App,
+            "display_name": "Poštovní služba",
+            "short_desc": "Zpracovává poštu",
+            "desc": "Poskytuje poštovní operace.",
+            "presentation_catalog_domain": Domain,
+            "presentation_source_locale": "cs-CZ",
+        };
+    }
+
+    private hash<auto> action() {
+        return {
+            "app": App,
+            "action": Action,
+            "display_name": "Odeslat zprávu",
+            "short_desc": "Odešle jednu zprávu",
+            "desc": "Odešle zprávu přes vybraný účet.",
+        };
+    }
+
+    private hash<auto> option() {
+        return {
+            "display_name": "Příjemce",
+            "short_desc": "Adresa příjemce",
+            "desc": "Technická adresa cílového příjemce.",
+        };
+    }
+
+    private hash<auto> messages() {
+        return {
+            DataProviderPresentation::appMessageId(App, "display_name"):
+                {"source": "Poštovní služba", "message": "メールサービス"},
+            DataProviderPresentation::appMessageId(App, "short_desc"):
+                {"source": "Zpracovává poštu", "message": "メールを処理します"},
+            DataProviderPresentation::appMessageId(App, "desc"):
+                {"source": "Poskytuje poštovní operace.", "message": "メール操作を提供します。"},
+            DataProviderPresentation::actionMessageId(App, Action,
+                "display_name"):
+                {"source": "Odeslat zprávu", "message": "メッセージを送信"},
+            DataProviderPresentation::actionMessageId(App, Action,
+                "short_desc"):
+                {"source": "Odešle jednu zprávu", "message": "1件のメッセージを送信します"},
+            DataProviderPresentation::actionMessageId(App, Action, "desc"):
+                {"source": "Odešle zprávu přes vybraný účet.",
+                    "message": "選択したアカウントでメッセージを送信します。"},
+            DataProviderPresentation::optionMessageId(App, Action, Option,
+                "display_name"):
+                {"source": "Příjemce", "message": "受信者"},
+            DataProviderPresentation::optionMessageId(App, Action, Option,
+                "short_desc"):
+                {"source": "Adresa příjemce", "message": "受信者のアドレス"},
+            DataProviderPresentation::optionMessageId(App, Action, Option,
+                "desc"):
+                {"source": "Technická adresa cílového příjemce.",
+                    "message": "対象受信者の技術アドレス。"},
+            DataProviderPresentation::allowedValueMessageId(App, Action,
+                Option, AllowedValue, "display_name"):
+                {"source": "Doručit", "message": "配信する"},
+            DataProviderPresentation::allowedValueMessageId(App, Action,
+                Option, AllowedValue, "short_desc"):
+                {"source": "Doručí zprávu", "message": "メッセージを配信します"},
+            DataProviderPresentation::allowedValueMessageId(App, Action,
+                Option, AllowedValue, "desc"):
+                {"source": "Zpráva bude doručena.", "message": "メッセージが配信されます。"},
+        };
+    }
+
+    private string writeCatalog() {
+        string root = make_tmp_dir("data-provider-presentation-");
+        mkdir(root + DirSep + Domain);
+        File file();
+        file.open2(root + DirSep + Domain + DirSep + "ja.json", O_CREAT
+            | O_WRONLY | O_TRUNC);
+        file.write(make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": messages()}},
+        }));
+        file.close();
+        return root;
+    }
+
+    stableIdentityTest() {
+        assertTrue(inlist("histogram", map $1.action,
+                DataProviderActionCatalog::getActionsNoInit("Qore")),
+            "the no-init action view exposes already-registered metadata");
+        string domain = DataProviderPresentation::defaultCatalogDomain(App);
+        assertTrue(regex(domain, "^data-provider\\.[A-Za-z0-9_-]+$"),
+            "a non-Latin app has a path-safe catalog domain");
+        assertEq(domain,
+            DataProviderPresentation::defaultCatalogDomain(App),
+            "catalog domain generation is deterministic");
+        assertNeq(DataProviderPresentation::actionMessageId(App, Action,
+                "display_name"),
+            DataProviderPresentation::actionMessageId(App, Action + "。",
+                "display_name"),
+            "distinct Unicode technical identities cannot collide");
+        assertNeq(DataProviderPresentation::allowedValueMessageId(App,
+                Action, Option, 1, "display_name"),
+            DataProviderPresentation::allowedValueMessageId(App, Action,
+                Option, "1", "display_name"),
+            "allowed-value identities include the exact scalar type");
+        assertNeq(DataProviderPresentation::allowedValueMessageId(App,
+                Action, Option, "GET", "display_name"),
+            DataProviderPresentation::allowedValueMessageId(App, Action,
+                Option, "PUT", "display_name"),
+            "distinct allowed values cannot share a catalog identity");
+        assertEq(NOTHING,
+            DataProviderPresentation::allowedValueMessageId(App, Action,
+                Option, {"complex": True}, "display_name"),
+            "complex values do not acquire an unstable presentation id");
+        assertThrows("DATA-PROVIDER-PRESENTATION-ERROR", sub () {
+            DataProviderPresentation::appMessageId(App, "label");
+        });
+    }
+
+    localizedProjectionTest() {
+        string root = writeCatalog();
+        on_exit remove_tree(root);
+        DataProviderPresentationCatalog catalog(Domain, "ja-JP",
+            {"search_path": (root,)});
+        hash<auto> localized_app = catalog.projectApp(app());
+        hash<auto> localized_action = catalog.projectAction(app(), action());
+        hash<auto> localized_option = catalog.projectOption(app(), action(),
+            Option, option());
+        hash<auto> localized_value = catalog.projectAllowedValue(app(),
+            action(), Option, {
+                "value": AllowedValue,
+                "display_name": "Doručit",
+                "short_desc": "Doručí zprávu",
+                "desc": "Zpráva bude doručena.",
+            });
+
+        assertEq(App, localized_app.name,
+            "app technical identity is unchanged");
+        assertEq(Action, localized_action.action,
+            "action technical identity is unchanged");
+        assertEq("メールサービス", localized_app.display_name);
+        assertEq("メッセージを送信", localized_action.display_name);
+        assertEq("受信者", localized_option.display_name);
+        assertEq(AllowedValue, localized_value.value,
+            "allowed-value technical identity is unchanged");
+        assertEq("配信する", localized_value.display_name,
+            "allowed-value presentation uses the locale catalog");
+        assertEq("ja-JP", localized_action.presentation_language);
+        assertEq("cs-CZ",
+            localized_action.producer_presentation.language);
+        assertEq("Odeslat zprávu",
+            localized_action.producer_presentation.display_name);
+        assertFalse(exists localized_action.presentation_incomplete,
+            "complete locale projection is marked complete");
+
+        hash<auto> changed_action = action() + {
+            "display_name": "Nový název akce",
+        };
+        hash<auto> stale_projection = catalog.projectAction(app(),
+            changed_action);
+        assertEq(Action, stale_projection.display_name,
+            "a translation with superseded source uses technical identity");
+        assertTrue(stale_projection.presentation_incomplete,
+            "a translation with superseded source is marked incomplete");
+        assertEq("Nový název akce",
+            stale_projection.producer_presentation.display_name,
+            "current producer presentation remains separately available");
+
+        DataProviderPresentationCatalog source_catalog(Domain, "cs",
+            {"search_path": (root,)});
+        hash<auto> source_action = source_catalog.projectAction(app(),
+            action());
+        assertEq("Odeslat zprávu", source_action.display_name,
+            "a source-language regional fallback uses producer text");
+        assertEq("cs-CZ", source_action.presentation_language);
+    }
+
+    literalPresentationTest() {
+        const string Source = "Send {id: 123} to /users/{id}.";
+        const string Translation = "{id: 123} を /users/{id} に送信します。";
+        string root = make_tmp_dir("data-provider-presentation-literal-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        string id = DataProviderPresentation::actionMessageId(App, Action,
+            "desc");
+        File file();
+        file.open2(root + DirSep + Domain + DirSep + "ja.json", O_CREAT
+            | O_WRONLY | O_TRUNC);
+        file.write(make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": Source, "message": Translation},
+            }}},
+        }));
+        file.close();
+
+        DataProviderPresentationCatalog catalog(Domain, "ja",
+            {"search_path": (root,)});
+        hash<auto> source_action = action() + {"desc": Source};
+        hash<auto> projected = catalog.projectAction(app(), source_action);
+        assertEq(Translation, projected.desc,
+            "provider prose treats JSON and path braces as literal text");
+        assertEq(Source, projected.producer_presentation.desc,
+            "literal producer prose is retained without escaping");
+    }
+
+    sourceCatalogTest() {
+        hash<DataProviderPathVarInfo> path_var =
+            <DataProviderPathVarInfo>{
+                "display_name": "Účet",
+                "short_desc": "Cílový účet",
+                "desc": "Technický identifikátor cílového účtu.",
+                "example_value": "primary",
+            };
+        hash<auto> source_action = action() + {
+            "path_vars": {
+                PathVar: path_var,
+            },
+            "options": {
+                Option: option() + {
+                    "allowed_values": ({
+                        "value": AllowedValue,
+                        "display_name": "Doručit",
+                        "short_desc": "Doručí zprávu",
+                        "desc": "Zpráva bude doručena.",
+                    },),
+                },
+            },
+        };
+        hash<string, hash<auto>> catalogs =
+            DataProviderPresentation::buildSourceCatalogs(app(),
+                (source_action,));
+        assertEq((Domain,), sort(keys catalogs),
+            "the app-owned catalog domain contains the action metadata");
+        hash<auto> source_messages =
+            catalogs{Domain}.locales.root.messages;
+        assertEq("Poštovní služba",
+            source_messages{
+                DataProviderPresentation::appMessageId(App,
+                    "display_name")}.source,
+            "the root catalog preserves app source text");
+        assertEq("Odeslat zprávu",
+            source_messages{
+                DataProviderPresentation::actionMessageId(App, Action,
+                    "display_name")}.source,
+            "the root catalog preserves action source text");
+        assertEq("Příjemce",
+            source_messages{
+                DataProviderPresentation::optionMessageId(App, Action,
+                    Option, "display_name")}.source,
+            "the root catalog preserves option source text");
+        assertEq("Účet",
+            source_messages{
+                DataProviderPresentation::optionMessageId(App, Action,
+                    PathVar, "display_name")}.source,
+            "typed path variables contribute presentation without requiring action-option members");
+        assertEq("Doručit",
+            source_messages{
+                DataProviderPresentation::allowedValueMessageId(App,
+                    Action, Option, AllowedValue,
+                    "display_name")}.source,
+            "the root catalog preserves static allowed-value source text");
+
+        assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", sub () {
+            DataProviderPresentation::buildSourceCatalogs(app(),
+                (source_action + {"app": "別のアプリ"},));
+        }, NOTHING, "source extraction rejects cross-app action metadata");
+    }
+
+    sourceCatalogSyncTest() {
+        string root = normalize_dir(dirname(get_script_path()) + DirSep
+            + "../../../..");
+        string qore_bin = root + DirSep + "build/qore";
+        if (!is_executable(qore_bin)) {
+            testSkip("built qore executable not available");
+            return;
+        }
+
+        assertEq(0, system(sprintf("%s %s --help >/dev/null",
+            shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"))),
+            "qore-data-provider-i18n accepts default color handling");
+
+        list<string> module_path = (
+            root + DirSep + "build/qlib-qmod",
+            root + DirSep + "build/modules/i18n",
+            root + DirSep + "build/modules/json",
+            root + DirSep + "qlib"
+        );
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        string cmd = sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s -a Qore",
+            shellQuote(module_path.join(PathSep)),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
+            shellQuote(root + DirSep + "qlib/DataProvider/i18n"));
+        assertEq(0, system(cmd),
+            "qore-data-provider-i18n --check accepts the source catalog");
+    }
+
+    checkedInLocaleCatalogTest() {
+        string catalog_root = normalize_dir(dirname(get_script_path())
+            + DirSep + "../../../../qlib/DataProvider/i18n");
+        hash<auto> qore_app = DataProviderActionCatalog::getAppEx("Qore");
+        hash<auto> histogram;
+        foreach hash<auto> candidate in (
+                DataProviderActionCatalog::getActions("Qore", False)) {
+            if (candidate.action == "histogram") {
+                histogram = candidate;
+                break;
+            }
+        }
+        assertTrue(histogram.toBool(),
+            "the built-in histogram action is registered");
+
+        DataProviderPresentationCatalog catalog(
+            DataProviderPresentation::defaultCatalogDomain("Qore"), "ja", {
+                "search_path": (catalog_root,),
+            });
+        hash<auto> action = catalog.projectAction(qore_app, histogram);
+        assertEq("値の範囲を集計", action.display_name,
+            "the provider action uses its source-owned Japanese catalog");
+        assertEq("histogram", action.action,
+            "localized action presentation preserves technical identity");
+        assertFalse(exists action.presentation_incomplete,
+            "the checked-in Japanese action presentation is complete");
+
+        foreach hash<auto> option_entry in (
+                histogram.options.pairIterator()) {
+            hash<auto> projected_option = catalog.projectOption(qore_app,
+                histogram, option_entry.key, option_entry.value);
+            assertFalse(exists projected_option.presentation_incomplete,
+                sprintf("the checked-in Japanese %s option presentation is complete",
+                    option_entry.key));
+        }
+
+        hash<auto> option = catalog.projectOption(qore_app, histogram,
+            "bin_method", histogram.options.bin_method);
+        assertEq("ビン分割方法", option.display_name,
+            "the provider option uses its source-owned Japanese catalog");
+        hash<auto> allowed_value = catalog.projectAllowedValue(qore_app,
+            histogram, "bin_method",
+            histogram.options.bin_method.allowed_values[0]);
+        assertEq(histogram.options.bin_method.allowed_values[0].value,
+            allowed_value.value,
+            "localized allowed-value presentation preserves its exact value");
+        assertTrue(inlist(allowed_value.display_name,
+                ("均等（等幅ビン）", "分位（等頻度ビン）")),
+            "the allowed value uses its source-owned Japanese catalog");
+
+        DataProviderPresentationCatalog portuguese_catalog(
+            DataProviderPresentation::defaultCatalogDomain("Qore"),
+            "pt-BR", {"search_path": (catalog_root,)});
+        hash<auto> portuguese_action = portuguese_catalog.projectAction(
+            qore_app, histogram);
+        assertEq("Contar intervalos de valores",
+            portuguese_action.display_name,
+            "a regional request uses a provider-owned base-locale catalog");
+        assertEq("pt-BR", portuguese_action.presentation_language,
+            "the provider projection preserves the requested locale");
+        assertTrue(portuguese_action.presentation_incomplete,
+            "a deliberately partial provider locale reports incompleteness");
+    }
+
+    missingTranslationTest() {
+        string root = writeCatalog();
+        on_exit remove_tree(root);
+        DataProviderPresentationCatalog catalog(Domain, "sk",
+            {"search_path": (root,)});
+        hash<auto> projected = catalog.projectAction(app(), action());
+        assertEq(Action, projected.display_name,
+            "missing display text falls back to exact technical identity");
+        assertEq("", projected.short_desc,
+            "source prose is withheld from a different requested language");
+        assertEq("", projected.desc,
+            "a cognate language does not authorize source-prose reuse");
+        assertTrue(projected.presentation_incomplete);
+        assertEq("sk", projected.presentation_language);
+        assertEq("Odeslat zprávu",
+            projected.producer_presentation.display_name,
+            "opaque producer presentation remains available separately");
+
+        hash<auto> complex = catalog.projectAllowedValue(app(), action(),
+            Option, {
+                "value": {"opaque": True},
+                "display_name": "Složitá hodnota",
+                "short_desc": "Popis složité hodnoty",
+                "desc": "Dlouhý popis složité hodnoty.",
+            });
+        assertEq({"opaque": True}, complex.value,
+            "complex allowed-value identity is unchanged");
+        assertEq("", complex.display_name,
+            "complex values without stable catalog ids do not leak source prose");
+        assertTrue(complex.presentation_incomplete,
+            "untranslatable complex values are marked incomplete");
+    }
+
+    private string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

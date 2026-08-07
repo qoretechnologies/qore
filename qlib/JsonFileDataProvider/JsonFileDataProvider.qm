@@ -112,6 +112,7 @@ namespace Priv {
         # Register the app
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JsonFileDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "JSON Files",
             "short_desc": "Read and write standard JSON files",
             "desc": "Read and write standard JSON files (not NDJSON/JSON Lines). Supports JSON files "

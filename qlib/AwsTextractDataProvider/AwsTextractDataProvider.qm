@@ -40,6 +40,7 @@ module AwsTextractDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AwsTextractDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "AWS Textract",
             "short_desc": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
             "desc": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) "

@@ -23,6 +23,7 @@ class RefForeachTest inherits QUnit::Test {
         addTestCase("implicit element $#", \testImplicitElement());
         addTestCase("type preservation", \testTypePreservation());
         addTestCase("on_exit in body", \testOnExitInBody());
+        addTestCase("local variable subscript", \testLocalVarSubscript());
         set_return_value(main());
     }
 
@@ -190,6 +191,54 @@ class RefForeachTest inherits QUnit::Test {
         assertEq(True, l[3]);
         assertEq(NOTHING, l[4]);
         assertEq((1, 2), l[5]);
+    }
+
+    #! a subscript held in a local variable must resolve when the reference is taken
+    /** The lvalue of a reference foreach is evaluated by the AST reference evaluator, which reads
+        the subscript from the runtime local stack.  A local used ONLY inside that expression used
+        to be classified as IR-only and was never materialized there, so the subscript evaluated to
+        NOTHING: the reference addressed the empty-string key instead of the intended one, every
+        write through the loop variable was discarded, and no exception was raised.  The
+        interpreter and AOT disagreed on identical source, which is what made it a defect rather
+        than a usage error.
+    */
+    testLocalVarSubscript() {
+        # hash key held in a local
+        hash<auto> h = {"s1": {"tr": ({"n": "a"},)}, "s2": {"tr": ({"n": "b"},)}};
+        string key = "s1";
+        foreach hash<auto> t in (\h{key}.tr) {
+            t.marker = "set";
+        }
+        assertEq("set", h.s1.tr[0].marker, "a write through a local-variable hash key must land");
+        assertEq(("s1", "s2"), keys h, "no spurious key may be created by the reference");
+
+        # the same key held in a loop variable
+        hash<auto> h2 = {"s1": {"tr": ({"n": "a"},)}, "s2": {"tr": ({"n": "b"},)}};
+        foreach string k in (keys h2) {
+            foreach hash<auto> t in (\h2{k}.tr) {
+                t.marker = "set";
+            }
+        }
+        assertEq("set", h2.s1.tr[0].marker, "a write through a loop-variable hash key must land");
+        assertEq("set", h2.s2.tr[0].marker, "a write through a loop-variable hash key must land");
+        assertEq(("s1", "s2"), keys h2, "no spurious key may be created by the reference");
+
+        # a list index held in a local
+        hash<auto> h3 = {"l": (({"n": "a"},),)};
+        int i = 0;
+        foreach hash<auto> t in (\h3.l[i]) {
+            t.marker = "set";
+        }
+        assertEq("set", h3.l[0][0].marker, "a write through a local-variable list index must land");
+
+        # a computed subscript expression
+        hash<auto> h4 = {"s1": {"tr": ({"n": "a"},)}};
+        string base = "s";
+        foreach hash<auto> t in (\h4{base + "1"}.tr) {
+            t.marker = "set";
+        }
+        assertEq("set", h4.s1.tr[0].marker, "a write through a computed hash key must land");
+        assertEq(("s1",), keys h4, "no spurious key may be created by the reference");
     }
 
     testOnExitInBody() {

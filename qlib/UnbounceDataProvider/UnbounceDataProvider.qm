@@ -47,6 +47,7 @@ module UnbounceDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": UnbounceDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Unbounce",
             "short_desc": "Unbounce landing page and lead management platform",
             "desc": "Unbounce is a landing page builder and conversion optimization platform.\n\n"

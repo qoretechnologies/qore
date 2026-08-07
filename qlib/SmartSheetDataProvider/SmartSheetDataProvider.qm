@@ -45,6 +45,7 @@ module SmartSheetDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SmartSheetDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Smartsheet",
             "short_desc": "Smartsheet spreadsheet and work management platform",
             "desc": "Smartsheet is a platform for work execution, providing spreadsheet-like "

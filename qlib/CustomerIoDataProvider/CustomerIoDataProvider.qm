@@ -47,6 +47,7 @@ module CustomerIoDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CustomerIoDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Customer.io",
             "short_desc": "Customer.io marketing automation platform",
             "desc": "Customer.io is a marketing automation platform for sending targeted emails, push notifications, "

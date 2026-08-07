@@ -44,6 +44,7 @@ module SystemeIoDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SystemeIoDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Systeme.io",
             "short_desc": "Systeme.io all-in-one marketing platform",
             "desc": "Systeme.io is an all-in-one online marketing platform for building sales "

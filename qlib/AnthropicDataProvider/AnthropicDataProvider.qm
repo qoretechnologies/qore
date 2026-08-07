@@ -49,6 +49,7 @@ module AnthropicDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AnthropicDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Anthropic Claude",
             "short_desc": "Anthropic Claude AI services",
             "desc": "Anthropic Claude AI services providing access to Claude language models for text generation, "

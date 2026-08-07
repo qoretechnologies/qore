@@ -47,6 +47,7 @@ module ZohoInvoiceDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ZohoInvoiceDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Zoho Invoice",
             "short_desc": "Zoho Invoice online invoicing software",
             "desc": "Zoho Invoice is online invoicing software that helps businesses create and send "

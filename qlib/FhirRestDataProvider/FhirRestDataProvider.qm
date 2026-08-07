@@ -412,6 +412,7 @@ namespace Priv {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FhirRestDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "FHIR R4",
             "short_desc": "FHIR R4 JSON server integration",
             "desc": "Connect to HL7 FHIR R4 JSON servers for healthcare interoperability.\n\n"

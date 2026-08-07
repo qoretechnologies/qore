@@ -43,6 +43,7 @@ module SegmentDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SegmentDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Segment",
             "short_desc": "Twilio Segment CDP services",
             "desc": "Twilio Segment is a Customer Data Platform (CDP) that helps you collect, clean, and "

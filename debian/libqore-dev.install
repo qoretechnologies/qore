@@ -9,4 +9,11 @@ usr/lib/*/libqore.so
 usr/lib/*/pkgconfig/qore.pc
 usr/lib/*/cmake/Qore/
 usr/include/qore/
-usr/share/qore/
+usr/share/qore/*.css
+usr/share/qore/*.html
+usr/share/qore/*.ico
+usr/share/qore/*.in
+usr/share/qore/*.png
+usr/share/qore/*.svg
+usr/share/qore/metadata/
+usr/share/qore/treesitter/

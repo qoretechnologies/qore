@@ -45,6 +45,7 @@ module VertexAiDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": VertexAiDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Google Vertex AI",
             "short_desc": "Google Vertex AI generative-model platform",
             "desc": "**Google Vertex AI** is Google Cloud's managed platform "

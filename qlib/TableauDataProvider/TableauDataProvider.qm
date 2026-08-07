@@ -47,6 +47,7 @@ module TableauDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": TableauDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Tableau",
             "short_desc": "Tableau analytics and data visualization platform",
             "desc": "Tableau is a visual analytics and business intelligence platform "

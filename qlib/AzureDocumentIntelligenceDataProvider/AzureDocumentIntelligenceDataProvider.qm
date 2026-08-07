@@ -40,6 +40,7 @@ module AzureDocumentIntelligenceDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AzureDocumentIntelligenceDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Azure Document Intelligence",
             "short_desc": "Azure Document Intelligence (formerly Form Recognizer)",
             "desc": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) "

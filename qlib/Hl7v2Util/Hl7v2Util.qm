@@ -51,6 +51,7 @@ module Hl7v2Util {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": Hl7v2Util::AppName,
+            "presentation_source_locale": "en",
             "display_name": "HL7 v2 Messages",
             "short_desc": "Read and write HL7 v2 delimited messages",
             "desc": "Read and write [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) "

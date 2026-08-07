@@ -40,6 +40,7 @@ module GroqDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GroqDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Groq",
             "short_desc": "Groq LPU inference for open-weight models at very high throughput",
             "desc": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for "

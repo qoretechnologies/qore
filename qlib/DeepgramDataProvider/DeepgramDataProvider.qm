@@ -40,6 +40,7 @@ module DeepgramDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": DeepgramDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Deepgram",
             "short_desc": "Deepgram speech (ASR + TTS) services",
             "desc": "Provides access to [Deepgram](https://deepgram.com) — a "

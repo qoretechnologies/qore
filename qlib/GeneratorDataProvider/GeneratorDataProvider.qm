@@ -42,6 +42,7 @@ module GeneratorDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GeneratorDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Data Generator",
             "short_desc": "Generate test record streams",
             "desc": "Generate configurable record streams for testing data pipelines without any external "

@@ -50,6 +50,7 @@ module SquarespaceDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SquarespaceDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Squarespace",
             "short_desc": "Squarespace Commerce platform",
             "desc": "Squarespace is an e-commerce platform for managing online stores.\n\n"

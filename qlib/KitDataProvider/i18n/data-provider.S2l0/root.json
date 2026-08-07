@@ -1,0 +1,1869 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.S2l0.display_name": {
+          "source": "Kit",
+          "message": "Kit"
+        },
+        "app.S2l0.short_desc": {
+          "source": "Kit email marketing platform for creators",
+          "message": "Kit email marketing platform for creators"
+        },
+        "app.S2l0.desc": {
+          "source": "Kit (formerly ConvertKit) is an email marketing platform for creators supporting subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases.\n\nThis integration supports full CRUD operations on core resources and event-based triggers.",
+          "message": "Kit (formerly ConvertKit) is an email marketing platform for creators supporting subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases.\n\nThis integration supports full CRUD operations on core resources and event-based triggers."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Kit",
+          "message": "Make a custom API call to Kit"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Kit** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Kit** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Create a Subscriber",
+          "message": "Create a Subscriber"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Create or update a subscriber",
+          "message": "Create or update a subscriber"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Create a new subscriber in Kit (upsert behavior — updates if email already exists)",
+          "message": "Create a new subscriber in Kit (upsert behavior — updates if email already exists)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "The subscriber's email address"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to create or update (upsert behavior)",
+          "message": "The email address of the subscriber to create or update (upsert behavior)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "First Name"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "The subscriber's first name"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "The first name of the subscriber"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "State"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.short_desc": {
+          "source": "The subscriber's state",
+          "message": "The subscriber's state"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.desc": {
+          "source": "The state of the subscriber (e.g., `active`, `inactive`)",
+          "message": "The state of the subscriber (e.g., `active`, `inactive`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Custom Fields"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Custom field values"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "A hash of custom field values to set on the subscriber"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Update a Subscriber",
+          "message": "Update a Subscriber"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Update an existing subscriber",
+          "message": "Update an existing subscriber"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Update an existing subscriber in Kit",
+          "message": "Update an existing subscriber in Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Subscriber ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to update",
+          "message": "The subscriber ID to update"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to update",
+          "message": "The unique identifier of the subscriber to update"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "First Name"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "The subscriber's first name"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "The first name of the subscriber"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "The subscriber's email address"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber",
+          "message": "The email address of the subscriber"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Custom Fields"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Custom field values"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "A hash of custom field values to set on the subscriber"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
+          "source": "Unsubscribe a Subscriber",
+          "message": "Unsubscribe a Subscriber"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
+          "source": "Unsubscribe a subscriber",
+          "message": "Unsubscribe a subscriber"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.desc": {
+          "source": "Unsubscribe a subscriber from Kit",
+          "message": "Unsubscribe a subscriber from Kit"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Subscriber ID"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to unsubscribe",
+          "message": "The subscriber ID to unsubscribe"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to unsubscribe",
+          "message": "The unique identifier of the subscriber to unsubscribe"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Create Subscribers",
+          "message": "Bulk Create Subscribers"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Create multiple subscribers at once",
+          "message": "Create multiple subscribers at once"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.desc": {
+          "source": "Bulk create subscribers in Kit (async processing)",
+          "message": "Bulk create subscribers in Kit (async processing)"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "Subscribers"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscribers to create",
+          "message": "List of subscribers to create"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscribers to create, each containing at least an `email_address` field",
+          "message": "A list of subscribers to create, each containing at least an `email_address` field"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.display_name": {
+          "source": "Callback URL",
+          "message": "Callback URL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.short_desc": {
+          "source": "URL to receive completion callback",
+          "message": "URL to receive completion callback"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.desc": {
+          "source": "A URL that will receive a webhook when the bulk operation completes",
+          "message": "A URL that will receive a webhook when the bulk operation completes"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Subscribers",
+          "message": "List Subscribers"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List all subscribers",
+          "message": "List all subscribers"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.desc": {
+          "source": "List subscribers in Kit with optional filtering",
+          "message": "List subscribers in Kit with optional filtering"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Subscriber ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "Filter by subscriber ID",
+          "message": "Filter by subscriber ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filter by email"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "State"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by state",
+          "message": "Filter by state"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "Filter by tag"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.display_name": {
+          "source": "Created After",
+          "message": "Created After"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filter by creation date"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.display_name": {
+          "source": "Created Before",
+          "message": "Created Before"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filter by creation date"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "Updated After"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "Filter by update date"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.display_name": {
+          "source": "Updated Before",
+          "message": "Updated Before"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by update date",
+          "message": "Filter by update date"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "Sort Field"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "Field to sort by"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sort Order"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sort direction"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
+          "source": "Get a Subscriber",
+          "message": "Get a Subscriber"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
+          "source": "Get a single subscriber by ID",
+          "message": "Get a single subscriber by ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.desc": {
+          "source": "Retrieve a single subscriber by ID from Kit",
+          "message": "Retrieve a single subscriber by ID from Kit"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Subscriber ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "The subscriber ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Create a Tag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Create a new tag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Kit",
+          "message": "Create a new tag in Kit"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Tag Name"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "The tag name"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "The name of the tag to create"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "Update a Tag"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update a tag name",
+          "message": "Update a tag name"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name of an existing tag in Kit",
+          "message": "Update the name of an existing tag in Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "The tag ID to update"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "The unique identifier of the tag to update"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Tag Name"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The new tag name",
+          "message": "The new tag name"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "The new name for the tag"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
+          "source": "Tag a Subscriber",
+          "message": "Tag a Subscriber"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
+          "source": "Apply a tag to a subscriber",
+          "message": "Apply a tag to a subscriber"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.desc": {
+          "source": "Apply a tag to a subscriber in Kit by email address",
+          "message": "Apply a tag to a subscriber in Kit by email address"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "The tag ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscriber",
+          "message": "The unique identifier of the tag to apply to the subscriber"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "The subscriber's email address"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to tag",
+          "message": "The email address of the subscriber to tag"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
+          "source": "Untag a Subscriber",
+          "message": "Untag a Subscriber"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
+          "source": "Remove a tag from a subscriber",
+          "message": "Remove a tag from a subscriber"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.desc": {
+          "source": "Remove a tag from a subscriber in Kit",
+          "message": "Remove a tag from a subscriber in Kit"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "The tag ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to remove from the subscriber",
+          "message": "The unique identifier of the tag to remove from the subscriber"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Subscriber ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "The subscriber ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to untag",
+          "message": "The unique identifier of the subscriber to untag"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Tag Subscribers",
+          "message": "Bulk Tag Subscribers"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Apply a tag to multiple subscribers",
+          "message": "Apply a tag to multiple subscribers"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "Apply a tag to multiple subscribers in Kit at once",
+          "message": "Apply a tag to multiple subscribers in Kit at once"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "The tag ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscribers",
+          "message": "The unique identifier of the tag to apply to the subscribers"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "Subscribers"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscriber email addresses",
+          "message": "List of subscriber email addresses"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscriber email addresses to tag",
+          "message": "A list of subscriber email addresses to tag"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "List Tags"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "List all tags"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Kit with optional filtering",
+          "message": "List tags in Kit with optional filtering"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "Filter by tag ID"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Filter by name"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "List Tag Subscribers",
+          "message": "List Tag Subscribers"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "List subscribers for a tag",
+          "message": "List subscribers for a tag"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "List all subscribers that have a specific tag applied in Kit",
+          "message": "List all subscribers that have a specific tag applied in Kit"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag to list subscribers for",
+          "message": "The tag to list subscribers for"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Subscriber State"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Filter by subscriber state"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "Create a Custom Field"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "Create a new custom field"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Kit",
+          "message": "Create a new custom field in Kit"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Label"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The custom field label",
+          "message": "The custom field label"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The display label of the custom field to create",
+          "message": "The display label of the custom field to create"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "Update a Custom Field"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update a custom field label",
+          "message": "Update a custom field label"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update the label of an existing custom field in Kit",
+          "message": "Update the label of an existing custom field in Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Custom Field ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to update",
+          "message": "The custom field ID to update"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to update",
+          "message": "The unique identifier of the custom field to update"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Label"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The new custom field label",
+          "message": "The new custom field label"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new display label for the custom field",
+          "message": "The new display label for the custom field"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "Delete a Custom Field"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "Delete a custom field"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Kit",
+          "message": "Delete a custom field from Kit"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Custom Field ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to delete",
+          "message": "The custom field ID to delete"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to delete",
+          "message": "The unique identifier of the custom field to delete"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "List Custom Fields"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "List all custom fields"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List all custom fields in Kit",
+          "message": "List all custom fields in Kit"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Create a Broadcast",
+          "message": "Create a Broadcast"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Create a new broadcast or draft",
+          "message": "Create a new broadcast or draft"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Create a new broadcast in Kit. Set `send_at` to schedule, or leave empty for a draft",
+          "message": "Create a new broadcast in Kit. Set `send_at` to schedule, or leave empty for a draft"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Content"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "The broadcast HTML content"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "The HTML content of the broadcast email"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Subject"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "The broadcast subject line"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "The subject line of the broadcast email"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "The broadcast description"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "A description of the broadcast for internal reference"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "The sender email address"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "The email address used as the sender for the broadcast"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "Email Template ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "The email template ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "The identifier of the email template to use for the broadcast"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "Public"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "Whether the broadcast is public"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "Indicates whether the broadcast is publicly accessible"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Published At"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "When to publish the broadcast"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "The timestamp when the broadcast should be published"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "Send At"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "When to send the broadcast"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "The timestamp when the broadcast should be sent; set to `null` for a draft"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "Thumbnail Alt"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "The thumbnail alt text"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "The alternative text for the broadcast thumbnail image"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "Thumbnail URL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "The thumbnail URL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "The URL of the broadcast thumbnail image"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "Preview Text"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "The preview text"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "The preview text shown in email clients before the email is opened"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Update a Broadcast",
+          "message": "Update a Broadcast"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Update an existing broadcast",
+          "message": "Update an existing broadcast"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Update an existing broadcast in Kit",
+          "message": "Update an existing broadcast in Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to update",
+          "message": "The broadcast ID to update"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to update",
+          "message": "The unique identifier of the broadcast to update"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Content"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "The broadcast HTML content"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "The HTML content of the broadcast email"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Subject"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "The broadcast subject line"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "The subject line of the broadcast email"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "The broadcast description"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "A description of the broadcast for internal reference"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "The sender email address"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "The email address used as the sender for the broadcast"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "Email Template ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "The email template ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "The identifier of the email template to use for the broadcast"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "Public"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "Whether the broadcast is public"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "Indicates whether the broadcast is publicly accessible"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Published At"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "When to publish the broadcast"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "The timestamp when the broadcast should be published"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "Send At"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "When to send the broadcast"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "The timestamp when the broadcast should be sent; set to `null` for a draft"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "Thumbnail Alt"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "The thumbnail alt text"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "The alternative text for the broadcast thumbnail image"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "Thumbnail URL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "The thumbnail URL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "The URL of the broadcast thumbnail image"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "Preview Text"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "The preview text"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "The preview text shown in email clients before the email is opened"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Delete a Broadcast",
+          "message": "Delete a Broadcast"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Delete a broadcast",
+          "message": "Delete a broadcast"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Delete a broadcast from Kit (only before sending)",
+          "message": "Delete a broadcast from Kit (only before sending)"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to delete",
+          "message": "The broadcast ID to delete"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to delete",
+          "message": "The unique identifier of the broadcast to delete"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
+          "source": "Get Broadcast Stats",
+          "message": "Get Broadcast Stats"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
+          "source": "Get statistics for a broadcast",
+          "message": "Get statistics for a broadcast"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.desc": {
+          "source": "Get statistics for a specific broadcast in Kit",
+          "message": "Get statistics for a specific broadcast in Kit"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "The broadcast ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to get stats for",
+          "message": "The unique identifier of the broadcast to get stats for"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
+          "source": "List Broadcasts",
+          "message": "List Broadcasts"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
+          "source": "List all broadcasts",
+          "message": "List all broadcasts"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.desc": {
+          "source": "List broadcasts in Kit",
+          "message": "List broadcasts in Kit"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast ID"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "Filter by broadcast ID",
+          "message": "Filter by broadcast ID"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
+          "source": "Get a Broadcast",
+          "message": "Get a Broadcast"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
+          "source": "Get a single broadcast by ID",
+          "message": "Get a single broadcast by ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.desc": {
+          "source": "Retrieve a single broadcast by ID from Kit",
+          "message": "Retrieve a single broadcast by ID from Kit"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "The broadcast ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
+          "source": "Add Subscriber to Form",
+          "message": "Add Subscriber to Form"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
+          "source": "Add a subscriber to a form",
+          "message": "Add a subscriber to a form"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.desc": {
+          "source": "Add a subscriber to a form in Kit by email address",
+          "message": "Add a subscriber to a form in Kit by email address"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Form ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "The form ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to add the subscriber to",
+          "message": "The unique identifier of the form to add the subscriber to"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "The subscriber's email address"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the form",
+          "message": "The email address of the subscriber to add to the form"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "First Name"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "The subscriber's first name"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "The first name of the subscriber"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "List Forms"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "List all forms"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in Kit with optional status filter",
+          "message": "List forms in Kit with optional status filter"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Form ID"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "Filter by form ID"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by form status",
+          "message": "Filter by form status"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
+          "source": "List Form Subscribers",
+          "message": "List Form Subscribers"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
+          "source": "List subscribers for a form",
+          "message": "List subscribers for a form"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.desc": {
+          "source": "List all subscribers that subscribed through a specific form in Kit",
+          "message": "List all subscribers that subscribed through a specific form in Kit"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Form ID"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list subscribers for",
+          "message": "The form to list subscribers for"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Subscriber State"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Filter by subscriber state"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
+          "source": "Add Subscriber to Sequence",
+          "message": "Add Subscriber to Sequence"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
+          "source": "Add a subscriber to a sequence",
+          "message": "Add a subscriber to a sequence"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.desc": {
+          "source": "Add a subscriber to an email sequence in Kit",
+          "message": "Add a subscriber to an email sequence in Kit"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "Sequence ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence ID",
+          "message": "The sequence ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.desc": {
+          "source": "The unique identifier of the sequence to add the subscriber to",
+          "message": "The unique identifier of the sequence to add the subscriber to"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "The subscriber's email address"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the sequence",
+          "message": "The email address of the subscriber to add to the sequence"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
+          "source": "List Sequences",
+          "message": "List Sequences"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
+          "source": "List all sequences",
+          "message": "List all sequences"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.desc": {
+          "source": "List email sequences in Kit",
+          "message": "List email sequences in Kit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "Sequence ID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "Filter by sequence ID",
+          "message": "Filter by sequence ID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Sequence Subscribers",
+          "message": "List Sequence Subscribers"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List subscribers for a sequence",
+          "message": "List subscribers for a sequence"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.desc": {
+          "source": "List all subscribers in a specific email sequence in Kit",
+          "message": "List all subscribers in a specific email sequence in Kit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "Sequence ID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence to list subscribers for",
+          "message": "The sequence to list subscribers for"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Subscriber State"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Filter by subscriber state"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
+          "source": "Create a Purchase",
+          "message": "Create a Purchase"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
+          "source": "Create a new purchase record",
+          "message": "Create a new purchase record"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.desc": {
+          "source": "Create a new purchase record in Kit for e-commerce tracking",
+          "message": "Create a new purchase record in Kit for e-commerce tracking"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The buyer's email address",
+          "message": "The buyer's email address"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the buyer",
+          "message": "The email address of the buyer"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "Transaction ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The external transaction ID",
+          "message": "The external transaction ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The external transaction identifier for the purchase",
+          "message": "The external transaction identifier for the purchase"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Products"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.short_desc": {
+          "source": "List of products in the purchase",
+          "message": "List of products in the purchase"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.desc": {
+          "source": "A list of products in the purchase, each containing product details such as `name`, `pid`, `lid`, `quantity`, and `unit_price`",
+          "message": "A list of products in the purchase, each containing product details such as `name`, `pid`, `lid`, `quantity`, and `unit_price`"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Currency"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "The currency code"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for the purchase (defaults to `USD`)",
+          "message": "The ISO 4217 currency code for the purchase (defaults to `USD`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.display_name": {
+          "source": "Transaction Time",
+          "message": "Transaction Time"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.short_desc": {
+          "source": "When the transaction occurred",
+          "message": "When the transaction occurred"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.desc": {
+          "source": "The timestamp when the transaction occurred",
+          "message": "The timestamp when the transaction occurred"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "Subtotal"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.short_desc": {
+          "source": "The purchase subtotal",
+          "message": "The purchase subtotal"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.desc": {
+          "source": "The subtotal amount of the purchase before tax, shipping, and discount",
+          "message": "The subtotal amount of the purchase before tax, shipping, and discount"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.display_name": {
+          "source": "Tax",
+          "message": "Tax"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.short_desc": {
+          "source": "The tax amount",
+          "message": "The tax amount"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.desc": {
+          "source": "The tax amount applied to the purchase",
+          "message": "The tax amount applied to the purchase"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.display_name": {
+          "source": "Shipping",
+          "message": "Shipping"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.short_desc": {
+          "source": "The shipping cost",
+          "message": "The shipping cost"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.desc": {
+          "source": "The shipping cost for the purchase",
+          "message": "The shipping cost for the purchase"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Discount"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.short_desc": {
+          "source": "The discount amount",
+          "message": "The discount amount"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount applied to the purchase",
+          "message": "The discount amount applied to the purchase"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.display_name": {
+          "source": "Total",
+          "message": "Total"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.short_desc": {
+          "source": "The total amount",
+          "message": "The total amount"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.desc": {
+          "source": "The total amount of the purchase",
+          "message": "The total amount of the purchase"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.short_desc": {
+          "source": "The purchase status",
+          "message": "The purchase status"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.desc": {
+          "source": "The current status of the purchase",
+          "message": "The current status of the purchase"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
+          "source": "List Purchases",
+          "message": "List Purchases"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
+          "source": "List all purchases",
+          "message": "List all purchases"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.desc": {
+          "source": "List purchase records in Kit",
+          "message": "List purchase records in Kit"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "Purchase ID"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "Filter by purchase ID",
+          "message": "Filter by purchase ID"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
+          "source": "Get a Purchase",
+          "message": "Get a Purchase"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
+          "source": "Get a single purchase by ID",
+          "message": "Get a single purchase by ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.desc": {
+          "source": "Retrieve a single purchase record by ID from Kit",
+          "message": "Retrieve a single purchase record by ID from Kit"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "Purchase ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "The purchase ID",
+          "message": "The purchase ID"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
+          "source": "Subscriber Activated",
+          "message": "Subscriber Activated"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
+          "source": "Watch for new subscriber activations",
+          "message": "Watch for new subscriber activations"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.desc": {
+          "source": "Triggers when a subscriber is activated in Kit",
+          "message": "Triggers when a subscriber is activated in Kit"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
+          "source": "Subscriber Unsubscribed",
+          "message": "Subscriber Unsubscribed"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for subscriber unsubscribes",
+          "message": "Watch for subscriber unsubscribes"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber unsubscribes in Kit",
+          "message": "Triggers when a subscriber unsubscribes in Kit"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
+          "source": "Subscriber Bounced",
+          "message": "Subscriber Bounced"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
+          "source": "Watch for subscriber bounces",
+          "message": "Watch for subscriber bounces"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.desc": {
+          "source": "Triggers when a subscriber's email bounces in Kit",
+          "message": "Triggers when a subscriber's email bounces in Kit"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
+          "source": "Subscriber Complained",
+          "message": "Subscriber Complained"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
+          "source": "Watch for subscriber complaints",
+          "message": "Watch for subscriber complaints"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.desc": {
+          "source": "Triggers when a subscriber marks an email as spam in Kit",
+          "message": "Triggers when a subscriber marks an email as spam in Kit"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
+          "source": "Form Subscription",
+          "message": "Form Subscription"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
+          "source": "Watch for form subscriptions",
+          "message": "Watch for form subscriptions"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.desc": {
+          "source": "Triggers when a subscriber signs up through a form in Kit",
+          "message": "Triggers when a subscriber signs up through a form in Kit"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
+          "source": "Course Subscription",
+          "message": "Course Subscription"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for course subscriptions",
+          "message": "Watch for course subscriptions"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber enrolls in a course in Kit",
+          "message": "Triggers when a subscriber enrolls in a course in Kit"
+        }
+      }
+    }
+  }
+}

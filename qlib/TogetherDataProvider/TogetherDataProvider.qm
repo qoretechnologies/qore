@@ -40,6 +40,7 @@ module TogetherDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": TogetherDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Together AI",
             "short_desc": "Together AI hosted open-weight LLMs, embeddings, and image generation",
             "desc": "Provides access to [Together AI](https://www.together.ai) — a managed "

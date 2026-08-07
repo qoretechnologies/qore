@@ -46,6 +46,7 @@ module GoogleCalendarDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GoogleCalendarDataProvider::CalendarAppName,
+            "presentation_source_locale": "en",
             "display_name": "Google Calendar",
             "short_desc": "Google calendar services",
             "desc": "Google calendar services",

@@ -64,6 +64,7 @@ module WebSocketClient {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": WebSocketClient::AppName,
+            "presentation_source_locale": "en",
             "display_name": "WebSocket Messaging",
             "short_desc": "Send and receive WebSocket messages",
             "desc": "Send and receive WebSocket messages",

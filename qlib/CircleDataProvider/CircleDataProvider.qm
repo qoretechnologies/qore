@@ -44,6 +44,7 @@ module CircleDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CircleDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Circle",
             "short_desc": "Circle community platform",
             "desc": "Circle is a community platform for managing posts, comments, members, "

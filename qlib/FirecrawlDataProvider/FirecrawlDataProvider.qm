@@ -48,6 +48,7 @@ module FirecrawlDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FirecrawlDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Firecrawl",
             "short_desc": "Firecrawl web scraping and crawling platform",
             "desc": "Firecrawl provides APIs for web scraping, crawling, URL mapping, "

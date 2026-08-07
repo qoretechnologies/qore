@@ -43,6 +43,7 @@ module KitDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": KitDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Kit",
             "short_desc": "Kit email marketing platform for creators",
             "desc": "Kit (formerly ConvertKit) is an email marketing platform for creators "

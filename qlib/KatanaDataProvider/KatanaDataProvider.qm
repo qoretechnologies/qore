@@ -44,6 +44,7 @@ module KatanaDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": KatanaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Katana",
             "short_desc": "Katana cloud manufacturing and inventory (MRP) integration",
             "desc": "Katana is a cloud-based manufacturing and inventory management (MRP) "

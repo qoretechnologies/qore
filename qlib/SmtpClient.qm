@@ -60,6 +60,7 @@ module SmtpClient {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SmtpClient::AppName,
+            "presentation_source_locale": "en",
             "display_name": "SMTP Server",
             "short_desc": "Generic SMTP server for sending emails",
             "desc": "Generic SMTP server for sending emails",

@@ -47,6 +47,7 @@ module GmailDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GmailDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Gmail",
             "short_desc": "Gmail services",
             "desc": "Gmail services",

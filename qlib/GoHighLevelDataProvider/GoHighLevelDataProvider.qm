@@ -50,6 +50,7 @@ module GoHighLevelDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GoHighLevelDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "GoHighLevel",
             "short_desc": "GoHighLevel CRM and marketing automation platform",
             "desc": "GoHighLevel is a comprehensive CRM and marketing automation platform for "

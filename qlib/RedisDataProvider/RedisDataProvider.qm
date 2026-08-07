@@ -50,6 +50,7 @@ module RedisDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": RedisDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Redis Server",
             "short_desc": "Redis in-memory data store",
             "desc": "Redis in-memory data structure store, used as a database, cache, message broker, and queue",

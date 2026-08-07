@@ -40,6 +40,7 @@ module LlamaParseDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": LlamaParseDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "LlamaParse",
             "short_desc": "LlamaParse document extraction (PDF / docx / HTML to markdown)",
             "desc": "Provides access to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started) "

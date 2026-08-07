@@ -42,6 +42,7 @@ module DeepSeekDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": DeepSeekDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "DeepSeek",
             "short_desc": "DeepSeek frontier and reasoning LLMs via an OpenAI-compatible API",
             "desc": "Provides access to [DeepSeek](https://platform.deepseek.com) — a "

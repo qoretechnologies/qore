@@ -6,6 +6,7 @@ usr/bin/qklist
 usr/bin/qls
 usr/bin/qore-asyncapi-gen
 usr/bin/qore-extract-qm-metadata
+usr/bin/qore-data-provider-i18n
 usr/bin/qore-i18n
 usr/bin/qore-openapi3-gen
 usr/bin/qpatch
@@ -23,6 +24,7 @@ usr/share/man/man1/qklist.1*
 usr/share/man/man1/qls.1*
 usr/share/man/man1/qore-asyncapi-gen.1*
 usr/share/man/man1/qore-extract-qm-metadata.1*
+usr/share/man/man1/qore-data-provider-i18n.1*
 usr/share/man/man1/qore-i18n.1*
 usr/share/man/man1/qore-openapi3-gen.1*
 usr/share/man/man1/qpatch.1*

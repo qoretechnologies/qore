@@ -54,6 +54,7 @@ module EasyPostDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": EasyPostDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "EasyPost",
             "short_desc": "EasyPost shipping and logistics platform",
             "desc": "EasyPost is a unified shipping API that connects to dozens of carriers including USPS, "

@@ -64,6 +64,7 @@ module OpenSearchDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OpenSearchDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "OpenSearch Server",
             "short_desc": "OpenSearch search and analytics server",
             "desc": "OpenSearch is an Apache 2.0-licensed search, analytics, and observability platform.\n\n"

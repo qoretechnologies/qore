@@ -46,6 +46,7 @@ module OneDriveDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OneDriveDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Microsoft OneDrive",
             "short_desc": "Microsoft OneDrive cloud file storage",
             "desc": "Provides access to [Microsoft OneDrive](https://onedrive.live.com/) for cloud file "

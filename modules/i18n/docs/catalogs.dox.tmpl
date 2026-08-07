@@ -57,8 +57,9 @@ I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
 
     @section i18ncatalogsdiscovery Discovery
 
-    Discovery uses \c QORE_CATALOG_DIR by default and can be overridden explicitly. Returned files are already ordered
-    for deterministic composition: lower precedence first, with \c root before more-specific locale files.
+    Discovery uses the configured system catalog directory by default.  \c QORE_CATALOG_DIR replaces that default,
+    and an explicit \c search_path option replaces both. Returned files are already ordered for deterministic
+    composition: lower precedence first, with \c root before more-specific locale files.
 
     @code{.py}
 list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
@@ -77,4 +78,9 @@ I18n::MessageCatalog billing_catalog(files);
     numeric value. Message formatting fails if a required placeholder argument is missing. Placeholder output is
     wrapped in Unicode bidi isolation marks automatically for RTL requested locales such as Arabic, Hebrew, Persian,
     and Urdu.
+
+    Catalogs for producer-owned presentation metadata or other opaque prose can pass
+    \c {"literal_messages": True}. In this mode, braces in non-plural messages are ordinary text, placeholder
+    validation and interpolation are disabled, and translations and source fallbacks are returned unchanged.
+    Plural entries keep the normal placeholder rules because plural selection can interpolate \c count.
 */

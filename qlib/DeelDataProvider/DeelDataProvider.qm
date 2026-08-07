@@ -46,6 +46,7 @@ module DeelDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": DeelDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Deel",
             "short_desc": "Deel global workforce management platform",
             "desc": "Deel is a global workforce management and HR platform for hiring, managing, "

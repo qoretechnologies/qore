@@ -45,6 +45,23 @@ public hashdecl DataProviderAppInfo {
     #! Description of the application with markdown formatting
     string desc;
 
+    #! Optional native i18n catalog domain for localized app and action presentation
+    /** When omitted, @ref DataProviderPresentation::defaultCatalogDomain() derives a stable domain from \c name.
+        The catalog changes presentation fields only; \c name and action identifiers remain exact technical
+        identities.
+
+        @since %DataProvider 3.7
+    */
+    *string presentation_catalog_domain;
+
+    #! BCP 47 locale of the producer-owned presentation strings
+    /** Omit this field when the producer language is unknown; consumers must then treat the source presentation as
+        opaque instead of assuming a language.
+
+        @since %DataProvider 3.7
+    */
+    *string presentation_source_locale;
+
     #! Any legal text, links, copyright notice(s), or disclaimer(s) related to the use of the app; markdown supported
     string legal;
 
@@ -420,6 +437,16 @@ public hashdecl DataProviderActionInfo {
 
     #! Action long description, markdown formatting
     string desc;
+
+    #! Optional native i18n catalog domain overriding the app presentation catalog
+    /** @since %DataProvider 3.7
+    */
+    *string presentation_catalog_domain;
+
+    #! Optional BCP 47 locale overriding the app producer-presentation locale
+    /** @since %DataProvider 3.7
+    */
+    *string presentation_source_locale;
 
     #! Action type code
     /** @see DataProviderActionType for valid values
@@ -1754,6 +1781,20 @@ public class DataProviderActionCatalog {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
+        return app_actionmap{app}.values();
+    }
+
+    #! Returns the currently registered actions for one application without loading or initializing provider modules
+    /** This accessor exposes only actions already present in the in-process catalog. Pending lazy registrations are
+        intentionally omitted so callers can overlay current authoritative metadata on an approximate provider index
+        without paying the cost of loading modules, resolving output types, or retaining provider schemas.
+
+        @param app the exact data-provider application identifier
+        @return currently registered actions, or @ref nothing when none are registered
+
+        @since %DataProvider 3.7
+    */
+    static *list<hash<DataProviderActionInfo>> getActionsNoInit(string app) {
         return app_actionmap{app}.values();
     }
 

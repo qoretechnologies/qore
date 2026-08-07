@@ -50,6 +50,7 @@ module KeapDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": KeapDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Keap",
             "short_desc": "Keap CRM and marketing automation platform",
             "desc": "Keap (formerly Infusionsoft) is a CRM and marketing automation platform "

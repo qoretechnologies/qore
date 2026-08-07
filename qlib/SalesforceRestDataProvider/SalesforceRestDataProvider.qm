@@ -53,6 +53,7 @@ module SalesforceRestDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SalesforceRestDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Salesforce",
             "short_desc": "Salesforce® cloud CRM; Salesforce is a trademark of Salesforce, Inc.",
             "desc": "Salesforce® cloud CRM; Salesforce is a trademark of Salesforce, Inc.",

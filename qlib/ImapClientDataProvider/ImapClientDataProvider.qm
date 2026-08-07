@@ -46,6 +46,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ImapClientDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "IMAP",
             "short_desc": "IMAP email services",
             "desc": "Read and manage email on any IMAP server.\n\n"

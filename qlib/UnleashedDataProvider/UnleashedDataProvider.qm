@@ -47,6 +47,7 @@ module UnleashedDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": UnleashedDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Unleashed Software",
             "short_desc": "Unleashed inventory and sales management platform",
             "desc": "Unleashed is a comprehensive cloud-based inventory management system that enables you to manage "

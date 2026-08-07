@@ -152,6 +152,7 @@ namespace Priv {
         # Register the app
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": McpClientDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "MCP Server",
             "short_desc": "Model Context Protocol server",
             "desc": "Connect to MCP servers for AI tool, resource, and prompt integration",

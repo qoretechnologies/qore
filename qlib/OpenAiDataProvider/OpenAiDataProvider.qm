@@ -60,6 +60,7 @@ module OpenAiDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OpenAiDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "OpenAI Services",
             "short_desc": "OpenAI services",
             "desc": "OpenAI services",

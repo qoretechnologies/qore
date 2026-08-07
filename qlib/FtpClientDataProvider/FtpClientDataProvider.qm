@@ -47,6 +47,7 @@ module FtpClientDataProvider {
         # NOTE: this application is also registed in the FtpPoller module
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FtpClientDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "FTP Server",
             "short_desc": "Generic FTP server for exchanging files with FTP and FTPS",
             "desc": "Generic FTP server for exchanging files with FTP and FTPS",
