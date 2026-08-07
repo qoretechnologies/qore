@@ -13752,6 +13752,21 @@ static int executeInitFunctions(
     if (exec_infos.empty() || descriptors.empty()) {
         return 0;
     }
+    assert(pgm);
+    if (!pgm) {
+        return -1;
+    }
+
+    ExceptionSink context_xsink;
+    ProgramThreadCountContextHelper program_ctx(&context_xsink, pgm, false);
+    if (context_xsink) {
+        if (failure_sink) {
+            failure_sink->assimilate(context_xsink);
+        } else {
+            context_xsink.handleExceptions();
+        }
+        return -1;
+    }
 
     // AOT init functions can load further modules and can run generated code
     // that mutates module/static state. Keep this phase reentrant but serialized
@@ -13839,13 +13854,10 @@ static int executeInitFunctions(
         return nullptr;
     };
 
-    // Ensure thread-local program data is set for the current program.
-    // When runTimeLoadModule uses ProgramRuntimeParseContextHelper, it sets
-    // td->current_pgm without setting td->tlpd. The subsequent
-    // ProgramThreadCountContextHelper in qore_aot_module_ns_init sees
-    // pgm == td->current_pgm and becomes a no-op, leaving td->tlpd null.
-    // Init functions that construct objects need td->tlpd for
-    // thread_instantiate_lvar() (e.g. SelfInstantiatorHelper in initMembers).
+    // ProgramRuntimeParseContextHelper can set td->current_pgm without setting
+    // td->tlpd. Init functions that construct objects need td->tlpd for
+    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in
+    // initMembers), so keep the bridge for nested parse-context callers.
     thread_ensure_local_program_data();
 
     int executed = 0;

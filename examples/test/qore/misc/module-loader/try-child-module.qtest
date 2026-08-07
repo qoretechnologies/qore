@@ -280,6 +280,18 @@ module AotTcmExt {
         AotTcmBase::registerChild(\"ext\", sub (string name) {});
     };
 }
+
+public class AotTcmExtConstObject {
+    private {
+        string v = \"const-ext\";
+    }
+
+    public string value() {
+        return v;
+    }
+}
+
+public const AotTcmExtConst = new AotTcmExtConstObject();
 ");
         f.close();
 
@@ -301,6 +313,15 @@ module AotTcmExt {
         unlink(base_src);
         unlink(child_src);
 
+        # qore -l loads the parent without a surrounding script parse frame.  The AOT child attach path must
+        # still install thread-local program data before running the child's top-level constant initializer.
+        out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -l AotTcmBase "
+                + "-e 'printf(\"%%s\\n\", \"cli-load-ok\");' 2>&1; echo EXIT=$?",
+            dirname(qore_bin), dirname(qore_bin), tmp.path, qore_bin));
+        assertEq("cli-load-ok\nEXIT=0\n", out,
+            "qore -l must initialize AOT child module constants without a thread-local frame crash");
+
         # run the check in a subprocess: the modules must be loaded in a process where they are not yet
         # registered, and module registration is global and permanent
         string script = tmp.path + "/aot-child.qr";
@@ -315,6 +336,7 @@ printf(\"status: %%s\\n\", mh.AotTcmBase.\"child-modules\".AotTcmExt.status);
 printf(\"absent: %%s\\n\", mh.AotTcmBase.\"child-modules\".AotTcmNoSuchChildModule.status);
 printf(\"children: %%y\\n\", keys AotTcmBase::children);
 printf(\"registrations: %%y\\n\", AotTcmBase::registrations);
+printf(\"const: %%s\\n\", AotTcmExtConst.value());
 ", tmp.path));
         f.close();
 
@@ -323,6 +345,7 @@ printf(\"registrations: %%y\\n\", AotTcmBase::registrations);
         assertRegex("absent: absent", out);
         assertRegex("children: \\[\"ext\"\\]", out);
         assertRegex("registrations: \\[\"ext\"\\]", out);
+        assertRegex("const: const-ext", out);
 
         # Loading the AOT child first pulls in its parent, whose child-attachment pass observes the child as
         # already in progress.  Completing the explicit child load must still initialize it exactly once.
