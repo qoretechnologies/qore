@@ -49,8 +49,53 @@ class RedirectedGetItemDataProvider inherits OneDriveDataProvider::OneDriveGetIt
     constructor(RestClientIo::RestClientIo rest) : OneDriveGetItemDataProvider(rest) {
     }
 
-    private string getDriveBasePath() {
+    private string getDriveBasePath(*hash<auto> req) {
         return RedirectedBase;
+    }
+}
+
+#! OneDrive's get-item request with the drive named explicitly
+/** Extending the request type is not optional: the request is validated against it before
+    doRequestImpl() runs, so a \c drive_id that the type does not declare is rejected as an
+    unsupported field rather than reaching the hook.
+*/
+class PerRequestDriveGetItemRequestDataType inherits DataProvider::HashDataType {
+    public {
+        const Fields = OneDriveDataProvider::OneDriveGetItemRequestDataType::Fields + {
+            "drive_id": {
+                "display_name": "Drive ID",
+                "short_desc": "The document library to address",
+                "desc": "The ID of the drive (document library) holding the item",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! A get-item provider whose drive is chosen by the request rather than fixed at construction
+/** SharePoint addresses a document library by a \c drive_id option carried in the request, so the
+    hook has to be able to resolve the drive per call; a provider object is shared between threads,
+    so stashing the drive on the instance between calls would not be safe.
+*/
+class PerRequestDriveGetItemDataProvider inherits OneDriveDataProvider::OneDriveGetItemDataProvider {
+    public {
+        const RequestType = new PerRequestDriveGetItemRequestDataType();
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : OneDriveGetItemDataProvider(rest) {
+    }
+
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
+        return RequestType;
+    }
+
+    private string getDriveBasePath(*hash<auto> req) {
+        return "drives/" + req.drive_id;
     }
 }
 
@@ -62,6 +107,9 @@ class FakeOneDriveRestClientIo inherits RestClientIo::RestClientIo {
         *hash<auto> last_headers;
         hash<auto> response_body;
         hash<auto> response_headers = {};
+
+        #! True if the last request was sent on the raw (no-codec) path
+        bool last_raw = False;
     }
 
     constructor() : RestClientIo({
@@ -78,10 +126,19 @@ class FakeOneDriveRestClientIo inherits RestClientIo::RestClientIo {
         last_path = path;
         last_request = body;
         last_headers = hdr;
+        last_raw = False;
         return <RestClient::RestResponseInfo>{
             "body": response_body,
             "headers": response_headers,
         };
+    }
+
+    #! Records that the caller used the raw path, where no codec touches the body
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        hash<RestClient::RestResponseInfo> rv = doRequest(method, path, body, hdr);
+        last_raw = True;
+        return rv;
     }
 
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
@@ -128,6 +185,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         addTestCase("get item", \getItemTest());
         addTestCase("get item by path", \getItemByPathTest());
         addTestCase("drive base path override", \driveBasePathOverrideTest());
+        addTestCase("drive base path per request", \driveBasePathPerRequestTest());
         addTestCase("create folder", \createFolderTest());
         addTestCase("upload file", \uploadFileTest());
         addTestCase("create upload session", \createUploadSessionTest());
@@ -378,6 +436,27 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
             "OneDrive itself still addresses the signed-in user's drive");
     }
 
+    #! The hook sees the request, so one provider object can serve several drives
+    /** A data provider object is reused across calls and threads, so a per-request drive cannot be
+        stashed on the instance; the request has to reach the hook.  This is what SharePoint's
+        \c drive_id option relies on.
+    */
+    driveBasePathPerRequestTest() {
+        checkModule();
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {"id": "item123"};
+
+        PerRequestDriveGetItemDataProvider dp(rest);
+
+        dp.doRequest({"id": "item123", "drive_id": "b!library-one"});
+        assertEq("drives/b!library-one/items/item123", rest.last_path);
+
+        # the same object, a different drive: no state carried over from the previous call
+        dp.doRequest({"id": "item123", "drive_id": "b!library-two"});
+        assertEq("drives/b!library-two/items/item123", rest.last_path,
+            "the second call is not contaminated by the first");
+    }
+
     getItemByPathTest() {
         checkModule();
         FakeOneDriveRestClientIo rest();
@@ -446,6 +525,14 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("PUT", rest.last_method);
         assertRegex("me/drive/root:/test.txt:/content", rest.last_path);
         assertEq("file123", resp.id);
+
+        # the file bytes go out on the raw path, undecoded and unencoded: the connection serializes
+        # as JSON, so the codec would base64 the binary into a quoted string and Graph would store
+        # that as the file's content, reporting success
+        assertTrue(rest.last_raw, "upload-file bypasses the data serialization codec");
+        assertEq(NT_BINARY, rest.last_request.typeCode(), "the body is still binary at the client");
+        assertEq(binary("hello world"), rest.last_request, "the exact bytes given are the bytes sent");
+        assertEq("text/plain", rest.last_headers."Content-Type");
 
         # test with parent_id
         resp = dp.doRequest({

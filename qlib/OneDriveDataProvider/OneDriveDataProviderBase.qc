@@ -135,11 +135,17 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         \c "sites/{site-id}/drives/{drive-id}" or \c "drives/{drive-id}".  A subclass that
         overrides this reuses every leaf provider in this module unchanged.
 
+        @param req the request (or search / reference-data option) hash for the call being built,
+        if any; OneDrive always addresses the signed-in user's own drive and therefore ignores it,
+        but a subclass whose drive is selected per request — as a SharePoint document library is,
+        by its \c drive_id option — resolves the drive from here.  It is @ref nothing for calls
+        that carry no options, such as the change feed.
+
         @return the Graph path prefix for this provider's drive, with no trailing slash
 
         @since %OneDriveDataProvider 1.1
     */
-    private string getDriveBasePath() {
+    private string getDriveBasePath(*hash<auto> req) {
         return "me/drive";
     }
 
@@ -155,17 +161,17 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
     #! Returns reference data for the given type
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
         switch (type) {
-            case "folders": return getReferenceFolders();
-            case "drives": return getReferenceDrives();
-            case "items": return getReferenceItems();
+            case "folders": return getReferenceFolders(action_opts);
+            case "drives": return getReferenceDrives(action_opts);
+            case "items": return getReferenceItems(action_opts);
         }
     }
 
     #! Returns reference data for folders (lists folders from root)
-    private *list<hash<AllowedValueInfo>> getReferenceFolders() {
+    private *list<hash<AllowedValueInfo>> getReferenceFolders(*hash<auto> action_opts) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            string path = getDriveBasePath() + "/root/children?$top=200&$filter=folder%20ne%20null"
+            string path = getDriveBasePath(action_opts) + "/root/children?$top=200&$filter=folder%20ne%20null"
                 "&$select=id,name,parentReference";
             hash<auto> response = doRestCommand("GET", path);
             foreach hash<auto> item in (response.body.value) {
@@ -183,10 +189,10 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns reference data for items (files and folders from root)
-    private *list<hash<AllowedValueInfo>> getReferenceItems() {
+    private *list<hash<AllowedValueInfo>> getReferenceItems(*hash<auto> action_opts) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            string path = getDriveBasePath() + "/root/children?$top=200&$select=id,name,folder";
+            string path = getDriveBasePath(action_opts) + "/root/children?$top=200&$select=id,name,folder";
             hash<auto> response = doRestCommand("GET", path);
             foreach hash<auto> item in (response.body.value) {
                 string type_label = item.folder ? "folder" : "file";
@@ -204,7 +210,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns reference data for drives
-    private *list<hash<AllowedValueInfo>> getReferenceDrives() {
+    private *list<hash<AllowedValueInfo>> getReferenceDrives(*hash<auto> action_opts) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
             hash<auto> response = doRestCommand("GET", "me/drives?$select=id,name,driveType");
@@ -243,6 +249,47 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
                     default:
                         return rest.restDoRequest(method, path, body, hdr);
                 }
+            } catch (hash<ExceptionInfo> ex) {
+                if (retry(ex, \retries)) {
+                    continue;
+                }
+                rethrow ex.err, getApiErrorDesc(ex, path), ex.arg;
+            }
+        }
+    }
+
+    #! Makes a REST call with a body that must reach the server byte for byte
+    /** Graph's content endpoints (\c ".../content", \c ".../createUploadSession" chunks) take the file
+        bytes as the request body, but the connection's data serialization is \c "json", and
+        @ref doRestCommand() hands the body to that codec: a @ref binary body is then base64-encoded
+        into a JSON string, so 256 bytes of file content are stored as 346 bytes of quoted base64.
+        Graph accepts it and returns success, so the corruption is only visible in a byte comparison
+        of the downloaded file.
+
+        This method uses the client's raw request path instead, where the caller owns both the body
+        and the \c Content-Type and no codec runs.  Note that it does **not** work to call
+        \c setSerialization("bin") around the request: that mutates client-wide state, and the client
+        is shared between provider objects and threads, so a concurrent JSON call would be silently
+        serialized as binary.
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the request body, sent verbatim
+        @param content_type the content type of \a body
+        @param hdr any additional headers
+
+        @return the REST response
+
+        @since %OneDriveDataProvider 1.1
+    */
+    private hash<auto> doRestRawCommand(string method, string path, data body, string content_type,
+            *hash<auto> hdr) {
+        hdr = (hdr ?? {}) + {"Content-Type": content_type};
+        int retries = 0;
+        while (True) {
+            try {
+                debug("REST (raw) %y %y %d byte(s) %y", method, path, body.size(), content_type);
+                return rest.restDoRawRequest(method, path, body, hdr);
             } catch (hash<ExceptionInfo> ex) {
                 if (retry(ex, \retries)) {
                     continue;

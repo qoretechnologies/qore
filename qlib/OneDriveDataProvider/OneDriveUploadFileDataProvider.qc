@@ -83,12 +83,14 @@ public class OneDriveUploadFileDataProvider inherits OneDriveDataProviderBase {
 
         string path;
         if (req.parent_id) {
-            path = getDriveBasePath() + "/items/" + req.parent_id + ":/" + encode_url(filename, True) + ":/content";
+            path = getDriveBasePath(req) + "/items/" + req.parent_id + ":/" + encode_url(filename, True) + ":/content";
         } else {
-            path = getDriveBasePath() + "/root:/" + encode_url(filename, True) + ":/content";
+            path = getDriveBasePath(req) + "/root:/" + encode_url(filename, True) + ":/content";
         }
 
-        return doRestCommand("PUT", path, content, {"Content-Type": ct}).body;
+        # the file bytes must reach Graph unchanged; the connection's "json" serialization would
+        # base64-encode them into a JSON string and Graph would store that without complaining
+        return doRestRawCommand("PUT", path, content, ct).body;
     }
 }
 }

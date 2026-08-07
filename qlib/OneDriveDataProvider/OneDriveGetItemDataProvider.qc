@@ -79,13 +79,13 @@ public class OneDriveGetItemDataProvider inherits OneDriveDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path;
         if (req.id) {
-            path = getDriveBasePath() + "/items/" + req.id;
+            path = getDriveBasePath(req) + "/items/" + req.id;
         } else if (req.path) {
             string item_path = req.path;
             if (item_path !~ /^\//) {
                 item_path = "/" + item_path;
             }
-            path = getDriveBasePath() + "/root:" + item_path;
+            path = getDriveBasePath(req) + "/root:" + item_path;
         } else {
             throw "ONEDRIVE-GET-ITEM-ERROR", "either 'id' or 'path' must be provided";
         }
