@@ -28,10 +28,18 @@ Root catalog output directory.  This option is required.
 .BR \-m ", " \-\-module =\fImodule\fP
 Load a provider module before extraction.  Repeat for multiple modules.
 .TP
+.BR \-\-owner =\fImodule\fP
+Load a provider module and extract only the app and action presentation
+contributions registered by that module.  Repeat for multiple owner modules.
+Transitive and ambient modules are excluded.  This is the deterministic form
+for source-owned module catalogs, including modules that contribute actions to
+an app owned by another module.
+.TP
 .BR \-a ", " \-\-app =\fIapp\fP
 Extract an exact registered application identifier.  Repeat for multiple
-applications.  If omitted, all applications registered by the loaded modules
-are extracted.
+applications.  If omitted and
+.B \-\-owner
+is not used, all applications registered in the process are extracted.
 .TP
 .BR \-\-check
 Do not write files.  Exit with status 2 if a generated root catalog is missing
@@ -40,6 +48,10 @@ translation is also checked for a canonical locale filename, a valid native
 catalog shape, current producer source text, and message identifiers that are
 still present in the generated root catalog.  Partial translations and
 translated text identical to the producer text remain valid.
+When
+.B \-\-app
+is omitted, the check also rejects catalog domains in the output directory
+that are not present in the generated catalog set.
 .TP
 .BR \-\-check\-tree
 Recursively find and validate all source-owned provider catalogs below the
@@ -49,6 +61,20 @@ Qorus catalog trees without a provider or locale list.  It cannot compare root
 catalogs to provider metadata; use
 .B \-\-check
 in the provider's source repository for that check.
+.TP
+.BR \-\-check\-source\-tree
+Recursively discover catalogs in canonical
+.I Module/i18n
+and
+.I Module.i18n
+source layouts, load every technical owner module, and compare each root and
+translation with current provider metadata.  Owner modules are inferred from
+the source layout without provider, application, or locale lists.  Use
+.B \-\-owner
+to identify the owner of a noncanonical source tree; exactly one owner is
+required when it cannot be inferred.  Use
+.B \-m
+only to load any additional runtime dependency.
 .TP
 .BR \-v ", " \-\-verbose
 Show loaded modules and written files.
@@ -66,12 +92,17 @@ Extract the built-in Qore provider catalog:
 .PP
 Verify a module's checked-in catalogs:
 .RS
-.B qore\-data\-provider\-i18n \-\-check \-o i18n \-m json
+.B qore\-data\-provider\-i18n \-\-check \-o qlib/json.i18n \-\-owner json
 .RE
 .PP
 Verify every provider catalog below an installed or source tree:
 .RS
 .B qore\-data\-provider\-i18n \-\-check\-tree \-o qlib
+.RE
+.PP
+Verify every provider catalog against its source owner modules:
+.RS
+.B qore\-data\-provider\-i18n \-\-check\-source\-tree \-o qlib
 .RE
 .SH SEE ALSO
 .BR qore (1),

@@ -352,6 +352,20 @@ class DataProviderPresentationTest inherits QUnit::Test {
                     "display_name")}.source,
             "the root catalog preserves static allowed-value source text");
 
+        hash<string, hash<auto>> action_only_catalogs =
+            DataProviderPresentation::buildSourceCatalogs(app(),
+                (source_action,), False);
+        hash<auto> action_only_messages =
+            action_only_catalogs{Domain}.locales.root.messages;
+        assertFalse(exists action_only_messages{
+                DataProviderPresentation::appMessageId(App,
+                    "display_name")},
+            "an action-only module does not duplicate app-owned presentation");
+        assertTrue(exists action_only_messages{
+                DataProviderPresentation::actionMessageId(App, Action,
+                    "display_name")},
+            "an action-only module retains its action presentation");
+
         assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", sub () {
             DataProviderPresentation::buildSourceCatalogs(app(),
                 (source_action + {"app": "別のアプリ"},));
@@ -393,6 +407,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(0, runCatalogTreeCheck(root, qore_bin,
                 root + DirSep + "qlib"),
             "recursive catalog validation covers every Qore provider without an app or locale list");
+        assertEq(0, runSourceCatalogTreeCheck(root, qore_bin,
+                root + DirSep + "qlib", ()),
+            "source-tree validation infers and verifies every Qore provider owner module");
     }
 
     sourceCatalogTranslationCheckTest() {
@@ -414,6 +431,26 @@ class DataProviderPresentationTest inherits QUnit::Test {
         mkdir(output + DirSep + domain);
         writeJson(output + DirSep + domain + DirSep + "root.json",
             catalogs{domain});
+        assertEq(1, runSourceCatalogTreeCheck(root, qore_bin, output, ()),
+            "a noncanonical source tree requires an explicit technical owner module");
+        assertEq(0, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",)),
+            "an explicit technical owner validates a noncanonical source tree without app or locale lists");
+        assertEq(0, runOwnerCatalogCheck(root, qore_bin, output,
+                "DataProvider", ("WebSocketClient",)),
+            "owner-scoped verification ignores ambient modules");
+
+        string orphan_domain =
+            DataProviderPresentation::defaultCatalogDomain("RemovedApp");
+        mkdir(output + DirSep + orphan_domain);
+        writeJson(output + DirSep + orphan_domain + DirSep + "root.json",
+            catalogs{domain});
+        assertEq(0, runCatalogCheck(root, qore_bin, output),
+            "an app-scoped check does not classify unrelated catalogs as orphans");
+        assertEq(2, runOwnerCatalogCheck(root, qore_bin, output,
+                "DataProvider", ()),
+            "a complete owner-scoped check rejects orphaned catalog domains");
+        remove_tree(output + DirSep + orphan_domain);
 
         string id = DataProviderPresentation::appMessageId("Qore",
             "display_name");
@@ -428,6 +465,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "a stale producer source fails catalog verification");
         assertEq(2, runCatalogTreeCheck(root, qore_bin, output),
             "catalog-tree verification detects stale producer source");
+        assertEq(2, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",)),
+            "source-tree verification detects stale producer source");
 
         writeJson(output + DirSep + domain + DirSep + "cs.json", {
             "schema_version": I18n::get_catalog_schema_version(),
@@ -439,6 +479,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "an identical translated brand or cognate remains valid");
         assertEq(0, runCatalogTreeCheck(root, qore_bin, output),
             "catalog-tree verification accepts identical brands and cognates");
+        assertEq(0, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",)),
+            "source-tree verification accepts identical brands and cognates");
 
         writeJson(output + DirSep + domain + DirSep + "cs.json", {
             "schema_version": I18n::get_catalog_schema_version(),
@@ -450,6 +493,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
         });
         assertEq(2, runCatalogCheck(root, qore_bin, output),
             "a translation for a removed message id fails verification");
+        assertEq(2, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",)),
+            "source-tree verification rejects removed message ids");
     }
 
     private int runCatalogCheck(string root, string qore_bin,
@@ -490,6 +536,51 @@ class DataProviderPresentationTest inherits QUnit::Test {
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output)));
+    }
+
+    private int runOwnerCatalogCheck(string root, string qore_bin,
+            string output, string owner, list<string> modules) {
+        list<string> module_path = (
+            root + DirSep + "build/qlib-qmod",
+            root + DirSep + "build/modules/i18n",
+            root + DirSep + "build/modules/json",
+            root + DirSep + "qlib"
+        );
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        list<string> module_args = map "--module " + shellQuote($1),
+            modules;
+        return system(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s --owner %s %s >/dev/null",
+            shellQuote(module_path.join(PathSep)),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
+            shellQuote(output), shellQuote(owner),
+            module_args.join(" ")));
+    }
+
+    private int runSourceCatalogTreeCheck(string root, string qore_bin,
+            string output, list<string> modules) {
+        list<string> module_path = (
+            root + DirSep + "build/qlib-qmod",
+            root + DirSep + "build/modules/i18n",
+            root + DirSep + "build/modules/json",
+            root + DirSep + "qlib"
+        );
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        list<string> owner_args = map "--owner " + shellQuote($1),
+            modules;
+        return system(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s >/dev/null",
+            shellQuote(module_path.join(PathSep)),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
+            shellQuote(output), owner_args.join(" ")));
     }
 
     checkedInLocaleCatalogTest() {

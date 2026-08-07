@@ -206,6 +206,8 @@ public class DataProviderPresentation {
 
         @param app provider app metadata
         @param actions provider action metadata
+        @param include_app include app-level presentation messages; set to \c False for an action-only module
+            contributing to an app owned by another module
         @return domain to native root catalog map
 
         @throw DATA-PROVIDER-PRESENTATION-CATALOG-ERROR if an action belongs to another app or two source strings
@@ -213,13 +215,15 @@ public class DataProviderPresentation {
         @throw DATA-PROVIDER-PRESENTATION-ERROR if a required technical identity is empty
     */
     static hash<string, hash<auto>> buildSourceCatalogs(hash<auto> app,
-            list<hash<auto>> actions) {
+            list<hash<auto>> actions, bool include_app = True) {
         hash<string, hash<auto>> domain_messages = {};
         string app_domain = appCatalogDomain(app);
-        addRecordMessages(\domain_messages{app_domain}, app,
-            *string sub (string field) {
-                return appMessageId(app.name, field);
-            });
+        if (include_app) {
+            addRecordMessages(\domain_messages{app_domain}, app,
+                *string sub (string field) {
+                    return appMessageId(app.name, field);
+                });
+        }
         foreach hash<auto> action in (actions) {
             if (action.app.toString() != app.name.toString()) {
                 throw "DATA-PROVIDER-PRESENTATION-CATALOG-ERROR",

@@ -743,11 +743,14 @@ public class DataProviderActionCatalog {
         #! Pending application init handler map: app -> init handler
         static hash<string, hash<auto>> initmap;
 
-        #! Pending application action init handler map: app -> action -> init handler
-        static hash<string, hash<string, code>> initactionmap;
+        #! Pending application action init handler map: app -> action -> init metadata
+        static hash<string, hash<string, hash<auto>>> initactionmap;
 
         #! Maps apps to the modules that define them: app -> module path -> True
         static hash<string, hash<string, bool>> appmodmap;
+
+        #! Maps actions to the modules that define them: app -> action -> module path -> True
+        static hash<string, hash<string, hash<string, bool>>> actionmodmap;
 
         #! File API map: app -> file API info
         static hash<string, hash<DataProviderFileApiInfo>> app_fileapimap;
@@ -819,7 +822,10 @@ public class DataProviderActionCatalog {
             throw "APP-ERROR", sprintf("Application %y action %y is already pending", app, action);
         }
 
-        initactionmap{app}{action} = init;
+        initactionmap{app}{action} = {
+            "init": init,
+            "module_context": _mod_init_ctx ?? get_module_context_path(),
+        };
     }
 
     #! Registers a data provider application
@@ -846,9 +852,7 @@ public class DataProviderActionCatalog {
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
         }
-        if (exists (*string path = _mod_init_ctx ?? get_module_context_path())) {
-            appmodmap{app.name}{path} = True;
-        }
+        *string module_path = _mod_init_ctx ?? get_module_context_path();
 
         bool should_auto_register_generic_call = False;
         bool should_load_generic_api_call_builder = False;
@@ -871,6 +875,13 @@ public class DataProviderActionCatalog {
                 hash<auto> existing_cmp = existing_app - AppActionFlags - ("disable_generic_api_call",);
                 hash<auto> incoming_cmp = app - AppActionFlags - ("disable_generic_api_call",);
                 if (existing_cmp == incoming_cmp) {
+                    if (module_path) {
+                        appmodmap{app.name}{module_path} = True;
+                        string mac_name = AbstractDataProvider::GenericApiCallActionName;
+                        if (app_actionmap{app.name}{mac_name}) {
+                            actionmodmap{app.name}{mac_name}{module_path} = True;
+                        }
+                    }
                     # OR-merge the disable_generic_api_call opt-out: if EITHER caller sets the
                     # flag, the cached app stays opted out (the more-restrictive wins). This
                     # makes the dedupe path order-independent — without it, a duplicate
@@ -890,6 +901,7 @@ public class DataProviderActionCatalog {
                             int removed_code = app_actionmap{app.name}{mac_name}.action_code;
                             remove app_actionmap{app.name}{mac_name};
                             remove top_actionmap{app.name + "/" + mac_name};
+                            remove actionmodmap{app.name}{mac_name};
                             if (existing_app.scheme && smap{existing_app.scheme}) {
                                 smap{existing_app.scheme} = map $1, smap{existing_app.scheme},
                                     $1.action != mac_name;
@@ -926,6 +938,9 @@ public class DataProviderActionCatalog {
 
             # add to cache
             appcache{app.name} = app;
+            if (module_path) {
+                appmodmap{app.name}{module_path} = True;
+            }
 
             # Register a module-init rollback so that a failed module load automatically undoes this
             # registration. This is only meaningful inside a module-load transaction (see
@@ -1055,6 +1070,7 @@ public class DataProviderActionCatalog {
         }
         # do not re-register if the action already exists for this app
         if (app_actionmap{app.name}{AbstractDataProvider::GenericApiCallActionName}) {
+            DataProviderActionCatalog::setGenericApiCallActionOwners(app.name);
             return;
         }
         # positive REST check: skip non-REST schemes here as well (the same predicate is also applied
@@ -1067,6 +1083,7 @@ public class DataProviderActionCatalog {
         try {
             hash<DataProviderActionInfo> action = call_function_args(cb_build_generic_api_call_action, (app,));
             DataProviderActionCatalog::registerAction(action);
+            DataProviderActionCatalog::setGenericApiCallActionOwners(app.name);
         } catch (hash<ExceptionInfo> ex) {
             # log but do not fail the surrounding registration
             stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
@@ -1252,6 +1269,57 @@ public class DataProviderActionCatalog {
         return keys appmodmap{app};
     }
 
+    #! Returns the source-owned presentation contributions registered by a module
+    /** The module match is based only on the technical module identity in the registration context. Ambient modules
+        and transitive dependencies do not contribute entries unless they registered the app or action themselves.
+
+        Each returned entry contains the app metadata, an \c include_app flag indicating whether the module owns the
+        app-level presentation, and the actions owned by the module. An action-only contributor to a shared app
+        therefore emits only its own action messages into the shared catalog domain.
+
+        @param module_name exact technical module name
+        @return presentation contributions owned by the module
+
+        @throw MODULE-ERROR if a module_name is empty
+
+        @par Example
+        Extract only the presentation metadata registered by the c json module:
+        @code{.qore}
+        load_module("json");
+        list<hash<auto>> contributions =
+            DataProviderActionCatalog::getPresentationContributionsForModule("json");
+        @endcode
+
+        @since %DataProvider 3.7
+    */
+    static list<hash<auto>> getPresentationContributionsForModule(string module_name) {
+        if (!module_name.val()) {
+            throw "MODULE-ERROR", "module name cannot be empty";
+        }
+
+        # Complete deferred registrations before taking the ownership snapshot.
+        DataProviderActionCatalog::getAllApps();
+
+        AutoLock al(lck);
+        list<hash<auto>> rv;
+        foreach hash<DataProviderAppInfo> app in (appcache.values()) {
+            bool include_app = DataProviderActionCatalog::modulePathsContain(
+                appmodmap{app.name}, module_name);
+            list<hash<DataProviderActionInfo>> actions = map $1,
+                app_actionmap{app.name}.values(),
+                DataProviderActionCatalog::modulePathsContain(
+                    actionmodmap{app.name}{$1.action}, module_name);
+            if (include_app || actions) {
+                rv += {
+                    "app": app,
+                    "include_app": include_app,
+                    "actions": actions,
+                };
+            }
+        }
+        return rv;
+    }
+
     #! Removes a dynamic data provider application
     /** @param name the name of the dynamic application to remove
 
@@ -1305,6 +1373,8 @@ public class DataProviderActionCatalog {
         The \c app and \c action attributes must be unique for every action registered
     */
     static registerAction(hash<DataProviderActionInfo> action) {
+        *string module_path = _mod_init_ctx ?? get_module_context_path();
+
         # check for required keys
         if (*hash<auto> missing = RequiredActionKeys - keys action) {
             throw "ACTION-ERROR", sprintf("action is missing the following required keys: %y (action: %y)",
@@ -1432,6 +1502,9 @@ public class DataProviderActionCatalog {
         if (*hash<DataProviderActionInfo> act = app_actionmap{action.app}{action.action}) {
             # ignore duplicates to cover injection scenarios
             if (!DataProviderActionCatalog::compareActions(action, act)) {
+                if (module_path) {
+                    actionmodmap{action.app}{action.action}{module_path} = True;
+                }
                 return;
             }
             list<string> diff = ();
@@ -1446,6 +1519,9 @@ public class DataProviderActionCatalog {
         # add to caches
         top_actionmap{key} = action;
         app_actionmap{action.app}{action.action} = action;
+        if (module_path) {
+            actionmodmap{action.app}{action.action}{module_path} = True;
+        }
         # add to scheme map
         if (app.scheme) {
             if (!smap{app.scheme}) {
@@ -1857,7 +1933,7 @@ public class DataProviderActionCatalog {
             DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending action for the app
-        if (*code init = remove initactionmap{app}{action}) {
+        if (*hash<auto> init = remove initactionmap{app}{action}) {
             DataProviderActionCatalog::doInit(init);
             if (!initactionmap{app}) {
                 remove initactionmap{app};
@@ -1890,7 +1966,7 @@ public class DataProviderActionCatalog {
             DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending action for the app
-        if (*code init = remove initactionmap{app}{action}) {
+        if (*hash<auto> init = remove initactionmap{app}{action}) {
             DataProviderActionCatalog::doInit(init);
             if (!initactionmap{app}) {
                 remove initactionmap{app};
@@ -2607,6 +2683,8 @@ public class DataProviderActionCatalog {
         *hash<string, hash<DataProviderActionInfo>> actions = remove app_actionmap{name};
         remove initactionmap{name};
         remove resolve_output_types{name};
+        remove appmodmap{name};
+        remove actionmodmap{name};
         if (actions) {
             map remove top_actionmap{name + "/" + $1.action}, actions.values();
         }
@@ -2619,6 +2697,36 @@ public class DataProviderActionCatalog {
         }
 
         return True;
+    }
+
+    #! Returns true when a registration-context path identifies the requested module
+    private static bool modulePathsContain(*hash<string, bool> paths,
+            string module_name) {
+        foreach string path in (keys paths) {
+            string context_name = basename(path);
+            if (context_name == module_name) {
+                return True;
+            }
+            foreach string suffix in ((".qmod", ".qm")) {
+                if (context_name == module_name + suffix) {
+                    return True;
+                }
+            }
+        }
+        return False;
+    }
+
+    #! Makes the framework-injected generic API action part of every app owner's presentation catalog
+    private static setGenericApiCallActionOwners(string app) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+        actionmodmap{app}{AbstractDataProvider::GenericApiCallActionName}
+            = appmodmap{app};
     }
 
     #! Runs initialization and catches exceptions
@@ -2634,13 +2742,6 @@ public class DataProviderActionCatalog {
     }
 
     #! Runs initialization and catches exceptions
-    private static doInit(code init) {
-        try {
-            init();
-        } catch (hash<ExceptionInfo> ex) {
-            stderr.printf("%s\n", get_exception_string(ex));
-        }
-    }
 }
 }
 

@@ -39,9 +39,11 @@ class QoreDataProviderI18nCmd {
         const Opts = {
             "output":  "o,output=s",
             "module":  "m,module=s@",
+            "owner":   "owner=s@",
             "app":     "a,app=s@",
             "check":   "check",
             "check_tree": "check-tree",
+            "check_source_tree": "check-source-tree",
             "verbose": "v,verbose:i+",
             "help":    "h,help",
         };
@@ -77,46 +79,81 @@ class QoreDataProviderI18nCmd {
     }
 
     private run(hash<auto> opt) {
+        if (opt.check_source_tree) {
+            if (opt.app) {
+                fail("--check-source-tree cannot be combined with --app");
+            }
+            checkSourceTree(opt.output,
+                cast<list<string>>(opt.module ?? ()),
+                cast<list<string>>(opt.owner ?? ()), opt.verbose);
+            return;
+        }
+
         if (opt.check_tree) {
-            if (opt.module || opt.app) {
-                fail("--check-tree cannot be combined with --module or --app");
+            if (opt.module || opt.owner || opt.app) {
+                fail("--check-tree cannot be combined with --module, --owner, or --app");
             }
             checkTree(opt.output, opt.verbose);
             return;
         }
 
-        foreach string module_name in (cast<list<string>>(opt.module ?? ())) {
+        if (opt.owner && opt.app) {
+            fail("--owner cannot be combined with --app");
+        }
+
+        hash<string, bool> modules_to_load = map {$1: True},
+            cast<list<string>>(opt.module ?? ())
+                + cast<list<string>>(opt.owner ?? ());
+        foreach string module_name in (sort(keys modules_to_load)) {
             if (opt.verbose) {
                 printf("loading provider module %s\n", color.key(module_name));
             }
             load_module(module_name);
         }
 
-        hash<string, hash<auto>> app_map = {};
-        foreach hash<auto> app in (
-                DataProviderActionCatalog::getAllApps()) {
-            app_map{app.name} = app;
-        }
-        list<string> app_names = opt.app
-            ? cast<list<string>>(opt.app) : sort(keys app_map);
-        if (!app_names) {
-            throw "DATA-PROVIDER-I18N-ERROR",
-                "no provider applications are registered";
-        }
-
         hash<string, hash<auto>> catalogs = {};
-        foreach string app_name in (app_names) {
-            if (!exists app_map{app_name}) {
-                throw "DATA-PROVIDER-I18N-ERROR",
-                    sprintf("provider application %y is not registered",
-                        app_name);
+        hash<string, bool> app_names;
+        if (opt.owner) {
+            foreach string owner in (cast<list<string>>(opt.owner)) {
+                foreach hash<auto> contribution in (
+                        DataProviderActionCatalog::getPresentationContributionsForModule(
+                            owner)) {
+                    app_names{contribution.app.name} = True;
+                    mergeCatalogs(\catalogs,
+                        DataProviderPresentation::buildSourceCatalogs(
+                            contribution.app, contribution.actions,
+                            contribution.include_app));
+                }
             }
-            hash<auto> app = app_map{app_name};
-            list<hash<auto>> actions =
-                DataProviderActionCatalog::getActions(app_name, False);
-            mergeCatalogs(\catalogs,
-                DataProviderPresentation::buildSourceCatalogs(app,
-                    actions));
+        } else {
+            hash<string, hash<auto>> app_map = {};
+            foreach hash<auto> app in (
+                    DataProviderActionCatalog::getAllApps()) {
+                app_map{app.name} = app;
+            }
+            list<string> selected_apps = opt.app
+                ? cast<list<string>>(opt.app) : sort(keys app_map);
+            foreach string app_name in (selected_apps) {
+                if (!exists app_map{app_name}) {
+                    throw "DATA-PROVIDER-I18N-ERROR",
+                        sprintf("provider application %y is not registered",
+                            app_name);
+                }
+                app_names{app_name} = True;
+                hash<auto> app = app_map{app_name};
+                list<hash<auto>> actions =
+                    DataProviderActionCatalog::getActions(app_name, False);
+                mergeCatalogs(\catalogs,
+                    DataProviderPresentation::buildSourceCatalogs(app,
+                        actions));
+            }
+        }
+        if (!catalogs) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                opt.owner
+                    ? sprintf("owner module(s) %y have no registered presentation contributions",
+                        cast<list<string>>(opt.owner))
+                    : "no provider applications are registered";
         }
 
         int stale = 0;
@@ -147,6 +184,9 @@ class QoreDataProviderI18nCmd {
                 printf("wrote %s (%d messages)\n", color.key(path),
                     catalogs{domain}.locales.root.messages.size());
             }
+        }
+        if (opt.check && !opt.app) {
+            stale += checkOrphanedCatalogs(opt.output, catalogs);
         }
         if (stale) {
             exit(2);
@@ -201,6 +241,186 @@ class QoreDataProviderI18nCmd {
             roots.size(), translation_count);
     }
 
+    private checkSourceTree(string output, list<string> extra_modules,
+            list<string> explicit_owners, *int verbose) {
+        list<hash<auto>> roots = ();
+        collectRootCatalogs(output, \roots);
+        if (!roots) {
+            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+                "no source-owned provider root catalogs found below %y",
+                output);
+        }
+
+        hash<string, bool> owner_modules = map {$1: True}, explicit_owners;
+        list<hash<auto>> unresolved_roots = ();
+        list<hash<auto>> owned_roots = ();
+        foreach hash<auto> root in (roots) {
+            *string module_name = sourceOwnerModule(root.search_root);
+            if (module_name.val()) {
+                owner_modules{module_name} = True;
+                root.owner = module_name;
+                owned_roots += root;
+            } else {
+                unresolved_roots += root;
+            }
+        }
+        if (unresolved_roots && explicit_owners.size() != 1) {
+            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+                "cannot infer an owner module for catalog %y; pass exactly one --owner for a noncanonical source tree",
+                unresolved_roots.first().path);
+        }
+        if (unresolved_roots) {
+            string owner = explicit_owners.first();
+            foreach hash<auto> root in (unresolved_roots) {
+                root.owner = owner;
+                owned_roots += root;
+            }
+        }
+        if (!owner_modules) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                "no provider owner modules were discovered";
+        }
+
+        hash<string, bool> modules_to_load = owner_modules;
+        foreach string module_name in (extra_modules) {
+            modules_to_load{module_name} = True;
+        }
+        foreach string module_name in (sort(keys modules_to_load)) {
+            if (verbose) {
+                printf("loading provider module %s\n",
+                    color.key(module_name));
+            }
+            load_module(module_name);
+        }
+
+        hash<string, hash<string, hash<auto>>> owner_catalogs;
+        foreach string owner in (sort(keys owner_modules)) {
+            owner_catalogs{owner} = moduleCatalogs(owner);
+        }
+
+        int stale = 0;
+        int translation_count = 0;
+        hash<string, hash<string, bool>> seen;
+        foreach hash<auto> root in (owned_roots) {
+            if (seen{root.owner}{root.domain}) {
+                ++stale;
+                stderr.printf("%s %s: duplicate catalog domain %y for owner module %y\n",
+                    color.error("STALE:"), root.path, root.domain,
+                    root.owner);
+                continue;
+            }
+            seen{root.owner}{root.domain} = True;
+            hash<auto> catalog = I18n::load_native_catalog(root.path);
+            I18n::MessageCatalog validated(catalog,
+                {"literal_messages": True});
+            if (sort(keys catalog.locales)
+                    != (DataProviderPresentation::RootLocale,)) {
+                ++stale;
+                stderr.printf("%s %s must contain only locale %y\n",
+                    color.error("STALE:"), root.path,
+                    DataProviderPresentation::RootLocale);
+                continue;
+            }
+            if (!exists owner_catalogs{root.owner}{root.domain}) {
+                ++stale;
+                stderr.printf("%s %s: module %y does not own catalog domain %y\n",
+                    color.error("ORPHANED:"), root.path, root.owner,
+                    root.domain);
+                continue;
+            }
+            if (catalog != owner_catalogs{root.owner}{root.domain}) {
+                ++stale;
+                stderr.printf("%s %s\n", color.error("STALE:"),
+                    root.path);
+            }
+            hash<auto> result =
+                DataProviderPresentation::inspectTranslationCatalogs(
+                    root.domain,
+                    owner_catalogs{root.owner}{root.domain}.locales.root.messages,
+                    {"search_path": (root.search_root,)});
+            translation_count += result.translation_count;
+            foreach hash<auto> issue in (result.issues) {
+                ++stale;
+                stderr.printf("%s %s%s: %s\n", color.error("STALE:"),
+                    issue.path, issue.message_id.val()
+                        ? ": " + issue.message_id : "", issue.reason);
+            }
+            if (verbose) {
+                printf("verified %s\n", color.key(root.path));
+            }
+        }
+        foreach string owner in (sort(keys owner_catalogs)) {
+            foreach string domain in (sort(keys owner_catalogs{owner})) {
+                if (!seen{owner}{domain}) {
+                    ++stale;
+                    stderr.printf("%s owner module %y catalog domain %y\n",
+                        color.error("MISSING:"), owner, domain);
+                }
+            }
+        }
+
+        if (stale) {
+            exit(2);
+        }
+        printf("verified %d owner module(s), %d catalog domain(s), %d translation(s)\n",
+            owner_modules.size(), roots.size(), translation_count);
+    }
+
+    private hash<string, hash<auto>> moduleCatalogs(string owner) {
+        hash<string, hash<auto>> catalogs;
+        foreach hash<auto> contribution in (
+                DataProviderActionCatalog::getPresentationContributionsForModule(
+                    owner)) {
+            mergeCatalogs(\catalogs,
+                DataProviderPresentation::buildSourceCatalogs(
+                    contribution.app, contribution.actions,
+                    contribution.include_app));
+        }
+        return catalogs;
+    }
+
+    private int checkOrphanedCatalogs(string output,
+            hash<string, hash<auto>> catalogs) {
+        if (!is_dir(output)) {
+            return 0;
+        }
+
+        hash<string, string> paths;
+        Dir dir();
+        if (!dir.chdir(output)) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                sprintf("cannot read catalog output directory %y", output);
+        }
+        foreach string name in (dir.listDirs()) {
+            if (name.startsWith(
+                    DataProviderPresentation::CatalogDomainPrefix)) {
+                paths{name} = output + DirSep + name;
+            }
+        }
+        string flat_suffix = "."
+            + DataProviderPresentation::RootLocale + ".json";
+        foreach string path in (glob(output + DirSep
+                + DataProviderPresentation::CatalogDomainPrefix + "*"
+                + flat_suffix)) {
+            if (!is_file(path)) {
+                continue;
+            }
+            string name = basename(path);
+            paths{name.substr(0,
+                name.length() - flat_suffix.length())} = path;
+        }
+
+        int stale = 0;
+        foreach string domain in (sort(keys paths)) {
+            if (!exists catalogs{domain}) {
+                ++stale;
+                stderr.printf("%s %s\n", color.error("ORPHANED:"),
+                    paths{domain});
+            }
+        }
+        return stale;
+    }
+
     private collectRootCatalogs(string path,
             reference<list<hash<auto>>> roots) {
         if (!is_dir(path)) {
@@ -244,6 +464,28 @@ class QoreDataProviderI18nCmd {
         foreach string child in (dir.listDirs()) {
             collectRootCatalogs(path + DirSep + child, \roots);
         }
+    }
+
+    private *string sourceOwnerModule(string search_root) {
+        string name = basename(search_root);
+        if (name == "i18n") {
+            string module_dir = dirname(search_root);
+            string module_name = basename(module_dir);
+            if (is_file(module_dir + DirSep + module_name + ".qm")) {
+                return module_name;
+            }
+        }
+
+        const string suffix = ".i18n";
+        if (name.endsWith(suffix)) {
+            string module_name = name.substr(0,
+                name.length() - suffix.length());
+            if (is_file(dirname(search_root) + DirSep + module_name
+                    + ".qm")) {
+                return module_name;
+            }
+        }
+        return NOTHING;
     }
 
     private int checkTranslations(string domain, hash<auto> root_messages,
@@ -323,9 +565,12 @@ class QoreDataProviderI18nCmd {
         printf("%s\n", color.bold("OPTIONS"));
         printf("  -o, --output=DIR   Root output directory (required)\n");
         printf("  -m, --module=MOD   Load provider module; repeatable\n");
+        printf("      --owner=MOD    Extract only contributions owned by module; repeatable\n");
         printf("  -a, --app=APP      Extract exact app identifier; repeatable\n");
         printf("      --check        Exit 2 if any generated root or translation is stale\n");
         printf("      --check-tree   Recursively verify catalogs without loading providers\n");
+        printf("      --check-source-tree\n");
+        printf("                     Load source owners and verify roots and translations\n");
         printf("  -v, --verbose      Show loaded modules and written files\n");
         printf("  -C, --no-color     Disable colored output\n");
         printf("  -h, --help         Show this help\n");
