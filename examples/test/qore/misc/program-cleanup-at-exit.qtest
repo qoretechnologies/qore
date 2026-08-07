@@ -56,12 +56,29 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         crash this guards against shows up here as 134 (SIGABRT, the JVM's crash handler) rather
         than as any status the script could have set itself
     */
-    private int runChild(string statement) {
+    private int runChild(string statement, int expected) {
         # the statement is embedded in single quotes below, so it must not contain any;
         # String::find() returns -1 when the substring is absent
         @assert(statement.find("'") == -1);
-        return system(sprintf("%s%s -l jni -e '%s' >/dev/null 2>&1", env_prefix, qore_exe,
-            statement));
+        # keep the child's output when the status is not the expected one: a crash here is
+        # reported by the shell only as "Abort trap: 6" or "Aborted", and the reason - a JVM fatal
+        # error report, an assertion, a Qore exception - is only in the child's own output.
+        # Discarding it left a CI failure with nothing to act on.
+        string out_file = sprintf("%s/qore-cleanup-child-%d.log", tmp_location(), gettid());
+        on_exit unlink(out_file);
+        int rc = system(sprintf("%s%s -l jni -e '%s' >%s 2>&1", env_prefix, qore_exe, statement,
+            out_file));
+        if (rc != expected) {
+            printf("--- child (%s) exited with status %d, expected %d; output follows ---\n",
+                statement, rc, expected);
+            try {
+                printf("%s", File::readTextFile(out_file));
+            } catch (hash<ExceptionInfo> ex) {
+                printf("(could not read the child's output: %s: %s)\n", ex.err, ex.desc);
+            }
+            printf("--- end child output ---\n");
+        }
+        return rc;
     }
 
     #! a child that returns normally, to show the harness reports a clean run as 0
@@ -71,7 +88,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
 %ifdef NoJni
         testSkip("the jni module is not available");
 %else
-        assertEq(0, runChild("int i = 1; ++i;"), "a child that returns normally exits with 0");
+        assertEq(0, runChild("int i = 1; ++i;", 0), "a child that returns normally exits with 0");
 %endif
     }
 
@@ -81,7 +98,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
 %else
         # before the fix this aborted in qore_call_program_cleanup_callback(), calling through a
         # pointer read out of the already-destroyed callback list
-        assertEq(0, runChild("exit(0);"), "exit(0) tears the process down without crashing");
+        assertEq(0, runChild("exit(0);", 0), "exit(0) tears the process down without crashing");
 %endif
     }
 
@@ -92,7 +109,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         # a status that is neither 0 nor any signal-derived value, so only the script could have
         # produced it; this is what distinguishes a real teardown from a crash that happens to
         # leave a zero status behind
-        assertEq(7, runChild("exit(7);"), "the exit status set by the script survives teardown");
+        assertEq(7, runChild("exit(7);", 7), "the exit status set by the script survives teardown");
 %endif
     }
 }
