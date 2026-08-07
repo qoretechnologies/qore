@@ -991,21 +991,43 @@ class QdpCmd {
         MyObserver observer(info);
         Observable observable = cast<Observable>(provider);
 
-        # print a message
-        string timeout_msg = opts.timeout ? sprintf(" %s", color.dim(sprintf("(timeout: %ds)", opts.timeout))) : "";
-        stdout.printf("%s %s%s; press any key or %s to stop listening...\n",
-            color.green("listening to events from"),
-            color.cyan(provider.getName()),
-            timeout_msg,
-            color.dim("Ctrl+C"));
+        observable.registerObserver(observer);
+
+        # Open the event source before announcing that a keystroke will stop it.
+        #
+        # Opening can take a noticeable amount of time: a subscription may have to connect,
+        # authenticate, and negotiate a stream before any event can arrive.  Two things depend on
+        # this running here rather than inside the block below:
+        #
+        # - the "press any key" prompt must not be printed until input is actually being read.
+        #   Nothing reads the keyboard until the loop below starts, so a prompt printed first
+        #   invites the user to press a key that is only buffered by the terminal and then acted on
+        #   whenever the open finally completes - which looks exactly like a hung program that
+        #   ignores the keyboard and then exits long after being asked to.
+        # - Term (below) clears ISIG, so while it is in scope Ctrl+C is not a signal at all, just a
+        #   byte on stdin, and the SIGINT handler installed in main() cannot run.  With the terminal
+        #   still in its normal mode here, Ctrl+C during the open is delivered as SIGINT and sets
+        #   shutdown_requested, which the loop below honours immediately.
+        if (observable instanceof DataProvider::DelayedObservable) {
+            stdout.printf("%s %s...\n", color.dim("opening event source"),
+                color.cyan(provider.getName()));
+            cast<DataProvider::DelayedObservable>(observable).observersReady();
+        }
+
+        # a Ctrl+C during the open has already asked for shutdown; do not then invite a keystroke
+        if (!shutdown_requested) {
+            # print a message
+            string timeout_msg = opts.timeout
+                ? sprintf(" %s", color.dim(sprintf("(timeout: %ds)", opts.timeout)))
+                : "";
+            stdout.printf("%s %s%s; press any key or %s to stop listening...\n",
+                color.green("listening to events from"),
+                color.cyan(provider.getName()),
+                timeout_msg,
+                color.dim("Ctrl+C"));
+        }
         {
             Term t();
-
-            observable.registerObserver(observer);
-
-            if (observable instanceof DataProvider::DelayedObservable) {
-                cast<DataProvider::DelayedObservable>(observable).observersReady();
-            }
 
             date start = now_us();
             while (observable.isActive() && !shutdown_requested) {
