@@ -125,6 +125,24 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         LoggerWrapper::setLogger(logger);
     }
 
+    #! Returns the Microsoft Graph path prefix identifying the drive this provider addresses
+    /** Every drive-item request in this module is rooted here: \c "<base>/items/{id}",
+        \c "<base>/root/children", \c "<base>/root:/{path}:/content" and so on.  OneDrive
+        addresses the signed-in user's own drive, which Graph spells \c "me/drive".
+
+        The prefix is a method rather than a literal because the drive-item API is not
+        OneDrive-specific: a SharePoint document library is the same API rooted at
+        \c "sites/{site-id}/drives/{drive-id}" or \c "drives/{drive-id}".  A subclass that
+        overrides this reuses every leaf provider in this module unchanged.
+
+        @return the Graph path prefix for this provider's drive, with no trailing slash
+
+        @since %OneDriveDataProvider 1.1
+    */
+    private string getDriveBasePath() {
+        return "me/drive";
+    }
+
     #! Returns the reference data types supported by this provider
     *hash<string, bool> getSupportedReferenceData() {
         return {
@@ -147,7 +165,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
     private *list<hash<AllowedValueInfo>> getReferenceFolders() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            string path = "me/drive/root/children?$top=200&$filter=folder%20ne%20null"
+            string path = getDriveBasePath() + "/root/children?$top=200&$filter=folder%20ne%20null"
                 "&$select=id,name,parentReference";
             hash<auto> response = doRestCommand("GET", path);
             foreach hash<auto> item in (response.body.value) {
@@ -168,7 +186,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
     private *list<hash<AllowedValueInfo>> getReferenceItems() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            string path = "me/drive/root/children?$top=200&$select=id,name,folder";
+            string path = getDriveBasePath() + "/root/children?$top=200&$select=id,name,folder";
             hash<auto> response = doRestCommand("GET", path);
             foreach hash<auto> item in (response.body.value) {
                 string type_label = item.folder ? "folder" : "file";

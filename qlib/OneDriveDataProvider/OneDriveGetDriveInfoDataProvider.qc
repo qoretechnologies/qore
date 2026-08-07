@@ -49,7 +49,7 @@ public class OneDriveGetDriveInfoDataProvider inherits OneDriveDataProviderBase 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", "me/drive").body;
+        return doRestCommand("GET", getDriveBasePath()).body;
     }
 }
 }

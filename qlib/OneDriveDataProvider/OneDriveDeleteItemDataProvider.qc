@@ -70,7 +70,7 @@ public class OneDriveDeleteItemDataProvider inherits OneDriveDataProviderBase {
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        doRestCommand("DELETE", "me/drive/items/" + req.id);
+        doRestCommand("DELETE", getDriveBasePath() + "/items/" + req.id);
         return {
             "status": "deleted",
             "id": req.id,

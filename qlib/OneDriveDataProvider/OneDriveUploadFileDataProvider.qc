@@ -83,9 +83,9 @@ public class OneDriveUploadFileDataProvider inherits OneDriveDataProviderBase {
 
         string path;
         if (req.parent_id) {
-            path = "me/drive/items/" + req.parent_id + ":/" + encode_url(filename, True) + ":/content";
+            path = getDriveBasePath() + "/items/" + req.parent_id + ":/" + encode_url(filename, True) + ":/content";
         } else {
-            path = "me/drive/root:/" + encode_url(filename, True) + ":/content";
+            path = getDriveBasePath() + "/root:/" + encode_url(filename, True) + ":/content";
         }
 
         return doRestCommand("PUT", path, content, {"Content-Type": ct}).body;

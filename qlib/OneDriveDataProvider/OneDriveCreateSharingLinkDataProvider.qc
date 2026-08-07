@@ -143,7 +143,7 @@ public class OneDriveCreateSharingLinkDataProvider inherits OneDriveDataProvider
             body.expirationDateTime = req.expirationDateTime.format("YYYY-MM-DDTHH:mm:SSZ");
         }
 
-        return doRestCommand("POST", "me/drive/items/" + req.id + "/createLink", body).body;
+        return doRestCommand("POST", getDriveBasePath() + "/items/" + req.id + "/createLink", body).body;
     }
 }
 }

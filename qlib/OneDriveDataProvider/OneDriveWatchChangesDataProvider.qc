@@ -106,7 +106,7 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
         return {
-            "drive": "me/drive/root",
+            "drive": getDriveBasePath() + "/root",
         };
     }
 
@@ -148,7 +148,7 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
                 path =~ s/^https:\/\/graph\.microsoft\.com\/v1\.0\///;
             } else {
                 # Initial delta request — get latest token
-                path = "me/drive/root/delta?token=latest";
+                path = getDriveBasePath() + "/root/delta?token=latest";
             }
 
             # Fetch all pages of changes
@@ -206,7 +206,7 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
     #! Returns example event data
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            hash<auto> response = doRestCommand("GET", "me/drive/root/children?$top=1");
+            hash<auto> response = doRestCommand("GET", getDriveBasePath() + "/root/children?$top=1");
             if (response.body.value) {
                 return response.body.value[0];
             }

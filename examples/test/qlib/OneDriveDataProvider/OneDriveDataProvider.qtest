@@ -37,6 +37,23 @@
 
 %exec-class OneDriveDataProviderTest
 
+#! A get-item provider rooted at a SharePoint document library rather than the personal drive
+/** Phase SP reuses OneDrive's drive-item providers by overriding getDriveBasePath(); this proves
+    the hook actually redirects the request, which is the whole basis of that reuse.
+*/
+class RedirectedGetItemDataProvider inherits OneDriveDataProvider::OneDriveGetItemDataProvider {
+    public {
+        const RedirectedBase = "sites/contoso.sharepoint.com,site-1/drives/drive-9";
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : OneDriveGetItemDataProvider(rest) {
+    }
+
+    private string getDriveBasePath() {
+        return RedirectedBase;
+    }
+}
+
 class FakeOneDriveRestClientIo inherits RestClientIo::RestClientIo {
     public {
         auto last_request;
@@ -110,6 +127,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         addTestCase("get drive info", \getDriveInfoTest());
         addTestCase("get item", \getItemTest());
         addTestCase("get item by path", \getItemByPathTest());
+        addTestCase("drive base path override", \driveBasePathOverrideTest());
         addTestCase("create folder", \createFolderTest());
         addTestCase("upload file", \uploadFileTest());
         addTestCase("create upload session", \createUploadSessionTest());
@@ -327,6 +345,36 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("me/drive/items/item123", rest.last_path);
         assertEq("item123", resp.id);
         assertEq("document.pdf", resp.name);
+    }
+
+    #! Overriding getDriveBasePath() redirects every request built from it
+    /** OneDrive's leaf providers hardcoded "me/drive"; SharePoint needs the same providers rooted
+        at a document library.  The rest of this suite pins the OneDrive paths themselves, so what
+        is left to prove is that the hook is genuinely the only thing deciding the prefix.
+    */
+    driveBasePathOverrideTest() {
+        checkModule();
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {"id": "item123", "name": "spec.docx"};
+
+        # the same leaf provider, rooted at a document library
+        RedirectedGetItemDataProvider dp(rest);
+        hash<auto> resp = dp.doRequest({"id": "item123"});
+        assertEq("GET", rest.last_method);
+        assertEq(RedirectedGetItemDataProvider::RedirectedBase + "/items/item123", rest.last_path,
+            "the override decides the prefix, and nothing else changes");
+        assertEq("item123", resp.id);
+
+        # the path form is redirected too, not just the id form
+        dp.doRequest({"path": "/Shared Documents/spec.docx"});
+        assertEq(RedirectedGetItemDataProvider::RedirectedBase + "/root:/Shared Documents/spec.docx",
+            rest.last_path);
+
+        # and the unmodified provider is unaffected: the default is still the personal drive
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        prov.getChildProvider("get-item").doRequest({"id": "item123"});
+        assertEq("me/drive/items/item123", rest.last_path,
+            "OneDrive itself still addresses the signed-in user's drive");
     }
 
     getItemByPathTest() {

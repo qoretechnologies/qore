@@ -83,11 +83,11 @@ public class OneDriveListItemsDataProvider inherits OneDriveDataProviderBase {
         string path;
         if (search_options.search_query) {
             # Search across the drive
-            path = "me/drive/root/search(q='" + encode_url(search_options.search_query, True) + "')";
+            path = getDriveBasePath() + "/root/search(q='" + encode_url(search_options.search_query, True) + "')";
         } else if (search_options.folder_id) {
-            path = "me/drive/items/" + search_options.folder_id + "/children";
+            path = getDriveBasePath() + "/items/" + search_options.folder_id + "/children";
         } else {
-            path = "me/drive/root/children";
+            path = getDriveBasePath() + "/root/children";
         }
 
         # Add query parameters
