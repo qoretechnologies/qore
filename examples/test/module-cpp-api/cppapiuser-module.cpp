@@ -75,6 +75,7 @@ const QoreCppApiTestApi* cppapiuser_get_api(ExceptionSink* xsink) {
 
 static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     init_cppapiuser_functions(CppApiTestNs);
+    CppApiTestNs.addSystemClass(initProgramContextProbeClass(CppApiTestNs));
 }
 
 static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

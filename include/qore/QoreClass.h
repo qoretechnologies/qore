@@ -894,6 +894,13 @@ public:
     DLLEXPORT QoreValue evalPseudoMethod(const QoreMethod* m, const QoreExternalMethodVariant* variant, const QoreValue n, const QoreListNode* args, ExceptionSink* xsink) const;
 
     //! marks the class as a builtin class
+    /** Also clears the class's source Program: a builtin class is shared by every Program that imports the
+        module defining it, so the Program that happened to be current when the class was created does not own
+        it, and retaining it would make every method call on the class switch the runtime Program context into
+        that unrelated Program.  A module that deliberately binds a builtin class to a Program must therefore
+        assign it after this call - which is what QoreBuiltinClass(QoreProgram*, const char*, const char*,
+        int64) does.
+    */
     DLLEXPORT void setSystem();
 
     //! returns true if the class implements a "memberGate" method

@@ -2546,6 +2546,13 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         remain compatible with MySQL 5.7 and current MariaDB releases
 
     - Core language
+      - fixed builtin class methods running in the wrong @ref Qore::Program "Program" context: a builtin class
+        captured whichever \c Program happened to be current when the module defining it was first initialized in
+        the process, and every later method call on that class -- from any \c Program -- switched the runtime
+        context into that unrelated \c Program.  Because one builtin class is shared by every \c Program that
+        imports its module, binary modules that check the calling \c Program's restrictions from C++ before
+        acting on its behalf (e.g. @ref PO_NO_FILESYSTEM before touching a file) read the wrong \c Program's
+        parse options, so the check silently passed and the restriction was not enforced
       - fixed a bug where no DBI driver could register a \c QDBI_METHOD_DESCRIBE method in a debug build of
         \c libqore; \c q_dbi_describe_t is the same function type as \c q_dbi_select_row_t, so a describe method
         always resolves to the \c q_dbi_select_row_t overload of \c qore_dbi_method_list::add(), whose assertion

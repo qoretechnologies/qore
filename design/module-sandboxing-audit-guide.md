@@ -103,6 +103,27 @@ application's sandbox even though the I/O executes in the module's program.
   specific program" and does **not** walk the stack; use the no-arg form for I/O on behalf
   of user code.
 
+#### Reading the calling Program's parse options
+
+`SandboxManager` is not the only per-Program restriction a module has to honor: the parse
+options carry the coarse domain restrictions (`PO_NO_FILESYSTEM`, `PO_NO_NETWORK`, ...), and a
+C++ module that acts on its caller's behalf reads them with
+`getProgram()->getParseOptions()`.
+
+For this to be correct, a builtin method must execute in the Program context of the code that
+called it. A builtin class is a single object shared by every Program that imports the module
+defining it, so nothing about the class itself may be used to decide which Program is running:
+`QoreClass::setSystem()` therefore clears the ambient Program that the class captured when it
+was created, and `execConstructor()` falls back to the executing Program for a builtin class
+with no source Program. Do not reintroduce a Program switch keyed off a builtin class's
+namespace or creation context — a module's restriction check would then read an unrelated
+Program's parse options and silently pass.
+
+Note that the coarse check is a complement to, not a substitute for, the `SandboxManager`
+check: parse options are all-or-nothing per domain, while the manager expresses path- and
+host-level policy. Module code that touches the filesystem on the caller's behalf should do
+both, in that order.
+
 #### The policy barrier: a sanctioned exception to inheritance
 
 Inheritance is correct by default, but it is wrong for trusted infrastructure that must use

@@ -3132,6 +3132,25 @@ void QoreClass::setSystem() {
     priv->sys = true;
     priv->committed = true;
     priv->loc = &loc_builtin;
+    // the qore_class_private constructor captures the ambient Program as the class's source Program,
+    // which is right for a user class -- it is the Program the class was parsed in -- but wrong for a
+    // builtin class: one builtin class is shared by every Program that imports the module defining
+    // it, and the Program that happened to be current when that module was initialized has no
+    // relationship to the Programs that later use the class.  Keeping it makes every method call on
+    // the class switch the runtime context into that unrelated Program, so module code checking the
+    // caller's restrictions from C++ -- e.g. getProgram()->getParseOptions() & PO_NO_FILESYSTEM
+    // before touching a file on the caller's behalf -- reads the wrong Program's parse options and
+    // its check silently passes.
+    // Note that QoreBuiltinClass(QoreProgram*, ...) assigns the source Program after calling this
+    // method, so a Program supplied explicitly by a module is preserved.
+    if (priv->spgm) {
+        QoreProgram* spgm = priv->spgm;
+        priv->spgm = nullptr;
+        if (priv->deref_source_program) {
+            priv->deref_source_program = false;
+            spgm->deref(nullptr);
+        }
+    }
 }
 
 bool QoreClass::hasMemberGate() const {

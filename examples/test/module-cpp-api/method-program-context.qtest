@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  method-program-context.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class MethodProgramContextTest
+
+#! a builtin class method must run in the Program context of the code that called it
+/** Binary modules act on their caller's behalf and check the caller's restrictions from C++ with
+    <tt>getProgram()->getParseOptions()</tt> -- e.g. @ref PO_NO_FILESYSTEM before touching a file.
+    A builtin class is a single object shared by every Program that imports the module defining it,
+    so nothing about the class may be used to decide which Program is executing.  The class used
+    here comes from the "cppapiuser" test module, which is built into the build tree and never
+    installed, so QORE_MODULE_DIR must include it (run_tests.sh does this).
+
+    This test must load the module itself rather than issuing \c "%requires cppapiuser": the defect
+    it covers is that the module's classes capture whichever Program is current when the module is
+    first initialized in the process, so the module must first be loaded from a Program that is not
+    the one whose restrictions are then checked.
+*/
+class MethodProgramContextTest inherits QUnit::Test {
+    constructor() : QUnit::Test("method-program-context", "1.0") {
+        addTestCase("builtin method Program context", \methodProgramContextTest());
+        set_return_value(main());
+    }
+
+    methodProgramContextTest() {
+        assertFalse(get_module_hash().hasKey("cppapiuser"),
+            "the module must not be loaded yet: it captures the Program that first initializes it");
+
+        # the Program that first loads the module; nothing here is restricted
+        Program loader(PO_MODERN);
+        loader.loadModule("cppapiuser");
+
+        # a second, independent Program with a restriction the loader does not have
+        Program restricted(PO_MODERN | PO_NO_FILESYSTEM);
+        restricted.loadModule("cppapiuser");
+
+        int restricted_po = restricted.getParseOptions();
+        assertTrue(boolean(restricted_po & PO_NO_FILESYSTEM),
+            "the restricted Program carries the restriction under test");
+        assertFalse(boolean(loader.getParseOptions() & PO_NO_FILESYSTEM),
+            "the loading Program does not carry it");
+
+        restricted.parse("
+            int sub normal_method() { ProgramContextProbe probe(); return probe.getParseOptions(); }
+            int sub static_method() { return ProgramContextProbe::getStaticParseOptions(); }
+        ", "method-pgm-context-restricted");
+
+        # the probe reports getProgram()->getParseOptions() as its C++ method body sees it
+        assertEq(restricted_po, restricted.callFunction("normal_method"),
+            "a normal method sees the Program executing it, not the one that loaded the module");
+        assertEq(restricted_po, restricted.callFunction("static_method"),
+            "a static method sees the Program executing it, not the one that loaded the module");
+
+        # ... and calling from the loading Program still reports that Program
+        loader.parse("int sub normal_method() { ProgramContextProbe probe(); return probe.getParseOptions(); }",
+            "method-pgm-context-loader");
+        assertEq(loader.getParseOptions(), loader.callFunction("normal_method"),
+            "the loading Program sees its own parse options");
+    }
+}
