@@ -27,6 +27,10 @@ class SalesforceTest inherits QUnit::Test {
     private {
         SalesforceRestClient rc;
 
+        # the async client; data providers run all I/O on the async socket I/O controller, so the
+        # provider tests must use this one and not the blocking client above
+        *SalesforceRestClientIo rcio;
+
         # salesforce.com connection options
         hash<auto> sfopts;
 
@@ -100,6 +104,8 @@ class SalesforceTest inherits QUnit::Test {
             rc = conn.get();
             rc.setLogger(logger);
             sfopts = rc.getOAuth2Options();
+            rcio = cast<SalesforceRestClientIo>(conn.getAsync());
+            rcio.setLogger(logger);
         } else {
             sfopts.oauth2_client_id = m_options.oauth2_client_id ?? ENV.SALESFORCE_CONSUMER_KEY;
             if (!sfopts.oauth2_client_id)
@@ -118,6 +124,7 @@ class SalesforceTest inherits QUnit::Test {
             sfopts.oauth2_grant_type = "password";
 
             rc = new SalesforceRestClient(sfopts + {"logger": logger});
+            rcio = new SalesforceRestClientIo(sfopts + {"logger": logger});
         }
     }
 
@@ -160,7 +167,7 @@ class SalesforceTest inherits QUnit::Test {
     salesForceDataProviderTests() {
         if (!rc) testSkip("no Salesforce.com connection");
 
-        SalesforceRestTablesDataProvider dp(rc);
+        SalesforceRestTablesDataProvider dp(rcio);
 
         assertFalse(dp.requiresTransactionManagement());
         {
@@ -219,7 +226,7 @@ class SalesforceTest inherits QUnit::Test {
     andOrExpressionTests() {
         if (!rc) testSkip("no Salesforce.com connection");
 
-        SalesforceRestTablesDataProvider dp(rc);
+        SalesforceRestTablesDataProvider dp(rcio);
         AbstractDataProvider account = dp.getChildProvider("Account");
 
         string id;

@@ -30,8 +30,8 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
     }
 
     private:internal {
-        #! The REST client object for API calls
-        SalesforceRestClient rest;
+        #! The REST client object for API calls (async, rooted at the versioned API base)
+        RestClientIo::RestClientIo rest;
 
         #! current object name
         string name;
@@ -50,7 +50,7 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
         @param where_cond the search conditions
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(SalesforceRestClient rest, string name, hash<SalesforceRestRecordInfo> record_info,
+    constructor(RestClientIo::RestClientIo rest, string name, hash<SalesforceRestRecordInfo> record_info,
             *hash<auto> where_cond, *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
@@ -59,15 +59,15 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
 
         # make query
         string soql = makeQuery(where_cond, search_options);
-        hash<auto> info;
+        # SOQL contains spaces, quotes and commas, none of which are legal in a URI query value;
+        # they must be percent-encoded or Salesforce answers "400 Bad Request"
         try {
-            i = new ListHashIterator(rest.get("query?q=" + soql, NOTHING, \info).body.records);
+            i = new ListHashIterator(rest.restGet("query?q=" + encode_url(soql, True)).body.records);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = {
+            throw ex.err, ex.desc, {
                 "soql": soql,
-            } + info{"response-code", "response-body"};
-            throw ex.err, ex.desc, ex_arg;
+            } + ex.arg{"status_code", "body"};
         }
     }
 

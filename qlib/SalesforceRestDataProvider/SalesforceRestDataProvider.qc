@@ -47,7 +47,7 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
     }
 
     #! Creates the object from the arguments
-    constructor(SalesforceRestClient::SalesforceRestClient rest) : SalesforceRestDataProviderBase(rest) {
+    constructor(SalesforceRestClient::SalesforceRestClientIo rest) : SalesforceRestDataProviderBase(rest) {
     }
 
     #! Creates the object from the arguments
@@ -68,7 +68,7 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
         }
 
         if (!rest) {
-            rest = new SalesforceRestClient(getClientOptions(copts));
+            rest = new SalesforceRestClient::SalesforceRestClientIo(getClientOptions(copts));
         }
     }
 
@@ -79,7 +79,7 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Root Salesforce data provider for URL `%s`", rest.getURL());
+        return sprintf("Root Salesforce data provider for URL `%s`", rest.getUrl().toString());
     }
 
     #! Registers a child data provider

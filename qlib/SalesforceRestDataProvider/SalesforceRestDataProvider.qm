@@ -32,6 +32,8 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) SalesforceRestClient
+# all Salesforce REST I/O runs on the async socket I/O controller
+%requires RestClientIo
 
 # The Salesforce Pub/Sub API event source lives in module-grpc, because it is gRPC + Avro and this
 # module has no business depending on either.  It registers itself back into this module as the

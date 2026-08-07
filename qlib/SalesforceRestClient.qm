@@ -324,6 +324,18 @@ public class SalesforceRestClientBase {
             "oauth2_client_secret",
         );
 
+        #! The \c Accept header value to use when the serialization is not XML
+        /** Salesforce content-negotiates the response format and **prefers XML** whenever the
+            \c Accept header allows it.  The generic REST client \c Accept header lists
+            \c text/xml and \c application/xml ahead of \c application/json, so a client that does
+            not narrow it receives XML for every call -- with a \c 200 status code and a body that
+            deserializes into the wrong shape rather than raising an error.  Narrowing \c Accept is
+            therefore not an optimization; it is what makes the JSON API usable at all.
+
+            @since %SalesforceRestClient 2.1
+        */
+        const JsonAcceptHeader = MimeTypeJson + "," + MimeTypeFormUrlEncoded;
+
         #! Salesforce.com async dataload namespace
         const AsyncDataloadNs = "http://www.force.com/2009/06/asyncapi/dataload";
 
@@ -1269,7 +1281,7 @@ sfrest.logout();
         # ensure that if a non-xml serialization is set, we do not accept XML responses, because otherwise
         # Salesforce will prefer XML responses to JSON
         if (ds !~ /xml/) {
-            addDefaultHeaders({"Accept": MimeTypeJson + "," + MimeTypeFormUrlEncoded});
+            addDefaultHeaders({"Accept": SalesforceRestClientBase::JsonAcceptHeader});
         } else {
             delete headers.Accept;
         }
@@ -1721,6 +1733,17 @@ public class SalesforceRestPingPollOperation inherits RestClient::RestPingPollOp
 
 #! Salesforce REST client for non-blocking I/O
 public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, SalesforceRestClientBase {
+    private {
+        #! The requested API version, or \c "auto" for the latest the org offers
+        string api = "auto";
+
+        #! The API client rooted at the org's versioned REST base; see @ref getApiClient()
+        *SalesforceRestClientIo api_client;
+
+        #! Protects @ref api_client during lazy resolution
+        Mutex api_lock();
+    }
+
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
@@ -1734,6 +1757,50 @@ public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, Salesfo
         if (opts.id_service_url) {
             id_service_url = opts.id_service_url;
         }
+        if (opts.api.val()) {
+            api = opts.api;
+        }
+        setHeaders();
+    }
+
+    #! Returns @ref True if this client is already rooted at a versioned REST API base
+    /** @return @ref True if this client's connection path is a \c "/services/data/v<version>" base
+
+        @note the check is on @ref RestClientIo::RestClientIo::getConnectionPath()
+        "getConnectionPath()" rather than on the URL, because
+        @ref RestClientIo::RestClientIo::getUrl() "getUrl()" returns the URL as a string and has no
+        parsed path component.
+
+        @since %SalesforceRestClient 2.1
+    */
+    bool isApiClient() {
+        return (getConnectionPath() ?? "") =~ /\/services\/data\/v[0-9]+\.[0-9]+\/?$/;
+    }
+
+    #! Narrows the \c Accept header so that Salesforce does not answer with XML
+    /** @see @ref SalesforceRestClientBase::JsonAcceptHeader for why this is required
+
+        @since %SalesforceRestClient 2.1
+    */
+    private setHeaders() {
+        if (ds !~ /xml/) {
+            addDefaultHeaders({"Accept": SalesforceRestClientBase::JsonAcceptHeader});
+        } else {
+            delete headers.Accept;
+        }
+    }
+
+    #! Sets the serialization and re-applies the Salesforce \c Accept header policy
+    /** The \c Accept header depends on the serialization, so changing one without the other would
+        leave a JSON client advertising that it accepts XML -- which Salesforce would then send.
+
+        @param data the serialization to use
+
+        @since %SalesforceRestClient 2.1
+    */
+    setSerialization(string data = "auto") {
+        RestClientIo::setSerialization(data);
+        setHeaders();
     }
 
     #! Captures the Salesforce org identity from an OAuth2 token response
@@ -1748,22 +1815,110 @@ public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, Salesfo
 
         @return the token response hash
 
-        @note this captures the org identity only; unlike
-        @ref SalesforceRestClient::SalesforceRestClient "SalesforceRestClient" it does not retarget
-        the client at the instance URL or perform API version discovery, because
-        <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> does not expose URL retargeting.  Use the
-        blocking client for REST calls against the org host.
+        @note this captures the org identity only; it does not retarget this client, because a
+        <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> URL is immutable by design -- its connection
+        manager pools by URL.  Use @ref getApiClient() for REST calls against the org's versioned
+        API base; if the org has moved to another instance, the cached API client is discarded here
+        so that the next call resolves against the new instance.
 
         @since %SalesforceRestClient 2.1
     */
     private hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
         if (h.instance_url.val() && h.instance_url != instance_url) {
             instance_url = h.instance_url;
+            # the cached API client is rooted at the old instance; drop it so the next call
+            # re-resolves.  Salesforce can move an org between instances, and a long-lived
+            # provider must follow it rather than keep calling the host it was created against
+            AutoLock al(api_lock);
+            remove api_client;
         }
         if (h.id.val() && h.id != id_service_url) {
             id_service_url = h.id;
         }
         return RestClientIo::gotOAuth2LoginInfo(h);
+    }
+
+    #! Returns a client rooted at the org's versioned REST API base, resolving the version once
+    /** This client targets the org host itself (for example
+        \c "https://example-dev-ed.my.salesforce.com"), because that is what the Pub/Sub call
+        metadata and the OAuth2 flow need.  REST API calls, however, are made against a
+        *versioned* base below it -- \c "/services/data/v67.0" -- so a provider issuing
+        \c "sobjects/Account/describe" against this client would address the org's web UI rather
+        than its API.
+
+        The version is negotiated the same way
+        @ref SalesforceRestClient::SalesforceRestClient "SalesforceRestClient" negotiates it, from
+        \c "GET /services/data", honouring the \c api option (\c "auto" selects the newest version
+        the org offers).  The result is cached, and retargeting goes through
+        @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()", which shares this client's
+        connection manager and carries its token over, so no duplicate login is performed and the
+        two clients share pooled connections to the org.
+
+        @return a client whose URL is the org's versioned REST API base
+
+        @throw SALESFORCE-API-ERROR the requested API version is not supported by the org
+        @throw SALESFORCE-INSTANCE-ERROR the org's instance URL is not known yet
+
+        @since %SalesforceRestClient 2.1
+    */
+    SalesforceRestClientIo getApiClient() {
+        # idempotent: a client that is already rooted at a versioned API base is its own API
+        # client.  Data providers pass their resolved client on to child providers, whose
+        # constructors call this again; without this check the second call would resolve
+        # "/services/data" relative to the versioned base and target the wrong URL
+        if (isApiClient()) {
+            return self;
+        }
+
+        {
+            AutoLock al(api_lock);
+            if (api_client) {
+                return api_client;
+            }
+        }
+
+        # the version request below must not be made while holding api_lock: it can answer 401 and
+        # drive an OAuth2 token refresh, and gotOAuth2LoginInfo() takes api_lock itself to discard
+        # a client rooted at a superseded instance.  A Qore Mutex is not recursive, so holding the
+        # lock across the request would deadlock the refresh path
+        string base = instance_url.val() ? instance_url : getUrl().toString();
+        if (!base.val()) {
+            throw "SALESFORCE-INSTANCE-ERROR", "the Salesforce org instance URL is not known; a "
+                "login must be performed before REST API calls can be made";
+        }
+
+        # "GET /services/data" is unversioned and is answered by the org host itself
+        auto body = restGet("/services/data").body;
+        if (body.typeCode() != NT_LIST || !body) {
+            throw "SALESFORCE-API-ERROR", sprintf("%y did not return the list of supported REST "
+                "APIs; got %y instead", base + "/services/data", body);
+        }
+
+        hash<auto> ah;
+        if (api == "auto") {
+            ah = body.last();
+        } else {
+            # accept both "v67.0" and "67.0" spellings, as the sync client's api_hash is keyed on
+            # the bare version
+            string want = api =~ /^v/ ? api.substr(1) : api;
+            *hash<auto> found = (select body, $1.version == want)[0];
+            if (!found) {
+                throw "SALESFORCE-API-ERROR", sprintf("Salesforce.com REST API %y was requested "
+                    "but is not supported; supported Salesforce.com APIs: %y", api,
+                    (map $1.version, body));
+            }
+            ah = found;
+        }
+
+        SalesforceRestClientIo c = cast<SalesforceRestClientIo>(copyWithUrl(base + ah.url));
+
+        AutoLock al(api_lock);
+        # another thread may have resolved the version concurrently; keep whichever client was
+        # stored first so that every caller shares one, and the duplicate is simply discarded
+        if (!api_client) {
+            api_client = c;
+        }
+        return api_client;
     }
 }
 }

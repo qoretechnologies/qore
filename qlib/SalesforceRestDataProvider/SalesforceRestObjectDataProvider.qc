@@ -150,7 +150,8 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     }
 
     #! Creates the object from the arguments
-    constructor(SalesforceRestClient rest, string name, hash<auto> sobject) : SalesforceRestDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest, string name, hash<auto> sobject) {
+        self.rest = rest;
         self.name = name;
         self.sobject = sobject;
         getRecordInfoIntern();
@@ -164,7 +165,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
-            "interface", rest.getURL(), name);
+            "interface", rest.getUrl().toString(), name);
     }
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
@@ -192,7 +193,10 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     */
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         where_cond = fixSalesforceRecord(where_cond);
-        return new SalesforceRestRecordIterator(rest, name, record_info, where_cond, search_options);
+        # the iterator issues "query?q=..." itself, so it needs the client rooted at the versioned
+        # API base; the "rest" member targets the org host, where that path returns an HTML page
+        return new SalesforceRestRecordIterator(getApiRest(), name, record_info, where_cond,
+            search_options);
     }
 
     #! Returns data provider static info
@@ -238,17 +242,16 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         rec -= keys record_info.no_create;
         rec = fixSalesforceRecord(rec);
         string url = sprintf("sobjects/%s", name);
-        hash<auto> info;
         # the id is returned in the "id" field in the response
         hash<auto> resp;
         try {
-            resp = rest.post(url, rec, \info);
+            resp = doRestCommand("POST", url, rec);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
+            hash<auto> ex_arg = ex.arg{"request_path", "status_code", "body"};
             # check for duplicate record error
-            if (info."response-body"[0].errorCode == "DUPLICATE_VALUE"
-                && (*string id = (info."response-body"[0].message =~ x/record with id: ([0-9a-zA-Z]+)/)[0])) {
+            if (ex.arg.body[0].errorCode == "DUPLICATE_VALUE"
+                && (*string id = (ex.arg.body[0].message =~ x/record with id: ([0-9a-zA-Z]+)/)[0])) {
                 ex.desc = sprintf("%s: %s", ex.err, ex.desc);
                 ex.err = "DUPLICATE-RECORD";
                 ex_arg.id = id;
@@ -279,22 +282,20 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         rec -= keys record_info.no_create;
         rec = fixSalesforceRecord(rec);
         string url = sprintf("sobjects/%s/%s/%s", name, extid, extid_value);
-        hash<auto> info;
         # the id is returned in the "id" field in the response
         hash<auto> resp;
         try {
-            resp = rest.patch(url, rec, \info);
+            resp = doRestCommand("PATCH", url, rec);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex_arg;
+            throw ex.err, ex.desc, ex.arg{"request_path", "status_code", "body"};
         }
         if (!resp.body.success) {
             throw "UPSERT-ERROR", sprintf("error upserting record with external ID %y = %y: %y", extid, rec{extid},
                 resp.errors);
         }
         # status code 201 = inserted, 204 = updated
-        return info."response-headers".status_code == 201
+        return resp.status_code == 201
             ? UpsertResultInserted
             : UpsertResultUpdated;
     }
@@ -348,36 +349,28 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     #! updates a single record
     private updateSingleRecord(string id, hash<auto> set) {
         string url = sprintf("sobjects/%s/%s", name, id);
-        hash<auto> info;
-        # the id is returned in the "id" field in the response
-        hash<auto> resp;
         try {
-            resp = rest.patch(url, set, \info);
+            doRestCommand("PATCH", url, set);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex_arg;
+            throw ex.err, ex.desc, ex.arg{"request_path", "status_code", "body"};
         }
     }
 
     #! deletes a single record
     private deleteSingleRecord(string id) {
         string url = sprintf("sobjects/%s/%s", name, id);
-        hash<auto> info;
-        # the id is returned in the "id" field in the response
-        hash<auto> resp;
         try {
-            resp = rest.del(url, NOTHING, \info);
+            doRestCommand("DELETE", url);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex_arg;
+            throw ex.err, ex.desc, ex.arg{"request_path", "status_code", "body"};
         }
     }
 
     #! Retrieves the record type
     private getRecordInfoIntern() {
-        desc = rest.get("sobjects/" + name + "/describe").body;
+        desc = doRestCommand("GET", "sobjects/" + name + "/describe").body;
         foreach hash<auto> field in (desc.fields) {
             hash<auto> info += {
                 "name": field.name,

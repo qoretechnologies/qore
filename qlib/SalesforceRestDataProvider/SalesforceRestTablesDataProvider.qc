@@ -46,7 +46,7 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
     }
 
     #! Creates the object from the arguments
-    constructor(SalesforceRestClient rest) : SalesforceRestDataProviderBase(rest) {
+    constructor(SalesforceRestClient::SalesforceRestClientIo rest) : SalesforceRestDataProviderBase(rest) {
     }
 
     #! Creates the object from constructor options
@@ -63,7 +63,7 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
         }
 
         if (!rest) {
-            rest = new SalesforceRestClient(getClientOptions(copts));
+            rest = new SalesforceRestClient::SalesforceRestClientIo(getClientOptions(copts));
         }
     }
 
@@ -75,12 +75,12 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Salesforce tables data provider for URL `%s`; supports child data provider objects with a "
-            "record-based interface", rest.getURL());
+            "record-based interface", rest.getUrl().toString());
     }
 
     #! Return data provider summary info
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        *list<auto> v = rest.get("sobjects").body.sobjects;
+        *list<auto> v = doRestCommand("GET", "sobjects").body.sobjects;
         if (!v) {
             return;
         }
@@ -91,7 +91,7 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
         return map <DataProviderSummaryInfo>{
             "name": $1.name,
             "desc": sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
-                "interface", rest.getURL(), $1.name),
+                "interface", rest.getUrl().toString(), $1.name),
             "type": "SalesforceRestObjectDataProvider",
             "supports_read": $1.queryable,
             "supports_create": $1.createable,
@@ -110,7 +110,7 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        hash<auto> v = rest.get("sobjects");
+        hash<auto> v = doRestCommand("GET", "sobjects");
         *list<string> rv = map $1.name, v.body.sobjects, $1.queryable;
         return rv ? sort(rv) : NOTHING;
     }
@@ -121,15 +121,15 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
         @see getChildProviderEx()
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        hash<auto> info;
         try {
-            hash<auto> v = rest.get("sobjects/" + name, NOTHING, \info).body.objectDescribe;
+            hash<auto> v = doRestCommand("GET", "sobjects/" + name).body.objectDescribe;
             if (!v.queryable) {
                 return;
             }
             return new SalesforceRestObjectDataProvider(rest, name, v);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" && info."response-headers".status_code == 404) {
+            # an unknown sobject is reported as "no such child", not as an error
+            if (ex.arg.status_code == 404) {
                 return;
             }
             rethrow;
