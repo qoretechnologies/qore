@@ -390,6 +390,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
             shellQuote(root + DirSep + "qlib/DataProvider/i18n"));
         assertEq(0, system(cmd),
             "qore-data-provider-i18n --check accepts the source catalog");
+        assertEq(0, runCatalogTreeCheck(root, qore_bin,
+                root + DirSep + "qlib"),
+            "recursive catalog validation covers every Qore provider without an app or locale list");
     }
 
     sourceCatalogTranslationCheckTest() {
@@ -423,6 +426,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         });
         assertEq(2, runCatalogCheck(root, qore_bin, output),
             "a stale producer source fails catalog verification");
+        assertEq(2, runCatalogTreeCheck(root, qore_bin, output),
+            "catalog-tree verification detects stale producer source");
 
         writeJson(output + DirSep + domain + DirSep + "cs.json", {
             "schema_version": I18n::get_catalog_schema_version(),
@@ -432,6 +437,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         });
         assertEq(0, runCatalogCheck(root, qore_bin, output),
             "an identical translated brand or cognate remains valid");
+        assertEq(0, runCatalogTreeCheck(root, qore_bin, output),
+            "catalog-tree verification accepts identical brands and cognates");
 
         writeJson(output + DirSep + domain + DirSep + "cs.json", {
             "schema_version": I18n::get_catalog_schema_version(),
@@ -458,6 +465,26 @@ class DataProviderPresentationTest inherits QUnit::Test {
         }
         return system(sprintf(
             "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s -a Qore >/dev/null",
+            shellQuote(module_path.join(PathSep)),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
+            shellQuote(output)));
+    }
+
+    private int runCatalogTreeCheck(string root, string qore_bin,
+            string output) {
+        list<string> module_path = (
+            root + DirSep + "build/qlib-qmod",
+            root + DirSep + "build/modules/i18n",
+            root + DirSep + "build/modules/json",
+            root + DirSep + "qlib"
+        );
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        return system(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s >/dev/null",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),

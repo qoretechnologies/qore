@@ -339,6 +339,95 @@ public class DataProviderPresentation {
         return rv;
     }
 
+    #! Inspects source-owned translations against a generated root catalog
+    /** Every native translation file for \a domain in the configured search
+        path is schema-validated and checked against the current producer
+        messages. Partial catalogs and translations identical to their source
+        are valid. This method does not infer a language from translated text
+        and does not contain a locale or language-pair allowlist.
+
+        @param domain native catalog domain
+        @param root_messages generated root-catalog message map
+        @param discovery_opts options accepted by
+            @ref I18n::get_catalog_search_path()
+        @return a hash with \c translation_count and an \c issues list; each
+            issue contains \c path, \c locale, \c message_id (empty for a
+            file-level issue), and \c reason
+
+        @throw I18N-CATALOG-ERROR if a catalog is malformed or its filename is
+            invalid
+        @throw I18N-LOCALE-ERROR if a locale filename is not a valid BCP-47
+            tag
+
+        @par Example
+        @code{.qore}
+        hash<auto> result =
+            DataProviderPresentation::inspectTranslationCatalogs(
+                domain, generated.locales.root.messages,
+                {"search_path": (catalog_root,)});
+        if (result.issues) {
+            throw "STALE-CATALOG", make_json(result.issues);
+        }
+        @endcode
+
+        @note The complete search path is inspected rather than only the
+            effective locale fallback, so shadowed stale source-owned files
+            are also reported.
+
+        @since %DataProvider 3.7
+    */
+    static hash<auto> inspectTranslationCatalogs(string domain,
+            hash<auto> root_messages,
+            *hash<auto> discovery_opts = NOTHING) {
+        int translation_count = 0;
+        list<hash<auto>> issues = ();
+        list<string> search_path =
+            I18n::get_catalog_search_path(discovery_opts);
+        foreach string locale in (
+                discoverCatalogLocales(domain, discovery_opts)) {
+            if (locale == RootLocale) {
+                continue;
+            }
+            foreach string search_root in (search_path) {
+                foreach string path in ((
+                        search_root + DirSep + domain + DirSep + locale
+                            + ".json",
+                        search_root + DirSep + domain + "." + locale
+                            + ".json")) {
+                    if (!is_file(path)) {
+                        continue;
+                    }
+                    # Parse once, then validate the in-memory native catalog.
+                    # Provider prose is opaque: braces are literal rather
+                    # than format placeholders.
+                    hash<auto> catalog = I18n::load_native_catalog(path);
+                    I18n::MessageCatalog validated(catalog,
+                        {"literal_messages": True});
+                    if (sort(keys catalog.locales) != (locale,)) {
+                        issues += translationCatalogIssue(path, locale, "",
+                            sprintf("catalog must contain only locale %y",
+                                locale));
+                        continue;
+                    }
+                    foreach hash<auto> entry in (
+                            catalog.locales{locale}.messages.pairIterator()) {
+                        ++translation_count;
+                        string reason = translationEntryProblem(entry.key,
+                            entry.value, root_messages);
+                        if (reason.val()) {
+                            issues += translationCatalogIssue(path, locale,
+                                entry.key, reason);
+                        }
+                    }
+                }
+            }
+        }
+        return {
+            "translation_count": translation_count,
+            "issues": issues,
+        };
+    }
+
     private static string identitySegment(string identity) {
         if (!identity.val()) {
             throw "DATA-PROVIDER-PRESENTATION-ERROR",
@@ -381,6 +470,36 @@ public class DataProviderPresentation {
                 file, locale + ".json");
         }
         locales{locale} = True;
+    }
+
+    private static hash<auto> translationCatalogIssue(string path,
+            string locale, string message_id, string reason) {
+        return {
+            "path": path,
+            "locale": locale,
+            "message_id": message_id,
+            "reason": reason,
+        };
+    }
+
+    private static string translationEntryProblem(string id, auto entry,
+            hash<auto> root_messages) {
+        if (!exists root_messages{id}) {
+            return "message id is not present in the generated root catalog";
+        }
+        if (entry.typeCode() != NT_HASH) {
+            return "provider translations must carry their producer source";
+        }
+        if (entry.source.typeCode() != NT_STRING) {
+            return "translation source must be a string";
+        }
+        if (entry.source != root_messages{id}.source) {
+            return "translation source no longer matches provider metadata";
+        }
+        if (entry.message.typeCode() != NT_STRING || !entry.message.val()) {
+            return "translation message must be a non-empty string";
+        }
+        return "";
     }
 
     private static addOptionMapMessages(reference<hash<auto>> messages,

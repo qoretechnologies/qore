@@ -41,6 +41,7 @@ class QoreDataProviderI18nCmd {
             "module":  "m,module=s@",
             "app":     "a,app=s@",
             "check":   "check",
+            "check_tree": "check-tree",
             "verbose": "v,verbose:i+",
             "help":    "h,help",
         };
@@ -76,6 +77,14 @@ class QoreDataProviderI18nCmd {
     }
 
     private run(hash<auto> opt) {
+        if (opt.check_tree) {
+            if (opt.module || opt.app) {
+                fail("--check-tree cannot be combined with --module or --app");
+            }
+            checkTree(opt.output, opt.verbose);
+            return;
+        }
+
         foreach string module_name in (cast<list<string>>(opt.module ?? ())) {
             if (opt.verbose) {
                 printf("loading provider module %s\n", color.key(module_name));
@@ -147,80 +156,111 @@ class QoreDataProviderI18nCmd {
             catalogs.size());
     }
 
-    private int checkTranslations(string domain, hash<auto> root_messages,
-            string output, *int verbose) {
+    private checkTree(string output, *int verbose) {
+        list<hash<auto>> roots = ();
+        collectRootCatalogs(output, \roots);
+        if (!roots) {
+            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+                "no source-owned provider root catalogs found below %y",
+                output);
+        }
+
         int stale = 0;
         int translation_count = 0;
-        hash<auto> discovery_opts = {"search_path": (output,)};
-        foreach string locale in (
-                DataProviderPresentation::discoverCatalogLocales(domain,
-                    discovery_opts)) {
-            if (locale == DataProviderPresentation::RootLocale) {
+        foreach hash<auto> root in (roots) {
+            hash<auto> catalog = I18n::load_native_catalog(root.path);
+            I18n::MessageCatalog validated(catalog,
+                {"literal_messages": True});
+            if (sort(keys catalog.locales)
+                    != (DataProviderPresentation::RootLocale,)) {
+                ++stale;
+                stderr.printf("%s %s must contain only locale %y\n",
+                    color.error("STALE:"), root.path,
+                    DataProviderPresentation::RootLocale);
                 continue;
             }
-            foreach string path in (translationCatalogPaths(output, domain,
-                    locale)) {
-                if (!is_file(path)) {
-                    continue;
-                }
-                # Constructing the native catalog validates the JSON schema and
-                # every message entry. Provider prose is opaque, so braces are
-                # literal rather than format placeholders.
-                hash<auto> catalog = I18n::load_native_catalog(path);
-                I18n::MessageCatalog validated(catalog,
-                    {"literal_messages": True});
-                if (sort(keys catalog.locales) != (locale,)) {
-                    ++stale;
-                    stderr.printf("%s %s must contain only locale %y\n",
-                        color.error("STALE:"), path, locale);
-                    continue;
-                }
-                hash<auto> messages = catalog.locales{locale}.messages;
-                foreach hash<auto> entry in (messages.pairIterator()) {
-                    ++translation_count;
-                    string reason = translationEntryProblem(entry.key,
-                        entry.value, root_messages);
-                    if (reason.val()) {
-                        ++stale;
-                        stderr.printf("%s %s: %s: %s\n",
-                            color.error("STALE:"), path, entry.key, reason);
-                    }
-                }
+            hash<auto> result =
+                DataProviderPresentation::inspectTranslationCatalogs(
+                    root.domain, catalog.locales.root.messages,
+                    {"search_path": (root.search_root,)});
+            translation_count += result.translation_count;
+            foreach hash<auto> issue in (result.issues) {
+                ++stale;
+                stderr.printf("%s %s%s: %s\n", color.error("STALE:"),
+                    issue.path, issue.message_id.val()
+                        ? ": " + issue.message_id : "", issue.reason);
             }
+            if (verbose) {
+                printf("verified %s\n", color.key(root.path));
+            }
+        }
+        if (stale) {
+            exit(2);
+        }
+        printf("verified %d catalog domain(s), %d translation(s)\n",
+            roots.size(), translation_count);
+    }
+
+    private collectRootCatalogs(string path,
+            reference<list<hash<auto>>> roots) {
+        if (!is_dir(path)) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                sprintf("catalog tree %y is not a directory", path);
+        }
+        string name = basename(path);
+        string nested_root = path + DirSep
+            + DataProviderPresentation::RootLocale + ".json";
+        if (name.startsWith(DataProviderPresentation::CatalogDomainPrefix)
+                && is_file(nested_root)) {
+            roots += {
+                "domain": name,
+                "path": nested_root,
+                "search_root": dirname(path),
+            };
+        }
+
+        string flat_suffix = "."
+            + DataProviderPresentation::RootLocale + ".json";
+        foreach string file in (glob(path + DirSep
+                + DataProviderPresentation::CatalogDomainPrefix + "*"
+                + flat_suffix)) {
+            if (!is_file(file)) {
+                continue;
+            }
+            string file_name = basename(file);
+            roots += {
+                "domain": file_name.substr(0,
+                    file_name.length() - flat_suffix.length()),
+                "path": file,
+                "search_root": path,
+            };
+        }
+
+        Dir dir();
+        if (!dir.chdir(path)) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                sprintf("cannot read catalog tree directory %y", path);
+        }
+        foreach string child in (dir.listDirs()) {
+            collectRootCatalogs(path + DirSep + child, \roots);
+        }
+    }
+
+    private int checkTranslations(string domain, hash<auto> root_messages,
+            string output, *int verbose) {
+        hash<auto> result =
+            DataProviderPresentation::inspectTranslationCatalogs(domain,
+                root_messages, {"search_path": (output,)});
+        foreach hash<auto> issue in (result.issues) {
+            stderr.printf("%s %s%s: %s\n", color.error("STALE:"),
+                issue.path, issue.message_id.val()
+                    ? ": " + issue.message_id : "", issue.reason);
         }
         if (verbose) {
             printf("checked %d translation(s) for %s\n",
-                translation_count, color.key(domain));
+                result.translation_count, color.key(domain));
         }
-        return stale;
-    }
-
-    private list<string> translationCatalogPaths(string output,
-            string domain, string locale) {
-        return (
-            join_paths(output, domain, locale + ".json"),
-            join_paths(output, domain + "." + locale + ".json")
-        );
-    }
-
-    private string translationEntryProblem(string id, auto entry,
-            hash<auto> root_messages) {
-        if (!exists root_messages{id}) {
-            return "message id is not present in the generated root catalog";
-        }
-        if (entry.typeCode() != NT_HASH) {
-            return "provider translations must carry their producer source";
-        }
-        if (entry.source.typeCode() != NT_STRING) {
-            return "translation source must be a string";
-        }
-        if (entry.source != root_messages{id}.source) {
-            return "translation source no longer matches provider metadata";
-        }
-        if (entry.message.typeCode() != NT_STRING || !entry.message.val()) {
-            return "translation message must be a non-empty string";
-        }
-        return "";
+        return result.issues.size();
     }
 
     private mergeCatalogs(reference<hash<string, hash<auto>>> target,
@@ -284,7 +324,8 @@ class QoreDataProviderI18nCmd {
         printf("  -o, --output=DIR   Root output directory (required)\n");
         printf("  -m, --module=MOD   Load provider module; repeatable\n");
         printf("  -a, --app=APP      Extract exact app identifier; repeatable\n");
-        printf("      --check        Exit 2 if any generated root catalog is stale\n");
+        printf("      --check        Exit 2 if any generated root or translation is stale\n");
+        printf("      --check-tree   Recursively verify catalogs without loading providers\n");
         printf("  -v, --verbose      Show loaded modules and written files\n");
         printf("  -C, --no-color     Disable colored output\n");
         printf("  -h, --help         Show this help\n");

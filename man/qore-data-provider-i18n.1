@@ -41,6 +41,15 @@ catalog shape, current producer source text, and message identifiers that are
 still present in the generated root catalog.  Partial translations and
 translated text identical to the producer text remain valid.
 .TP
+.BR \-\-check\-tree
+Recursively find and validate all source-owned provider catalogs below the
+output directory without loading provider modules.  This validates native
+catalog structure and translation provenance for Qore, external module, and
+Qorus catalog trees without a provider or locale list.  It cannot compare root
+catalogs to provider metadata; use
+.B \-\-check
+in the provider's source repository for that check.
+.TP
 .BR \-v ", " \-\-verbose
 Show loaded modules and written files.
 .TP
@@ -58,6 +67,11 @@ Extract the built-in Qore provider catalog:
 Verify a module's checked-in catalogs:
 .RS
 .B qore\-data\-provider\-i18n \-\-check \-o i18n \-m json
+.RE
+.PP
+Verify every provider catalog below an installed or source tree:
+.RS
+.B qore\-data\-provider\-i18n \-\-check\-tree \-o qlib
 .RE
 .SH SEE ALSO
 .BR qore (1),
