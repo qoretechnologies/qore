@@ -1,8 +1,24 @@
 # Implementation Plan — migrating Salesforce, SharePoint, Supabase and Firebase to native Qore
 
-**Status:** Design proposal. Tracked by [#5388](https://github.com/qoretechnologies/qore/issues/5388),
-branch `feature/5388_app_migration`. Phase S is partially implemented in `module-grpc`
-(§S.1-S.3, commit `eef85af`); everything else is unimplemented.
+**Status:** The recommended scope is **implemented** — phases S, P0, SP and V are done on
+branch `feature/5388_app_migration`, tracked by
+[#5388](https://github.com/qoretechnologies/qore/issues/5388). Phases SB (Supabase) and FB
+(Firebase) remain deferred proposals, which is why this document is still in
+`design-pending/` rather than `design/`.
+
+| Phase | Status |
+|---|---|
+| S — Salesforce | Done; TS app deleted, Pub/Sub `change_type` filter and CDC enablement in `module-grpc`, REST providers on `RestClientIo` |
+| P0 — OneDrive drive-path hook | Done; `getDriveBasePath()` takes the request, so the drive can be chosen per call |
+| SP — SharePoint | Done; `qlib/SharePointDataProvider`, `SharePointRestConnection`, TS app deleted. 28 actions vs the TS app's 7 |
+| V — API version pins | Done; only Shopify needed a change (a release candidate was pinned in production). Each other pin was checked against upstream and left, with reasons recorded in the commit |
+| SB — Supabase | Deferred, not started |
+| FB — Firebase | Deferred, not started — superseded by a Google Cloud Storage provider if demand appears |
+
+**Deployment note.** The `sharepoint` connection must be re-created against the native
+`sharepoint://graph.microsoft.com` scheme: the old one was a TypeScript connection
+(`tsrest-sharepoint`), and that scheme no longer exists now that the TS app is gone, so the
+existing connection resolves as `(InvalidConnection)` until it is migrated.
 
 **Recommended scope:** Salesforce (phase S) and SharePoint (phases P0 + SP), plus the
 version pins (phase V). **Supabase and Firebase are documented in full but deferred** —
