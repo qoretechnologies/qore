@@ -147,6 +147,61 @@ public class OneDriveRestClientBase {
             "Accept": MimeTypeJson,
         };
 
+        #! OAuth2 scopes for the \c "sharepoint" API profile
+        /** SharePoint needs site scopes that OneDrive does not, and does not need
+            \c Files.ReadWrite.All, which grants access to every drive in the tenant; a document
+            library is reached through its site instead.
+        */
+        const SharePointOAuth2Scopes = (
+            "openid",
+            "email",
+            "profile",
+            "offline_access",
+            "Sites.Manage.All",
+            "Sites.Read.All",
+            "Files.ReadWrite",
+            "User.Read",
+        );
+
+        #! Ping path for the \c "sharepoint" API profile
+        /** \c "me/drive" is the signed-in user's OneDrive, which says nothing about whether
+            SharePoint is reachable; the tenant's root site does.
+        */
+        const SharePointPingPath = "sites/root";
+
+        #! API profiles
+        /** Microsoft Graph serves OneDrive and SharePoint from one host with one OAuth2 flow, so
+            the two differ only in which scopes they ask for and what a meaningful ping is.  A
+            profile carries that difference, which is why there is no separate SharePoint client
+            class: duplicating the Graph auth layer would mean fixing every Microsoft OAuth2 bug
+            twice.
+
+            Profile values are **defaults, not overrides**: an option the caller set explicitly
+            always wins.
+
+            @since %OneDriveRestClient 1.1
+        */
+        const ApiProfiles = {
+            "onedrive": {
+                "oauth2_scopes": DefaultOAuth2Scopes,
+                "ping_method": DefaultPingMethod,
+                "ping_path": DefaultPingPath,
+                "ping_headers": DefaultPingHeaders,
+            },
+            "sharepoint": {
+                "oauth2_scopes": SharePointOAuth2Scopes,
+                "ping_method": DefaultPingMethod,
+                "ping_path": SharePointPingPath,
+                "ping_headers": DefaultPingHeaders,
+            },
+        };
+
+        #! The API profile used when none is given
+        /** \c "onedrive" reproduces the behaviour this module had before profiles existed, so an
+            existing connection resolves to exactly the same options.
+        */
+        const DefaultApiProfile = "onedrive";
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
@@ -161,8 +216,23 @@ public class OneDriveRestClientBase {
     }
 
     #! returns options for the OneDriveRestClient constructors
+    /** @param opts0 the caller's options; the \c api_profile option selects an entry in
+        @ref ApiProfiles and is consumed here rather than passed on to the client
+
+        @throw ONEDRIVE-API-PROFILE-ERROR the named profile is not known
+    */
     static hash<auto> getOptions(hash<auto> opts0) {
         hash<auto> opts += opts0;
+        # the API profile is resolved before the module defaults, so that a profile value counts
+        # as "already set" and the defaults do not overwrite it
+        string profile = (remove opts.api_profile) ?? DefaultApiProfile;
+        *hash<auto> conf = ApiProfiles{profile};
+        if (!exists conf) {
+            throw "ONEDRIVE-API-PROFILE-ERROR", sprintf("unknown api_profile %y; known profiles: "
+                "%y", profile, keys ApiProfiles);
+        }
+        # profile values fill in only where the caller has not set the option itself
+        map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
         # set defaults for options not already set
         map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
         # resolve tenant-aware OAuth2 URLs

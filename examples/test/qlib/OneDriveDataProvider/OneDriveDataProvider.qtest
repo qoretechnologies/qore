@@ -139,6 +139,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         addTestCase("search items", \searchItemsTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("api profile resolution", \apiProfileTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
         addTestCase("live get drive info", \liveGetDriveInfoTest());
         addTestCase("live list items", \liveListItemsTest());
@@ -734,6 +735,67 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
             OneDriveDataProvider::OneDriveDataProvider::AppName, "create-sharing-link"
         );
         assertEq("items", action.options.id.ref_data, "create-sharing-link id has ref_data");
+    }
+
+    #! The api_profile mechanism must not change what an existing OneDrive connection resolves to
+    /** SharePoint is served by a profile on OneDriveRestClientBase rather than by a separate
+        client, so that the Microsoft OAuth2 layer exists once.  The risk that buys is that adding
+        the mechanism changes how OneDrive itself assembles its options, so the resolved hash for
+        the default profile is asserted directly rather than inferred from the suite passing.
+    */
+    apiProfileTest() {
+        checkModule();
+        hash<auto> base = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        };
+
+        # the default profile reproduces the pre-profile behaviour exactly
+        hash<auto> od = OneDriveRestClient::OneDriveRestClientBase::getOptions(base);
+        assertEq("onedrive", OneDriveRestClient::OneDriveRestClientBase::DefaultApiProfile);
+        assertEq(OneDriveRestClient::OneDriveRestClientBase::DefaultOAuth2Scopes, od.oauth2_scopes);
+        assertEq(OneDriveRestClient::OneDriveRestClientBase::DefaultPingPath, od.ping_path);
+        assertEq(OneDriveRestClient::OneDriveRestClientBase::DefaultUrl, od.url);
+        assertEq(OneDriveRestClient::OneDriveRestClientBase::DefaultData, od."data");
+        assertNothing(od.api_profile, "the profile name is consumed, not passed to the client");
+        # naming the default profile explicitly resolves identically
+        assertEq(od, OneDriveRestClient::OneDriveRestClientBase::getOptions(
+            base + {"api_profile": "onedrive"}), "naming the default changes nothing");
+
+        # the sharepoint profile differs only in scopes and ping target; the host, the OAuth2
+        # endpoints and the serialization are shared, which is the point of a profile
+        hash<auto> sp = OneDriveRestClient::OneDriveRestClientBase::getOptions(
+            base + {"api_profile": "sharepoint"});
+        assertEq(OneDriveRestClient::OneDriveRestClientBase::SharePointOAuth2Scopes,
+            sp.oauth2_scopes);
+        assertEq(OneDriveRestClient::OneDriveRestClientBase::SharePointPingPath, sp.ping_path);
+        assertEq(od.url, sp.url, "both profiles target the same Graph host");
+        assertEq(od.oauth2_auth_url, sp.oauth2_auth_url, "the OAuth2 layer is shared");
+        assertEq(od.oauth2_token_url, sp.oauth2_token_url);
+        assertNeq(od.oauth2_scopes, sp.oauth2_scopes);
+        # SharePoint must not ask for tenant-wide file access; it reaches a library via its site
+        assertFalse(inlist("Files.ReadWrite.All", sp.oauth2_scopes),
+            "the sharepoint profile does not request Files.ReadWrite.All");
+
+        # a profile value is a default, not an override: what the caller set wins
+        hash<auto> explicit = OneDriveRestClient::OneDriveRestClientBase::getOptions(base + {
+            "api_profile": "sharepoint",
+            "oauth2_scopes": ("Custom.Scope",),
+            "ping_path": "custom/ping",
+        });
+        assertEq(("Custom.Scope",), explicit.oauth2_scopes, "an explicit scope beats the profile");
+        assertEq("custom/ping", explicit.ping_path, "an explicit ping path beats the profile");
+
+        # an unknown profile fails naming the ones that exist, rather than silently doing nothing
+        try {
+            OneDriveRestClient::OneDriveRestClientBase::getOptions(base + {"api_profile": "nope"});
+            fail("expected an error for an unknown api_profile");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ONEDRIVE-API-PROFILE-ERROR", ex.err);
+            assertRegex("nope", ex.desc);
+            assertRegex("onedrive", ex.desc, "the error names the known profiles");
+            assertRegex("sharepoint", ex.desc);
+        }
     }
 
     connectionSchemeTest() {
