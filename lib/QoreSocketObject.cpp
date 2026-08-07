@@ -3106,6 +3106,22 @@ static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOpe
     }
 
     bool config_action = poller->isConfigAction();
+
+    // Config actions never block: each completes in a single continuePoll() call -- one
+    // setsockopt()/getsockopt() or private-data update -- and never waits for socket
+    // readiness, which is why they skip the async I/O guard taken below.  Driving one
+    // inline therefore does exactly what the controller would do minus the cross-thread
+    // hop, so the sync config APIs stay usable from async I/O execution paths instead of
+    // tripping assertNotOnIoThread() in qore_socket_object_exec_poll_operation().
+    //
+    // This must live here rather than in each caller: libqore owns socket safety, so no
+    // Qore-level or module-level caller has to know which thread it is running on.
+    if (config_action && SocketSyncPoll::onIoExecutionPath()) {
+        // config actions always return nullptr from continuePoll(); hold it anyway
+        ReferenceHolder<QoreHashNode> unused(poller->continuePoll(xsink), xsink);
+        return *xsink ? -1 : poller->getRc();
+    }
+
     if (!config_action) {
         my_socket_priv* priv = my_socket_priv::getPriv(*s);
         QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
@@ -6040,39 +6056,19 @@ bool QoreSocketObject::isOpen() const {
 }
 
 int QoreSocketObject::setNoDelayForAsyncPoll(int nodelay, ExceptionSink* xsink) {
-    // Both conditions matter: poll operation code runs on the I/O thread proper and on
-    // continuePoll workers, and the public sync API refuses to run in either context.
-    if (!qore_on_async_io_thread() && !qore_in_async_io_continue_poll_worker()) {
-        return setNoDelay(nodelay);
-    }
-
-    this->ref();
-    ReferenceHolder<SocketSetupPollOperation> poller(new SocketSetupPollOperation(xsink, this,
-        SocketSetupPollOperation::ConfigAction::SetNoDelay, nodelay), xsink);
-    if (*xsink) {
-        return -1;
-    }
-
-    poller->continuePoll(xsink);
-    return *xsink ? -1 : poller->getRc();
+    // qore_socket_object_exec_setup() picks the async-I/O-path-safe route itself, so this
+    // is now only an xsink-reporting variant of setNoDelay(): identical behavior, but
+    // failures are raised on the caller's sink instead of being flattened into -1.
+    return qore_socket_object_exec_setup(this, new SocketSetupPollOperation(xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetNoDelay, nodelay), "setNoDelay", "done", xsink);
 }
 
 int QoreSocketObject::setUserTimeoutForAsyncPoll(int ms, ExceptionSink* xsink) {
-    // Both conditions matter: the ALPN handover can run on the I/O thread proper or on a
-    // continuePoll worker, and the public sync API refuses to run in either context.
-    if (!qore_on_async_io_thread() && !qore_in_async_io_continue_poll_worker()) {
-        return setUserTimeout(ms);
-    }
-
-    this->ref();
-    ReferenceHolder<SocketSetupPollOperation> poller(new SocketSetupPollOperation(xsink, this,
-        SocketSetupPollOperation::ConfigAction::SetUserTimeout, ms), xsink);
-    if (*xsink) {
-        return -1;
-    }
-
-    poller->continuePoll(xsink);
-    return *xsink ? -1 : poller->getRc();
+    // qore_socket_object_exec_setup() picks the async-I/O-path-safe route itself, so this
+    // is now only an xsink-reporting variant of setUserTimeout(): identical behavior, but
+    // failures are raised on the caller's sink instead of being flattened into -1.
+    return qore_socket_object_exec_setup(this, new SocketSetupPollOperation(xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetUserTimeout, ms), "setUserTimeout", "done", xsink);
 }
 
 int QoreSocketObject::connectINETSSL(ExceptionSink* xsink, const char* host, int port, int timeout_ms) {

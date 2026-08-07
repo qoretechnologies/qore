@@ -45,6 +45,23 @@
 */
 class SocketSyncPoll {
 public:
+    //! Returns @ref true if the calling thread is executing an async I/O path
+    /** @ref true when the caller is either the async I/O controller thread itself or a
+        worker driving @ref AbstractPollOperation::continuePoll().  Both contexts forbid
+        sync socket APIs that block waiting for controller completion: on the I/O thread
+        the wait deadlocks the controller, and from a \c continuePoll() worker a nested
+        wait steals readiness registration from the outer poll operation.
+
+        This is the single canonical predicate for "am I on an async I/O execution path".
+        Always use it instead of testing @ref qore_on_async_io_thread() or
+        @ref qore_in_async_io_continue_poll_worker() individually -- checking only one of
+        the two is a recurring source of bugs, because the guard in
+        @ref assertNotOnIoThread() fires on either.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL static bool onIoExecutionPath();
+
     //! Asserts the current thread is not an async I/O controller thread.
     /** Sync socket API entry points call this before doing any blocking
         work: sync-on-I/O-thread is a correctness bug that leads to

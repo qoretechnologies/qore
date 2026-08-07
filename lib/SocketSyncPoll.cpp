@@ -35,13 +35,18 @@
 
 #include <cassert>
 
+bool SocketSyncPoll::onIoExecutionPath() {
+    return qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker();
+}
+
 void SocketSyncPoll::assertNotOnIoThread(const char* cname, const char* mname,
         ExceptionSink* xsink) {
-    bool on_io_thread = qore_on_async_io_thread();
-    bool in_continue_poll_worker = qore_in_async_io_continue_poll_worker();
-    if (!on_io_thread && !in_continue_poll_worker) {
+    // use the canonical predicate so this guard can never diverge from the check callers
+    // make to decide whether they are on an async I/O execution path
+    if (!onIoExecutionPath()) {
         return;
     }
+    bool on_io_thread = qore_on_async_io_thread();
     const char* where = on_io_thread
         ? "async I/O controller thread"
         : "async I/O continuePoll worker";

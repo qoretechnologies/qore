@@ -173,6 +173,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
         addTestCase("isDataAvailable close test", \isDataAvailableCloseTest());
+        addTestCase("TCP_NODELAY accessor test", \noDelayAccessorTest());
         addTestCase("poll test", \pollTest());
         addTestCase("poll extra fd test", \pollExtraFdTest());
         addTestCase("poll timeout hint test", \pollTimeoutHintTest());
@@ -1022,6 +1023,29 @@ class SocketTest inherits QUnit::Test {
 
         string str0 = s2.recv(-1);
         assertEq(str, str0);
+    }
+
+    #! Socket::getNoDelay() is declared to return bool and must actually return one
+    /** It used to return the underlying C++ int rc verbatim, so it yielded an integer
+        for a bool-declared method -- and the error rc (-1) read as True in Qore.
+    */
+    noDelayAccessorTest() {
+        Socket sock();
+        if (sock.bind("127.0.0.1:0", True)) {
+            throw "SOCKET-BIND-ERROR", strerror();
+        }
+        on_exit sock.close();
+
+        # assertEq() is type-strict, so these also pin the declared return type
+        assertEq(False, sock.getNoDelay());
+        assertEq(0, sock.setNoDelay(True));
+        assertEq(True, sock.getNoDelay());
+        assertEq(0, sock.setNoDelay(False));
+        assertEq(False, sock.getNoDelay());
+
+        # on a closed socket the option cannot be read; the error rc must not read as True
+        Socket closed();
+        assertEq(False, closed.getNoDelay());
     }
 
     isDataAvailableCloseTest() {

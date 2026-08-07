@@ -430,11 +430,10 @@ public:
     */
     DLLLOCAL int checkIdleDataForAsyncPollLocked(ExceptionSink* xsink);
 
-    //! Internal async-poll helper for TCP_NODELAY setup from poll operation code.
-    /** Public synchronous callers must use @ref setNoDelay(), which delegates
-        through the async I/O controller.  Poll operations use this helper so
-        I/O-thread execution can use the controller-side setup path directly,
-        while non-I/O-thread execution still delegates through the public sync API.
+    //! Error-reporting variant of @ref setNoDelay() for poll operation code.
+    /** @ref setNoDelay() is already safe on async I/O execution paths -- libqore selects the
+        inline (non-controller) route for socket config actions itself -- so this helper differs
+        only in error reporting: it raises failures on @a xsink instead of flattening them to -1.
 
         @param nodelay the TCP_NODELAY value to set
         @param xsink exception sink
@@ -444,16 +443,10 @@ public:
     */
     DLLLOCAL int setNoDelayForAsyncPoll(int nodelay, ExceptionSink* xsink);
 
-    //! Internal async-poll helper for TCP_USER_TIMEOUT setup from poll operation code.
-    /** Public synchronous callers must use @ref setUserTimeout(), which delegates through the
-        async I/O controller and therefore must not be called while a poll operation is being
-        driven.  Poll operations use this helper so I/O-thread execution can use the
-        controller-side setup path directly, while non-I/O-thread execution still delegates
-        through the public sync API.
-
-        Needed because a connection can now be built on the I/O thread: the ALPN handover to a
-        concrete H1/H2 connection runs from continuePoll(), and its adopt-socket constructor
-        applies the configured TCP_USER_TIMEOUT.
+    //! Error-reporting variant of @ref setUserTimeout() for poll operation code.
+    /** @ref setUserTimeout() is already safe on async I/O execution paths -- libqore selects the
+        inline (non-controller) route for socket config actions itself -- so this helper differs
+        only in error reporting: it raises failures on @a xsink instead of flattening them to -1.
 
         @param ms the TCP_USER_TIMEOUT value in milliseconds
         @param xsink exception sink
@@ -532,7 +525,7 @@ public:
 
     //! Mark an HTTP/2 stream for incremental response body delivery
     /** Internal direct variant for callers that already serialized request submission on the
-    /** async I/O thread; mutates only lock-protected Http2Session bookkeeping (no nghttp2 calls),
+        async I/O thread; mutates only lock-protected Http2Session bookkeeping (no nghttp2 calls),
         so it is safe to call from any thread.
     */
     DLLLOCAL void setHttp2StreamStreamingDirect(int32_t stream_id);

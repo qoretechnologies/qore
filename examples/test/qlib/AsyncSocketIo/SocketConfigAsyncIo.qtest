@@ -9,6 +9,12 @@
 
 %exec-class SocketConfigAsyncIoTest
 
+# Distinctive values, so a readback proves we are seeing what this operation set
+# and not a coincidental default.
+const UserTimeoutMs = 8765;
+const SendTimeoutMs = 5000;
+const RecvTimeoutMs = 3000;
+
 class SocketTlsConfigPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
         bool done = False;
@@ -36,10 +42,112 @@ class SocketTlsConfigPollOperation inherits Qore::AbstractPollOperation<auto> {
     }
 }
 
+#! Exercises the socket "config action" APIs from inside continuePoll()
+/** Every call below is dispatched by libqore as a SocketSetupPollOperation config
+    action.  Before libqore learned to run config actions inline on async I/O
+    execution paths, each of these went through the async I/O controller and tripped
+    SocketSyncPoll::assertNotOnIoThread() -- SIGABRT in debug builds, and in release
+    builds a silently swallowed error that left the option unapplied.
+
+    Only setSslVerifyMode()/acceptAllCertificates() had hand-written escapes; the
+    setters below had none, which is how the RestClient.qtest crash reached
+    Socket::setUserTimeout() through HttpClientConnectionManager::applyTcpUserTimeout().
+*/
+class SocketConfigActionPollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        Socket sock;
+        bool done = False;
+        hash<auto> results;
+    }
+
+    constructor(Socket sock) {
+        self.sock = sock;
+    }
+
+    string getGoal() {
+        return "socket-config-actions-applied";
+    }
+
+    string getState() {
+        return done ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    hash<auto> getResults() {
+        return results;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        results.set_user_timeout_rc = sock.setUserTimeout(UserTimeoutMs);
+        results.user_timeout = sock.getUserTimeout();
+        results.set_no_delay_rc = sock.setNoDelay(True);
+        results.no_delay = sock.getNoDelay();
+        results.set_send_timeout_rc = sock.setSendTimeout(SendTimeoutMs);
+        results.send_timeout = sock.getSendTimeout();
+        results.set_recv_timeout_rc = sock.setRecvTimeout(RecvTimeoutMs);
+        results.recv_timeout = sock.getRecvTimeout();
+        results.port = sock.getPort();
+        # returns the PREVIOUS value
+        results.capture_remote_certs = sock.captureRemoteCertificates(True);
+        done = True;
+        return NOTHING;
+    }
+}
+
 public class SocketConfigAsyncIoTest inherits QUnit::Test {
     constructor() : Test("SocketConfigAsyncIoTest", "1.0") {
         addTestCase("TLS setup setters are safe from continuePoll", \tlsSetupSettersFromContinuePoll());
+        addTestCase("config actions are safe from continuePoll", \configActionsFromContinuePoll());
         set_return_value(main());
+    }
+
+    configActionsFromContinuePoll() {
+        Socket sock();
+        sock.bind("localhost:0", True);
+        on_exit sock.close();
+        int port = sock.getSocketInfo().port;
+        assertGt(0, port);
+
+        EventNotifier notifier();
+        SocketConfigActionPollOperation op(sock);
+
+        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": "socket-config-actions-continue-poll",
+            "to": 10s,
+        });
+
+        hash<SocketPollResultInfo> result = q.get(10s);
+        assertNothing(result.ex);
+        assertTrue(op.goalReached());
+
+        # every setter succeeded on the worker; before the fix these were -1 (release)
+        # or never returned at all (debug abort)
+        hash<auto> r = op.getResults();
+        assertEq(0, r.set_user_timeout_rc);
+        assertEq(0, r.set_no_delay_rc);
+        assertEq(0, r.set_send_timeout_rc);
+        assertEq(0, r.set_recv_timeout_rc);
+
+        # ... and the values actually took effect, read back on the worker
+        assertEq(UserTimeoutMs, r.user_timeout);
+        assertEq(True, r.no_delay);
+        assertEq(SendTimeoutMs, r.send_timeout);
+        assertEq(RecvTimeoutMs, r.recv_timeout);
+        assertEq(port, r.port);
+        assertEq(False, r.capture_remote_certs);
+
+        # the worker configured the real socket, not a copy: the same values are
+        # visible from this (non-I/O) thread
+        assertEq(UserTimeoutMs, sock.getUserTimeout());
+        assertEq(True, sock.getNoDelay());
+        assertEq(SendTimeoutMs, sock.getSendTimeout());
+        assertEq(RecvTimeoutMs, sock.getRecvTimeout());
+        assertEq(port, sock.getPort());
     }
 
     tlsSetupSettersFromContinuePoll() {

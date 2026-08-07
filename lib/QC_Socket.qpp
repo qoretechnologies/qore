@@ -6239,12 +6239,16 @@ int Socket::setNoDelay(bool enabled = True) [flags=NAMED_ARGS] {
 bool b = sock.getNoDelay();
     @endcode
 
-    @return the \c TCP_NODELAY setting for the socket
+    @return the \c TCP_NODELAY setting for the socket; @ref False if the setting could not be
+    retrieved (for example on a closed socket)
 
     @see Socket::setNoDelay() for a description of the \c TCP_NODELAY setting
 */
 bool Socket::getNoDelay() [flags=CONSTANT] {
-    return s->getNoDelay();
+    // the C++ API returns an int rc (-1 on error), so it must be converted explicitly here;
+    // returning it directly gave this bool-declared method an integer value, and made the
+    // error rc (-1) read as True in Qore
+    return s->getNoDelay() > 0;
 }
 
 //! Sets the \c TCP_USER_TIMEOUT socket option (in milliseconds) on the socket
