@@ -227,6 +227,19 @@ else (WIN32 OR MSYS or MINGW)
     set(USER_MODULE_VER_DIR ${USER_MODULE_DIR}${VERSION})
 endif (WIN32 OR MSYS OR MINGW)
 
+# Install directory for native Qore i18n catalogs.
+#
+# This must be defined here, with the other install directories, because it is consumed far
+# below by both add_subdirectory(modules/i18n) -- which bakes it into the i18n module as the
+# compiled-in default catalog search path -- and by the configure_file() that generates
+# QoreConfig.cmake for external modules.  Defining it after those uses left it empty on the
+# *first* configure of a build tree (the CACHE entry only becomes visible to a later
+# configure run), so a from-scratch build produced an i18n module with no default catalog
+# path and a QoreConfig.cmake whose empty QORE_CATALOG_DIR made every external module that
+# ships catalogs fail to configure.
+set(QORE_CATALOG_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore/i18n CACHE PATH
+    "Install directory for native Qore i18n catalogs")
+
 get_module_api_versions()
 
 set(LIBQORE_QPP_SRC
@@ -3227,8 +3240,6 @@ set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 # this source tree, silently disabling metadata for the whole build on any mismatch -- a
 # bootstrap cycle that made a from-scratch build unable to produce metadata at all.
 set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
-set(QORE_CATALOG_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore/i18n CACHE PATH
-    "Install directory for native Qore i18n catalogs")
 
 # An installed qore is still used below to probe *external* binary modules whose availability
 # changes qlib AOT output; that probe degrades gracefully when qore is not installed yet.

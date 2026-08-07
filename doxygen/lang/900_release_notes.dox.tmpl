@@ -2486,6 +2486,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
     - Build
+      - fixed \c QORE_CATALOG_DIR being empty in a from-scratch build; it was defined after the two places that
+        consume it, so the first \c cmake run of a build tree compiled the \c i18n module with no default catalog
+        search path and generated a \c QoreConfig.cmake that made every external module shipping i18n catalogs
+        fail to configure with \c "QORE_CATALOG_DIR is required to install i18n catalogs"
       - fixed \c libqore being unloadable with \c dlopen() on musl targets (Alpine Linux), which broke embedding
         Qore in Python (\c "import qoreloader" failed with \c "initial-exec TLS resolves to dynamic definition").
         jemalloc, which musl builds link into \c libqore in place of musl's much slower allocator, is now built
