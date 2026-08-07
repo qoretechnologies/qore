@@ -29,7 +29,6 @@
 
 ## Coding Style & Naming Conventions
 - C++ code uses 4-space indentation and braces on the same line; follow nearby file style.
-- Qore sources typically opt into `%new-style`; many files set `indent-tabs-mode: nil`.
 - File naming is consistent by type: `.cpp`/`.h` for C++, `.q`/`.qm`/`.qc` for Qore, `.qtest` for tests.
 - No formatter is mandated; keep changes minimal and match local conventions.
 - **Documentation tables use the Qore pipe format, never Markdown** — `|!Header|!Header` then
