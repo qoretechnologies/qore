@@ -327,6 +327,7 @@ public class ConnectionSchemeCache {
             "together": "TogetherRestClient",
 
             "onedrive": "OneDriveRestClient",
+            "sharepoint": "OneDriveRestClient",
 
             "sse": "ServerSentEventClient",
             "sses": "ServerSentEventClient",

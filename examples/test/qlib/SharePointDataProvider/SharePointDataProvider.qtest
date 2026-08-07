@@ -1,0 +1,926 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** SharePointDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires OneDriveRestClient
+%requires OneDriveDataProvider
+%requires SharePointDataProvider
+
+%requires json
+
+%exec-class SharePointDataProviderTest
+
+#! A REST client that records requests instead of making them
+class FakeSharePointRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        auto last_request;
+        string last_method;
+        string last_path;
+        *hash<auto> last_headers;
+        hash<auto> response_body;
+        hash<auto> response_headers = {};
+
+        #! True if the last request was sent on the raw (no-codec) path
+        bool last_raw = False;
+    }
+
+    constructor() : RestClientIo({
+        "url": "https://graph.microsoft.com",
+        "oauth2_client_id": "test",
+        "oauth2_client_secret": "test",
+        "data": "json",
+    }) {
+    }
+
+    private hash<RestClient::RestResponseInfo> doRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        last_headers = hdr;
+        last_raw = False;
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+            "headers": response_headers,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return doRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return doRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return doRequest("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return doRequest("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return doRequest("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return doRequest(method, path, body, hdr);
+    }
+
+    #! Records that the caller used the raw path, where no codec touches the body
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        hash<RestClient::RestResponseInfo> rv = doRequest(method, path, body, hdr);
+        last_raw = True;
+        return rv;
+    }
+}
+
+#! Exposes the watch providers' change classification, which is an internal hook
+/** Subclassing is how the predicate is reached: it is deliberately not part of the module's public
+    API, and widening it just to be testable would be the wrong trade.
+*/
+class TestNewFileDataProvider inherits SharePointDataProvider::SharePointNewFileDataProvider {
+    constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
+        : SharePointNewFileDataProvider(rest, options) {
+    }
+    bool check(hash<auto> change) { return acceptChange(change); }
+    *hash<auto> feed() { return getWatchStreamIdentityImpl(); }
+}
+
+class TestFileModifiedDataProvider inherits SharePointDataProvider::SharePointFileModifiedDataProvider {
+    constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
+        : SharePointFileModifiedDataProvider(rest, options) {
+    }
+    bool check(hash<auto> change) { return acceptChange(change); }
+}
+
+class TestNewFolderDataProvider inherits SharePointDataProvider::SharePointNewFolderDataProvider {
+    constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
+        : SharePointNewFolderDataProvider(rest, options) {
+    }
+    bool check(hash<auto> change) { return acceptChange(change); }
+}
+
+class TestNewRowDataProvider inherits SharePointDataProvider::SharePointNewRowDataProvider {
+    constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
+        : SharePointNewRowDataProvider(rest, options) {
+    }
+    bool check(hash<auto> change) { return acceptChange(change); }
+    *hash<auto> feed() { return getWatchStreamIdentityImpl(); }
+}
+
+public class SharePointDataProviderTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! A site ID of the shape Graph actually returns: hostname, site-collection, site
+        const TestSite = "contoso.sharepoint.com,4a1b2c3d-1111-2222-3333-444455556666,"
+            "9f8e7d6c-aaaa-bbbb-cccc-ddddeeeeffff";
+
+        #! A document library ID of the shape Graph actually returns
+        const TestDrive = "b!AbCdEf0123456789";
+
+        const TestList = "6091260c-c6eb-454e-82d9-93b62dde7358";
+    }
+
+    private {
+        #! set to True if the live tenant fixtures should be cleaned up
+        *string live_site;
+        *string live_drive;
+    }
+
+    constructor() : Test("SharePointDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("file API registration", \fileApiTest());
+        addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("data types", \dataTypesTest());
+        addTestCase("drive item paths", \driveItemPathsTest());
+        addTestCase("drive is per request", \drivePerRequestTest());
+        addTestCase("missing drive is an error", \missingDriveTest());
+        addTestCase("upload bypasses the codec", \uploadRawTest());
+        addTestCase("collection paths", \collectionPathsTest());
+        addTestCase("list paths", \listPathsTest());
+        addTestCase("list item paths", \listItemPathsTest());
+        addTestCase("writable field filtering", \writableFieldsTest());
+        addTestCase("column type mapping", \columnTypeMappingTest());
+        addTestCase("record flattening", \recordFlattenTest());
+        addTestCase("OData filter translation", \odataFilterTest());
+        addTestCase("graph url stripping", \graphUrlStripTest());
+        addTestCase("event change filtering", \eventFilterTest());
+        addTestCase("live connection ping", \liveConnectionPingTest());
+        addTestCase("live site and library navigation", \liveNavigationTest());
+        addTestCase("live binary round trip", \liveBinaryRoundTripTest());
+        addTestCase("live list and record lifecycle", \liveListLifecycleTest());
+
+        set_return_value(main());
+    }
+
+    checkModule() {
+    }
+
+    private SharePointDataProvider::SharePointDataProvider getProvider(
+            reference<FakeSharePointRestClientIo> rest) {
+        rest = new FakeSharePointRestClientIo();
+        return new SharePointDataProvider::SharePointDataProvider(rest);
+    }
+
+    sanityTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        assertEq("sharepoint", prov.getName());
+
+        *list<string> children = prov.getChildProviderNames();
+        # the file surface reused from OneDrive
+        foreach string name in (("items", "get-item", "create-folder", "upload-file",
+                "create-upload-session", "download-file", "delete-item", "update-item", "copy-item",
+                "create-sharing-link", "get-drive-info")) {
+            assertTrue(inlist(name, children), sprintf("has file child %y", name));
+        }
+        # the surfaces with no OneDrive equivalent
+        foreach string name in (("sites", "drives", "lists", "columns", "list-items", "get-site",
+                "get-list", "create-list", "delete-list", "get-list-item", "create-list-item",
+                "update-list-item", "delete-list-item", "records", "events")) {
+            assertTrue(inlist(name, children), sprintf("has child %y", name));
+        }
+
+        assertEq("SharePoint", SharePointDataProvider::AppName);
+        assertEq("sharepoint", ApiProfile, "the client profile the module pins");
+    }
+
+    actionCatalogTest() {
+        checkModule();
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("SharePoint");
+        hash<string, bool> names = map {$1.action: True}, actions;
+
+        # every action the TypeScript app had must still exist, so nothing regresses
+        foreach string name in (("create-folder", "create-list", "create-list-item",
+                "delete-list-item", "update-list-item", "new-row")) {
+            assertTrue(names{name}, sprintf("TS app action %y is still offered", name));
+        }
+        # the TS app searched list items with a single hardcoded "Title eq" query; the replacement
+        # is a general find action
+        assertTrue(names."search-list-items", "list item search is offered");
+
+        # the file surface the TS app never had: it could not move a file at all
+        foreach string name in (("upload-file", "download-file", "create-upload-session",
+                "delete-item", "update-item", "copy-item", "create-sharing-link", "search-items",
+                "get-item", "get-drive-info")) {
+            assertTrue(names{name}, sprintf("file action %y is offered", name));
+        }
+        # and the list actions it omitted
+        assertTrue(names."get-list", "get-list is offered (the TS app could create but not read)");
+        assertTrue(names."delete-list", "delete-list is offered (the TS app could never delete)");
+
+        assertTrue(actions.size() > 20, sprintf("the app offers %d actions", actions.size()));
+
+        # every action carries the documentation the checklist requires
+        foreach hash<auto> action in (actions) {
+            assertTrue(action.display_name.val(), sprintf("%y has a display_name", action.action));
+            assertTrue(action.short_desc.val(), sprintf("%y has a short_desc", action.action));
+            assertTrue(action.desc.val(), sprintf("%y has a desc", action.action));
+        }
+    }
+
+    fileApiTest() {
+        checkModule();
+        *hash<DataProviderFileApiInfo> fapi = DataProviderActionCatalog::getAppFileApi("SharePoint");
+        assertTrue(exists fapi, "SharePoint registers a file API, so conn:// can reach a library");
+        assertEq("download-file", fapi.read_action);
+        assertEq("upload-file", fapi.write_action);
+        # a document library is the container: one connection reaches every library in the tenant
+        assertEq("drive_id", fapi.read_container_option);
+        assertEq("drive_id", fapi.write_container_option);
+        # Graph does not return bytes; it returns a pre-authenticated URL that the framework fetches
+        assertEq(DPFR_URL, fapi.read_mode, "the read is a two-step URL fetch, not inline data");
+        assertEq("download_url", fapi.read_data_field);
+        assertEq(True, fapi.path_is_id, "items are addressed by opaque ID, not by path");
+        assertEq(True, fapi.write_path_is_parent);
+        assertTrue(inlist("SharePoint", DataProviderActionCatalog::getAppFileApiNames()));
+    }
+
+    connectionSchemeTest() {
+        checkModule();
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("sharepoint");
+        assertEq("Microsoft SharePoint", scheme.display_name);
+        assertTrue(scheme.schemes.sharepoint, "the sharepoint:// scheme is registered");
+
+        SharePointRestConnection conn("sp", "test", SharePointRestConnection::DefaultUrl, {}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("sharepoint", conn.getType());
+        assertEq("SharePoint", conn.getAppName());
+        assertEq("sharepoint://graph.microsoft.com", conn.getUrl());
+        assertTrue(conn.hasDataProvider());
+
+        # the SharePoint profile asks for site scopes and pings a site, not the user's own drive
+        assertEq(OneDriveRestClientBase::SharePointOAuth2Scopes,
+            scheme.options.oauth2_scopes.default_value);
+        assertEq(OneDriveRestClientBase::SharePointPingPath, scheme.options.ping_path.default_value);
+        assertFalse(inlist("Files.ReadWrite.All", OneDriveRestClientBase::SharePointOAuth2Scopes),
+            "SharePoint does not ask for access to every drive in the tenant");
+
+        # resolving the profile must not disturb OneDrive, which is the default
+        hash<auto> sp = OneDriveRestClientBase::getOptions({"api_profile": "sharepoint"});
+        hash<auto> od = OneDriveRestClientBase::getOptions({});
+        assertEq(OneDriveRestClientBase::SharePointPingPath, sp.ping_path);
+        assertEq(OneDriveRestClientBase::DefaultPingPath, od.ping_path);
+        assertFalse(sp.hasKey("api_profile"), "the profile name is consumed, not passed to the client");
+    }
+
+    dataTypesTest() {
+        checkModule();
+        hash<auto> site_fields = SharePointSiteDataType.getFields();
+        assertTrue(exists site_fields.id && exists site_fields.displayName && exists site_fields.webUrl);
+        hash<auto> drive_fields = SharePointDriveDataType.getFields();
+        assertTrue(exists drive_fields.id && exists drive_fields.driveType);
+        hash<auto> list_fields = SharePointListDataType.getFields();
+        assertTrue(exists list_fields.id && exists list_fields.displayName);
+        hash<auto> item_fields = SharePointListItemDataType.getFields();
+        assertTrue(exists item_fields.id && exists item_fields."fields");
+        hash<auto> col_fields = SharePointColumnDataType.getFields();
+        assertTrue(exists col_fields.name && exists col_fields.readOnly);
+
+        # the selectors cascade, so the pickers refetch as the hierarchy is narrowed
+        assertEq(("site_id",), ListIdField."list_id"."depends_on");
+        assertEq(("site_id",), DriveIdField."drive_id"."depends_on");
+        assertEq(("site_id", "list_id"), ItemIdField."item_id"."depends_on");
+        assertEq("sites", SiteIdField."site_id"."ref_data");
+        assertEq("drives", DriveIdField."drive_id"."ref_data");
+        assertEq("lists", ListIdField."list_id"."ref_data");
+        assertEq("list-items", ItemIdField."item_id"."ref_data");
+        assertTrue(SiteIdField."site_id"."has_dependents");
+    }
+
+    #! Every reused OneDrive provider must build a path rooted at the named library
+    driveItemPathsTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        hash<auto> base = {"site_id": TestSite, "drive_id": TestDrive};
+        string root = "drives/" + TestDrive;
+
+        rest.response_body = {"id": "ITEM1", "name": "spec.docx", "size": 10};
+        prov.getChildProvider("get-item").doRequest(base + {"id": "ITEM1"});
+        assertEq("GET", rest.last_method);
+        assertEq(root + "/items/ITEM1", rest.last_path);
+
+        prov.getChildProvider("get-item").doRequest(base + {"path": "/Shared Documents/spec.docx"});
+        assertEq(root + "/root:/Shared Documents/spec.docx", rest.last_path);
+
+        prov.getChildProvider("create-folder").doRequest(base + {"name": "Contracts"});
+        assertEq("POST", rest.last_method);
+        assertEq(root + "/root/children", rest.last_path);
+        assertEq("Contracts", rest.last_request.name);
+
+        prov.getChildProvider("create-folder").doRequest(base + {"name": "Sub", "parent_id": "F1"});
+        assertEq(root + "/items/F1/children", rest.last_path);
+
+        prov.getChildProvider("delete-item").doRequest(base + {"id": "ITEM1"});
+        assertEq("DELETE", rest.last_method);
+        assertEq(root + "/items/ITEM1", rest.last_path);
+
+        prov.getChildProvider("update-item").doRequest(base + {"id": "ITEM1", "name": "new.docx"});
+        assertEq("PATCH", rest.last_method);
+        assertEq(root + "/items/ITEM1", rest.last_path);
+
+        prov.getChildProvider("copy-item").doRequest(base + {"id": "ITEM1", "name": "copy.docx"});
+        assertEq("POST", rest.last_method);
+        assertEq(root + "/items/ITEM1/copy", rest.last_path);
+
+        prov.getChildProvider("create-sharing-link").doRequest(base + {"id": "ITEM1", "type": "view"});
+        assertEq(root + "/items/ITEM1/createLink", rest.last_path);
+
+        prov.getChildProvider("get-drive-info").doRequest(base);
+        assertEq("GET", rest.last_method);
+        assertEq(root, rest.last_path);
+
+        prov.getChildProvider("create-upload-session").doRequest(base + {"filename": "big.zip"});
+        assertEq(root + "/root:/big.zip:/createUploadSession", rest.last_path);
+
+        rest.response_body = {"id": "ITEM1", "name": "spec.docx", "size": 10,
+            "@microsoft.graph.downloadUrl": "https://example.com/dl"};
+        hash<auto> dl = prov.getChildProvider("download-file").doRequest(base + {"id": "ITEM1"});
+        assertEq(root + "/items/ITEM1", rest.last_path);
+        assertEq("https://example.com/dl", dl.download_url,
+            "download-file surfaces the pre-authenticated URL the file API reads");
+
+        # nothing anywhere addresses the signed-in user's personal drive
+        assertNRegex("me/drive", rest.last_path);
+    }
+
+    #! One provider object serves several libraries; the drive comes from each request
+    drivePerRequestTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        rest.response_body = {"id": "ITEM1"};
+
+        AbstractDataProvider dp = prov.getChildProvider("get-item");
+        dp.doRequest({"site_id": TestSite, "drive_id": "b!one", "id": "ITEM1"});
+        assertEq("drives/b!one/items/ITEM1", rest.last_path);
+
+        # the same object, a different library: no state is carried between calls, which matters
+        # because a provider is shared between threads
+        dp.doRequest({"site_id": TestSite, "drive_id": "b!two", "id": "ITEM1"});
+        assertEq("drives/b!two/items/ITEM1", rest.last_path);
+    }
+
+    missingDriveTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+
+        # drive_id is required by the request type, so the omission is caught before the call
+        AbstractDataProvider get_item = prov.getChildProvider("get-item");
+        AbstractDataProvider get_site = prov.getChildProvider("get-site");
+        assertThrows("INVALID-REQUEST", "drive_id", \get_item.doRequest(),
+            ({"site_id": TestSite, "id": "ITEM1"},));
+
+        assertThrows("INVALID-REQUEST", "site_id", \get_site.doRequest(), ({},));
+
+        # a provider with no request type to validate against - an event provider is configured
+        # rather than called - reports the missing option itself, naming the action that lists the
+        # values it accepts
+        TestNewFileDataProvider unconfigured(rest, {});
+        assertThrows("SHAREPOINT-DRIVE-ERROR", "list-drives", \unconfigured.feed());
+        TestNewRowDataProvider no_site(rest, {"list_id": TestList});
+        assertThrows("SHAREPOINT-SITE-ERROR", "list-sites", \no_site.feed());
+    }
+
+    #! File content must not go through the connection's JSON codec
+    uploadRawTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        rest.response_body = {"id": "F1", "name": "a.bin", "size": 3};
+
+        # content with a NUL and a high byte: base64-through-JSON would change every one of them
+        binary content = binary("\x00\x01\xff");
+        prov.getChildProvider("upload-file").doRequest({
+            "site_id": TestSite,
+            "drive_id": TestDrive,
+            "file": {
+                "name": "a.bin",
+                "content": make_base64_string(content),
+                "mime_type": "application/octet-stream",
+            },
+        });
+        assertEq("PUT", rest.last_method);
+        assertEq("drives/" + TestDrive + "/root:/a.bin:/content", rest.last_path);
+        assertTrue(rest.last_raw, "the content request bypasses the data serialization codec");
+        assertEq(NT_BINARY, rest.last_request.typeCode(), "the body reaches the client as binary");
+        assertEq(content, rest.last_request, "the exact bytes given are the bytes sent");
+        assertEq("application/octet-stream", rest.last_headers."Content-Type");
+    }
+
+    collectionPathsTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+
+        rest.response_body = {"value": ()};
+        prov.getChildProvider("items").searchRecords(NOTHING, {
+            "site_id": TestSite, "drive_id": TestDrive});
+        assertRegex("^drives/" + TestDrive + "/root/children", rest.last_path);
+
+        prov.getChildProvider("items").searchRecords(NOTHING, {
+            "site_id": TestSite, "drive_id": TestDrive, "folder_id": "F1"});
+        assertRegex("^drives/" + TestDrive + "/items/F1/children", rest.last_path);
+
+        prov.getChildProvider("drives").searchRecords(NOTHING, {"site_id": TestSite});
+        assertRegex("^sites/" + TestSite + "/drives", rest.last_path);
+
+        # with no search term the root site and its subsites are listed, which always works;
+        # "/sites?search=" is answered from the search index and can legitimately return nothing
+        prov.getChildProvider("sites").searchRecords();
+        assertRegex("^sites/root", rest.last_path);
+
+        prov.getChildProvider("sites").searchRecords(NOTHING, {"search": "Marketing Team"});
+        assertRegex("^sites\\?search=", rest.last_path);
+        assertNRegex("search=Marketing Team", rest.last_path,
+            "the search term is URL-encoded; Graph answers an unencoded space with an HTML error page");
+    }
+
+    listPathsTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        rest.response_body = {"value": ()};
+
+        prov.getChildProvider("lists").searchRecords(NOTHING, {"site_id": TestSite});
+        assertRegex("^sites/" + TestSite + "/lists", rest.last_path);
+
+        rest.response_body = {"id": TestList, "displayName": "Orders"};
+        hash<auto> l = prov.getChildProvider("get-list").doRequest({
+            "site_id": TestSite, "list_id": TestList});
+        assertEq("GET", rest.last_method);
+        assertEq("sites/" + TestSite + "/lists/" + TestList, rest.last_path);
+        assertEq("Orders", l.displayName);
+
+        prov.getChildProvider("create-list").doRequest({
+            "site_id": TestSite, "display_name": "Orders", "description": "d",
+            "template": "genericList"});
+        assertEq("POST", rest.last_method);
+        assertEq("sites/" + TestSite + "/lists", rest.last_path);
+        assertEq("Orders", rest.last_request.displayName);
+        assertEq("genericList", rest.last_request."list".template);
+        assertEq("d", rest.last_request.description);
+
+        hash<auto> del = prov.getChildProvider("delete-list").doRequest({
+            "site_id": TestSite, "list_id": TestList});
+        assertEq("DELETE", rest.last_method);
+        assertEq("sites/" + TestSite + "/lists/" + TestList, rest.last_path);
+        assertEq("deleted", del.status);
+        assertEq(TestList, del.id);
+
+        rest.response_body = {"value": ()};
+        prov.getChildProvider("columns").searchRecords(NOTHING, {
+            "site_id": TestSite, "list_id": TestList});
+        assertRegex("^sites/" + TestSite + "/lists/" + TestList + "/columns", rest.last_path);
+    }
+
+    listItemPathsTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        string lbase = "sites/" + TestSite + "/lists/" + TestList;
+
+        rest.response_body = {"id": "1", "fields": {"Title": "Widget"}};
+        hash<auto> item = prov.getChildProvider("get-list-item").doRequest({
+            "site_id": TestSite, "list_id": TestList, "item_id": "1"});
+        assertEq(lbase + "/items/1?$expand=fields", rest.last_path);
+        assertEq("Widget", item."fields".Title);
+
+        prov.getChildProvider("create-list-item").doRequest({
+            "site_id": TestSite, "list_id": TestList, "fields": {"Title": "Widget"}});
+        assertEq("POST", rest.last_method);
+        assertEq(lbase + "/items", rest.last_path);
+        assertEq("Widget", rest.last_request."fields".Title);
+
+        prov.getChildProvider("update-list-item").doRequest({
+            "site_id": TestSite, "list_id": TestList, "item_id": "1",
+            "fields": {"Title": "Widget2"}});
+        assertEq("PATCH", rest.last_method);
+        assertEq(lbase + "/items/1/fields", rest.last_path,
+            "an update patches the fields resource, not the item");
+        assertEq("Widget2", rest.last_request.Title);
+
+        hash<auto> del = prov.getChildProvider("delete-list-item").doRequest({
+            "site_id": TestSite, "list_id": TestList, "item_id": "1"});
+        assertEq("DELETE", rest.last_method);
+        assertEq(lbase + "/items/1", rest.last_path);
+        assertEq("deleted", del.status);
+
+        rest.response_body = {"value": ()};
+        prov.getChildProvider("list-items").searchRecords(NOTHING, {
+            "site_id": TestSite, "list_id": TestList, "filter": "fields/Title eq 'Widget'"});
+        assertRegex("\\$expand=fields", rest.last_path);
+        assertRegex("\\$filter=", rest.last_path);
+        # SharePoint refuses a query on a column it has not indexed unless asked not to
+        assertEq("HonorNonIndexedQueriesWarningMayFailRandomly", rest.last_headers.Prefer);
+    }
+
+    writableFieldsTest() {
+        checkModule();
+        # the fields SharePoint maintains are rejected on write, so a record read back and written
+        # again unchanged would fail without this
+        hash<auto> out = SharePointListItemWriteDataProviderBase::getWritableFields({
+            "Title": "Widget",
+            "Amount": 42,
+            "id": "1",
+            "createdDateTime": "2026-01-01T00:00:00Z",
+            "lastModifiedDateTime": "2026-01-01T00:00:00Z",
+            "webUrl": "https://example.com",
+            "eTag": "\"1\"",
+            "@odata.etag": "\"1\"",
+            "_hidden": "x",
+            "ContentType": "Item",
+        });
+        assertEq(("Title", "Amount"), keys out, "only the writable columns survive");
+        assertEq(42, out.Amount, "a numeric column keeps its type");
+
+        # a multi-valued column has to declare itself or Graph reads the list as a single value
+        hash<auto> multi = SharePointListItemWriteDataProviderBase::getWritableFields({
+            "Tags": ("a", "b"),
+        });
+        assertEq(("a", "b"), multi.Tags);
+        assertEq("Collection(Edm.String)", multi."Tags@odata.type");
+
+        # a single-valued column must not acquire the annotation
+        hash<auto> single = SharePointListItemWriteDataProviderBase::getWritableFields({"Tags": "a"});
+        assertFalse(single.hasKey("Tags@odata.type"));
+    }
+
+    columnTypeMappingTest() {
+        checkModule();
+        # Graph declares a column's kind by which facet is present, not by a type name
+        assertEq(NT_BOOLEAN, SharePointDataProviderBase::getColumnField({
+            "name": "Flag", "displayName": "Flag", "boolean": {},
+        }).type.getBaseTypeCode());
+        assertEq(NT_STRING, SharePointDataProviderBase::getColumnField({
+            "name": "Title", "displayName": "Title", "text": {},
+        }).type.getBaseTypeCode());
+        assertEq(NT_DATE, SharePointDataProviderBase::getColumnField({
+            "name": "Due", "displayName": "Due", "dateTime": {},
+        }).type.getBaseTypeCode());
+        assertEq(NT_NUMBER, SharePointDataProviderBase::getColumnField({
+            "name": "Amount", "displayName": "Amount", "number": {},
+        }).type.getBaseTypeCode(), "a number column is not typed as a string");
+        assertEq(NT_NUMBER, SharePointDataProviderBase::getColumnField({
+            "name": "Price", "displayName": "Price", "currency": {},
+        }).type.getBaseTypeCode());
+
+        # a choice column carries its choices as allowed values, with display names
+        *hash<auto> choice = SharePointDataProviderBase::getColumnField({
+            "name": "Status", "displayName": "Status",
+            "choice": {"choices": ("Open", "Closed"), "displayAs": "dropDownMenu"},
+        });
+        assertEq(2, choice.allowed_values.size());
+        assertEq("Open", choice.allowed_values[0].value);
+        assertEq("Open", choice.allowed_values[0].display_name);
+
+        # a check-box choice holds several values at once
+        *hash<auto> multi = SharePointDataProviderBase::getColumnField({
+            "name": "Tags", "displayName": "Tags",
+            "choice": {"choices": ("a", "b"), "displayAs": "checkBoxes"},
+        });
+        assertEq(NT_LIST, multi.type.getBaseTypeCode());
+
+        # a column whose kind has no useful mapping is skipped rather than guessed at
+        assertNothing(SharePointDataProviderBase::getColumnField({
+            "name": "Calc", "displayName": "Calc", "calculated": {},
+        }));
+
+        # the column's own requiredness carries over
+        assertEq(True, SharePointDataProviderBase::getColumnField({
+            "name": "Title", "displayName": "Title", "text": {}, "required": True,
+        }).required);
+    }
+
+    recordFlattenTest() {
+        checkModule();
+        # a record is one flat hash: Graph nests the column values under "fields" and keeps its own
+        # bookkeeping beside them
+        hash<auto> rec = SharePointRecordTableDataProvider::flattenItem({
+            "id": "1",
+            "webUrl": "https://example.com/1",
+            "createdDateTime": "2026-01-01T00:00:00Z",
+            "lastModifiedDateTime": "2026-01-02T00:00:00Z",
+            "fields": {
+                "Title": "Widget",
+                "Amount": 42,
+                "Done": True,
+                "@odata.etag": "\"1\"",
+                "_internal": "x",
+            },
+        });
+        assertEq("1", rec.id);
+        assertEq("Widget", rec.Title);
+        # the mixed types are the point: a narrowed hash would fail on the first non-string column
+        assertEq(42, rec.Amount);
+        assertEq(True, rec.Done);
+        assertFalse(rec.hasKey("@odata.etag"), "OData bookkeeping is dropped");
+        assertFalse(rec.hasKey("_internal"), "SharePoint's internal keys are dropped");
+        assertEq("https://example.com/1", rec.webUrl);
+    }
+
+    odataFilterTest() {
+        checkModule();
+        # a simple equality condition is pushed to the server
+        assertEq("fields/Title eq 'Widget'",
+            SharePointRecordTableDataProvider::getODataFilter({"Title": "Widget"}));
+        # the key field is not a column, so it is not prefixed
+        assertEq("id eq '1'", SharePointRecordTableDataProvider::getODataFilter({"id": "1"}));
+        assertEq("fields/Amount eq 42",
+            SharePointRecordTableDataProvider::getODataFilter({"Amount": 42}));
+        assertEq("fields/Done eq true",
+            SharePointRecordTableDataProvider::getODataFilter({"Done": True}));
+        # a single quote is escaped by doubling it, so a value cannot break out of the literal
+        assertEq("fields/Title eq 'O''Brien'",
+            SharePointRecordTableDataProvider::getODataFilter({"Title": "O'Brien"}));
+
+        # anything the translation cannot express returns nothing, so that the caller filters
+        # locally rather than silently returning the wrong rows
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({
+            "exp": "and", "args": ()}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({
+            "Amount": {"op": ">", "value": 5}}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter());
+    }
+
+    graphUrlStripTest() {
+        checkModule();
+        # Graph returns paging and delta cursors as absolute URLs, but the client is already rooted
+        # at the API version, so the prefix has to come off or the version appears twice
+        assertEq("sites/root/lists", SharePointDataProviderBase::stripGraphBaseUrl(
+            "https://graph.microsoft.com/v1.0/sites/root/lists"));
+        assertEq("sites/root/lists", SharePointDataProviderBase::stripGraphBaseUrl(
+            "https://graph.microsoft.com/beta/sites/root/lists"));
+        # an already-relative path is left alone
+        assertEq("sites/root/lists", SharePointDataProviderBase::stripGraphBaseUrl(
+            "sites/root/lists"));
+    }
+
+    #! A delta entry says what an item is now, not what changed, so the classification matters
+    eventFilterTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest();
+        hash<auto> opts = {"site_id": TestSite, "drive_id": TestDrive, "list_id": TestList};
+
+        TestNewFileDataProvider nf(rest, opts);
+        TestFileModifiedDataProvider fm(rest, opts);
+        TestNewFolderDataProvider nd(rest, opts);
+        TestNewRowDataProvider nr(rest, opts);
+
+        hash<auto> new_file = {"id": "1", "file": {"mimeType": "text/plain"},
+            "createdDateTime": "2026-01-01T00:00:00Z", "lastModifiedDateTime": "2026-01-01T00:00:00Z",
+            "parentReference": {"path": "/drive/root:"}};
+        hash<auto> mod_file = new_file + {"lastModifiedDateTime": "2026-01-02T00:00:00Z"};
+        hash<auto> new_dir = {"id": "2", "folder": {"childCount": 0},
+            "createdDateTime": "2026-01-01T00:00:00Z", "lastModifiedDateTime": "2026-01-01T00:00:00Z",
+            "parentReference": {"path": "/drive/root:"}};
+        hash<auto> deleted = new_file + {"deleted": {"state": "deleted"}};
+        # the library root itself appears in the first page of a fresh delta feed
+        hash<auto> drive_root = {"id": "root", "folder": {"childCount": 3},
+            "createdDateTime": "2026-01-01T00:00:00Z", "lastModifiedDateTime": "2026-01-01T00:00:00Z"};
+
+        assertTrue(nf.check(new_file), "a newly created file is a new file");
+        assertFalse(nf.check(mod_file), "a modified file is not a new file");
+        assertFalse(nf.check(new_dir), "a folder is not a file");
+        assertFalse(nf.check(deleted), "a deleted item is not a new file");
+
+        assertTrue(fm.check(mod_file), "a modified file is a modification");
+        assertFalse(fm.check(new_file), "a creation is not a modification");
+        assertFalse(fm.check(deleted), "a delete is not a modification");
+
+        assertTrue(nd.check(new_dir), "a newly created folder is a new folder");
+        assertFalse(nd.check(new_file), "a file is not a folder");
+        assertFalse(nd.check(drive_root),
+            "the library root is not a newly created folder");
+
+        hash<auto> new_row = {"id": "1", "createdDateTime": "2026-01-01T00:00:00Z",
+            "lastModifiedDateTime": "2026-01-01T00:00:00Z", "fields": {"Title": "x"}};
+        assertTrue(nr.check(new_row), "a newly created item is a new row");
+        assertFalse(nr.check(new_row + {"lastModifiedDateTime": "2026-01-02T00:00:00Z"}),
+            "an updated item is not a new row");
+        assertFalse(nr.check(new_row + {"deleted": {"state": "deleted"}}),
+            "a deleted item is not a new row");
+
+        # the cursor is keyed on the feed, so tuning the poll interval does not re-seed it
+        assertEq({"feed": "drives/" + TestDrive + "/root"}, nf.feed());
+        assertEq({"feed": "sites/" + TestSite + "/lists/" + TestList + "/items"},
+            nr.feed());
+    }
+
+    # --- Live tests (require -c <connection>) ---
+
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn;
+        if (!conn_name) {
+            testSkip("no connection specified; use -c <connection_name>");
+            return;
+        }
+        return get_connection(conn_name);
+    }
+
+    liveConnectionPingTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+        hash<auto> info = conn.ping(True);
+        assertEq(True, info.ok, "ping succeeded");
+    }
+
+    liveNavigationTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        list<hash<auto>> sites = ();
+        {
+            AbstractDataProviderRecordIterator<hash<auto>> i =
+                prov.getChildProvider("sites").searchRecords();
+            while (i.next()) {
+                sites += i.getValue();
+            }
+        }
+        assertGt(0, sites.size(), "listing sites with no search term always returns the root site");
+        live_site = sites[0].id;
+        assertTrue(live_site.val());
+
+        list<hash<auto>> drives = ();
+        {
+            AbstractDataProviderRecordIterator<hash<auto>> i =
+                prov.getChildProvider("drives").searchRecords(NOTHING, {"site_id": live_site});
+            while (i.next()) {
+                drives += i.getValue();
+            }
+        }
+        assertGt(0, drives.size(), "the site has at least one document library");
+        live_drive = drives[0].id;
+        assertEq("documentLibrary", drives[0].driveType);
+
+        # the library picker must offer the site's libraries, not the signed-in user's own drive
+        *list<hash<AllowedValueInfo>> ref = prov.getReferenceData("drives", {"site_id": live_site});
+        assertEq(drives.size(), ref.size(), "the drive_id dropdown lists the site's libraries");
+        assertEq((map string($1.id), drives), (map $1.value, ref));
+    }
+
+    #! Content must survive both directions unchanged, which a successful call does not prove
+    liveBinaryRoundTripTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+        AbstractDataProvider prov = conn.getDataProvider();
+        if (!live_drive.val()) {
+            testSkip("no document library resolved");
+            return;
+        }
+
+        # every byte value, so a codec that mangles NUL, high bytes or invalid UTF-8 is caught
+        binary payload = binary();
+        for (int i = 0; i < 256; ++i) {
+            payload += chr(i).toBinary();
+        }
+        string name = sprintf("qore-sp-test-%d-%d.bin", gettid(), clock_getmicros());
+
+        hash<auto> up = prov.getChildProvider("upload-file").doRequest({
+            "site_id": live_site,
+            "drive_id": live_drive,
+            "file": {
+                "name": name,
+                "content": make_base64_string(payload),
+                "mime_type": "application/octet-stream",
+            },
+        });
+        on_exit {
+            try {
+                prov.getChildProvider("delete-item").doRequest({
+                    "site_id": live_site, "drive_id": live_drive, "id": up.id});
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: could not remove test file %y: %s: %s\n", name, ex.err, ex.desc);
+            }
+        }
+        # the byte count alone catches the base64-into-JSON failure: 256 bytes become 346
+        assertEq(payload.size(), up.size, "the library stored exactly the bytes uploaded");
+
+        hash<auto> dl = prov.getChildProvider("download-file").doRequest({
+            "site_id": live_site, "drive_id": live_drive, "id": up.id});
+        assertTrue(dl.download_url.val(), "the download is a pre-authenticated URL");
+
+        HTTPClient hc({"url": dl.download_url});
+        auto body = hc.get("");
+        binary got = body.typeCode() == NT_BINARY ? body : body.toBinary();
+        assertEq(payload, got, "the content round-trips byte for byte");
+    }
+
+    liveListLifecycleTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+        AbstractDataProvider prov = conn.getDataProvider();
+        if (!live_site.val()) {
+            testSkip("no site resolved");
+            return;
+        }
+
+        string list_name = sprintf("Qore SP Test %d-%d", gettid(), clock_getmicros());
+        hash<auto> nlist = prov.getChildProvider("create-list").doRequest({
+            "site_id": live_site,
+            "display_name": list_name,
+            "description": "created by SharePointDataProvider.qtest",
+            "template": "genericList",
+            "columns": ({"name": "Amount", "number": {}}, {"name": "Notes", "text": {}}),
+        });
+        assertTrue(nlist.id.val(), "the list was created");
+        string list_id = nlist.id;
+        on_exit {
+            try {
+                prov.getChildProvider("delete-list").doRequest({
+                    "site_id": live_site, "list_id": list_id});
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: could not remove test list %y: %s: %s\n", list_name, ex.err, ex.desc);
+            }
+        }
+
+        assertEq(list_name, prov.getChildProvider("get-list").doRequest({
+            "site_id": live_site, "list_id": list_id}).displayName);
+
+        hash<auto> row = prov.getChildProvider("create-list-item").doRequest({
+            "site_id": live_site, "list_id": list_id,
+            "fields": {"Title": "Widget", "Amount": 42, "Notes": "first"},
+        });
+        assertTrue(row.id.val());
+
+        hash<auto> got = prov.getChildProvider("get-list-item").doRequest({
+            "site_id": live_site, "list_id": list_id, "item_id": row.id});
+        assertEq("Widget", got."fields".Title, "the value written is the value read back");
+        assertEq(42, got."fields".Amount.toInt());
+
+        prov.getChildProvider("update-list-item").doRequest({
+            "site_id": live_site, "list_id": list_id, "item_id": row.id,
+            "fields": {"Notes": "updated"}});
+        got = prov.getChildProvider("get-list-item").doRequest({
+            "site_id": live_site, "list_id": list_id, "item_id": row.id});
+        assertEq("updated", got."fields".Notes);
+        assertEq("Widget", got."fields".Title, "the update left the other columns alone");
+
+        # the record surface over the same list, typed from the list's own columns
+        AbstractDataProvider table = prov.getChildProvider("records").getChildProvider(list_name);
+        *hash<string, AbstractDataField> rt = table.getRecordType();
+        assertTrue(exists rt.Amount, "the record type follows the list's schema");
+        assertEq(NT_NUMBER, rt.Amount.getType().getBaseTypeCode(),
+            "a number column is typed as a number");
+
+        hash<auto> created = table.createRecord({"Title": "FromRecords", "Amount": 7});
+        assertTrue(created.id.val());
+        int found = 0;
+        {
+            AbstractDataProviderRecordIterator<hash<auto>> i =
+                table.searchRecords({"Title": "FromRecords"});
+            while (i.next()) {
+                ++found;
+                assertEq(7, i.getValue().Amount.toInt(), "the field value survives the round trip");
+            }
+        }
+        assertEq(1, found, "the condition was pushed to the server and matched one record");
+        assertEq(1, table.updateRecords({"Notes": "r2"}, {"Title": "FromRecords"}));
+        assertEq(1, table.deleteRecords({"Title": "FromRecords"}));
+    }
+}

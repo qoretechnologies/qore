@@ -41,6 +41,7 @@ module OneDriveRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("onedrive", OneDriveRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("sharepoint", SharePointRestConnection::ConnectionScheme);
     };
 }
 
@@ -552,6 +553,114 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
     #! Returns an async-I/O-capable connection object
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new OneDriveRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! class for Microsoft SharePoint REST connections; returns @ref OneDriveRestClientIo objects
+/** SharePoint is served by the same Microsoft Graph host, and authorized by the same OAuth2 flow, as
+    OneDrive; the two differ only in which scopes they ask for and what a meaningful ping is.  That
+    difference is carried by the \c "sharepoint" entry in
+    @ref OneDriveRestClientBase::ApiProfiles "ApiProfiles", which this connection pins, so there is no
+    separate SharePoint client class to keep in step with Microsoft's OAuth2 handling.
+
+    @since %OneDriveRestClient 1.1
+*/
+public class SharePointRestConnection inherits OneDriveRestConnection {
+    public {
+        #! Default SharePoint REST API URL
+        const DefaultUrl = "sharepoint://graph.microsoft.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Microsoft SharePoint",
+            "short_desc": "A connection to Microsoft SharePoint via the Microsoft Graph API",
+            "desc": "A connection to Microsoft SharePoint via the Microsoft Graph API, for document "
+                "libraries and lists.\n\n"
+                "Requires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your "
+                "[Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). "
+                "The connection uses the `sharepoint://` URL scheme",
+            "cls": Class::forName("SharePointRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "sharepoint": True,
+            },
+            "base_scheme_map": {
+                "https": "sharepoint",
+            },
+            "options": OneDriveRestConnection::ConnectionScheme.options + {
+                "oauth2_scopes": OneDriveRestConnection::ConnectionScheme.options.oauth2_scopes
+                        + <ConnectionOptionInfo>{
+                    "default_value": OneDriveRestClientBase::SharePointOAuth2Scopes,
+                },
+                "ping_path": OneDriveRestConnection::ConnectionScheme.options.ping_path
+                        + <ConnectionOptionInfo>{
+                    "default_value": OneDriveRestClientBase::SharePointPingPath,
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+        };
+    }
+
+    #! creates the SharePointRestConnection object
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : OneDriveRestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the SharePointRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : OneDriveRestConnection(SharePointRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config with the correct URL
+    private static hash<auto> getConfig(hash<auto> config) {
+        if (!config.url || config.url != DefaultUrl) {
+            config.url = DefaultUrl;
+        }
+        return config;
+    }
+
+    #! returns \c "sharepoint"
+    string getType() {
+        return "sharepoint";
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "SharePoint";
+    }
+
+    #! returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the SharePointDataProvider and creates the
+        # data provider object dynamically
+        load_module("SharePointDataProvider");
+        return create_object("SharePointDataProvider", getAsync());
+    }
+
+    #! Returns the connection options with the SharePoint API profile pinned
+    /** The profile supplies the scopes and ping that SharePoint needs, and only where the connection
+        has not set the option itself.
+    */
+    private hash<auto> getSharePointConnectionOptions(*hash<auto> rtopts) {
+        return getConnectionOptions(rtopts) + {
+            "api_profile": "sharepoint",
+        };
+    }
+
+    #! returns a @ref OneDriveRestClient object configured for SharePoint
+    private OneDriveRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new OneDriveRestClient(getSharePointConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object configured for SharePoint
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new OneDriveRestClientIo(getSharePointConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

@@ -294,6 +294,7 @@ public class DataProvider {
             "tally": "TallyDataProvider",
 
             "onedrive": "OneDriveDataProvider",
+            "sharepoint": "SharePointDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",

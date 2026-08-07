@@ -143,9 +143,14 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
 
         @return the Graph path prefix for this provider's drive, with no trailing slash
 
+        @note public rather than private because it is overridden from a *sibling* branch of the
+        class hierarchy: SharePointDataProvider combines its own policy base with these leaf
+        providers, and a private method declared in one branch is not reachable from the execution
+        context of the other.
+
         @since %OneDriveDataProvider 1.1
     */
-    private string getDriveBasePath(*hash<auto> req) {
+    string getDriveBasePath(*hash<auto> req) {
         return "me/drive";
     }
 

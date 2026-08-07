@@ -1,0 +1,721 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file SharePointDataProvider.qm Qore user module providing a data provider API for Microsoft SharePoint
+
+/*  SharePointDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires OneDriveRestClient
+%requires(reexport) OneDriveDataProvider
+%requires RestClientIo
+
+module SharePointDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Microsoft SharePoint via Microsoft Graph";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new SharePointDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SharePointDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Microsoft SharePoint",
+            "short_desc": "Microsoft SharePoint document libraries and lists",
+            "desc": "Provides access to [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) "
+                "document libraries and lists via the Microsoft Graph API.\n\n"
+                "**Common use cases**:\n"
+                "- **Document management**: upload, download, copy, move, and delete documents in a "
+                "document library, including resumable uploads for large files\n"
+                "- **Sharing**: create sharing links for documents and folders\n"
+                "- **Lists**: create and delete lists, and create, update, search, and delete list items\n"
+                "- **Records**: read and write list items as records, typed from each list's own columns\n"
+                "- **Change tracking**: react to new and modified documents and to new list items, using "
+                "delta queries that resume exactly where they left off\n\n"
+                "Microsoft and SharePoint are trademarks of the Microsoft group of companies",
+            "scheme": "sharepoint",
+            "logo": SharePointLogo,
+            "logo_file_name": "sharepoint-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CloudStorage,),
+        });
+
+        # declare how this application's actions map onto single-file read and write operations, so that
+        # "conn://" file locations can read and write documents through a SharePoint connection.
+        # SharePoint addresses items by immutable ID within a document library rather than by path, and
+        # its download action returns a short-lived pre-authenticated URL rather than the file content,
+        # so the read is a two-step operation and the library is the container
+        DataProviderActionCatalog::registerAppFileApi(SharePointDataProvider::AppName,
+            <DataProviderFileApiInfo>{
+                "read_action": "download-file",
+                "read_path_option": "id",
+                "read_container_option": "drive_id",
+                "read_mode": DPFR_URL,
+                "read_data_field": "download_url",
+                "read_mime_type_field": "content_type",
+                "write_action": "upload-file",
+                "write_path_option": "parent_id",
+                "write_container_option": "drive_id",
+                "write_data_option": "file",
+                "write_data_format": DPFW_FILE,
+                "write_path_is_parent": True,
+                "path_is_id": True,
+            });
+
+        # --- Site Actions ---
+
+        # list-sites
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/sites",
+            "action": "list-sites",
+            "display_name": "List Sites",
+            "short_desc": "List or search SharePoint sites",
+            "desc": "List the sites available. With no search term the tenant's root site and its "
+                "subsites are returned, which always works; a search term is answered from the "
+                "SharePoint search index",
+            "action_code": DPAT_FIND,
+            "groups": ("Sites",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "search": {
+                    "display_name": "Search",
+                    "short_desc": "Search term to match sites against",
+                    "desc": "A term to search site titles and URLs for. When omitted, the tenant's root "
+                        "site and its subsites are returned",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            }, {
+                "preselected": True,
+            }),
+            "output_type": SharePointSiteDataType,
+        });
+
+        # get-site
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/get-site",
+            "action": "get-site",
+            "display_name": "Get Site",
+            "short_desc": "Get site metadata",
+            "desc": "Retrieve metadata for a SharePoint site",
+            "action_code": DPAT_API,
+            "groups": ("Sites",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointGetSiteRequestDataType::Fields
+            ),
+            "output_type": SharePointGetSiteDataProvider::ResponseType,
+        });
+
+        # list-drives
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/drives",
+            "action": "list-drives",
+            "display_name": "List Document Libraries",
+            "short_desc": "List the document libraries in a site",
+            "desc": "List the document libraries (drives) in a SharePoint site. The `drive_id` of a "
+                "library identifies it to every file action",
+            "action_code": DPAT_FIND,
+            "groups": ("Sites", "Files"),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SiteIdField),
+            "output_type": SharePointDriveDataType,
+        });
+
+        # get-drive-info
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/get-drive-info",
+            "action": "get-drive-info",
+            "display_name": "Get Document Library Info",
+            "short_desc": "Get document library metadata and quota",
+            "desc": "Retrieve a document library's metadata, including its storage quota and owner",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointGetDriveInfoRequestDataType::Fields
+            ),
+            "output_type": SharePointGetDriveInfoDataProvider::ResponseType,
+        });
+
+        # --- File and Folder Actions ---
+
+        # search-items
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/items",
+            "action": "search-items",
+            "display_name": "Search Documents",
+            "short_desc": "List or search documents and folders",
+            "desc": "List the items in a folder of a document library, or search the whole library. "
+                "Supports pagination and sorting",
+            "action_code": DPAT_FIND,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SiteIdField + DriveIdField)
+                + DataProviderActionCatalog::getActionOptionFromFields({
+                    "folder_id": {
+                        "display_name": "Folder ID",
+                        "short_desc": "The folder to list items from",
+                        "desc": "The ID of the folder to list items from. If omitted, lists items from "
+                            "the root of the library",
+                        "type": AbstractDataProviderTypeMap."*string",
+                        "ref_data": "folders",
+                        "depends_on": DriveItemCascade,
+                    },
+                    "search_query": {
+                        "display_name": "Search Query",
+                        "short_desc": "Search query string",
+                        "desc": "A search query string to filter items by name or content",
+                        "type": AbstractDataProviderTypeMap."*string",
+                    },
+                    "top": {
+                        "display_name": "Top",
+                        "short_desc": "Maximum items to return per page",
+                        "desc": "Maximum number of items to return per page (default `200`, max `1000`)",
+                        "type": AbstractDataProviderTypeMap."*int",
+                    },
+                }, {
+                    "preselected": True,
+                })
+                + DataProviderActionCatalog::getActionOptionFromFields({
+                    "orderby": {
+                        "display_name": "Order By",
+                        "short_desc": "Sort field and direction",
+                        "desc": "Sort order for results (e.g., `name asc`, `size desc`)",
+                        "type": AbstractDataProviderTypeMap."*string",
+                    },
+                }),
+            "output_type": OneDriveDataProvider::OneDriveDriveItemDataType,
+        });
+
+        # get-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/get-item",
+            "action": "get-item",
+            "display_name": "Get Document",
+            "short_desc": "Get document or folder metadata",
+            "desc": "Retrieve metadata for a document or folder by ID or by path within the library",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointGetItemRequestDataType::Fields{"site_id", "drive_id"}
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointGetItemRequestDataType::Fields{"id", "path"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SharePointGetItemDataProvider::ResponseType,
+        });
+
+        # create-folder
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/create-folder",
+            "action": "create-folder",
+            "display_name": "Create Folder",
+            "short_desc": "Create a new folder",
+            "desc": "Create a new folder in a document library, optionally within a parent folder",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateFolderRequestDataType::Fields{"site_id", "drive_id", "name"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateFolderRequestDataType::Fields{"description", "parent_id",
+                    "conflict_behavior"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SharePointCreateFolderDataProvider::ResponseType,
+        });
+
+        # upload-file
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/upload-file",
+            "action": "upload-file",
+            "display_name": "Upload Document",
+            "short_desc": "Upload a document (up to 4 MB)",
+            "desc": "Upload a document to a library using a simple upload. For files larger than 4 MB, "
+                "use the `create-upload-session` action instead",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointUploadFileRequestDataType::Fields{"site_id", "drive_id", "file"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointUploadFileRequestDataType::Fields{"parent_id",}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SharePointUploadFileDataProvider::ResponseType,
+        });
+
+        # create-upload-session
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/create-upload-session",
+            "action": "create-upload-session",
+            "display_name": "Create Upload Session",
+            "short_desc": "Create a resumable upload session",
+            "desc": "Create a resumable upload session for uploading a large document (>4 MB) in "
+                "chunks. Returns an upload URL that accepts PUT requests with byte ranges",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateUploadSessionRequestDataType::Fields{"site_id", "drive_id", "filename"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateUploadSessionRequestDataType::Fields{"parent_id", "conflict_behavior"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SharePointCreateUploadSessionDataProvider::ResponseType,
+        });
+
+        # download-file
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/download-file",
+            "action": "download-file",
+            "display_name": "Download Document",
+            "short_desc": "Download a document",
+            "desc": "Get the download URL and metadata for a document. Returns a pre-authenticated "
+                "download URL that can be used to download the content directly",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointDownloadFileRequestDataType::Fields, {
+                    "required": True,
+                }
+            ),
+            "output_type": SharePointDownloadFileDataProvider::ResponseType,
+        });
+
+        # delete-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/delete-item",
+            "action": "delete-item",
+            "display_name": "Delete Document",
+            "short_desc": "Delete a document or folder",
+            "desc": "Delete a document or folder from a library. The item is moved to the recycle bin",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointDeleteItemRequestDataType::Fields, {
+                    "required": True,
+                }
+            ),
+            "output_type": SharePointDeleteItemDataProvider::ResponseType,
+        });
+
+        # update-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/update-item",
+            "action": "update-item",
+            "display_name": "Update Document",
+            "short_desc": "Rename, move, or update a document or folder",
+            "desc": "Update the metadata of a document or folder. Can be used to rename an item, move "
+                "it to a different folder, or update its description",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointUpdateItemRequestDataType::Fields{"site_id", "drive_id", "id"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointUpdateItemRequestDataType::Fields{"name", "description", "parent_id"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SharePointUpdateItemDataProvider::ResponseType,
+        });
+
+        # copy-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/copy-item",
+            "action": "copy-item",
+            "display_name": "Copy Document",
+            "short_desc": "Copy a document or folder",
+            "desc": "Asynchronously copy a document or folder to a new location, optionally with a new "
+                "name. Returns a monitor URL to track copy progress",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCopyItemRequestDataType::Fields{"site_id", "drive_id", "id"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCopyItemRequestDataType::Fields{"name", "parent_id", "parent_drive_id",
+                    "conflict_behavior"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SharePointCopyItemDataProvider::ResponseType,
+        });
+
+        # --- Sharing Actions ---
+
+        # create-sharing-link
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/create-sharing-link",
+            "action": "create-sharing-link",
+            "display_name": "Create Sharing Link",
+            "short_desc": "Create a sharing link for a document",
+            "desc": "Create a sharing link (view, edit, or embed) for a document or folder",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateSharingLinkRequestDataType::Fields{"site_id", "drive_id", "id", "type"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateSharingLinkRequestDataType::Fields{"scope",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateSharingLinkRequestDataType::Fields
+                    - ("site_id", "drive_id", "id", "type", "scope")
+            ),
+            "output_type": SharePointCreateSharingLinkDataProvider::ResponseType,
+        });
+
+        # --- List Actions ---
+
+        # list-lists
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/lists",
+            "action": "list-lists",
+            "display_name": "List Lists",
+            "short_desc": "List the lists in a site",
+            "desc": "List the lists in a SharePoint site. SharePoint's own internal lists are excluded "
+                "by default",
+            "action_code": DPAT_FIND,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SiteIdField)
+                + DataProviderActionCatalog::getActionOptionFromFields({
+                    "include_system": {
+                        "display_name": "Include System Lists",
+                        "short_desc": "Include SharePoint's own internal lists",
+                        "desc": "Include the lists SharePoint maintains for its own bookkeeping",
+                        "type": AbstractDataProviderTypeMap."*bool",
+                        "default_value": False,
+                    },
+                    "include_document_libraries": {
+                        "display_name": "Include Document Libraries",
+                        "short_desc": "Include document libraries as well as record lists",
+                        "desc": "Include lists whose template is `documentLibrary`",
+                        "type": AbstractDataProviderTypeMap."*bool",
+                        "default_value": True,
+                    },
+                }),
+            "output_type": SharePointListDataType,
+        });
+
+        # get-list
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/get-list",
+            "action": "get-list",
+            "display_name": "Get List",
+            "short_desc": "Get list metadata",
+            "desc": "Retrieve metadata for a SharePoint list",
+            "action_code": DPAT_API,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointGetListRequestDataType::Fields
+            ),
+            "output_type": SharePointGetListDataProvider::ResponseType,
+        });
+
+        # create-list
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/create-list",
+            "action": "create-list",
+            "display_name": "Create List",
+            "short_desc": "Create a new list",
+            "desc": "Create a new list in a SharePoint site, optionally with its columns",
+            "action_code": DPAT_API,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateListRequestDataType::Fields{"site_id", "display_name"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateListRequestDataType::Fields{"description", "template"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateListRequestDataType::Fields{"columns",}
+            ),
+            "output_type": SharePointCreateListDataProvider::ResponseType,
+        });
+
+        # delete-list
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/delete-list",
+            "action": "delete-list",
+            "display_name": "Delete List",
+            "short_desc": "Delete a list",
+            "desc": "Delete a SharePoint list and every item in it",
+            "action_code": DPAT_API,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointDeleteListRequestDataType::Fields
+            ),
+            "output_type": SharePointDeleteListDataProvider::ResponseType,
+        });
+
+        # list-columns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/columns",
+            "action": "list-columns",
+            "display_name": "List Columns",
+            "short_desc": "List the columns of a list",
+            "desc": "List the columns of a SharePoint list, with their types and whether they can be "
+                "written",
+            "action_code": DPAT_FIND,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SiteIdField + ListIdField)
+                + DataProviderActionCatalog::getActionOptionFromFields({
+                    "writable_only": {
+                        "display_name": "Writable Only",
+                        "short_desc": "Return only columns that can be written",
+                        "desc": "Return only the columns that can be written; SharePoint maintains many "
+                            "read-only columns that a create or update call would reject",
+                        "type": AbstractDataProviderTypeMap."*bool",
+                        "default_value": False,
+                    },
+                }),
+            "output_type": SharePointColumnDataType,
+        });
+
+        # --- List Item Actions ---
+
+        # search-list-items
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/list-items",
+            "action": "search-list-items",
+            "display_name": "Search List Items",
+            "short_desc": "List or search the items in a list",
+            "desc": "List the items in a SharePoint list, optionally filtered with an OData expression "
+                "over the item's columns",
+            "action_code": DPAT_FIND,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SiteIdField + ListIdField)
+                + DataProviderActionCatalog::getActionOptionFromFields({
+                    "filter": {
+                        "display_name": "Filter",
+                        "short_desc": "An OData filter expression",
+                        "desc": "An OData `$filter` expression over the item's columns, for example "
+                            "`fields/Title eq 'Widget'`. Column names are prefixed with `fields/`",
+                        "type": AbstractDataProviderTypeMap."*string",
+                    },
+                }, {
+                    "preselected": True,
+                })
+                + DataProviderActionCatalog::getActionOptionFromFields({
+                    "orderby": {
+                        "display_name": "Order By",
+                        "short_desc": "Sort field and direction",
+                        "desc": "Sort order for results, for example `fields/Title asc`",
+                        "type": AbstractDataProviderTypeMap."*string",
+                    },
+                    "limit": {
+                        "display_name": "Limit",
+                        "short_desc": "Maximum items to return in total",
+                        "desc": "Stop after this many items in total, across all pages",
+                        "type": AbstractDataProviderTypeMap."*int",
+                    },
+                }),
+            "output_type": SharePointListItemDataType,
+        });
+
+        # get-list-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/get-list-item",
+            "action": "get-list-item",
+            "display_name": "Get List Item",
+            "short_desc": "Get a list item and its column values",
+            "desc": "Retrieve a list item with the values of all of its columns",
+            "action_code": DPAT_API,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointGetListItemRequestDataType::Fields
+            ),
+            "output_type": SharePointGetListItemDataProvider::ResponseType,
+        });
+
+        # create-list-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/create-list-item",
+            "action": "create-list-item",
+            "display_name": "Create List Item",
+            "short_desc": "Create an item in a list",
+            "desc": "Create an item in a SharePoint list. Once a site and list have been chosen, the "
+                "list's own columns are offered as individual typed options",
+            "action_code": DPAT_API,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointCreateListItemRequestDataType::Fields
+            ),
+            "output_type": SharePointCreateListItemDataProvider::ResponseType,
+        });
+
+        # update-list-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/update-list-item",
+            "action": "update-list-item",
+            "display_name": "Update List Item",
+            "short_desc": "Update an item's column values",
+            "desc": "Update the column values of an item in a SharePoint list. Once a site and list "
+                "have been chosen, the list's own columns are offered as individual typed options",
+            "action_code": DPAT_API,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointUpdateListItemRequestDataType::Fields
+            ),
+            "output_type": SharePointUpdateListItemDataProvider::ResponseType,
+        });
+
+        # delete-list-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/delete-list-item",
+            "action": "delete-list-item",
+            "display_name": "Delete List Item",
+            "short_desc": "Delete an item from a list",
+            "desc": "Delete an item from a SharePoint list",
+            "action_code": DPAT_API,
+            "groups": ("Lists",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SharePointDeleteListItemRequestDataType::Fields
+            ),
+            "output_type": SharePointDeleteListItemDataProvider::ResponseType,
+        });
+
+        # --- Event Actions ---
+
+        # new-file
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FILE,
+            "action": EVENT_NEW_FILE,
+            "display_name": "Document Added",
+            "short_desc": "Trigger when a document is added to a library",
+            "desc": "Fires when a document is added to a document library. Uses delta queries, which "
+                "resume exactly where they left off rather than re-reading the library",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FILE,
+        });
+
+        # file-modified
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/events/" + EVENT_FILE_MODIFIED,
+            "action": EVENT_FILE_MODIFIED,
+            "display_name": "Document Modified",
+            "short_desc": "Trigger when a document is modified",
+            "desc": "Fires when a document already in a library is modified. Uses delta queries, which "
+                "resume exactly where they left off rather than re-reading the library",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_FILE_MODIFIED,
+        });
+
+        # new-folder
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FOLDER,
+            "action": EVENT_NEW_FOLDER,
+            "display_name": "Folder Added",
+            "short_desc": "Trigger when a folder is added to a library",
+            "desc": "Fires when a folder is added to a document library",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FOLDER,
+        });
+
+        # new-row
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SharePointDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_ROW,
+            "action": EVENT_NEW_ROW,
+            "display_name": "List Item Added",
+            "short_desc": "Trigger when an item is added to a list",
+            "desc": "Fires when an item is added to a SharePoint list. Uses delta queries, which "
+                "resume exactly where they left off rather than polling the head of the list",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ROW,
+        });
+    };
+}
+
+/** @mainpage SharePointDataProvider Module
+
+    @tableofcontents
+
+    @section sharepointdataproviderintro SharePointDataProvider Introduction
+
+    The %SharePointDataProvider module provides a data provider API for accessing Microsoft SharePoint
+    document libraries and lists via the Microsoft Graph API.
+
+    A SharePoint document library is the same Microsoft Graph drive-item API that
+    @ref onedrivedataproviderintro "OneDriveDataProvider" serves, rooted at a named library rather than
+    at the signed-in user's own drive.  This module therefore reuses OneDrive's drive-item providers
+    directly, overriding only the path prefix, and adds the surfaces that have no OneDrive equivalent:
+    sites, document libraries, lists, list items, and records.
+
+    The following classes are provided:
+    - @ref SharePointDataProvider::SharePointDataProvider "SharePointDataProvider": the main data
+      provider class
+
+    @section sharepointdataproviderrelnotes Release Notes
+
+    @subsection sharepointdataproviderv1_0 SharePointDataProvider v1.0
+    - the initial version of the %SharePointDataProvider module
+*/
+
+public namespace SharePointDataProvider {
+}
