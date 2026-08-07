@@ -67,16 +67,26 @@ ParseOptionMaps pomaps;
 // More than one module needs this notification, so it is a list; a single slot meant whichever
 // module registered last silently disabled every other one.  Function-local statics avoid any
 // dependency on static initialization order, since modules can register from their own init.
+//
+// The lock and the list are allocated once and deliberately never destroyed.  Programs are torn
+// down from static destructors and atexit handlers while exit() runs, and objects with static
+// storage duration are destroyed in reverse order of construction.  A module registers its
+// callback from its module init function, which runs after the module's own static objects have
+// already been registered for destruction, so a destructible container here would be destroyed
+// first and then read by the very teardown it exists to serve: the read sees a freed buffer, the
+// size still looks non-empty because the vector's members are untouched, and the call jumps to
+// whatever now occupies that heap memory.  Immortal objects keep the list usable for the entire
+// life of the process, which is what the previous single function-pointer slot got for free.
 static QoreThreadLock& program_cleanup_lock() {
-    static QoreThreadLock l;
-    return l;
+    static QoreThreadLock* l = new QoreThreadLock;
+    return *l;
 }
 
 typedef std::vector<qore_program_cleanup_callback_t> program_cleanup_callback_list_t;
 
 static program_cleanup_callback_list_t& program_cleanup_callbacks() {
-    static program_cleanup_callback_list_t l;
-    return l;
+    static program_cleanup_callback_list_t* l = new program_cleanup_callback_list_t;
+    return *l;
 }
 
 void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback) {
