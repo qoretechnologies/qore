@@ -417,12 +417,13 @@ public class DataProviderPresentationCatalog {
         list<string> files = I18n::discover_catalog_files(domain, locale,
             discovery_opts);
         if (files) {
-            catalog = new I18n::MessageCatalog(files);
+            catalog = new I18n::MessageCatalog(files,
+                {"literal_messages": True});
         } else {
             catalog = new I18n::MessageCatalog({
                 "schema_version": I18n::get_catalog_schema_version(),
                 "locales": {"root": {"messages": {}}},
-            });
+            }, {"literal_messages": True});
         }
     }
 

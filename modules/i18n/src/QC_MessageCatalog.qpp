@@ -488,7 +488,8 @@ static int64 i18n_catalog_get_max_file_len_option(const QoreHashNode* opts, Exce
 
 class QoreMessageCatalog : public AbstractPrivateData {
 public:
-    DLLLOCAL explicit QoreMessageCatalog(bool use_unreviewed = false) : use_unreviewed(use_unreviewed) {
+    DLLLOCAL explicit QoreMessageCatalog(bool use_unreviewed = false, bool literal_messages = false)
+            : use_unreviewed(use_unreviewed), literal_messages(literal_messages) {
     }
 
     DLLLOCAL void loadCatalog(const QoreHashNode* catalog, ExceptionSink* xsink) {
@@ -565,7 +566,7 @@ public:
             I18nCatalogMessage fallback;
             fallback.source = source;
             fallback.message = source;
-            if (!i18n_catalog_validate_placeholders(id, fallback, xsink)) {
+            if (!literal_messages && !i18n_catalog_validate_placeholders(id, fallback, xsink)) {
                 return nullptr;
             }
             return formatMessage(fallback, args, i18n_catalog_is_rtl_locale(locale), xsink);
@@ -814,6 +815,7 @@ public:
 private:
     I18nLocaleMap locales;
     bool use_unreviewed = false;
+    bool literal_messages = false;
 
     DLLLOCAL void loadLocale(const std::string& locale, const QoreHashNode* locale_hash, ExceptionSink* xsink) {
         QoreValue messages_value = locale_hash->getKeyValue("messages");
@@ -926,7 +928,7 @@ private:
             return false;
         }
 
-        return i18n_catalog_validate_placeholders(id, msg, xsink);
+        return literal_messages || i18n_catalog_validate_placeholders(id, msg, xsink);
     }
 
     DLLLOCAL bool parsePluralForms(const std::string& id, const QoreHashNode* forms, I18nCatalogMessage& msg,
@@ -1127,6 +1129,9 @@ private:
 
     DLLLOCAL QoreStringNode* formatMessage(const I18nCatalogMessage& msg, const QoreHashNode* args,
             bool bidi_isolate, ExceptionSink* xsink) const {
+        if (literal_messages) {
+            return new QoreStringNode(msg.message, QCS_UTF8);
+        }
         return formatText(msg.message, args, nullptr, bidi_isolate, xsink);
     }
 
@@ -1219,13 +1224,15 @@ MessageCatalog::constructor(hash<auto> native_catalog) {
 
 //! Creates a message catalog from one native catalog hash with options.
 /** @param native_catalog schema-versioned native catalog hash
-    @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime
+    @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
+        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation
 
     @throw I18N-CATALOG-ERROR if the catalog schema or placeholders are invalid
 */
 MessageCatalog::constructor(hash<auto> native_catalog, *hash<auto> opts) {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed));
+    bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
     holder->loadCatalog(native_catalog, xsink);
     if (*xsink) {
         return;
@@ -1252,6 +1259,7 @@ MessageCatalog::constructor(string path) [dom=FILESYSTEM] {
 //! Creates a message catalog from one native catalog JSON file with options.
 /** @param path path to a UTF-8 native catalog JSON file
     @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
+        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation;
         \c "max_file_len" sets the maximum accepted file size in bytes
 
     @throw FILE-READ-ERROR if the file cannot be read
@@ -1260,12 +1268,13 @@ MessageCatalog::constructor(string path) [dom=FILESYSTEM] {
 */
 MessageCatalog::constructor(string path, *hash<auto> opts) [dom=FILESYSTEM] {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
+    bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
     int64 max_file_len = i18n_catalog_get_max_file_len_option(opts, xsink);
     if (*xsink) {
         return;
     }
 
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed));
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
     holder->loadCatalogFile(path, max_file_len, xsink);
     if (*xsink) {
         return;
@@ -1324,6 +1333,7 @@ MessageCatalog::constructor(list<string> paths) [dom=FILESYSTEM] {
 
     @param paths list of UTF-8 native catalog JSON file paths
     @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
+        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation;
         \c "max_file_len" sets the maximum accepted file size in bytes for each file
 
     @throw FILE-READ-ERROR if a file cannot be read
@@ -1332,12 +1342,13 @@ MessageCatalog::constructor(list<string> paths) [dom=FILESYSTEM] {
 */
 MessageCatalog::constructor(list<string> paths, *hash<auto> opts) [dom=FILESYSTEM] {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
+    bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
     int64 max_file_len = i18n_catalog_get_max_file_len_option(opts, xsink);
     if (*xsink) {
         return;
     }
 
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed));
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
     for (size_t i = 0; i < paths->size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog files")) {
             return;
@@ -1355,13 +1366,15 @@ MessageCatalog::constructor(list<string> paths, *hash<auto> opts) [dom=FILESYSTE
 /** Later catalog hashes override earlier hashes per whole message id.
 
     @param native_catalogs list of schema-versioned native catalog hashes
-    @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime
+    @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
+        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation
 
     @throw I18N-CATALOG-ERROR if any catalog schema or placeholders are invalid
 */
 MessageCatalog::constructor(list<hash<auto>> native_catalogs, *hash<auto> opts) {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed));
+    bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
     for (size_t i = 0; i < native_catalogs->size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog layers")) {
             return;

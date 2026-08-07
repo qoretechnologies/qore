@@ -7,9 +7,10 @@
 
 %modern
 
-%requires ../../../qlib/FsUtil.qm
-%requires ../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
+%requires FsUtil
+%requires QUnit
 %requires i18n
 
 %exec-class I18nTest
@@ -34,6 +35,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("message catalog JSON validation", \messageCatalogJsonValidationTest());
         addTestCase("message catalog discovery", \messageCatalogDiscoveryTest());
         addTestCase("message catalog discovery sandbox", \messageCatalogDiscoverySandboxTest());
+        addTestCase("message catalog literal text", \messageCatalogLiteralTextTest());
         addTestCase("message catalog validation", \messageCatalogValidationTest());
 
         set_return_value(main());
@@ -538,6 +540,36 @@ list<string> sub discover_catalogs(string domain, string locale, string path) {
         assertEq((base_root,), p.callFunction("discover_catalogs", "billing", "root", base_dir));
         assertThrows("FILESYSTEM-ACCESS-DENIED", auto sub() {
             return p.callFunction("discover_catalogs", "billing", "root", "/etc");
+        });
+    }
+
+    messageCatalogLiteralTextTest() {
+        const string Source = "Send {id: 123} to /users/{id}";
+        const string Translation = "Pošlete {id: 123} do /users/{id}";
+        hash<auto> data = {
+            "schema_version": 1,
+            "locales": {
+                "root": {"messages": {
+                    "provider.desc": {"source": Source, "message": Source},
+                }},
+                "cs": {"messages": {
+                    "provider.desc": {"source": Source,
+                        "message": Translation},
+                }},
+            },
+        };
+
+        I18n::MessageCatalog catalog(data, {"literal_messages": True});
+        assertEq(Translation, catalog.tc("provider.desc", Source, "cs"),
+            "literal catalog messages preserve braces");
+        assertEq(Translation, catalog.tc("provider.desc", Source, "cs",
+                {"id": 999}),
+            "literal catalog messages ignore interpolation arguments");
+        assertEq(Source, catalog.tc("missing.desc", Source, "de"),
+            "literal source fallbacks preserve braces");
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog(data);
         });
     }
 

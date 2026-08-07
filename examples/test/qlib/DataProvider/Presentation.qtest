@@ -46,6 +46,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \stableIdentityTest());
         addTestCase("catalog projection is locale-aware and identity-safe",
             \localizedProjectionTest());
+        addTestCase("catalog projection preserves literal braces",
+            \literalPresentationTest());
         addTestCase("source catalogs cover provider presentation metadata",
             \sourceCatalogTest());
         addTestCase("the checked-in Qore source catalog is synchronized",
@@ -229,6 +231,35 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq("Odeslat zprávu", source_action.display_name,
             "a source-language regional fallback uses producer text");
         assertEq("cs-CZ", source_action.presentation_language);
+    }
+
+    literalPresentationTest() {
+        const string Source = "Send {id: 123} to /users/{id}.";
+        const string Translation = "{id: 123} を /users/{id} に送信します。";
+        string root = make_tmp_dir("data-provider-presentation-literal-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        string id = DataProviderPresentation::actionMessageId(App, Action,
+            "desc");
+        File file();
+        file.open2(root + DirSep + Domain + DirSep + "ja.json", O_CREAT
+            | O_WRONLY | O_TRUNC);
+        file.write(make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": Source, "message": Translation},
+            }}},
+        }));
+        file.close();
+
+        DataProviderPresentationCatalog catalog(Domain, "ja",
+            {"search_path": (root,)});
+        hash<auto> source_action = action() + {"desc": Source};
+        hash<auto> projected = catalog.projectAction(app(), source_action);
+        assertEq(Translation, projected.desc,
+            "provider prose treats JSON and path braces as literal text");
+        assertEq(Source, projected.producer_presentation.desc,
+            "literal producer prose is retained without escaping");
     }
 
     sourceCatalogTest() {
