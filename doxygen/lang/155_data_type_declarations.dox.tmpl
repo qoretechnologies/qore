@@ -1206,6 +1206,8 @@ int result = tripler(5);  # returns 15
 
     @note Closures with default parameters can be assigned to typed callables expecting fewer parameters, as long as the required parameters match.
 
+    @note A typed callable signature declares parameter <i>types</i> only; parameter names are not part of the type and may not be given in the signature.
+
     @par Incompatible Assignments
     The following will cause parse-time type errors:
     @code{.py}
@@ -1217,6 +1219,16 @@ code<int(string)> func = int sub (int x) { return x; };
 
 # Error: fewer parameters than expected
 code<int(int, string)> func = int sub (int x) { return x; };
+    @endcode
+
+    @par Invalid Signatures
+    The following will cause parse-time type errors:
+    @code{.py}
+# Error: parameter names are not supported in a typed callable signature
+code<hash<auto>(hash<auto> query)> func;
+
+# correct: the parameter type alone
+code<hash<auto>(hash<auto>)> func;
     @endcode
 
     <hr>

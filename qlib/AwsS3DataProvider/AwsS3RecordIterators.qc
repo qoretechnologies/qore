@@ -44,7 +44,7 @@ public class AwsS3ObjectPageIterator inherits Qore::AbstractIterator {
         /** A closure rather than the provider itself: the request plumbing is private to the provider
             hierarchy, and this iterator is not part of it
         */
-        code<hash<auto>(hash<auto> query)> fetch;
+        code<hash<auto>(hash<auto>)> fetch;
 
         #! The bucket being listed
         string bucket;
@@ -70,7 +70,7 @@ public class AwsS3ObjectPageIterator inherits Qore::AbstractIterator {
         @param bucket the bucket to list
         @param base_query the query arguments applied to every page
     */
-    constructor(code<hash<auto>(hash<auto> query)> fetch, string bucket, hash<auto> base_query) {
+    constructor(code<hash<auto>(hash<auto>)> fetch, string bucket, hash<auto> base_query) {
         self.fetch = fetch;
         self.bucket = bucket;
         self.base_query = base_query;

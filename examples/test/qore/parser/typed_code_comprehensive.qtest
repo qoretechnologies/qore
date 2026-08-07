@@ -4,7 +4,11 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
 %requires QUnit
+
+# for runtime (as opposed to parse-time) resolution of type strings
+%requires reflection
 
 %exec-class TypedCodeComprehensiveTest
 
@@ -23,6 +27,7 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
         addTestCase("Closure capturing variables", \closureCapturingTest());
         addTestCase("Type inference edge cases", \typeInferenceEdgeCasesTest());
         addTestCase("Whitespace in code<> signatures", \whitespaceInSignatureTest());
+        addTestCase("Parameter names rejected in code<> signatures", \parameterNamesRejectedTest());
         set_return_value(main());
     }
 
@@ -371,6 +376,60 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
             ", "test");
             p.run();
         }
+    }
+
+    parameterNamesRejectedTest() {
+        # code<> signatures declare parameter types only; carrying names in the callable type is deferred
+        # work (see design/named-arguments.md), so a name must be rejected rather than silently discarded
+        code<*string(string)> parse_sig = *string sub (string sig) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            try {
+                p.parse(sprintf("sub test() { %s f; }", sig), "test");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-TYPE-ERROR", ex.err, sig);
+                return ex.desc;
+            }
+            return;
+        };
+
+        # a name after a complex parameter type used to parse without error: complex-type parsing stops at
+        # the matching '>', so the name was silently thrown away
+        *string desc = parse_sig("code<hash<auto>(hash<auto> query)>");
+        assertRegex("parameter names are not supported", desc ?? "");
+        assertRegex("unexpected text 'query'", desc);
+
+        # a name after a simple parameter type was already an error, but with a misleading message
+        desc = parse_sig("code<int(int x)>");
+        assertRegex("parameter names are not supported", desc ?? "");
+        assertRegex("unexpected text 'x'", desc);
+
+        # a nested callable parameter type is checked the same way
+        assertRegex("parameter names are not supported", parse_sig("code<int(code<int(string)> cb)>") ?? "");
+
+        # a name after the return type is rejected earlier, where the type arguments are split: the name
+        # makes the signature look like two type arguments rather than one
+        assertRegex("takes a single callable signature", parse_sig("code<hash<auto> rv(hash<auto>)>") ?? "");
+
+        # ... and to every parameter position, not just the first
+        assertRegex("unexpected text 'b'", parse_sig("code<int(string, list<int> b)>") ?? "");
+
+        # runtime type-string resolution rejects the same input as the parse-time path
+        assertThrows("UNKNOWN-TYPE", "code<hash<auto>\\(hash<auto> query\\)>", sub () {
+            new Type("code<hash<auto>(hash<auto> query)>");
+        });
+        assertEq("code<hash<auto>(hash<auto>)>", (new Type("code<hash<auto>(hash<auto>)>")).getName());
+
+        # valid signatures are unaffected: nested callables, varargs, and whitespace all still resolve
+        assertEq(NOTHING, parse_sig("code<int(code<int(string)>)>"));
+        assertEq(NOTHING, parse_sig("code<int(string, ...)>"));
+        assertEq(NOTHING, parse_sig("code<hash<string, int> (string, int)>"));
+        assertEq(NOTHING, parse_sig("*code<nothing(string)>"));
+
+        # a name-carrying signature is rejected in a closure declaration as well, not only in a variable
+        # declaration, so the check cannot be bypassed by declaration context
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-TYPE-ERROR", "parameter names are not supported", \p.parse(),
+            ("code<int(int x)> sub get() { return int sub (int v) { return v; }; }", "test"));
     }
 }
 

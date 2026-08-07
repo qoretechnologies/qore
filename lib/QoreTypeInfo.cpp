@@ -1873,6 +1873,58 @@ QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
     return new QoreParseTypeInfo(strdup(base_type.c_str()), or_nothing, std::move(subtypes));
 }
 
+// Returns any trailing text after a complete type in a code<> signature type string (ex: a parameter name)
+/** Parameter names are not supported in code<> callable signatures; the signature declares types only (see
+    design/named-arguments.md: carrying names in the callable type is deferred v2 work, and the syntax space
+    must not be consumed accidentally).  Complex-type parsing stops at the '>' matching the first '<', so
+    without this check a trailing name after a complex type (ex: "hash<auto> query") would be silently
+    discarded, while the same name after a simple type (ex: "int x") fails with a confusing "reference to
+    undefined type 'int x'" error.  Detecting the trailing text makes both cases fail consistently.
+
+    @param str the trimmed type string to check
+    @param trailing set to the trailing text if any is found
+
+    @return true if trailing text was found, meaning that the type string is invalid
+*/
+static bool code_sig_type_trailing_text(const std::string& str, std::string& trailing) {
+    const char* ws = " \t\n\r\f\v";
+    // wildcard type arguments ("? extends X", "? super X") legitimately contain whitespace
+    if (str.empty() || str[0] == '?') {
+        return false;
+    }
+    size_t end;
+    size_t angle_pos = str.find('<');
+    if (angle_pos == std::string::npos) {
+        // simple type: the type name ends at the first whitespace character
+        end = str.find_first_of(ws);
+        if (end == std::string::npos) {
+            return false;
+        }
+    } else {
+        // complex type: the type ends at the '>' matching the first '<'
+        int depth = 0;
+        end = std::string::npos;
+        for (size_t i = angle_pos, e = str.size(); i < e; ++i) {
+            if (str[i] == '<') {
+                ++depth;
+            } else if (str[i] == '>' && !--depth) {
+                end = i + 1;
+                break;
+            }
+        }
+        if (end == std::string::npos) {
+            // unbalanced angle brackets; reported elsewhere
+            return false;
+        }
+    }
+    size_t tpos = str.find_first_not_of(ws, end);
+    if (tpos == std::string::npos) {
+        return false;
+    }
+    trailing = str.substr(tpos);
+    return true;
+}
+
 // Helper function to parse a type string and resolve it (for use in code<> signature parsing)
 // This handles complex types like "hash<string, int>" and "list<string>"
 static const QoreTypeInfo* parse_and_resolve_type_string(const char* type_str, const QoreProgramLocation* loc, int& err) {
@@ -1883,6 +1935,18 @@ static const QoreTypeInfo* parse_and_resolve_type_string(const char* type_str, c
     std::string str(type_str);
     while (!str.empty() && isspace(str.back())) str.pop_back();
     if (str.empty()) return nullptr;
+
+    // reject parameter names and any other trailing text after the type
+    {
+        std::string trailing;
+        if (code_sig_type_trailing_text(str, trailing)) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "invalid type '%s' in a 'code<...>' callable signature; " \
+                "unexpected text '%s' after the type; callable signatures declare types only, parameter " \
+                "names are not supported (ex: 'code<hash<auto>(hash<auto>)>')", str.c_str(), trailing.c_str());
+            err = -1;
+            return nullptr;
+        }
+    }
 
     // Check for or-nothing prefix
     bool or_nothing = false;
@@ -4313,6 +4377,12 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         // Resolve return type
         const QoreTypeInfo* returnType = nullptr;
         if (!return_type_str.empty() && return_type_str != "nothing") {
+            // reject parameter names and any other trailing text after the type; the parse-time path
+            // (resolveSubtype()) raises a PARSE-TYPE-ERROR for the same input
+            std::string trailing;
+            if (code_sig_type_trailing_text(return_type_str, trailing)) {
+                return nullptr;
+            }
             returnType = qore_get_type_from_string_intern(return_type_str.c_str());
             if (!returnType) {
                 return nullptr;
@@ -4366,6 +4436,12 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
                         current_param.erase(0, 1);
                     }
                     if (!current_param.empty()) {
+                        // reject parameter names and any other trailing text after the type; the parse-time
+                        // path (resolveSubtype()) raises a PARSE-TYPE-ERROR for the same input
+                        std::string trailing;
+                        if (code_sig_type_trailing_text(current_param, trailing)) {
+                            return nullptr;
+                        }
                         const QoreTypeInfo* param_type = qore_get_type_from_string_intern(current_param.c_str());
                         if (!param_type) {
                             return nullptr;

@@ -211,7 +211,7 @@ public class AwsS3ListObjectsDataProvider inherits AwsS3DataProviderBase {
 
         # the request plumbing is private to the provider hierarchy, so the iterator is given a closure
         # rather than the provider itself
-        code<hash<auto>(hash<auto> q)> fetch = hash<auto> sub (hash<auto> q) {
+        code<hash<auto>(hash<auto>)> fetch = hash<auto> sub (hash<auto> q) {
             return doS3Request("GET", bucket, NOTHING, q);
         };
         return new DefaultRecordIterator<hash<auto>>(
