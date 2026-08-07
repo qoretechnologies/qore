@@ -57,8 +57,9 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         than as any status the script could have set itself
     */
     private int runChild(string statement) {
-        # the statement is embedded in single quotes below, so it must not contain any
-        @assert(!statement.find("'"));
+        # the statement is embedded in single quotes below, so it must not contain any;
+        # String::find() returns -1 when the substring is absent
+        @assert(statement.find("'") == -1);
         return system(sprintf("%s%s -l jni -e '%s' >/dev/null 2>&1", env_prefix, qore_exe,
             statement));
     }

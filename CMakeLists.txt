@@ -1491,7 +1491,7 @@ qore_check_funcs(
     getgid getgrgid_r getgrnam_r getgroups gethostbyaddr gethostbyname gethostname getifaddrs getnameinfo getppid
     getpwnam_r getpwuid_r getrlimit getsockopt gettimeofday getuid glob gmtime_r inet_ntop inet_pton isblank kill lchown
     localtime_r link_ntoa lstat memmem memmove memset mkfifo mkfifo nanosleep poll
-    pthread_attr_getstacksize
+    pthread_attr_getstack pthread_attr_getstacksize
     pthread_get_name_np pthread_get_stacksize_np pthread_getname_np putenv random
     readlink realloc realpath regcomp round select setegid setegid setenv
     seteuid seteuid setgid setgroups setsid setsockopt setuid setuid sleep socket
