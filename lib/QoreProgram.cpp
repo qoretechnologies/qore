@@ -64,15 +64,60 @@ ParseOptionMaps pomaps;
 
 // Optional callback invoked before program data is cleared (issue #4816)
 // Can be used by modules to perform cleanup before namespace data is freed
-static qore_program_cleanup_callback_t program_cleanup_callback = nullptr;
+// More than one module needs this notification, so it is a list; a single slot meant whichever
+// module registered last silently disabled every other one.  Function-local statics avoid any
+// dependency on static initialization order, since modules can register from their own init.
+static QoreThreadLock& program_cleanup_lock() {
+    static QoreThreadLock l;
+    return l;
+}
+
+typedef std::vector<qore_program_cleanup_callback_t> program_cleanup_callback_list_t;
+
+static program_cleanup_callback_list_t& program_cleanup_callbacks() {
+    static program_cleanup_callback_list_t l;
+    return l;
+}
 
 void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback) {
-    program_cleanup_callback = callback;
+    assert(callback);
+    AutoLocker al(program_cleanup_lock());
+    program_cleanup_callback_list_t& l = program_cleanup_callbacks();
+    // registering twice would both grow the list without bound and call the module back twice per
+    // Program, so repeat registrations (ex: a module loaded again) are ignored
+    if (std::find(l.begin(), l.end(), callback) == l.end()) {
+        l.push_back(callback);
+    }
+}
+
+void qore_deregister_program_cleanup_callback(qore_program_cleanup_callback_t callback) {
+    assert(callback);
+    AutoLocker al(program_cleanup_lock());
+    program_cleanup_callback_list_t& l = program_cleanup_callbacks();
+    program_cleanup_callback_list_t::iterator i = std::find(l.begin(), l.end(), callback);
+    if (i != l.end()) {
+        l.erase(i);
+    }
 }
 
 void qore_call_program_cleanup_callback(QoreProgram* pgm) {
-    if (program_cleanup_callback) {
-        program_cleanup_callback(pgm);
+    assert(pgm);
+    // teardown reaches this from more than one place; the callbacks must run once per Program
+    if (!qore_program_private::get(*pgm)->takeCleanupCallbackFlag()) {
+        return;
+    }
+    // copy the list and call outside the lock: a callback runs module code that must not be
+    // serialized against registration, and must not be able to deadlock against it
+    program_cleanup_callback_list_t l;
+    {
+        AutoLocker al(program_cleanup_lock());
+        if (program_cleanup_callbacks().empty()) {
+            return;
+        }
+        l = program_cleanup_callbacks();
+    }
+    for (auto& callback : l) {
+        callback(pgm);
     }
 }
 
@@ -1091,8 +1136,8 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // call evalMethod → incThreadCount.  incThreadCount takes plock, so
     // the callback must not hold plock.  ptid must not be set yet,
     // otherwise workers on other threads fail with PROGRAM-ERROR.
-    if (need_cleanup && program_cleanup_callback) {
-        program_cleanup_callback(pgm);
+    if (need_cleanup) {
+        qore_call_program_cleanup_callback(pgm);
     }
 
     if (need_cleanup) {

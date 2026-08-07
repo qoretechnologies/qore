@@ -550,6 +550,12 @@ public:
         parsing_stub_declarations : 1
         ;
 
+    //! Set once the program cleanup callbacks have been run for this Program
+    /** There are two teardown entry points - waitForTerminationAndClear() and clearNamespaceData()
+        - and the callbacks must run exactly once per Program from whichever gets there first.
+    */
+    std::atomic<bool> pgm_cleanup_called{false};
+
     qore_exec_mode_t exec_mode = QEM_AST;
     bool user_requested_exec_mode = false;
     bool inherited_user_requested_exec_mode = false;
@@ -3318,6 +3324,11 @@ public:
         return programId;
     }
 
+    //! Returns @ref true only for the first caller, so cleanup callbacks run once per Program
+    DLLLOCAL bool takeCleanupCallbackFlag() {
+        return !pgm_cleanup_called.exchange(true);
+    }
+
     // called locked
     DLLLOCAL void clearNamespaceData(ExceptionSink* xsink) {
         if (ns_vars) {
@@ -3325,6 +3336,11 @@ public:
         }
         assert(RootNS);
         ns_vars = true;
+        // Notify registered modules while the namespaces are still intact, so they can drop
+        // anything they cache that this Program's namespaces own.  This is the single point that
+        // every teardown path funnels through (waitForTerminationAndClear(), del(), and the
+        // module/AOT paths), and the ns_vars guard above makes it fire exactly once per Program.
+        qore_call_program_cleanup_callback(pgm);
         // delete all global variables, etc
         // this call can only be made once
         qore_root_ns_private::clearData(*RootNS, xsink);

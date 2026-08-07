@@ -140,6 +140,17 @@ typedef void (*qore_program_cleanup_callback_t)(QoreProgram* pgm);
 */
 DLLEXPORT void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback);
 
+//! Removes a previously-registered program cleanup callback
+/** Must be called by any module that registers one and can be unloaded, otherwise the callback
+    list retains a pointer into unmapped code.  Registering the same callback twice is ignored, so
+    a single deregistration is always enough.
+
+    @param callback the callback function to remove
+
+    @since %Qore 3.0
+*/
+DLLEXPORT void qore_deregister_program_cleanup_callback(qore_program_cleanup_callback_t callback);
+
 //! Calls the registered program cleanup callback for the given program
 /** This should be called before dereferencing a program to break potential reference cycles.
 
