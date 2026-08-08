@@ -224,10 +224,17 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
             (sprintf("insert into %s values (%%v, %%v)", TableName), 1, "one"));
 
         # nothing was executed and no transaction was left open
-        assertEq((SQL_MUTATION_EVENT_PRE_EXEC,), obs.codes());
         assertFalse(ds.currentThreadInTransaction());
 
+        # the rejection is closed by a terminal event against the real server as well, so that a
+        # consumer tracking reservations by "op_id" sees the operation's lifetime end
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_POST_EXEC), obs.codes());
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, obs.events[1].outcome);
+        assertTrue(obs.events[1].replay_safe);
+        assertEq("pgsql", obs.events[1].driver);
+
         obs.reset();
+        # the operation really was not executed
         assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
         ds.commit();
     }

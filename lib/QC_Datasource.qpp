@@ -405,6 +405,17 @@ const SQL_MUTATION_OUTCOME_ROLLBACK_ERROR = SQL_MUTATION_OUTCOME_ROLLBACK_ERROR;
 const SQL_MUTATION_OUTCOME_LOST_CONNECTION = SQL_MUTATION_OUTCOME_LOST_CONNECTION;
 
 //! The operation was rejected at an admission point and was not executed
+/** Reported on the terminal event that follows every rejected admission point, always with
+    \c "replay_safe" @ref True "True", since a rejected operation cannot have attempted a commit.
+
+    On a @ref Qore::SQL::SQL_MUTATION_EVENT_STREAM_END "SQL_MUTATION_EVENT_STREAM_END" event this
+    outcome means that the observer stopped the stream, as distinct from
+    @ref Qore::SQL::SQL_MUTATION_OUTCOME_ERROR "SQL_MUTATION_OUTCOME_ERROR", which means that the
+    database failed while the payload was being sent.  Bytes already sent before an observer stopped
+    a stream are discarded by the surrounding rollback.
+
+    @see @ref sql_mutation_admission
+*/
 const SQL_MUTATION_OUTCOME_NOT_EXECUTED = SQL_MUTATION_OUTCOME_NOT_EXECUTED;
 ///@}
 

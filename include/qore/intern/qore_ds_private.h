@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     The Datasource class provides the low-level interface to Qore DBI drivers.
 
@@ -111,6 +111,12 @@ struct qore_ds_private {
     int64 tx_seq = 0;
     // declared size in bytes of the bounded stream in progress; -1 = no stream in progress
     int64 stream_declared_bytes = -1;
+    //! set when a bounded stream admission point rejected the stream in progress
+    /** it distinguishes a stream that the consumer stopped from one that the driver failed, so that
+        the terminal stream event can report the exact outcome; see
+        design/datasource-mutation-observer.md
+    */
+    bool stream_rejected = false;
 
     // interface for the parent class
     DatasourceStatementHelper* dsh;
@@ -274,7 +280,54 @@ struct qore_ds_private {
         ev.tx_seq = ++tx_seq;
         ev.in_transaction = in_transaction;
         ev.autocommit = autocommit;
-        return ctx->dispatch(ev, *ds, xsink);
+        int rc = ctx->dispatch(ev, *ds, xsink);
+        if (rc && ev.isAdmission()) {
+            dispatchMutationNotExecuted(ev, xsink);
+        }
+        return rc;
+    }
+
+    //! emits the terminal event for an operation that an admission point rejected
+    /** The event closes the operation's lifetime for a consumer that tracks reservations by
+        \c "op_id": without it a rejected operation would leave an unpaired admission event, and a
+        rejection outside a transaction would produce no terminal event at all.
+
+        It cannot be emitted from SqlMutationContext::dispatch() itself, because the re-entrancy
+        depth that suppresses observer-issued operations is still held there; it is emitted here,
+        after that depth has been released.
+
+        The event is a notification: the operation has already been refused, so the return value is
+        ignored.  The rejection exception is passed for reporting only and is not consumed.
+
+        @param ev the rejected admission event
+    */
+    DLLLOCAL void dispatchMutationNotExecuted(const SqlMutationEvent& ev, ExceptionSink* xsink) {
+        assert(ev.isAdmission());
+        // a rejected stream in progress is closed by its producer's terminal event, which reports
+        // the rejection through the "stream_rejected" flag; emitting here would duplicate it
+        if (ev.event == SQL_MUTATION_EVENT_STREAM_PROGRESS) {
+            stream_rejected = true;
+            return;
+        }
+        if (ev.event == SQL_MUTATION_EVENT_STREAM_BEGIN) {
+            // the producer never started the stream, so it emits no terminal event of its own
+            stream_declared_bytes = -1;
+            SqlMutationEvent term(SQL_MUTATION_EVENT_STREAM_END, SQL_STMT_CLASS_STREAM);
+            term.declared_bytes = ev.declared_bytes;
+            term.consumed_bytes = 0;
+            term.outcome = SQL_MUTATION_OUTCOME_NOT_EXECUTED;
+            // the operation was refused before execution, so no commit can have been attempted
+            term.replay_safe = 1;
+            term.driver_xsink = xsink;
+            dispatchMutationEvent(term, xsink);
+            return;
+        }
+        assert(ev.event == SQL_MUTATION_EVENT_PRE_EXEC);
+        SqlMutationEvent term(SQL_MUTATION_EVENT_POST_EXEC, ev.stmt_class);
+        term.outcome = SQL_MUTATION_OUTCOME_NOT_EXECUTED;
+        term.replay_safe = 1;
+        term.driver_xsink = xsink;
+        dispatchMutationEvent(term, xsink);
     }
 
     //! emits a transaction start event

@@ -197,7 +197,7 @@ the driver `commit` call.  No error text is examined.
 | rollback returned 0 | `SQL_MUTATION_OUTCOME_ROLLBACK` | `True` |
 | rollback raised | `SQL_MUTATION_OUTCOME_ROLLBACK_ERROR` | `True` |
 | connection lost or aborted with no commit in flight | `SQL_MUTATION_OUTCOME_LOST_CONNECTION` | `True` |
-| admission rejected the operation | `SQL_MUTATION_OUTCOME_NOT_EXECUTED` | `True` |
+| admission rejected the operation or the stream | `SQL_MUTATION_OUTCOME_NOT_EXECUTED` | `True` |
 
 A commit that raises is **always** ambiguous.  It is never reported as a rollback, because the core
 cannot know whether the server applied it.  This is the single most important rule in this design: a
@@ -224,10 +224,35 @@ notification.
 - Returning `NOTHING`, or a hash with `admit` `True`, admits the operation.
 - Returning `{"admit": False, "err": ..., "desc": ...}` rejects it.  The core raises the given
   exception — defaulting to `SQL-MUTATION-REJECTED` — does not execute the operation, and does not
-  change transaction state.  An `OUTCOME_NOT_EXECUTED` event is not emitted, because the consumer
-  itself produced the rejection.
+  change transaction state.
 - An exception thrown by the observer propagates and the operation is not executed.  Admission is
   fail-closed by design: a consumer that cannot decide must not have its silence read as consent.
+
+### Terminal events for a rejected operation
+
+Every rejected admission point is followed by exactly one terminal event carrying
+`OUTCOME_NOT_EXECUTED` and `replay_safe` `True`.  This holds for both kinds of rejection — an
+explicit `admit` `False` decision and a fail-closed observer exception — because a consumer tracking
+reservations by `op_id` must always see the operation's lifetime close.  Without it, a rejection
+outside a transaction produces no terminal event at all: no rollback follows, so no `OUTCOME` event
+is ever emitted, and the reservation has no boundary at which to be released.
+
+| rejected at | terminal event | emitted by |
+|---|---|---|
+| `PRE_EXEC` | `POST_EXEC` with `OUTCOME_NOT_EXECUTED` | the core; pairs the admission event |
+| `STREAM_BEGIN` | `STREAM_END` with `OUTCOME_NOT_EXECUTED` | the core; the producer never started the stream, so it reports no end boundary of its own |
+| `STREAM_PROGRESS` | `STREAM_END` with `OUTCOME_NOT_EXECUTED` | the producer, which is required to report the end boundary of a stream it started |
+
+The terminal event is a notification: its return value is ignored, and it cannot re-enter the
+callback that produced the rejection, because the re-entrancy depth is released before it is
+delivered.  The rejection exception is reported on it through `ex` without being consumed.
+
+For a stream stopped at `STREAM_PROGRESS` the core records the rejection and maps the producer's
+`reportMutationStreamEnd(consumed, False)` to `OUTCOME_NOT_EXECUTED` instead of `OUTCOME_ERROR`.  The
+distinction matters to a consumer: `OUTCOME_ERROR` on a stream means the database failed while the
+payload was being sent, whereas `OUTCOME_NOT_EXECUTED` means the consumer itself stopped it.  In both
+cases the bytes already sent are discarded by the surrounding rollback; `replay_safe` `True` states
+only that no commit was attempted, not that nothing was sent.
 
 ### Notification events
 
