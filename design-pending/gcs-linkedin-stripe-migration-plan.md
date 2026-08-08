@@ -318,18 +318,32 @@ copy: `createWebhook()` in `observersReady()`, `stopEventsIntern()` in
 `stopEvents()`, `getEventTypesImpl()`, and `getExampleEventDataImpl()` fetching a
 recent real event with a static fallback.
 
-**The real gap here is signature verification, and it is pre-existing.** None of
-those eleven modules verifies the signature on an inbound webhook. For Stripe that
-is not acceptable: an unauthenticated endpoint accepts forged `charge.succeeded`
-and `invoice.payment_failed` events, so a caller could fabricate payment outcomes.
-Stripe signs every delivery with `Stripe-Signature` (HMAC-SHA256 over
-`timestamp.payload`, with a tolerance window against replay).
+**Signature verification is the real gap, and it is mostly — but not entirely —
+missing.** Of the 16 webhook event providers in `qlib`, exactly **two verify**:
 
-So phase T should **add signature verification**, and should do it generically
-rather than only for Stripe — a verification hook on the webhook support layer
-would let the eleven existing providers adopt it too. That is a security
-improvement to the platform that this phase happens to be the right occasion for,
-not Stripe-specific work.
+- `EasyPostDataProvider/EasyPostBaseEventDataProvider.qc` generates a shared secret
+  when it registers the webhook and checks the `x-hmac-signature` header with
+  `SHA256_hmac(webhook_secret, body)`, enforced whenever a secret is configured.
+- `MailgunDataProvider/MailgunBaseEventDataProvider.qc` verifies HMAC-SHA256 over
+  `timestamp + token` with the signing key and **rejects** the event when it does
+  not match.
+
+The other 14 do not — Chargebee (4), Jotform (2), Linear (2), WooCommerce, Lemlist,
+Instantly, Wave, CustomerIo and ShipStation. Neither do any of the **24**
+`module-v8` apps that register webhooks (`stripe`, `github`, `paypal`, `jira`,
+`calendly`, `typeform`, … ).
+
+For Stripe this is not optional: an unverified endpoint accepts forged
+`charge.succeeded` and `invoice.payment_failed` events, so a caller could fabricate
+payment outcomes. Stripe signs every delivery with `Stripe-Signature` — HMAC-SHA256
+over `timestamp.payload`, with a tolerance window against replay.
+
+The good news is that there is nothing to invent: `SHA256_hmac()` is available, and
+EasyPost and Mailgun are two working in-repo templates with slightly different
+shapes (header-based versus payload-block, self-issued secret versus provider
+signing key). Phase T should follow them, and should lift the common part onto the
+shared webhook layer so the other 14 providers can adopt it — a platform
+improvement this phase is the right occasion for, not Stripe-specific work.
 
 ### T.3 The API version pin resolves itself here
 
@@ -373,8 +387,8 @@ Phase L  (LinkedIn)              ── independent of G; two flag days, do them
 Phase T  (Stripe)                ── size depends entirely on the T.1 decision
    ├─ T.1 schema-driven actions  ── EITHER infrastructure unblocking ~19 apps,
    │                                OR hand-write 20 actions and stay small
-   └─ T.2 webhook triggers       ── ordinary port (~11 precedents), plus generic
-                                    signature verification that none of them has
+   └─ T.2 webhook triggers       ── ordinary port (16 precedents), plus generic
+                                    signature verification that only 2 of them have
 ```
 
 **Recommended order: G → L → T.** G is self-contained and has no flag day, so it
@@ -402,7 +416,8 @@ its size by an order of magnitude.
    infrastructure for ~19 apps, or is Stripe hand-written as 20 actions? This
    changes phase T from a large infrastructure item to a small port, and changes
    what the other 18 apps cost later.
-3. **Should webhook signature verification be generalised** (§T.2)? None of the
-   eleven existing webhook providers verifies signatures. Stripe forces the issue
-   because forged payment events are a real risk, but the fix belongs on the shared
-   webhook layer rather than in one app.
+3. **Should webhook signature verification be generalised** (§T.2)? Only 2 of the
+   16 webhook providers verify (EasyPost, Mailgun), and none of the 24 webhook
+   apps in `module-v8` do. Stripe forces the issue because forged payment events
+   are a real risk, but the fix belongs on the shared webhook layer rather than in
+   one app.
