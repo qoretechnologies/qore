@@ -46,7 +46,7 @@ public class SoftListDataType inherits ListDataType {
     constructor(AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
             *list<auto> default_value, *hash<NameDescInfo> attr)
             : ListDataType(sprintf("%ssoftlist<%s>", or_nothing ? "*" : "", element_type.getName()),
-            SoftListDataType::getQoreType(element_type.getValueType(), or_nothing), element_type,
+            SoftListDataType::getQoreType(element_type, or_nothing), element_type,
             or_nothing, options, tags, default_value, attr) {
     }
 
@@ -61,7 +61,7 @@ public class SoftListDataType inherits ListDataType {
     #! creates the object
     constructor(string name, AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
             *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
-            : ListDataType(name, SoftListDataType::getQoreType(element_type.getValueType(), or_nothing),
+            : ListDataType(name, SoftListDataType::getQoreType(element_type, or_nothing),
             element_type, or_nothing, options, tags, default_value, attr) {
     }
 
@@ -70,7 +70,7 @@ public class SoftListDataType inherits ListDataType {
             *list<auto> default_value, *hash<NameDescInfo> attr)
             : ListDataType(name,
             SoftListDataType::getQoreType(element_type, or_nothing), AbstractDataProviderType::get(element_type),
-            or_nothing, options, tags. default_value, attr) {
+            or_nothing, options, tags, default_value, attr) {
     }
 
     #! returns the subtype (for lists or hashes) if there is only one
@@ -127,6 +127,20 @@ public class SoftListDataType inherits ListDataType {
     #! Returns the underlying %Qore type for this type
     private Type getQoreType(Type element_type, bool or_nothing) {
         return new Type(sprintf("%ssoftlist<%s>", or_nothing ? "*" : "", element_type.getName()));
+    }
+
+    #! Returns the underlying %Qore type for this type
+    /** Not every data type has a single %Qore type behind it -- a union type produced by an OpenAPI
+        \c anyOf or \c oneOf has none -- so a list of such elements falls back to an untyped list rather
+        than failing to resolve a type name.
+
+        @since DataProvider 3.8
+    */
+    private Type getQoreType(AbstractDataProviderType element_type, bool or_nothing) {
+        *Type qtype = element_type.getValueType();
+        return qtype
+            ? SoftListDataType::getQoreType(qtype, or_nothing)
+            : (or_nothing ? AutoListOrNothingType : AutoListType);
     }
 }
 }

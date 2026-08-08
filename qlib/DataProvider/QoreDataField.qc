@@ -198,9 +198,24 @@ public class QoreDataField inherits AbstractDataField {
 
     #! returns a field with an "or nothing" type equivalent to the current type
     /** @return a field with an "or nothing" type equivalent to the current type
+
+        @note The \c "required" attribute is cleared on the returned field.  A field that may be omitted is
+        not required, however the field it was derived from was declared; keeping the attribute made an
+        optional field report itself as required to every consumer that reads attributes rather than the
+        type, such as
+        @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()".
     */
     AbstractDataField getOrNothingType() {
-        return getNewFieldType(type.getOrNothingType());
+        AbstractDataProviderType new_type = type.getOrNothingType();
+        if (new_type == type) {
+            return self;
+        }
+        QoreDataField rv = copy();
+        rv.type = new_type;
+        if (rv.attr.required) {
+            remove rv.attr.required;
+        }
+        return rv;
     }
 
     #! Returns a mandatory (i.e. not "or nothing") field equivalent to the current field

@@ -848,6 +848,9 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("return-based processor API test", \returnBasedApiTest());
         addTestCase("type cache test", \typeCacheTest());
         addTestCase("static factory map test", \factoryMapTest());
+        addTestCase("union optional type test", \unionOptionalTypeTest());
+        addTestCase("optional field attribute test", \optionalFieldAttributeTest());
+        addTestCase("soft list of union type test", \softListUnionTest());
         addTestCase("test", \dataProviderTest());
 
         # Return for compatibility with test harnesses that check the return value.
@@ -5069,4 +5072,74 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(("a",), t.acceptsValue(("a",)));
         }
     }
+
+    unionOptionalTypeTest() {
+        # isMandatory() must be False whenever a type can accept NOTHING.  A union asks its alternatives
+        # directly: the direct type hash reports the base type code of an alternative's value, so an
+        # optional alternative contributes only that code and can never show that it is optional.
+        QoreUnionDataType opt((AbstractDataProviderType::get("*string"), AbstractDataProviderType::get("*int")));
+        assertTrue(opt.isOrNothingType());
+        assertFalse(opt.isMandatory());
+        assertFalse(opt.getInfo().mandatory);
+
+        # one optional alternative is enough to make the whole union optional
+        QoreUnionDataType mixed((AbstractDataProviderType::get("string"), AbstractDataProviderType::get("*int")));
+        assertTrue(mixed.isOrNothingType());
+        assertFalse(mixed.isMandatory());
+
+        # a union of mandatory alternatives is mandatory
+        QoreUnionDataType req((AbstractDataProviderType::get("string"), AbstractDataProviderType::get("int")));
+        assertFalse(req.isOrNothingType());
+        assertTrue(req.isMandatory());
+        assertTrue(req.getInfo().mandatory);
+
+        # the same has to hold for ordinary types: "mandatory" in the type info is what isMandatory() says
+        assertFalse(AbstractDataProviderType::get("*string").getInfo().mandatory);
+        assertTrue(AbstractDataProviderType::get("string").getInfo().mandatory);
+    }
+
+    optionalFieldAttributeTest() {
+        # a field that may be omitted is not required, however the field it was derived from was declared;
+        # the schema loaders set the "required" attribute on object-valued fields, and consumers read the
+        # attribute rather than the type
+        QoreDataField f({
+            "name": "x",
+            "desc": "d",
+            "type": AutoHashType,
+            "attr": {"required": True, "preselected": True},
+        });
+        assertTrue(f.getType().isMandatory());
+        assertTrue(f.getAttributes().required);
+
+        AbstractDataField opt = f.getOrNothingType();
+        assertFalse(opt.getType().isMandatory());
+        assertEq(NOTHING, opt.getAttributes().required);
+        # a presentation hint is not a contract, so it survives
+        assertTrue(opt.getAttributes().preselected);
+        # the field it was derived from is untouched
+        assertTrue(f.getAttributes().required);
+
+        # a field that was already optional is returned unchanged
+        QoreDataField g({"name": "y", "desc": "d", "type": AbstractDataProviderType::get("*string")});
+        assertEq("y", g.getOrNothingType().getName());
+    }
+
+    softListUnionTest() {
+        # a union has no single Qore type behind it, so a soft list of union elements has to fall back to
+        # an untyped list rather than failing to resolve a type name
+        QoreUnionDataType element((AbstractDataProviderType::get("*string"), AbstractDataProviderType::get("*int")));
+        assertNothing(element.getValueType());
+
+        SoftListDataType t(element);
+        assertEq(NT_LIST, t.getBaseTypeCode());
+        assertEq(element.getName(), t.getElementType().getName());
+
+        SoftListDataType opt(element, True);
+        assertTrue(opt.isOrNothingType());
+
+        # a named soft list of union elements resolves as well
+        SoftListDataType named("my-list", element, True);
+        assertEq("my-list", named.getName());
+    }
+
 }

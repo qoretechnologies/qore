@@ -222,10 +222,20 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
     #! Returns True if the type also accepts @ref nothing
     /** @return @ref True if any alternative accepts @ref nothing
         @since DataProvider 3.5.1
+
+        @note Each alternative is asked directly rather than looking for
+        @ref Qore::NT_NOTHING "NT_NOTHING" in @ref getDirectTypeHash().  That hash reports the base type
+        code of an alternative's *value* — \c "*string" contributes @ref Qore::NT_STRING "NT_STRING" and
+        nothing else — so it can never show that an alternative is optional, and a union of optional
+        alternatives reported itself as mandatory.
     */
     bool isOrNothingType() {
-        hash<string, bool> h = getDirectTypeHash();
-        return h{NT_NOTHING} ?? False;
+        foreach AbstractDataProviderType type in (types) {
+            if (type.isOrNothingType()) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Returns a hash of types accepted by this type; keys are type names

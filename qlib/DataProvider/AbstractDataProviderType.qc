@@ -502,7 +502,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 }, options.pairIterator())
                 : NOTHING,
             "base_type": getBaseTypeName(),
-            "mandatory": getDirectTypeHash(){NT_NOTHING} ? False : True,
+            # NOTE: asked through isMandatory() rather than by looking for NT_NOTHING in the direct type
+            # hash; that hash reports the base type code of the type's value, so an "or nothing" type
+            # contributes only its value's code and would be reported as mandatory here
+            "mandatory": isMandatory(),
             "types_accepted": keys getAcceptTypeHash(simple),
             "types_returned": keys getReturnTypeHash(simple),
             "fields": !recursive ? getFieldInfo() : NOTHING,
