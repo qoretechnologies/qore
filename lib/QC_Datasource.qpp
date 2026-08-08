@@ -289,6 +289,15 @@ const DBI_CAP_HAS_TYPED_SELECT = DBI_CAP_HAS_TYPED_SELECT;
     @since %Qore 3.0
  */
 const DBI_CAP_HAS_COLUMNAR_SELECT = DBI_CAP_HAS_COLUMNAR_SELECT;
+
+//! Indicates that the DBI driver provides the native bulk-load begin/rows/end protocol
+/** This capability is set automatically only when the driver registers all three native bulk-load
+    methods.  Native bulk loading is opt-in because its transaction, trigger, constraint, logging,
+    and error behavior can differ from ordinary inserts.
+
+    @since %Qore 3.0
+*/
+const DBI_CAP_HAS_BULK_LOAD = DBI_CAP_HAS_BULK_LOAD;
 ///@}
 
 /** @defgroup sql_mutation_effects SQL Mutation Declared Effect Constants
@@ -1026,6 +1035,44 @@ db.execRaw("create table my_tab (id number, some_text varchar2(30))");
 */
 auto Datasource::execRaw(string sql) [flags=NAMED_ARGS] {
     return ds->execRaw(sql, xsink);
+}
+
+//! Starts a driver-native bulk-load operation
+/** This is a low-level protocol method used by BulkSqlUtil.  Call Datasource::bulkLoadRows() one or
+    more times after a successful return and always finish with Datasource::bulkLoadEnd().
+
+    @param table the SQL-rendered target table name
+    @param columns SQL-rendered target column names in the same order as the row hash
+    @param options optional driver-specific options
+    @return @ref True when the native operation was started; @ref False when it is dynamically unavailable
+    @throw DBI-BULK-LOAD-ERROR the driver does not support the operation or the protocol is used out of order
+
+    @since %Qore 3.0
+*/
+bool Datasource::bulkLoadBegin(string table, list<string> columns, *hash<auto> options)
+        [flags=NAMED_ARGS] {
+    int rc = ds->bulkLoadBegin(table, columns, options, xsink);
+    return rc == 0;
+}
+
+//! Sends one row block to an active driver-native bulk-load operation
+/** @param rows a hash of column lists or scalar constants
+    @throw DBI-BULK-LOAD-ERROR no native bulk-load operation is active
+
+    @since %Qore 3.0
+*/
+nothing Datasource::bulkLoadRows(hash<auto> rows) {
+    ds->bulkLoadRows(rows, xsink);
+}
+
+//! Ends an active driver-native bulk-load operation
+/** @param success @ref True to finish the load normally; @ref False to abort it
+    @throw DBI-BULK-LOAD-ERROR no native bulk-load operation is active
+
+    @since %Qore 3.0
+*/
+nothing Datasource::bulkLoadEnd(bool success) {
+    ds->bulkLoadEnd(success, xsink);
 }
 
 //! Executes an %SQL select statement on the server and returns the result as a hash (column names) of lists (column values per row)

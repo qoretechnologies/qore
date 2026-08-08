@@ -1,0 +1,378 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires BulkSqlUtil
+
+%exec-class BulkSqlUtilNativeTest
+
+#! collects only the mutation events needed by the native bulk-load assertions
+class NativeStreamCollector {
+    public {
+        list<hash<SqlMutationEventInfo>> events();
+        int abort_after = 0;
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        events += ev;
+        if (abort_after && ev.event == SQL_MUTATION_EVENT_STREAM_PROGRESS
+            && ev.consumed_bytes > abort_after) {
+            return <SqlMutationDecisionInfo>{
+                "admit": False,
+                "err": "NATIVE-STREAM-OVER-BUDGET",
+                "desc": sprintf("native stream consumed %d bytes", ev.consumed_bytes),
+            };
+        }
+        return NOTHING;
+    }
+
+    reset() {
+        events = ();
+        abort_after = 0;
+    }
+
+    list<hash<SqlMutationEventInfo>> streamEvents() {
+        return map $1, events, $1.event >= SQL_MUTATION_EVENT_STREAM_BEGIN
+            && $1.event <= SQL_MUTATION_EVENT_STREAM_END;
+    }
+
+    list<int> streamCodes() {
+        return map $1.event, streamEvents();
+    }
+}
+
+#! validates the driver-neutral native bulk-load contract without an external database
+public class BulkSqlUtilNativeTest inherits QUnit::Test {
+    public {
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "native-bulk-1",
+            "path_id": "bulk_native_test.insert",
+            "op_code": 7,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 1048576,
+        };
+
+        const RowCount = 5;
+        const BlockSize = 2;
+    }
+
+    private {
+        NativeStreamCollector obs();
+    }
+
+    constructor() : Test("BulkSqlUtilNativeTest", "1.0", \ARGV) {
+        addTestCase("capability and low-level protocol", \capabilityTest());
+        addTestCase("native insert path", \nativePathTest());
+        addTestCase("default fallback path", \defaultFallbackTest());
+        addTestCase("dynamic unavailable fallback", \dynamicFallbackTest());
+        addTestCase("missing capability fallback", \missingCapabilityTest());
+        addTestCase("returning restriction", \returningRestrictionTest());
+        addTestCase("native stream overrun", \nativeOverrunTest());
+        addTestCase("fallback stream overrun", \fallbackOverrunTest());
+        addTestCase("close aborts active protocol", \closeAbortTest());
+        addTestCase("datasource pool plumbing", \poolTest());
+
+        set_return_value(main());
+    }
+
+    private Datasource getDs(string driver = "dbitest") {
+        Datasource ds;
+        try {
+            # Loading dbitest also registers the dbitestnobulk alias used by capability tests.
+            ds = new Datasource(sprintf("%s:u/p@db", driver));
+            ds.setAutoCommit(False);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+        ds.setOption("bulk-load-reset", True);
+        ds.setOption("fault", "");
+        return ds;
+    }
+
+    private PgsqlSqlUtilBase::PgsqlTable getTable(Datasource ds) {
+        # An explicit schema avoids a connection-specific search_path lookup.  dbitest returns no
+        # row for PgsqlTable's temporary-table catalog probe, so this represents a normal table.
+        PgsqlSqlUtilBase::PgsqlTable table(ds, "public.bulk_native_test", NOTHING);
+        # Supply deterministic metadata so fallback SQL generation uses the ordinary PgsqlTable
+        # implementation without requiring dbitest to emulate PostgreSQL's catalog schema.
+        table.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int},
+                "val": {"qore_type": Type::String, "size": 64},
+            },
+        });
+        return table;
+    }
+
+    private hash<auto> stats(Datasource ds) {
+        return ds.getOption("bulk-load-stats");
+    }
+
+    private queueRows(BulkSqlUtil::BulkInsertOperation op, int count) {
+        for (int i = 0; i < count; ++i) {
+            op.queueData({"id": i, "val": sprintf("value-%d", i)});
+        }
+    }
+
+    capabilityTest() {
+        Datasource ds = getDs();
+        assertTrue((ds.getCapabilities() & DBI_CAP_HAS_BULK_LOAD) != 0);
+        assertTrue(ds.getCapabilityList().contains("HasBulkLoad"));
+
+        Datasource no_bulk = getDs("dbitestnobulk");
+        assertFalse((no_bulk.getCapabilities() & DBI_CAP_HAS_BULK_LOAD) != 0);
+        assertFalse(no_bulk.getCapabilityList().contains("HasBulkLoad"));
+
+        assertTrue(ds.bulkLoadBegin("public.bulk_native_test", ("id", "val"), NOTHING));
+        assertThrows("DBI-BULK-LOAD-ERROR", sub () {
+            ds.bulkLoadBegin("public.bulk_native_test", ("id",), NOTHING);
+        });
+        ds.bulkLoadRows({"id": (1, 2), "val": ("a", "b")});
+        ds.bulkLoadEnd(True);
+        assertThrows("DBI-BULK-LOAD-ERROR", sub () { ds.bulkLoadRows({"id": (3,)}); });
+
+        hash<auto> s = stats(ds);
+        assertEq(1, s.begins);
+        assertEq(1, s.blocks);
+        assertEq(2, s.rows);
+        assertEq(1, s.ends);
+
+        ds.setOption("fault", "bulk-unavailable");
+        assertFalse(ds.bulkLoadBegin("public.bulk_native_test", ("id",), NOTHING));
+        ds.setOption("fault", "");
+        ds.rollback();
+        no_bulk.close();
+    }
+
+    nativePathTest() {
+        Datasource ds = getDs();
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkSqlUtil::BulkInsertOperation op(getTable(ds), {
+                "bulk_load": True,
+                "block_size": BlockSize,
+            });
+            on_error op.discard();
+            queueRows(op, RowCount);
+            op.flush();
+            op.endStream();
+        }
+        ds.commit();
+
+        hash<auto> s = stats(ds);
+        assertEq(1, s.begins);
+        assertEq(3, s.blocks);
+        assertEq(RowCount, s.rows);
+        assertEq(1, s.ends);
+        assertEq(0, s.sql_execs);
+        assertEq(1, s.commits);
+
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_PROGRESS, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_END), obs.streamCodes());
+        list<hash<SqlMutationEventInfo>> events = obs.streamEvents();
+        list<int> consumed = map $1.consumed_bytes,
+            (map $1, events, $1.event == SQL_MUTATION_EVENT_STREAM_PROGRESS);
+        assertEq(consumed, sort(consumed));
+        assertGt(0, consumed[0]);
+        assertGt(consumed[0], consumed.last());
+        assertEq(consumed.last(), events.last().consumed_bytes);
+        assertEq(SQL_MUTATION_OUTCOME_OK, events.last().outcome);
+    }
+
+    defaultFallbackTest() {
+        Datasource ds = getDs();
+        BulkSqlUtil::BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+        on_error op.discard();
+        queueRows(op, RowCount);
+        op.flush();
+        op.endStream();
+
+        hash<auto> s = stats(ds);
+        assertEq(0, s.begins);
+        assertEq(0, s.blocks);
+        assertEq(0, s.rows);
+        assertEq(0, s.ends);
+        assertGt(0, s.sql_execs);
+        ds.rollback();
+    }
+
+    private requiredUnavailable(Datasource ds) {
+        BulkSqlUtil::BulkInsertOperation op(getTable(ds), {"bulk_load": True});
+        on_error op.discard();
+        queueRows(op, 1);
+        op.flush();
+    }
+
+    dynamicFallbackTest() {
+        Datasource ds = getDs();
+        ds.setOption("fault", "bulk-unavailable");
+        BulkSqlUtil::BulkInsertOperation op(getTable(ds), {"bulk_load": "auto", "block_size": BlockSize});
+        on_error op.discard();
+        queueRows(op, RowCount);
+        op.flush();
+        op.endStream();
+        hash<auto> s = stats(ds);
+        assertEq(0, s.begins);
+        assertGt(0, s.sql_execs);
+        op.discard();
+        ds.rollback();
+
+        ds.setOption("bulk-load-reset", True);
+        assertThrows("BULK-SQL-OPERATION-ERROR", sub () { requiredUnavailable(ds); });
+        assertEq(0, stats(ds).begins);
+        ds.setOption("fault", "");
+        ds.rollback();
+    }
+
+    missingCapabilityTest() {
+        # First load the module under its primary name so its no-bulk alias is registered.
+        Datasource loader = getDs();
+        loader.close();
+        Datasource ds = getDs("dbitestnobulk");
+        BulkSqlUtil::BulkInsertOperation op(getTable(ds), {"bulk_load": "auto", "block_size": BlockSize});
+        on_error op.discard();
+        queueRows(op, RowCount);
+        op.flush();
+        op.endStream();
+        assertGt(0, stats(ds).sql_execs);
+        op.discard();
+        ds.rollback();
+
+        assertThrows("BULK-SQL-OPERATION-ERROR", sub () { requiredUnavailable(ds); });
+        ds.rollback();
+    }
+
+    private requiredReturning(Datasource ds) {
+        BulkSqlUtil::BulkInsertOperation op(getTable(ds), {
+            "bulk_load": True,
+            "returning": ("id",),
+        });
+        on_error op.discard();
+        op.queueData({"id": 1, "val": "a"});
+        op.flush();
+    }
+
+    returningRestrictionTest() {
+        Datasource ds = getDs();
+
+        # Automatic mode preserves ordinary insert semantics for an ineligible returning operation.
+        BulkSqlUtil::BulkInsertOperation fallback(getTable(ds), {
+            "bulk_load": "auto",
+            "returning": ("id",),
+        });
+        on_error fallback.discard();
+        fallback.queueData({"id": 1, "val": "a"});
+        fallback.flush();
+        fallback.endStream();
+        assertEq(0, stats(ds).begins);
+        assertGt(0, stats(ds).sql_execs);
+        fallback.discard();
+        ds.rollback();
+
+        ds.setOption("bulk-load-reset", True);
+        assertThrows("BULK-SQL-OPERATION-ERROR", sub () { requiredReturning(ds); });
+        assertEq(0, stats(ds).begins);
+        assertEq(0, stats(ds).sql_execs);
+        ds.rollback();
+    }
+
+    private runOverrun(Datasource ds, auto bulk_load) {
+        BulkSqlUtil::BulkInsertOperation op(getTable(ds), {
+            "bulk_load": bulk_load,
+            "block_size": BlockSize,
+        });
+        on_error op.discard();
+        queueRows(op, RowCount);
+        op.flush();
+        op.endStream();
+    }
+
+    private setupObserver(Datasource ds) {
+        obs.reset();
+        obs.abort_after = 1;
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+    }
+
+    nativeOverrunTest() {
+        Datasource ds = getDs();
+        setupObserver(ds);
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            assertThrows("NATIVE-STREAM-OVER-BUDGET", sub () { runOverrun(ds, True); });
+        }
+        hash<auto> s = stats(ds);
+        assertEq(1, s.begins);
+        assertEq(1, s.blocks);
+        assertEq(BlockSize, s.rows);
+        assertEq(1, s.ends);
+        assertEq(0, s.sql_execs);
+        assertEq(0, s.commits);
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_END), obs.streamCodes());
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, obs.streamEvents().last().event);
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, obs.streamEvents().last().outcome);
+        ds.rollback();
+    }
+
+    fallbackOverrunTest() {
+        Datasource ds = getDs();
+        setupObserver(ds);
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            assertThrows("NATIVE-STREAM-OVER-BUDGET", sub () { runOverrun(ds, False); });
+        }
+        hash<auto> s = stats(ds);
+        assertEq(0, s.begins);
+        assertEq(0, s.blocks);
+        assertEq(0, s.rows);
+        assertEq(0, s.ends);
+        assertGt(0, s.sql_execs);
+        assertEq(0, s.commits);
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_END), obs.streamCodes());
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, obs.streamEvents().last().event);
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, obs.streamEvents().last().outcome);
+        ds.rollback();
+    }
+
+    closeAbortTest() {
+        Datasource ds = getDs();
+        ds.setAutoCommit(True);
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            assertTrue(ds.bulkLoadBegin("public.bulk_native_test", ("id", "val"),
+                {"stream_bounds": True}));
+            ds.bulkLoadRows({"id": (1, 2), "val": ("a", "b")});
+            # The core supplies the final abort callback when a low-level caller closes without end.
+            ds.close();
+        }
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_END), obs.streamCodes());
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, obs.streamEvents().last().outcome);
+    }
+
+    poolTest() {
+        # The pool must pin one connection from begin through rows/end and release it on rollback.
+        Datasource loader = getDs();
+        loader.close();
+        DatasourcePool pool("dbitest:u/p@db{min=1,max=1}");
+        assertTrue(pool.bulkLoadBegin("public.bulk_native_test", ("id", "val"), NOTHING));
+        assertTrue(pool.currentThreadInTransaction());
+        pool.bulkLoadRows({"id": (1, 2), "val": ("a", "b")});
+        pool.bulkLoadEnd(True);
+        assertTrue(pool.currentThreadInTransaction());
+        pool.rollback();
+        assertFalse(pool.currentThreadInTransaction());
+    }
+}

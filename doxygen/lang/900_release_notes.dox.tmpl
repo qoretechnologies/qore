@@ -157,6 +157,9 @@
     - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper support shaped columnar bulk blocks, and DPQL
       gained dense filtering with scalar, expression-to-expression, string, date, list-membership, and
       ICU-backed locale-sensitive predicates, plus streaming-style prefix operators
+    - opt-in driver-native bulk inserts use a new DBI begin/rows/end protocol and capability; BulkSqlUtil preserves
+      the driver-neutral bounded ordinary path as the default and gives the native driver sole ownership of stream
+      events and actual transmitted-byte accounting when selected
     - the dataframe benchmark suite shows Qore outperforming <a href="https://pandas.pydata.org/">pandas</a> for the
       included typed column construction, filtering, aggregation, join,
       value counting, missing-data cleanup, reshape, <a href="https://arrow.apache.org/">Arrow</a>/<a href="https://parquet.apache.org/">Parquet</a> roundtrip,
@@ -1346,6 +1349,12 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         token-protected flow, and STS \c AssumeRole bootstrap, tried in order
       - new connection options for role assumption and IMDS/STS endpoints, plus static credential helpers
 
+    - @ref bulksqlutilintro "BulkSqlUtil" module
+      - added the opt-in \c bulk_load policy for driver-native inserts, with required and automatic-fallback modes;
+        returning values, row callbacks, SQL value expressions, and upserts remain on the ordinary path
+      - native paths report exactly one bounded-stream event sequence from the driver, while fallback operations
+        retain the driver-neutral block reporting added in Phase 1
+
     - @ref cdsrestclientintro "CdsRestClient" module
       - added support for Microsoft Dynamics 365 Business Central
         - new @ref CdsRestClient::BusinessCentralRestConnection "CdsRestClient::BusinessCentralRestConnection" class for BC connections
@@ -1539,6 +1548,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         \c validator, and \c asyncapi_channel handler and bridge options
 
     - @ref sqlutilintro "SqlUtil" module
+      - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to
+        @ref SqlUtil::AbstractTable "AbstractTable" for opt-in use by BulkSqlUtil
       - added @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" (and the all-drivers variant)
         for standard created/modified-timestamp and sequence-ID triggers across PostgreSQL, Oracle, MySQL, MSSQL
       - added portable range-partition strategy, introspection, lookup, add, ensure, drop, truncate, and detach APIs

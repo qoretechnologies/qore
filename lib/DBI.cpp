@@ -77,6 +77,7 @@ struct dbi_cap_hash dbi_cap_list[] =
   { DBI_CAP_HAS_RESULTSET_OUTPUT,   "HasResultsetOutput" },
   { DBI_CAP_HAS_TYPED_SELECT,       "HasTypedSelect" },
   { DBI_CAP_HAS_COLUMNAR_SELECT,    "HasColumnarSelect" },
+  { DBI_CAP_HAS_BULK_LOAD,          "HasBulkLoad" },
 };
 
 #define NUM_DBI_CAPS (sizeof(dbi_cap_list) / sizeof(dbi_cap_hash))
@@ -240,6 +241,27 @@ void qore_dbi_method_list::add(int code, q_dbi_stmt_next_t method) {
     priv->l[code] = (void*)method;
 }
 
+// covers native bulk-load begin
+void qore_dbi_method_list::add(int code, q_dbi_bulk_load_begin_t method) {
+    assert(code == QDBI_METHOD_BULK_LOAD_BEGIN);
+    assert(priv->l.find(code) == priv->l.end());
+    priv->l[code] = reinterpret_cast<void*>(method);
+}
+
+// covers native bulk-load rows
+void qore_dbi_method_list::add(int code, q_dbi_bulk_load_rows_t method) {
+    assert(code == QDBI_METHOD_BULK_LOAD_ROWS);
+    assert(priv->l.find(code) == priv->l.end());
+    priv->l[code] = reinterpret_cast<void*>(method);
+}
+
+// covers native bulk-load end
+void qore_dbi_method_list::add(int code, q_dbi_bulk_load_end_t method) {
+    assert(code == QDBI_METHOD_BULK_LOAD_END);
+    assert(priv->l.find(code) == priv->l.end());
+    priv->l[code] = reinterpret_cast<void*>(method);
+}
+
 void qore_dbi_method_list::add(int code, q_dbi_option_set_t method) {
     assert(code == QDBI_METHOD_OPT_SET);
     assert(priv->l.find(code) == priv->l.end());
@@ -322,22 +344,37 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
             case QDBI_METHOD_SELECT_TYPED:
                 assert(!f.selectTyped);
                 f.selectTyped = (q_dbi_select_typed_t)(*i).second;
-                cps |= DBI_CAP_HAS_TYPED_SELECT;
+                caps |= DBI_CAP_HAS_TYPED_SELECT;
                 break;
             case QDBI_METHOD_SELECT_ROWS_TYPED:
                 assert(!f.selectRowsTyped);
                 f.selectRowsTyped = (q_dbi_select_rows_typed_t)(*i).second;
-                cps |= DBI_CAP_HAS_TYPED_SELECT;
+                caps |= DBI_CAP_HAS_TYPED_SELECT;
                 break;
             case QDBI_METHOD_SELECT_COLUMNAR:
                 assert(!f.selectColumnar);
                 f.selectColumnar = (q_dbi_select_columnar_t)(*i).second;
-                cps |= DBI_CAP_HAS_COLUMNAR_SELECT;
+                caps |= DBI_CAP_HAS_COLUMNAR_SELECT;
+                break;
+
+            case QDBI_METHOD_BULK_LOAD_BEGIN:
+                assert(!f.bulk_load_begin);
+                f.bulk_load_begin = reinterpret_cast<q_dbi_bulk_load_begin_t>((*i).second);
+                break;
+
+            case QDBI_METHOD_BULK_LOAD_ROWS:
+                assert(!f.bulk_load_rows);
+                f.bulk_load_rows = reinterpret_cast<q_dbi_bulk_load_rows_t>((*i).second);
+                break;
+
+            case QDBI_METHOD_BULK_LOAD_END:
+                assert(!f.bulk_load_end);
+                f.bulk_load_end = reinterpret_cast<q_dbi_bulk_load_end_t>((*i).second);
                 break;
             case QDBI_METHOD_SELECT_ROW:
                 assert(!f.selectRow);
                 f.selectRow = (q_dbi_select_row_t)(*i).second;
-                cps |= DBI_CAP_HAS_SELECT_ROW;
+                caps |= DBI_CAP_HAS_SELECT_ROW;
                 break;
             case QDBI_METHOD_EXEC:
                 assert(!f.execSQL);
@@ -346,12 +383,12 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
             case QDBI_METHOD_EXECRAW:
                 assert(!f.execRawSQL);
                 f.execRawSQL = (q_dbi_execraw_t)(*i).second;
-                cps |= DBI_CAP_HAS_EXECRAW;
+                caps |= DBI_CAP_HAS_EXECRAW;
                 break;
             case QDBI_METHOD_DESCRIBE:
                 assert(!f.describe);
                 f.describe = (q_dbi_describe_t)(*i).second;
-                cps |= DBI_CAP_HAS_DESCRIBE;
+                caps |= DBI_CAP_HAS_DESCRIBE;
                 break;
             case QDBI_METHOD_COMMIT:
                 assert(!f.commit);
@@ -421,7 +458,7 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
             case QDBI_METHOD_STMT_FETCH_COLUMNAR:
                 assert(!f.stmt.fetch_columnar);
                 f.stmt.fetch_columnar = (q_dbi_stmt_fetch_columnar_t)(*i).second;
-                cps |= DBI_CAP_HAS_COLUMNAR_SELECT;
+                caps |= DBI_CAP_HAS_COLUMNAR_SELECT;
                 break;
             case QDBI_METHOD_STMT_DESCRIBE:
                 assert(!f.stmt.describe);
@@ -470,6 +507,14 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
                 assert(false);
 #endif
         }
+    }
+
+    // Native bulk loading is a three-method protocol.  Only advertise it when the complete protocol
+    // is registered so a partially updated driver can never be dispatched through an incomplete API.
+    if (f.bulk_load_begin && f.bulk_load_rows && f.bulk_load_end) {
+        caps |= DBI_CAP_HAS_BULK_LOAD;
+    } else {
+        assert(!f.bulk_load_begin && !f.bulk_load_rows && !f.bulk_load_end);
     }
     // ensure minimum methods are defined
     assert(f.open);

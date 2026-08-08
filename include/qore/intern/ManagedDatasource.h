@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -103,6 +103,10 @@ public:
     DLLLOCAL QoreValue selectRowsTyped(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue exec(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue execRaw(const QoreString *query_str, ExceptionSink* xsink);
+    DLLLOCAL int bulkLoadBegin(const QoreString* table, const QoreListNode* columns, const QoreHashNode* options,
+        ExceptionSink* xsink);
+    DLLLOCAL int bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink);
+    DLLLOCAL int bulkLoadEnd(bool success, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* describe(const QoreString *query_str, const QoreListNode* args, ExceptionSink* xsink);
 
     DLLLOCAL int commit(ExceptionSink* xsink);

@@ -579,6 +579,31 @@ QoreValue DatasourcePool::execRaw(const QoreString* sql, ExceptionSink* xsink) {
    return exec_internal(false, sql, nullptr, xsink);
 }
 
+int DatasourcePool::bulkLoadBegin(const QoreString* table, const QoreListNode* columns,
+        const QoreHashNode* options, ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink, DAH_ACQUIRE);
+    if (!dpah) {
+        return -1;
+    }
+    return dpah->bulkLoadBegin(table, columns, options, xsink);
+}
+
+int DatasourcePool::bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink, DAH_ACQUIRE);
+    if (!dpah) {
+        return -1;
+    }
+    return dpah->bulkLoadRows(rows, xsink);
+}
+
+int DatasourcePool::bulkLoadEnd(bool success, ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink, DAH_ACQUIRE);
+    if (!dpah) {
+        return -1;
+    }
+    return dpah->bulkLoadEnd(success, xsink);
+}
+
 int DatasourcePool::commit(ExceptionSink* xsink) {
     DatasourcePoolActionHelper dpah(*this, xsink, DAH_RELEASE);
     if (!dpah)

@@ -344,6 +344,37 @@ than borrowing it temporarily.  The declared size of a stream is per-connection 
 temporary acquisition could report progress against a different connection than the one the stream
 was started on.  The connection is released by the caller's commit or rollback.
 
+### Native bulk-load ownership
+
+`BulkInsertOperation` has two bounded-stream implementations, with exactly one event owner for any
+operation:
+
+- on the ordinary array-bind or row-loop path, BulkSqlUtil reports `STREAM_BEGIN`, cumulative
+  `STREAM_PROGRESS`, and `STREAM_END` around its block flushes;
+- on a driver-native path, the DBI driver reports the same boundaries around its native protocol,
+  and BulkSqlUtil suppresses its own events.
+
+Native loading is opt-in. `bulk_load: False` is the default, `bulk_load: True` requires an eligible
+native mechanism, and `bulk_load: "auto"` falls back to the ordinary path when the capability or
+dynamic server support is unavailable. Upserts, SQL value expressions, `returning`, and `rowcode`
+callbacks are not native-eligible because the native mechanisms are insert-only and do not return
+generated values.
+
+The fallback path measures the serialized Qore values before each block executes. A native driver
+reports the encoded bytes it actually passes to its database API, which can include escaping,
+delimiters, or protocol framing. Both measures are cumulative payload bytes and can be checked
+against the declaration bound, but callers must not assume byte-for-byte equality between paths.
+
+The DBI contract consists of `QDBI_METHOD_BULK_LOAD_BEGIN`,
+`QDBI_METHOD_BULK_LOAD_ROWS`, and `QDBI_METHOD_BULK_LOAD_END`. Registering the complete set
+automatically adds `DBI_CAP_HAS_BULK_LOAD`; a partial set is invalid. Begin receives an SQL-rendered
+table name, ordered SQL-rendered column names, and driver options. It returns 0 after starting a
+session, 1 when the mechanism is dynamically unavailable and fallback remains safe, or -1 with an
+exception for a hard error. Rows receives one hash-of-columns block. End receives `true` to finish
+or `false` to abort and must close the driver protocol and any stream boundary it began. Once begin
+returns 0, the caller invokes end exactly once even when row delivery fails. Closing a datasource
+with a session still active forces an abort callback as a final safety net.
+
 ## API surface
 
 `AbstractDatasource` gains these as **non-abstract** methods that throw

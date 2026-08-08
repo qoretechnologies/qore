@@ -226,6 +226,10 @@ public:
     DLLLOCAL int beginTransaction(ExceptionSink* xsink);
     DLLLOCAL QoreValue exec(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL QoreValue execRaw(const QoreString* sql, ExceptionSink* xsink);
+    DLLLOCAL int bulkLoadBegin(const QoreString* table, const QoreListNode* columns, const QoreHashNode* options,
+        ExceptionSink* xsink);
+    DLLLOCAL int bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink);
+    DLLLOCAL int bulkLoadEnd(bool success, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* describe(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
     DLLLOCAL int commit(ExceptionSink* xsink);
     DLLLOCAL int rollback(ExceptionSink* xsink);

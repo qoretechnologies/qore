@@ -65,6 +65,8 @@ struct qore_ds_private {
     bool commit_in_progress = false;
     //! set when the driver reports a lost or aborted connection; flushed at the next core boundary
     bool mutation_conn_lost = false;
+    //! true while the driver owns an active native bulk-load protocol session
+    bool bulk_load_active = false;
 
     mutable DBIDriver* dsl;
     const QoreEncoding* qorecharset = QCS_DEFAULT;
@@ -518,6 +520,15 @@ struct qore_ds_private {
     DLLLOCAL int close() {
         if (isopen) {
             //printd(5, "qore_ds_private::close() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
+            if (bulk_load_active && !connection_aborted) {
+                // A native protocol session cannot survive a close/reopen cycle.  Give the driver a
+                // final abort callback so it can close its wire-level state and stream boundary.
+                ExceptionSink xsink;
+                bulk_load_active = false;
+                qore_dbi_private::get(*dsl)->bulkLoadEnd(ds, false, &xsink);
+                xsink.clear();
+            }
+            bulk_load_active = false;
             qore_dbi_private::get(*dsl)->close(ds);
             isopen = false;
             in_transaction = false;

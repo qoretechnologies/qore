@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -461,6 +461,45 @@ db.execRaw("create table my_tab (id number, some_text varchar2(30))");
  */
 auto DatasourcePool::execRaw(string sql) [flags=NAMED_ARGS] {
    return ds->execRaw(sql, xsink);
+}
+
+//! Starts a driver-native bulk-load operation
+/** This low-level method allocates one pool connection to the calling thread for the entire native
+    operation.  Finish every successful call with DatasourcePool::bulkLoadEnd(), then commit or roll
+    back the surrounding transaction normally.
+
+    @param table the SQL-rendered target table name
+    @param columns SQL-rendered target column names in the same order as the row hash
+    @param options optional driver-specific options
+    @return @ref True when the native operation was started; @ref False when it is dynamically unavailable
+    @throw DBI-BULK-LOAD-ERROR the driver does not support the operation or the protocol is used out of order
+
+    @since %Qore 3.0
+*/
+bool DatasourcePool::bulkLoadBegin(string table, list<string> columns, *hash<auto> options)
+        [flags=NAMED_ARGS] {
+    int rc = ds->bulkLoadBegin(table, columns, options, xsink);
+    return rc == 0;
+}
+
+//! Sends one row block to an active driver-native bulk-load operation
+/** @param rows a hash of column lists or scalar constants
+    @throw DBI-BULK-LOAD-ERROR no native bulk-load operation is active
+
+    @since %Qore 3.0
+*/
+nothing DatasourcePool::bulkLoadRows(hash<auto> rows) {
+    ds->bulkLoadRows(rows, xsink);
+}
+
+//! Ends an active driver-native bulk-load operation
+/** @param success @ref True to finish the load normally; @ref False to abort it
+    @throw DBI-BULK-LOAD-ERROR no native bulk-load operation is active
+
+    @since %Qore 3.0
+*/
+nothing DatasourcePool::bulkLoadEnd(bool success) {
+    ds->bulkLoadEnd(success, xsink);
 }
 
 //! Executes an %SQL select statement on the server and returns the result as a hash (column names) of lists (column values per row)

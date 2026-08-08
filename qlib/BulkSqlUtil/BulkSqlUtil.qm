@@ -36,7 +36,7 @@
 %requires(reexport) SqlUtil
 
 module BulkSqlUtil {
-    version = "1.5";
+    version = "1.6";
     desc = "user module performing bulk DML operations with SqlUtil";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -81,9 +81,9 @@ module BulkSqlUtil {
     discarded by the caller's rollback.
 
     Two properties make this useful in practice:
-    - it is driver-neutral: the reporting is implemented over the ordinary block flush path, so it does not depend
-      on a native bulk-load mechanism such as PostgreSQL \c COPY, and it behaves identically on DBI drivers with and
-      without @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND "array bind" support
+    - it is driver-neutral: the ordinary block flush path reports these boundaries on every driver; when an explicitly
+      requested native bulk-load path is used, the driver reports the same boundaries around the bytes it actually
+      sends, and BulkSqlUtil does not duplicate them
     - it costs nothing when unused: no events are reported unless a mutation observer is registered on the
       datasource, so operations on unmonitored datasources behave exactly as before
 
@@ -96,7 +96,32 @@ module BulkSqlUtil {
     @ref BulkSqlUtil::AbstractBulkOperation::endStream() "AbstractBulkOperation::endStream()" first so that the
     observer sees the stream's end boundary before the transaction outcome.
 
+    @section native_bulk_load Native Bulk Loading
+
+    @ref BulkSqlUtil::BulkInsertOperation "BulkInsertOperation" can explicitly select a driver-native bulk-load
+    mechanism with the \c "bulk_load" option.  The default is @ref False "False", preserving the ordinary Phase 1
+    block path.  @ref True "True" requires native loading and raises \c BULK-SQL-OPERATION-ERROR if it cannot be used;
+    \c "auto" uses it when eligible and falls back to ordinary inserts otherwise.  Driver-specific settings can be
+    passed in \c "bulk_load_options".
+
+    Native loading is insert-only.  Upserts, SQL value expressions, caller-requested \c "returning" values, and
+    operations with a \c "rowcode" callback are ineligible because native mechanisms do not return generated values
+    and do not implement merge semantics.  Required mode reports this as an error; automatic mode preserves the
+    ordinary insert behavior.
+
+    Exactly one layer owns bounded-stream events.  A native driver reports begin, cumulative progress, and end around
+    its wire protocol; BulkSqlUtil reports them only for the fallback path.  Fallback byte counts estimate the
+    serialized Qore values before execution.  Native byte counts are the encoded payload actually handed to the
+    database API and can additionally include escaping, delimiters, or protocol framing.  Both are cumulative payload
+    measures suitable for comparison with a declaration's growth bound, but they are not guaranteed to be identical.
+
     @section bulksqlutil_relnotes Release Notes
+
+    @subsection bulksqlutil_v1_6 BulkSqlUtil v1.6
+    - added the opt-in \c "bulk_load" policy and \c "bulk_load_options" for driver-native inserts; see
+      @ref native_bulk_load
+    - native paths now own bounded-stream reporting while the ordinary fallback retains the driver-neutral Phase 1
+      reporting, preventing duplicate stream events
 
     @subsection bulksqlutil_v1_5 BulkSqlUtil v1.5
     - bulk operations now report themselves as bounded streams to a datasource mutation observer, so that an

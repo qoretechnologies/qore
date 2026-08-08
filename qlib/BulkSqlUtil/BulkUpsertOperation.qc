@@ -131,5 +131,10 @@ on_error ds.rollback();
             # execute the statement on the args
             upsert(hbuf + cval);
         }
+
+        #! native bulk loading is insert-only and has no upsert equivalent
+        private bool nativeLoadEligible() {
+            return False;
+        }
     } # BulkUpsertOperation class
 } # BulkSqlUtil namespace
