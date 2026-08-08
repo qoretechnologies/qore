@@ -32,7 +32,7 @@ in scheduling them together:
 
 | Phase | Kind of work | Blocked on |
 |---|---|---|
-| **G** — Google Cloud Storage | A *new* app; no TypeScript predecessor | Nothing. A logo must be supplied |
+| **G** — Google Cloud Storage | A *new* app; no TypeScript predecessor | Nothing; the logo is in place |
 | **L** — LinkedIn | A migration of two TypeScript apps | Nothing; needs a live LinkedIn app for each scope family |
 | **T** — Stripe | A port plus one infrastructure decision | Schema-driven action registration (§T.1) |
 
@@ -153,17 +153,25 @@ value.
    (`restDoRawRequest()`), never `setSerialization("bin")`, which mutates
    client-wide state shared between provider objects and threads.
 
-### G.5 Logo — **must be supplied**
+### G.5 Logo — **supplied**
 
-There is no Google Cloud or GCS icon in the repo. The existing Google-family logos
-are all product-specific: `google-drive-logo.svg`, `google-calendar-logo.svg`,
-`google-document-ai-logo.svg`, `vertex-ai-logo.svg`.
+`qlib/GoogleCloudStorageDataProvider/google-cloud-storage-logo.svg` is in place: the
+four-colour Google Cloud mark, `viewBox="0 -25 256 256"`.
 
-Per `design/data-provider-checklist.md` the logo must be **square** and a separate
-file loaded at module level, never an inlined string. A non-square source is
-normalized by padding the short axis in the `viewBox` rather than stretching —
-`google-drive-logo.svg` (`viewBox="0 -4.65 87.3 87.3"`) and the SharePoint logo
-added in phase SP (`viewBox="0 -23.1665 1992.333 1992.333"`) are the precedents.
+It needed no normalization — it is already square, and the `-25` y-offset is
+already the centering pad that `google-drive-logo.svg` (`0 -4.65 87.3 87.3`) and the
+SharePoint logo (`0 -23.1665 1992.333 1992.333`) use. It is well-formed XML with no
+entities, scripts, external references or embedded rasters.
+
+Load it at module level per `design/data-provider-checklist.md` — a separate file
+read with `File::readTextFile(get_script_dir() + "/google-cloud-storage-logo.svg")`,
+never an inlined string — and pass `"logo_mime_type": MimeTypeSvg`. Add the file as
+the second argument to `qore_user_module()` in `CMakeLists.txt` so the doc build
+picks it up.
+
+Note it is the *generic* Google Cloud mark rather than the distinct Cloud Storage
+bucket icon. That is a deliberate, reversible choice: the generic mark is more
+widely recognised, and swapping it later is a one-file change.
 
 ### G.6 Tests
 
@@ -356,7 +364,7 @@ generalise it, since eleven existing providers would benefit.
 
 ```
 Phase G  (Google Cloud Storage)  ── independent, no flag day, closes an internal gap
-                                    needs: a GCS logo (§G.5), a GCP service account
+                                    needs: a GCP service account (logo already in place)
 Phase L  (LinkedIn)              ── independent of G; two flag days, do them one at a time
    ├─ L: LinkedIn (member)       ── smaller, simpler API, do first
    └─ L: LinkedInOrganizations   ── also closes the stale 202502 DMA version pin
@@ -387,16 +395,14 @@ its size by an order of magnitude.
 
 ## Decisions needed before coding starts
 
-1. **A Google Cloud Storage logo** (§G.5) — none exists in the repo; it must be
-   supplied as a square SVG, or as any SVG whose `viewBox` can be padded to square.
-2. **Live tenants**: a GCP project with a service account (phase G); a LinkedIn
+1. **Live tenants**: a GCP project with a service account (phase G); a LinkedIn
    developer application for the member scopes and a second, separately approved,
    DMA application (phase L); a Stripe account with webhook access (phase T).
-3. **§T.1 scope** — is schema-driven app-action registration funded as
+2. **§T.1 scope** — is schema-driven app-action registration funded as
    infrastructure for ~19 apps, or is Stripe hand-written as 20 actions? This
    changes phase T from a large infrastructure item to a small port, and changes
    what the other 18 apps cost later.
-4. **Should webhook signature verification be generalised** (§T.2)? None of the
+3. **Should webhook signature verification be generalised** (§T.2)? None of the
    eleven existing webhook providers verifies signatures. Stripe forces the issue
    because forged payment events are a real risk, but the fix belongs on the shared
    webhook layer rather than in one app.
