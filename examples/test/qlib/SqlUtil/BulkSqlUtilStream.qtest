@@ -101,6 +101,7 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
         addTestCase("stream overrun stops before commit", \streamOverrunTest());
         addTestCase("stream refused before it starts", \streamRejectedTest());
         addTestCase("discard ends the stream", \discardTest());
+        addTestCase("flush failure ends the stream", \flushFailureEndsStreamTest());
         addTestCase("no observer means no events", \noObserverTest());
         addTestCase("stream_bounds disabled", \streamBoundsDisabledTest());
 
@@ -291,6 +292,41 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
 
         ds.rollback();
         assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    #! a failure while the stream is open still closes it
+    /** the end boundary must be reported however the flush fails, so that a consumer never sees a
+        stream left open; the write here fails in the database because the table is gone
+    */
+    flushFailureEndsStreamTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+            on_error op.discard();
+            queueRows(op, BlockSize);
+            op.flush();
+
+            # drop the table underneath the operation so that the next block fails in the server
+            ds.commit();
+            ds.execRaw(sprintf("drop table %s", TableName));
+            ds.commit();
+
+            # fewer rows than block_size, so the failure happens in the explicit flush below rather
+            # than in the automatic flush inside queueData()
+            queueRows(op, BlockSize - 1);
+            assertThrows("DBI:PGSQL:ERROR", \op.flush());
+            op.discard();
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        # exactly one end boundary, reporting that the operation did not complete
+        assertEq(1, (map $1, l, $1.event == SQL_MUTATION_EVENT_STREAM_END).size());
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, l.last().event);
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, l.last().outcome);
+        ds.rollback();
     }
 
     noObserverTest() {

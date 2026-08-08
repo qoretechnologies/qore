@@ -643,10 +643,15 @@ on_error ds.rollback();
             # report the stream boundary before anything is written, so that an observer that
             # refuses the operation stops it before the first row reaches the database
             streamBegin();
-            int bytes = stream_started ? getBlockBytes() : 0;
 
-            # any failure from here on ends the stream; the boundary is reported exactly once
+            # any failure once the stream has started ends it; the boundary is reported exactly
+            # once, and this is registered before anything that could throw with the stream open -
+            # including the payload measurement below - so the stream can never be left open.  A
+            # refusal from streamBegin() itself is deliberately outside this handler: the stream was
+            # never started, and the core reports that terminal event itself
             on_error streamEnd(False);
+
+            int bytes = stream_started ? getBlockBytes() : 0;
 
             # flush data to the DB; implemented in subclasses
             flushImpl();
