@@ -76,8 +76,36 @@ class FakeStripeRestClient inherits StripeRestClient::StripeRestClientIo {
         return requests[requests.size() - 1];
     }
 
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
             *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body, *hash<auto> hdr) {
         push requests, <RecordedRequest>{
             "method": method,
             "path": path,
@@ -99,6 +127,51 @@ class FakeStripeRestClient inherits StripeRestClient::StripeRestClientIo {
             "body": resp.body,
             "headers": resp.headers ?? {},
         };
+    }
+}
+
+
+#! A Stripe event provider that exposes delivery handling for testing
+class TestStripeEventProvider inherits StripeDataProvider::StripeChargeSucceededEventDataProvider {
+    public {
+        #! Events the provider reported to its observers
+        list<auto> notified = ();
+    }
+
+    constructor() : StripeChargeSucceededEventDataProvider(NOTHING) {
+    }
+
+    #! Sets the signing secret, standing in for registering the endpoint with Stripe
+    setSecret(string secret) {
+        webhook_secret = secret;
+    }
+
+    reset() {
+        notified = ();
+    }
+
+    #! Returns a Stripe-Signature header value for the given body
+    string sign(string body, date ts, *string secret) {
+        int t = get_epoch_seconds(ts);
+        return sprintf("t=%d,v1=%s", t, DataProvider::WebhookSignature::sign(secret ?? webhook_secret,
+            sprintf("%d.%s", t, body)));
+    }
+
+    #! Delivers a signed payload and returns the event that was reported, if any
+    *hash<auto> deliver(string body, string sig_header, date ts) {
+        reset();
+        deliverRaw({"body": body, "hdr": {"Stripe-Signature": sig_header}});
+        return notified ? notified[0] : NOTHING;
+    }
+
+    #! Delivers a raw request as the webhook infrastructure would
+    deliverRaw(hash<auto> request) {
+        handleWebhookEvent(request);
+    }
+
+    #! Records what would have been reported to observers
+    notifyObservers(string event_id, hash<auto> data) {
+        notified += data;
     }
 }
 
@@ -178,6 +251,8 @@ public class StripeDataProviderTest inherits QUnit::Test {
         addTestCase("request reconstruction", \requestReconstructionTest());
         addTestCase("response contract", \responseContractTest());
         addTestCase("connection", \connectionTest());
+        addTestCase("webhook events", \webhookEventTest());
+        addTestCase("webhook delivery verification", \webhookVerificationTest());
 
         set_return_value(main());
     }
@@ -252,11 +327,12 @@ public class StripeDataProviderTest inherits QUnit::Test {
         FakeStripeRestClient rest();
         StripeDataProvider root(rest);
         aset.validateActionPaths(root);
-        # the framework injects a generic API-call child into every REST-scheme provider, so there is one
-        # more child than there are actions
+        # besides the actions the root resolves two more children: the generic API-call child the
+        # framework injects into every REST-scheme provider, and the container holding the event providers
         list<string> children = root.getChildProviderNames();
-        assertEq(actions.size() + 1, children.size());
-        assertEq(actions.size(), (map $1, children, $1 != "__call__").size());
+        assertEq(actions.size() + 2, children.size());
+        assertEq(actions.size(), (map $1, children,
+            $1 != "__call__" && $1 != StripeDataProvider::EventsChildName).size());
         assertNothing(root.getChildProvider("no-such-action"));
 
         AbstractDataProvider child = root.getChildProviderEx("get-customer");
@@ -441,4 +517,88 @@ public class StripeDataProviderTest inherits QUnit::Test {
         # an unknown data provider option is reported rather than ignored
         assertThrows("CONSTRUCTOR-ERROR", "unknown option", sub () { new StripeDataProvider({"bogus": 1}); });
     }
+
+    webhookEventTest() {
+        FakeStripeRestClient rest();
+        StripeDataProvider root(rest);
+
+        # every event action names a path under "/events", so that container has to resolve
+        AbstractDataProvider events = root.getChildProviderEx(StripeDataProvider::EventsChildName);
+        list<string> ids = events.getChildProviderNames();
+        assertEq(13, ids.size());
+
+        foreach string id in (ids) {
+            AbstractDataProvider ep = events.getChildProviderEx(id);
+            assertTrue(ep.getInfo().supports_observable, id + ": observable");
+            assertEq((id,), keys ep.getEventTypes(), id + ": event types");
+            assertTrue(ep.getEventTypes(){id}.desc.val(), id + ": event description");
+        }
+        assertNothing(events.getChildProvider("no-such-event"));
+
+        # the example event is formatted to the version the actions were generated from, so what a user
+        # is shown matches what will actually arrive
+        rest.push_response({"throw_status": 404, "body": {}});
+        hash<auto> example = events.getChildProviderEx("charge-succeeded").getExampleEventData("charge-succeeded");
+        assertEq("charge.succeeded", example.type);
+        assertEq(StripeSchema::Provenance.api_version, example.api_version);
+        assertTrue(example.data.object.hasKey("amount"));
+
+        # a real recent event is preferred over the static one
+        rest.reset();
+        rest.push_response({"body": {"data": ({"id": "evt_real", "type": "charge.succeeded"},)}});
+        assertEq("evt_real",
+            events.getChildProviderEx("charge-succeeded").getExampleEventData("charge-succeeded").id);
+    }
+
+    webhookVerificationTest() {
+        # a webhook endpoint is a URL anyone can post to: an unverified endpoint would accept a forged
+        # "charge.succeeded", which is enough to make an integration ship goods that were never paid for
+        TestStripeEventProvider ep();
+        ep.setSecret("whsec_test");
+
+        string body = "{\"id\":\"evt_1\",\"type\":\"charge.succeeded\",\"data\":{\"object\":{\"id\":\"ch_1\"}}}";
+        date ts = now_us();
+
+        # a correctly signed delivery is accepted
+        assertEq("evt_1", ep.deliver(body, ep.sign(body, ts), ts).id);
+
+        # a forged delivery signed with a different secret is dropped
+        assertNothing(ep.deliver(body, ep.sign(body, ts, "whsec_attacker"), ts));
+
+        # so is one whose body was altered after signing
+        assertNothing(ep.deliver(body + " ", ep.sign(body, ts), ts));
+
+        # a captured delivery replayed beyond the tolerance is dropped
+        date old = ts - 10m;
+        assertNothing(ep.deliver(body, ep.sign(body, old), old));
+
+        # a delivery with no signature header at all is dropped
+        assertNothing(ep.deliverRaw({"body": body, "hdr": {}}));
+
+        # ... as is one whose header carries no usable values
+        assertNothing(ep.deliverRaw({"body": body, "hdr": {"Stripe-Signature": "garbage"}}));
+
+        # a delivery that arrives already parsed cannot be verified, because the signature covers the
+        # bytes as sent; it is dropped rather than accepted unchecked
+        assertNothing(ep.deliverRaw({
+            "body": parse_json(body),
+            "hdr": {"Stripe-Signature": ep.sign(body, ts)},
+        }));
+
+        # nothing is accepted before the endpoint has been registered and a secret is known
+        TestStripeEventProvider unregistered();
+        assertNothing(unregistered.deliver(body, "t=1,v1=deadbeef", ts));
+
+        # a signed delivery of some other event type is not reported by this provider
+        string other = "{\"id\":\"evt_2\",\"type\":\"charge.refunded\"}";
+        ep.reset();
+        ep.deliverRaw({"body": other, "hdr": {"Stripe-Signature": ep.sign(other, ts)}});
+        assertEq((), ep.notified);
+
+        # the header name is matched without regard to case, as HTTP header names are case-insensitive
+        ep.reset();
+        ep.deliverRaw({"body": body, "hdr": {"STRIPE-SIGNATURE": ep.sign(body, ts)}});
+        assertEq(1, ep.notified.size());
+    }
+
 }

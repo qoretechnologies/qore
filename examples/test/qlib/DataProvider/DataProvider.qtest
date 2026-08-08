@@ -851,6 +851,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("union optional type test", \unionOptionalTypeTest());
         addTestCase("optional field attribute test", \optionalFieldAttributeTest());
         addTestCase("soft list of union type test", \softListUnionTest());
+        addTestCase("webhook signature test", \webhookSignatureTest());
         addTestCase("test", \dataProviderTest());
 
         # Return for compatibility with test harnesses that check the return value.
@@ -5140,6 +5141,84 @@ public class DataProviderTest inherits QUnit::Test {
         # a named soft list of union elements resolves as well
         SoftListDataType named("my-list", element, True);
         assertEq("my-list", named.getName());
+    }
+
+
+    webhookSignatureTest() {
+        # a known vector pins the argument order: hmac() takes (algorithm, data, key), and passing the key
+        # as the data computes a different digest that still looks stable, so a self-consistent test would
+        # not catch it -- two shipped webhook verifiers had exactly that defect
+        assertEq("f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8",
+            WebhookSignature::sign("key", "The quick brown fox jumps over the lazy dog"));
+
+        string secret = "whsec_test";
+        string body = "{\"id\":\"evt_1\",\"type\":\"charge.succeeded\"}";
+        date ts = now_us();
+        string payload = sprintf("%d.%s", get_epoch_seconds(ts), body);
+        string sig = WebhookSignature::sign(secret, payload);
+
+        assertTrue(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": secret, "payload": payload, "signatures": sig, "timestamp": ts, "tolerance": 5m,
+        }));
+
+        # a forged delivery signed with the wrong secret is rejected
+        assertFalse(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": "whsec_other", "payload": payload, "signatures": sig, "timestamp": ts,
+            "tolerance": 5m,
+        }));
+
+        # so is one whose payload was altered after signing
+        assertFalse(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": secret, "payload": payload + " ", "signatures": sig, "timestamp": ts,
+            "tolerance": 5m,
+        }));
+
+        # a captured delivery replayed later is rejected, in both directions: a timestamp far in the
+        # future is no more trustworthy than one far in the past
+        assertFalse(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": secret, "payload": payload, "signatures": sig, "timestamp": ts - 10m,
+            "tolerance": 5m,
+        }));
+        assertFalse(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": secret, "payload": payload, "signatures": sig, "timestamp": ts + 10m,
+            "tolerance": 5m,
+        }));
+        # without a tolerance the age is not checked at all
+        assertTrue(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": secret, "payload": payload, "signatures": sig, "timestamp": ts - 10m,
+        }));
+
+        # while a secret is being rotated the sender signs with both, and either is sufficient
+        assertTrue(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": secret, "payload": payload, "signatures": ("0000000000000000000000000000000000000000000000000000000000000000", sig), "timestamp": ts,
+            "tolerance": 5m,
+        }));
+
+        # nothing to check means nothing is accepted
+        assertFalse(WebhookSignature::verify(<WebhookSignatureInfo>{
+            "secret": secret, "payload": payload, "signatures": (),
+        }));
+
+        # base64 is supported, and an unknown encoding is an error rather than a silent failure
+        assertEq(make_base64_string(hmac("sha256", payload, secret)),
+            WebhookSignature::sign(secret, payload, "sha256", "base64"));
+        assertThrows("WEBHOOK-SIGNATURE-ERROR", "is not supported", \WebhookSignature::sign(),
+            (secret, payload, "sha256", "rot13"));
+
+        # the comparison is exact, including length
+        assertTrue(WebhookSignature::secureCompare("abc", "abc"));
+        assertFalse(WebhookSignature::secureCompare("abc", "abd"));
+        assertFalse(WebhookSignature::secureCompare("abc", "abcd"));
+        assertFalse(WebhookSignature::secureCompare("", "a"));
+        assertTrue(WebhookSignature::secureCompare("", ""));
+
+        # a key/value signature header can carry a timestamp and more than one signature
+        hash<string, list<string>> parts = WebhookSignature::parseKeyValueHeader(
+            "t=1614556800,v1=5257a869,v1=a1b2c3d4");
+        assertEq(("1614556800",), parts.t);
+        assertEq(("5257a869", "a1b2c3d4"), parts.v1);
+        # whitespace and unparseable segments are tolerated
+        assertEq(("1", "2"), WebhookSignature::parseKeyValueHeader("v1=1, v1=2 ,garbage,=x").v1);
     }
 
 }

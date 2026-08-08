@@ -33,6 +33,9 @@ public class StripeDataProvider inherits RestSchemaActions::RestSchemaActionSetD
         #! The application name
         const AppName = "Stripe";
 
+        #! The name of the child provider holding the webhook event providers
+        const EventsChildName = "events";
+
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "stripe",
@@ -89,6 +92,22 @@ public class StripeDataProvider inherits RestSchemaActions::RestSchemaActionSetD
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Stripe data provider for API version `%s`", StripeSchema::Provenance.api_version);
+    }
+
+    #! Returns the action IDs plus the events container
+    /** Event actions name a path under \c "/events", so that container has to resolve alongside the
+        schema-derived actions.
+    */
+    private *list<string> getChildProviderNamesImpl() {
+        return (RestSchemaActionSetDataProvider::getChildProviderNamesImpl() ?? ()) + (EventsChildName,);
+    }
+
+    #! Returns the given child provider or @ref nothing if the given child is unknown
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == EventsChildName) {
+            return new StripeEventsDataProvider(cast<*StripeRestClient::StripeRestClientIo>(rest));
+        }
+        return RestSchemaActionSetDataProvider::getChildProviderImpl(name);
     }
 
     #! Returns a REST client from the constructor options

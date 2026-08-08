@@ -146,13 +146,20 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
     }
 
     #! Verifies the HMAC-SHA-256 signature on a webhook payload
+    /** NOTE: the arguments to SHA256_hmac() are (data, key), and this passed them the other way round, so
+        the digest computed was HMAC(key = body, data = secret) and every genuine delivery was rejected.
+        Verification is done through DataProvider's shared helper now, which also compares the digests
+        without leaking where they first differ.
+    */
     private bool verifyHmacSignature(string body, *string sig) {
         if (!webhook_secret.val() || !sig.val()) {
             return False;
         }
-        # SHA256_hmac() returns the hex digest as a string
-        string computed = SHA256_hmac(webhook_secret, body);
-        return computed.lwr() == sig.lwr();
+        return DataProvider::WebhookSignature::verify(<DataProvider::WebhookSignatureInfo>{
+            "secret": webhook_secret,
+            "payload": body,
+            "signatures": sig,
+        });
     }
 
     #! Handles an incoming webhook event

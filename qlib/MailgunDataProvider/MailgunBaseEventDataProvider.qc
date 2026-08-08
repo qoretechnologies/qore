@@ -255,12 +255,14 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
             return True;
         }
 
-        # Compute expected signature: HMAC-SHA256(timestamp + token, signing_key)
-        string data = timestamp + token;
-        string expected_signature = hmac("sha256", signing_key, data).toHex().lwr();
-
-        # Compare signatures
-        if (expected_signature != signature.lwr()) {
+        # Compute the expected signature: HMAC-SHA256 over timestamp + token, keyed with the signing key
+        # NOTE: the arguments to hmac() are (algorithm, data, key), and this passed the key as the data and
+        # the data as the key, so the digest never matched and every genuine delivery was rejected
+        if (!DataProvider::WebhookSignature::verify(<DataProvider::WebhookSignatureInfo>{
+            "secret": signing_key,
+            "payload": timestamp + token,
+            "signatures": signature,
+        })) {
             log(LoggerLevel::WARN, "verifyWebhookSignature: signature mismatch");
             return False;
         }
