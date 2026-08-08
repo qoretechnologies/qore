@@ -148,6 +148,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider execution", \providerExecutionTest());
         addTestCase("provider paths", \providerPathTest());
+        addTestCase("schema drift", \driftReportTest());
 
         set_return_value(main());
     }
@@ -703,4 +704,120 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         assertEq("GET", rest.last().method);
         assertEq("/api/categories", rest.last().path);
     }
+    driftReportTest() {
+        list<hash<RestSchemaActionInfo>> manifest = (
+            entry("get-widget", "GET", "/widgets/{widget_id}", {"operation_id": "getWidget"}),
+            entry("create-widget", "POST", "/widgets"),
+        );
+        RestSchemaActionSet aset = makeSet(manifest);
+
+        # the same schema must report nothing at all
+        assertEq((), RestSchemaDrift::compare(aset, schema));
+        assertNothing(RestSchemaDrift::getBreaking(()));
+        assertRegex("no drift", RestSchemaDrift::getReport());
+
+        # a new optional option can be adopted without touching the manifest
+        list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            d.paths."/widgets/{widget_id}".get.parameters += {
+                "name": "include_archived", "in": "query", "required": False,
+                "schema": {"type": "boolean"},
+            };
+        }));
+        assertEq(1, drift.size());
+        assertEq(RSD_OPTION_ADDED, drift[0].kind);
+        assertEq("include_archived", drift[0].option);
+        assertTrue(drift[0].compatible);
+        assertNothing(RestSchemaDrift::getBreaking(drift));
+
+        # an option that disappeared breaks every caller that supplies it
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            remove d.components.schemas.widget_create.properties.category;
+        }));
+        assertEq(RSD_OPTION_REMOVED, drift[0].kind);
+        assertEq("category", drift[0].option);
+        assertFalse(drift[0].compatible);
+        assertEq(1, RestSchemaDrift::getBreaking(drift).size());
+
+        # a newly required option breaks callers that omit it; the report says which action and option
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            d.components.schemas.widget_create.required = ("name", "category");
+        }));
+        # making an option required also changes its type from "*string" to "string", so both differences
+        # are reported; both are breaking
+        list<hash<RestSchemaDriftInfo>> cat = select drift, $1.option == "category";
+        assertEq(2, cat.size());
+        assertEq((RSD_OPTION_TYPE_CHANGED, RSD_OPTION_REQUIREDNESS_CHANGED), (map $1.kind, cat));
+        map assertFalse($1.compatible, $1.kind + " is breaking"), cat;
+        assertRegex("BREAKING", RestSchemaDrift::getReport(drift));
+        assertRegex("create-widget", RestSchemaDrift::getReport(drift));
+
+        # losing an enum value rejects requests that used to work; gaining one does not
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            d.components.schemas.widget_create.properties.status{"enum"} = ("draft", "active");
+        }));
+        assertEq(RSD_OPTION_VALUES_CHANGED, (select drift, $1.option == "status")[0].kind);
+        assertFalse((select drift, $1.option == "status")[0].compatible);
+
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            d.components.schemas.widget_create.properties.status{"enum"} = ("draft", "active", "retired",
+                "archived");
+        }));
+        assertTrue((select drift, $1.option == "status")[0].compatible);
+
+        # an operation that is gone entirely is reported, and does not stop the rest of the report
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            remove d.paths."/widgets/{widget_id}".get;
+        }));
+        assertEq(RSD_OPERATION_REMOVED, drift[0].kind);
+        assertEq("get-widget", drift[0].action);
+        assertFalse(drift[0].compatible);
+
+        # an operationId rename never renames an action, but it is reported
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            d.paths."/widgets/{widget_id}".get.operationId = "retrieveWidget";
+        }));
+        assertEq(RSD_OPERATION_RENAMED, drift[0].kind);
+        assertEq("getWidget", drift[0].old_value);
+        assertEq("retrieveWidget", drift[0].new_value);
+        assertFalse(drift[0].compatible);
+
+        # a documentation-only change can be adopted
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            d.paths."/widgets/{widget_id}".get.parameters[0].description = "which properties to expand";
+        }));
+        assertEq(RSD_DOCUMENTATION_CHANGED, drift[0].kind);
+        assertTrue(drift[0].compatible);
+        assertNothing(RestSchemaDrift::getBreaking(drift));
+
+        # a changed request content type changes how every request is serialized
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            hash<auto> content = d.paths."/widgets".post.requestBody.content;
+            d.paths."/widgets".post.requestBody.content = {
+                MimeTypeJson: content{MimeTypeFormUrlEncoded},
+            };
+        }));
+        assertEq(RSD_CONTENT_TYPE_CHANGED, (select drift, $1.kind == RSD_CONTENT_TYPE_CHANGED)[0].kind);
+        assertFalse((select drift, $1.kind == RSD_CONTENT_TYPE_CHANGED)[0].compatible);
+
+        # a response that lost a field breaks callers reading it; one that gained a field does not
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            remove d.components.schemas.widget.properties.category;
+        }));
+        assertEq(RSD_RESPONSE_CHANGED, (select drift, $1.kind == RSD_RESPONSE_CHANGED)[0].kind);
+        assertFalse((select drift, $1.kind == RSD_RESPONSE_CHANGED)[0].compatible);
+
+        drift = RestSchemaDrift::compare(aset, mutate(sub (reference<hash<auto>> d) {
+            d.components.schemas.widget.properties.colour = {"type": "string", "description": "the colour"};
+        }));
+        assertEq(RSD_RESPONSE_CHANGED, (select drift, $1.kind == RSD_RESPONSE_CHANGED)[0].kind);
+        assertTrue((select drift, $1.kind == RSD_RESPONSE_CHANGED)[0].compatible);
+    }
+
+    #! Returns the fixture schema with the given mutation applied
+    private OpenApi3Schema mutate(code change) {
+        hash<auto> doc = parse_json(File::readTextFile(SchemaFile));
+        change(\doc);
+        return OpenApi3::OpenApi3Loader::fromString(make_json(doc), True);
+    }
+
 }

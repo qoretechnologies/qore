@@ -162,6 +162,25 @@ module RestSchemaActions {
     @note Actions can currently only be generated from OpenAPI 3 schemas; a Swagger 2.0 schema is
     rejected with a clear error rather than handled by untested code paths.
 
+    @section restschemaactions_drift Schema Updates
+
+    Staying aligned with an API has to mean a **reproducible reviewed update**, not an uncontrolled
+    runtime one — a schema fetched at run time could change the contract of an action that existing
+    workflows already call.
+
+    @ref RestSchemaActions::RestSchemaDrift "RestSchemaDrift" produces the report that makes such a
+    review possible.  Given the action set an application ships and a candidate schema, it says exactly
+    what would change about every exported action, and classifies each difference as one that can be
+    adopted or one that needs a decision:
+
+    |!Adoptable|!Needs review
+    |a new option|an option removed, moved, or changed type
+    |a new operation on an exported path|an operation removed or its \c operationId renamed
+    |a documentation change|an option becoming required, or losing an allowed value
+    ||the request content type or the published response changing
+
+    An update is then: import a named revision, run the report, adopt it or stop.
+
     @section restschemaactionsrelnotes Release Notes
 
     @subsection restschemaactionsv1_0 RestSchemaActions v1.0
