@@ -10,6 +10,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 
 ### Connection Setup
 - [ ] Scheme registered in `qlib/ConnectionProvider/ConnectionSchemeCache.qc` -> `SchemeMap`
+- [ ] Connection class overrides `getAppName()` — the base returns nothing, so a connection that does not is never associated with its app and `getInfo()` omits `app` entirely
 - [ ] **Every URL constant in the module uses a scheme that's actually registered.** Grep for every `<scheme>://` literal in the REST client `.qm` (default URLs, examples, `oauth2_*_url`, `ping` defaults) and verify each scheme matches one in the module's `ConnectionScheme.schemes` hash. A typo like `myservices` (extra `s`) when only `myservice` is registered makes every connection an `(InvalidConnection)` with `type: "invalid"` and no `app` — silently filtered out of the action picker. Surfaces as `URL-ARG-ERROR: references unknown scheme` in connection alerts but only after a connection is created.
 - [ ] `auto_url: True` only if URL can be built from connection options (domain/region/host)
 - [ ] **For fixed-endpoint APIs (single global URL, no per-tenant domain), `getConfig()` hard-codes the URL.** Without an override, the framework's auto_url machinery falls back to `<scheme>://localhost` and every connection fails with `SOCKET-CONNECT-ERROR: Connection refused`. Pair with `setUpdateOptionsCode()` to auto-correct any options update.

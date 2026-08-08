@@ -40,6 +40,18 @@ const SchemeMap = {
 
 **Critical: every URL constant in the module must use a scheme that is actually registered.** If the module registers `myservice` but the `DefaultConnectionUrl` constant uses `myservices://` (with a typo'd trailing `s`, or any other unregistered variant), the framework parses the URL, sees an unknown scheme, marks the connection as `(InvalidConnection)` with `type: "invalid"`, no `app`, no `has_provider` — and the connection silently disappears from the action picker because invalid connections are filtered out. This is the kind of bug that `qrest connections/<name>` will surface as a `URL-ARG-ERROR: ... references unknown scheme ... known schemes: [...]` alert, but only after a connection actually exists. Always grep your module for every scheme literal (`grep -rn '<schemename>' qlib/<Module>*`) and verify each appears in the schemes list registered via `ConnectionSchemeCache::registerScheme()`.
 
+### Associating a Connection with its App
+
+`AbstractConnection::getAppName()` returns nothing by default, and `getInfo()` reports an `app` key only
+when it returns a value, so a connection that does not override it is never associated with its
+application:
+
+```qore
+*string getAppName() {
+    return "MyService";
+}
+```
+
 ### OAuth2: Declare It, Do Not Configure It
 
 Qorus performs OAuth2 through its API servers, which hold the client ID and secret for every supported

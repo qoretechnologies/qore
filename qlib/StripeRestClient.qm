@@ -449,6 +449,14 @@ public class StripeRestConnection inherits RestClient::RestConnection {
         return "stripe";
     }
 
+    #! Returns the name of the application this connection serves
+    /** The base class returns nothing, and a connection that does not override this reports no \c app
+        at all, so it is never associated with its application.
+    */
+    *string getAppName() {
+        return "Stripe";
+    }
+
     #! Returns @ref True, as the connection returns a data provider
     bool hasDataProvider() {
         return True;

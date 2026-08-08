@@ -528,6 +528,9 @@ public class StripeDataProviderTest inherits QUnit::Test {
             "api_key": "sk_test_fake",
         });
         assertEq("stripe", conn.getType());
+        # a connection that does not report its app name is never associated with its application: the
+        # base class returns nothing and getInfo() then omits "app" entirely
+        assertEq(StripeDataProvider::AppName, conn.getAppName());
         assertTrue(conn.hasDataProvider());
         # the scheme is what decides the connection class, so it has to be registered
         assertTrue(exists ConnectionSchemeCache::getScheme("stripe"));
