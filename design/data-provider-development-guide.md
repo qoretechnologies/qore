@@ -40,6 +40,84 @@ const SchemeMap = {
 
 **Critical: every URL constant in the module must use a scheme that is actually registered.** If the module registers `myservice` but the `DefaultConnectionUrl` constant uses `myservices://` (with a typo'd trailing `s`, or any other unregistered variant), the framework parses the URL, sees an unknown scheme, marks the connection as `(InvalidConnection)` with `type: "invalid"`, no `app`, no `has_provider` — and the connection silently disappears from the action picker because invalid connections are filtered out. This is the kind of bug that `qrest connections/<name>` will surface as a `URL-ARG-ERROR: ... references unknown scheme ... known schemes: [...]` alert, but only after a connection actually exists. Always grep your module for every scheme literal (`grep -rn '<schemename>' qlib/<Module>*`) and verify each appears in the schemes list registered via `ConnectionSchemeCache::registerScheme()`.
 
+### OAuth2: Declare It, Do Not Configure It
+
+Qorus performs OAuth2 through its API servers, which hold the client ID and secret for every supported
+app, so that **the OAuth2 secret is never exposed to a Qorus instance**. What the module supplies is
+everything else about the flow; what it must not supply is the credentials:
+
+```qore
+const ConnectionScheme = <ConnectionSchemeInfo>{
+    ...
+    # this is what declares that the connection supports OAuth2
+    "required_options": "api_key|token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
+        "oauth2_client_id,oauth2_client_secret",
+    "options": RestConnection::ConnectionScheme.options + {
+        "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+        + <ConnectionOptionInfo>{"default_value": DefaultAuthUrl},
+        "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+        + <ConnectionOptionInfo>{"default_value": DefaultGrantType},
+        "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+        + <ConnectionOptionInfo>{"default_value": DefaultTokenUrl},
+        "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+        + <ConnectionOptionInfo>{"default_value": DefaultOAuth2Scopes},
+    },
+};
+```
+
+`required_options` is the declaration: names separated by commas are required together, alternatives
+are separated by `|`. Listing the OAuth2 set as one alternative is what tells Qorus this connection can
+be authorized through the API servers; the client ID and secret then arrive from
+`dataprovider/apps/<App>/oauth2_clients` and never live in the module or the connection.
+
+Check what the API servers already publish for the app before writing any of this:
+
+```bash
+qrest dataprovider/apps/Stripe/oauth2_clients
+```
+
+**Getting this wrong fails silently.** The connection is created, the ping runs, and the only symptom
+is an HTTP 401, because no token was ever obtained:
+
+```
+REST-PING-ERROR: HTTP 401 from RestClientIo ping GET "/v1/balance"
+```
+
+Three mistakes produce exactly that:
+
+- **No default `oauth2_grant_type`.** Without a grant type the flow never runs at all, so the
+  connection sits there with no token. Default it; do not leave it to the user.
+- **The wrong authorization or token URL.** Services often run more than one OAuth2 flow — Stripe
+  serves its legacy Connect flow from `connect.stripe.com` and current Stripe Apps from
+  `marketplace.stripe.com` with a `/v2` authorize endpoint and a token endpoint on the main API host.
+  Take the URLs from a connection that is known to work rather than from the first page of the docs.
+- **No `required_options` entry naming the OAuth2 options.** The flow is then never offered.
+
+**A module that also supports a plain API key must not force the OAuth2 options onto that path.**
+Setting a grant type makes the client demand the whole OAuth2 option set:
+
+```
+OAUTH2-ERROR: OAuth2 grant type "authorization_code" requires option "oauth2_client_id", ...
+```
+
+Remove them when a key was supplied, **after** applying defaults — otherwise the default puts the grant
+type straight back:
+
+```qore
+map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+if (key_auth) {
+    opts -= OAuth2Options;
+}
+```
+
+The test is whether a **key** was supplied, not whether a token is set. An authorized OAuth2 connection
+also has a token — the access token the flow returned — and it still needs its OAuth2 options, or the
+token can never be refreshed when it expires.
+
+A service-account flow is not this. Google Cloud Storage mints its own bearer token from a service
+account key and takes no interactive authorization, so it declares neither OAuth2 defaults nor an
+OAuth2 alternative in `required_options` — correctly.
+
 ### Connection Options
 
 Use `apikey` instead of `token` (inherited `token` has special handling that causes issues):

@@ -23,6 +23,13 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] Options with finite allowed values use `allowed_values` field explicitly (never describe allowed values as text in `desc` or `short_desc`)
 
 ### OAuth2 (if applicable)
+- [ ] `required_options` names the OAuth2 option set as an alternative — this is what declares OAuth2 support and lets Qorus supply the client ID and secret from its API servers
+- [ ] `oauth2_client_id` / `oauth2_client_secret` are **not** hard-coded or defaulted in the module (they come from the API servers, so the secret never reaches the instance)
+- [ ] `oauth2_grant_type` **defaulted** — without one the flow never runs and the connection silently has no token (symptom: ping returns HTTP 401)
+- [ ] `oauth2_auth_url` / `oauth2_token_url` defaulted and verified against a connection known to work — services often run more than one OAuth2 flow with different endpoints
+- [ ] `oauth2_scopes` defaulted
+- [ ] Checked `qrest dataprovider/apps/<App>/oauth2_clients` to see what the API servers already publish
+- [ ] If the module also accepts an API key: the OAuth2 options are removed when a key is supplied, **after** defaults are applied, and the test is whether a *key* was given — an authorized OAuth2 connection also has a token and must keep its OAuth2 options so the token can be refreshed
 - [ ] `DefaultAuthArgs` has `"access_type": "offline"` and `"prompt": "consent"` for refresh tokens
 - [ ] `oauth2_auth_args` in `DefaultOptions` and `ConnectionScheme`
 - [ ] `getConnectionOptions(*hash<auto> rtopts)` signature correct (accepts runtime options)
