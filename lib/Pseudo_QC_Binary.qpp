@@ -200,6 +200,7 @@ bool <binary>::val() [const;flags=CONSTANT] {
 //! Returns a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 /**
     @param separator the bytes that separate the fields
+    @param keep_trailing_empty keep the empty final field produced by data that ends with the separator; see @ref split_trailing_empty_fields
 
     @return a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 
@@ -208,16 +209,18 @@ bool <binary>::val() [const;flags=CONSTANT] {
 list<binary> l = bin.split(sep);
     @endcode
 
-    @note equivalent to split(data, binary)
+    @note equivalent to split(data, binary, bool)
 
-    @since %Qore 0.8.5
+    @since
+    - %Qore 0.8.5
+    - %Qore 3.0 added the \c keep_trailing_empty parameter
  */
-list<binary> <binary>::split(data separator) [const;flags=CONSTANT,NAMED_ARGS] {
+list<binary> <binary>::split(data separator, bool keep_trailing_empty = False) [const;flags=CONSTANT,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
     q_get_data(separator, bin_ptr, bin_len);
 
-    return split_intern(bin_ptr, bin_len, (const char*)b->getPtr(), b->size(), nullptr);
+    return split_intern(bin_ptr, bin_len, (const char*)b->getPtr(), b->size(), nullptr, false, keep_trailing_empty);
 }
 
 //! Returns the <a href="http://en.wikipedia.org/wiki/MD5">MD5 message digest</a> of the binary data as a hex string

@@ -1836,7 +1836,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedPseudoMethodVariantCount(ValuePseudoClass, "toString", ("encoding",));
         assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "find", ("pattern", "byte_offset"));
         assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "rfind", ("pattern", "byte_offset"));
-        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "split", ("separator",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "split", ("separator", "keep_trailing_empty"));
         assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toHexArray",
             ("byte_prefix", "byte_suffix", "bytes_per_line", "line_separator"));
         assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toBase64", ("max_line_length",));
@@ -1872,8 +1872,10 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "find", ("substring", "offset"));
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "rfind", ("substring", "offset"));
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "substr", ("start", "length"));
-        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split", ("separator", "with_separator"));
-        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split", ("separator", "quote", "trim_unquoted"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split",
+            ("separator", "with_separator", "keep_trailing_empty"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split",
+            ("separator", "quote", "trim_unquoted", "keep_trailing_empty"));
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitString", ("separator",));
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitLinesRegex",
             ("separator_pattern", "options", "with_separator"));

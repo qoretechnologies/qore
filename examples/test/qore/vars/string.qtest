@@ -17,6 +17,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("pseudo-method test", \testPseudoMethods());
         addTestCase("Base64 URL test", \testBase64Url());
         addTestCase("split regex", \splitRegexTest());
+        addTestCase("split keep_trailing_empty", \testSplitKeepTrailingEmpty());
         addTestCase("splitString iterator", \testSplitStringIter());
         addTestCase("splitLines iterator", \testSplitLinesIter());
         addTestCase("splitLinesRegex iterator", \testSplitLinesRegexIter());
@@ -114,6 +115,74 @@ class StringTest inherits QUnit::Test {
         assertEq(("FIELD", "1.FIELD", "2\\.WITH\\.DOTS.FIELD", "3"), a);
     }
 
+    testSplitKeepTrailingEmpty() {
+        # --- the default is unchanged: interior empty fields are kept, the trailing one is dropped
+        assertEq(("a", "", "b"), split("/", "a//b"));
+        assertEq(("a", "b"), split("/", "a/b/"));
+        assertEq((), split("/", ""));
+        assertEq(("", ""), split("/", "//"));
+        assertEq(("plain",), split("/", "plain"));
+        # the same via the pseudo-method
+        assertEq(("a", "b"), "a/b/".split("/"));
+        assertEq(("a", "", "b"), "a//b".split("/"));
+
+        # --- keep_trailing_empty keeps exactly that one field
+        assertEq(("a", "b", ""), split("/", "a/b/", False, True));
+        assertEq(("a", "", "b"), split("/", "a//b", False, True));
+        assertEq(("",), split("/", "", False, True));
+        assertEq(("", "", ""), split("/", "//", False, True));
+        assertEq(("plain",), split("/", "plain", False, True));
+        # a leading separator was never affected: its empty field is not the trailing one
+        assertEq(("", "lead"), split("/", "/lead", False, True));
+        # a folder-marker object name: the trailing "/" is significant and must survive
+        assertEq(("dir", ""), split("/", "dir/", False, True));
+        assertEq(("dir", ""), "dir/".split("/", False, True));
+
+        # --- with_separator composes with keep_trailing_empty
+        assertEq(("a/", "b/"), split("/", "a/b/", True));
+        assertEq(("a/", "b/", ""), split("/", "a/b/", True, True));
+
+        # --- multi-byte separators
+        assertEq(("a", "b"), split("::", "a::b::"));
+        assertEq(("a", "b", ""), split("::", "a::b::", False, True));
+
+        # --- the binary variant and its pseudo-method
+        assertEq((binary("a"), binary("b")), split(binary("/"), binary("a/b/")));
+        assertEq((binary("a"), binary("b"), binary()), split(binary("/"), binary("a/b/"), True));
+        assertEq((binary("a"), binary("b"), binary()), binary("a/b/").split(binary("/"), True));
+
+        # --- the quoted variants
+        assertEq(("a", "b"), split(",", "a,b,", "'"));
+        assertEq(("a", "b", ""), split(",", "a,b,", "'", False, True));
+        assertEq(("a", "b", ""), "a,b,".split(",", "'", False, True));
+        # a quoted final field followed by the separator
+        assertEq(("a", "b", ""), split(",", "a,'b',", "'", False, True));
+        # an empty quoted final field followed by the separator
+        assertEq(("a", "", ""), split(",", "a,'',", "'", False, True));
+        # no trailing separator: nothing is added
+        assertEq(("a", "b"), split(",", "a,b", "'", False, True));
+        assertEq(("a", "b"), split(",", "a,'b'", "'", False, True));
+        # an empty subject yields the single empty field, as the unquoted form does
+        assertEq(("",), split(",", "", "'", False, True));
+        # trim_unquoted still applies
+        assertEq(("a", "b", ""), split(",", " a , b ,", "'", True, True));
+        # a quote longer than the separator falls back to the unquoted implementation, which must
+        # still honor the flag
+        assertEq(("a", "b"), split(",", "a,b,", "''"));
+        assertEq(("a", "b", ""), split(",", "a,b,", "''", False, True));
+
+        # --- the point of the flag: the split becomes exactly reversible
+        foreach string s in (("a/b/", "a//b", "", "//", "plain", "/lead", "dir/", "a/b/c", "///")) {
+            assertEq(s, join("/", split("/", s, False, True)), sprintf("round trip %y", s));
+        }
+
+        # --- and the eager and lazy forms now agree
+        foreach string s in (("a/b/", "a//b", "", "//", "plain", "dir/", "a/b/c")) {
+            assertEq((map $1, s.splitString("/")), s.split("/", False, True),
+                sprintf("eager == lazy for %y", s));
+        }
+    }
+
     testSplitStringIter() {
         # basic semantics match eager split
         string s = "a,b,,c";
@@ -128,14 +197,20 @@ class StringTest inherits QUnit::Test {
         string first = typed.getValue();
         assertEq("a", first);
 
-        # empty source string yields one empty piece (matches eager split())
+        # an empty source string yields one empty piece; eager split() drops that trailing empty
+        # field by default and only matches when "keep_trailing_empty" is set
         assertEq(("",), (map $1, "".splitString(",")));
+        assertEq((), "".split(","));
+        assertEq(("",), "".split(",", False, True));
 
         # delimiter not found yields the whole string
         assertEq(("xyz",), (map $1, "xyz".splitString(",")));
 
         # trailing delimiter yields a trailing empty piece
         assertEq(("a", "b", ""), (map $1, "a,b,".splitString(",")));
+        # ... which the eager form reproduces only with "keep_trailing_empty"
+        assertEq(("a", "b"), "a,b,".split(","));
+        assertEq(("a", "b", ""), "a,b,".split(",", False, True));
 
         # multi-byte delimiter
         assertEq(("x", "y", "z"), (map $1, "x::y::z".splitString("::")));

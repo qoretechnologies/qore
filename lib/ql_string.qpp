@@ -156,16 +156,19 @@ static void split_add_element(QoreListNode* l, const char* str, unsigned len, co
 }
 
 QoreListNode* split_intern(const char* pattern, size_t pl, const char* str, size_t sl, const QoreEncoding* enc,
-        bool with_separator) {
+        bool with_separator, bool keep_trailing_empty) {
     QoreListNode* l = new QoreListNode(enc ? stringTypeInfo : binaryTypeInfo);
     const char* ostr = str;
     while (const char* p = memstr(str, pattern, pl, sl - (str - ostr))) {
         split_add_element(l, str, p - str + (with_separator ? pl : 0), enc);
         str = p + pl;
     }
-    // add last field if there is data remaining
-    if (sl - (str - ostr))
-        split_add_element(l, str, sl - (str - ostr), enc);
+    // add the last field if there is data remaining; when keep_trailing_empty is set it is added even when empty,
+    // which is the only case where the two modes differ: interior empty fields are always kept, so it is exactly
+    // and only a trailing separator (or an empty subject) whose empty field would otherwise be dropped
+    size_t remaining = sl - (str - ostr);
+    if (remaining || keep_trailing_empty)
+        split_add_element(l, str, remaining, enc);
 
     return l;
 }
@@ -191,7 +194,8 @@ static size_t count_quotes(const char*& str, size_t& len, const QoreString& quot
 }
 
 QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, const QoreString* str,
-        const QoreString* quote, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol) {
+        const QoreString* quote, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol,
+        bool keep_trailing_empty) {
     // convert pattern encoding to string encoding if necessary
     TempEncodingHelper pat(sep, str->getEncoding(), xsink);
     if (*xsink)
@@ -203,11 +207,12 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, cons
         return nullptr;
 
     return split_with_quote(xsink, pat->c_str(), pat->size(), str, tquote->c_str(), tquote->size(), trim_unquoted, h,
-        eol);
+        eol, keep_trailing_empty);
 }
 
 QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t patlen, const QoreString* str,
-        const char* quote, size_t quotelen, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol) {
+        const char* quote, size_t quotelen, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol,
+        bool keep_trailing_empty) {
     // in case the eol string needs encoding conversion
     TempEncodingHelper teol;
 
@@ -217,7 +222,8 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
     //printd(5, "split_with_quote() sep: %s str: %s quote: %s trim_unquoted: %d\n", pat->c_str(), str->c_str(), tquote->c_str(), trim_unquoted);
 
     if (!quotelen || quotelen > patlen) {
-        return split_intern(pat, patlen, str->c_str(), str->strlen(), str->getEncoding());
+        return split_intern(pat, patlen, str->c_str(), str->strlen(), str->getEncoding(), false,
+            keep_trailing_empty);
     }
 
     ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
@@ -231,9 +237,20 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
     // remaining byte length
     size_t len = sl;
 
+    // the subject is empty, so the loop below never runs; with keep_trailing_empty the result is the single empty
+    // field that splitting an empty string yields, matching split_intern()
+    const bool empty_subject = !len;
+
+    // set when an iteration consumes a separator, so that after the loop it reports whether the subject ended on a
+    // separator -- the one case whose trailing empty field would otherwise be dropped.  Cleared at the top of every
+    // iteration, so it always describes the last one.
+    bool ended_on_separator = false;
+
     //printd(5, "split_with_quote() '%s' len: " QSD "\n", ststr, len);
 
     while (len) {
+        ended_on_separator = false;
+
         // make sure len is always calculated correctly
         assert(len == (str->size() - (ststr - ostr)));
 
@@ -250,6 +267,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
 
                 ststr += pl;
                 len -= pl;
+                ended_on_separator = true;
                 continue;
             } else if (!(num_quotes & 1)) {
                 xsink->raiseException("SPLIT-ERROR", "field with text must begin with an add number of quotes (got "
@@ -411,6 +429,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
             }
             ststr += pl;
             len -= pl;
+            ended_on_separator = true;
             continue;
         }
 
@@ -445,8 +464,13 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
         size_t text_len = (p - ststr) + pl;
         ststr += text_len;
         len -= text_len;
+        ended_on_separator = true;
 
         //printd(5, "f " QSD " now setting ststr: '%s' len: " QSD "\n", l->size() + 1, ststr, len);
+    }
+
+    if (keep_trailing_empty && (ended_on_separator || empty_subject)) {
+        l->push(new QoreStringNode(str->getEncoding()), nullptr);
     }
 
     return l.release();
@@ -1218,6 +1242,8 @@ nothing chr() [flags=RUNTIME_NOOP] {
     @ref character_encoding "character encoding"
     @param str the string to split
     @param with_separator include the separator string in every element
+    @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
+    @ref split_trailing_empty_fields
 
     @return a list of each component of a string separated by a separator string, with the separator removed; the
     separator pattern will not be included in the elements of the list returned unless the \a with_separator argument
@@ -1226,14 +1252,17 @@ nothing chr() [flags=RUNTIME_NOOP] {
     @par Example:
     @code{.py}
 list<string> l = split(":", "some:text:here"); # returns ("some", "text", "here")
+list<string> t = split("/", "a/b/", False, True); # returns ("a", "b", "")
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @note equivalent to <string>::split(string, bool)
+    @note equivalent to <string>::split(string, bool, bool)
+
+    @since %Qore 3.0 added the \c keep_trailing_empty parameter
  */
-list<string> split(string separator, string str, bool with_separator = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+list<string> split(string separator, string str, bool with_separator = False, bool keep_trailing_empty = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
     TempEncodingHelper temp(separator, str->getEncoding(), xsink);
     if (*xsink) {
@@ -1241,7 +1270,7 @@ list<string> split(string separator, string str, bool with_separator = False) [f
     }
 
     return split_intern(temp->c_str(), temp->strlen(), str->c_str(), str->strlen(), str->getEncoding(),
-        with_separator);
+        with_separator, keep_trailing_empty);
 }
 
 //! Splits a string into a list of components based on a separator string and a quote character
@@ -1258,6 +1287,8 @@ list<string> split(string separator, string str, bool with_separator = False) [f
     @param quote the quote character; quotes may be escaped (in quoted fields only) by doubling the quote character or
     by preceding it with a backslash (<tt>\\</tt>)
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
+    @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
+    @ref split_trailing_empty_fields
 
     @return a list of each component of a string separated by a separator string, with the separator and any enclosing
     quote characters removed
@@ -1271,20 +1302,23 @@ list<string> l = split(",", "some,'text with spaces',here", "'"); # returns ("so
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
     @throw SPLIT-ERROR field missing closing quote character; extra text following quoted field
 
-    @note equivalent to <string>::split(string, string)
+    @note equivalent to <string>::split(string, string, bool, bool)
 
     @since
     - %Qore 0.8.6 the \c trim_unquoted parameter was added
     - %Qore 0.9.4 processes doubled quote characters as an escaped quote within a quoted field
+    - %Qore 3.0 added the \c keep_trailing_empty parameter
  */
-list<string> split(string separator, string str, string quote, bool trim_unquoted = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return split_with_quote(xsink, separator, str, quote, trim_unquoted);
+list<string> split(string separator, string str, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return split_with_quote(xsink, separator, str, quote, trim_unquoted, nullptr, nullptr, keep_trailing_empty);
 }
 
 //! Returns a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 /**
     @param data the binary object to separate
     @param separator the bytes that separate the fields
+    @param keep_trailing_empty keep the empty final field produced by data that ends with the separator; see
+    @ref split_trailing_empty_fields
 
     @return a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 
@@ -1293,13 +1327,16 @@ list<string> split(string separator, string str, string quote, bool trim_unquote
 list<binary> l = split(sep, bin);
     @endcode
 
-    @note equivalent to <binary>::split(data)
+    @note equivalent to <binary>::split(data, bool)
+
+    @since %Qore 3.0 added the \c keep_trailing_empty parameter
  */
-list<binary> split(data separator, binary data) [flags=CONSTANT,NAMED_ARGS] {
+list<binary> split(data separator, binary data, bool keep_trailing_empty = False) [flags=CONSTANT,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
     q_get_data(separator, bin_ptr, bin_len);
-    return split_intern(bin_ptr, bin_len, (const char*)data->getPtr(), data->size(), nullptr);
+    return split_intern(bin_ptr, bin_len, (const char*)data->getPtr(), data->size(), nullptr, false,
+        keep_trailing_empty);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

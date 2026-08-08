@@ -124,6 +124,32 @@ string 3: "olleh"
     When making a substring with a list of character offsets and referring to a character offset that does not exist,
     no characters are added to the output string; these references are ignored.
 
+    @anchor split_trailing_empty_fields
+    @par Trailing Empty Fields When Splitting
+    @ref Qore::split() "split()" and @ref <string>::split() "<string>::split()" keep every
+    <i>interior</i> empty field, but by default they drop the empty field that a subject ending with
+    the separator produces:\n
+    @code{.py}
+split("/", "a//b");    # ("a", "", "b")  -- the interior empty field is kept
+split("/", "a/b/");    # ("a", "b")      -- the trailing empty field is dropped
+split("/", "");        # ()              -- no fields at all
+    @endcode \n
+    That default is convenient for line- and record-oriented text, where a trailing separator is a
+    terminator rather than the start of another field.  It is wrong whenever the fields carry
+    meaning positionally or the value must round-trip, because \c "a/b/" and \c "a/b" produce the
+    same list and a subsequent @ref Qore::join() "join()" therefore cannot reproduce the original.\n\n
+    Pass \c keep_trailing_empty as @ref True to keep it, which makes the split exactly reversible:\n
+    @code{.py}
+split("/", "a/b/", False, True);       # ("a", "b", "")
+split("/", "", False, True);           # ("")
+join("/", split("/", str, False, True)) == str;   # True for any str
+    @endcode \n
+    The parameter defaults to @ref False on every overload, so existing code is unaffected.  Note
+    that the lazy counterpart @ref <string>::splitString() "<string>::splitString()" has always
+    yielded the trailing empty piece; \c keep_trailing_empty is what makes the eager and lazy forms
+    agree.\n\n
+    @since %Qore 3.0
+
     @anchor string_escape_chars
     @par String Escape Characters
     The following escape sequences are recognized in double-quoted strings:

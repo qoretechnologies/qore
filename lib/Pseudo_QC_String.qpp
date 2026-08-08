@@ -478,6 +478,7 @@ string <string>::substr(softint start, softint length) [const;flags=RET_VALUE_ON
 /**
     @param separator the separator string; if the separator string is not found in the string to split, then a list with only one element containing the entire string argument is returned'; if this string has a different @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding"
     @param with_separator include the separator string in every element
+    @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see @ref split_trailing_empty_fields
 
     @return a list of each component of a string separated by a separator string, with the separator removed; the separator pattern will not be included in the elements of the list returned unless the \a with_separator argument is @ref True
 
@@ -485,22 +486,25 @@ string <string>::substr(softint start, softint length) [const;flags=RET_VALUE_ON
     @code{.py}
 string str = "some:text:here";
 list<string> list = str.split(":"); # returns ("some", "text", "here")
+list<string> t = "a/b/".split("/", False, True); # returns ("a", "b", "")
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @note equivalent to @ref Qore::split(string, string, bool)
+    @note equivalent to @ref Qore::split(string, string, bool, bool)
 
-    @since %Qore 0.8.5
+    @since
+    - %Qore 0.8.5
+    - %Qore 3.0 added the \c keep_trailing_empty parameter
  */
-list<string> <string>::split(string separator, bool with_separator = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
+list<string> <string>::split(string separator, bool with_separator = False, bool keep_trailing_empty = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
     TempEncodingHelper temp(separator, str->getEncoding(), xsink);
     if (*xsink)
         return QoreValue();
 
     return split_intern(temp->c_str(), temp->strlen(), str->c_str(), str->strlen(), str->getEncoding(),
-        with_separator);
+        with_separator, keep_trailing_empty);
 }
 
 //! Returns a lazy @ref Qore::StringSplitIterator iterator yielding zero-copy views of each piece.
@@ -688,6 +692,8 @@ AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int
     @ref character_encoding "character encoding"
     @param quote the quote character
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
+    @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
+    @ref split_trailing_empty_fields
 
     @return a list of each component of a string separated by a separator string, with the separator and any enclosing
     quote characters removed
@@ -703,14 +709,15 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
 
     @throw SPLIT-ERROR field missing closing quote character; extra text following quoted field
 
-    @note equivalent to @ref Qore::split(string, string, string, bool)
+    @note equivalent to @ref Qore::split(string, string, string, bool, bool)
 
     @since
     - %Qore 0.8.5 added this pseudo-method
     - %Qore 0.8.6 added the \c trim_unquoted parameter
+    - %Qore 3.0 added the \c keep_trailing_empty parameter
  */
-list<string> <string>::split(string separator, string quote, bool trim_unquoted = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return split_with_quote(xsink, separator, str, quote, trim_unquoted);
+list<string> <string>::split(string separator, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return split_with_quote(xsink, separator, str, quote, trim_unquoted, nullptr, nullptr, keep_trailing_empty);
 }
 
 //! Splits a string into a list of components based on a separator regular expression

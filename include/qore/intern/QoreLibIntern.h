@@ -1370,15 +1370,15 @@ DLLLOCAL void qore_string_init();
 DLLLOCAL QoreListNode* split_regex_intern(QoreRegex& regex, const char* str, size_t sl, const QoreEncoding* enc,
     bool with_separator = false);
 DLLLOCAL QoreListNode* split_intern(const char* pattern, size_t pl, const char* str, size_t sl,
-    const QoreEncoding* enc, bool with_separator = false);
+    const QoreEncoding* enc, bool with_separator = false, bool keep_trailing_empty = false);
 DLLLOCAL QoreStringNode* join_intern(const QoreStringNode* p0, const QoreListNode* l, int offset,
     ExceptionSink* xsink);
 DLLLOCAL QoreListNode* split_with_quote(ExceptionSink* xsink, const char* sep, size_t seplen, const QoreString* str,
     const char* quote, size_t quotelen, bool trim_unquoted, AbstractIteratorHelper* h = nullptr,
-    const QoreString* eol = nullptr);
+    const QoreString* eol = nullptr, bool keep_trailing_empty = false);
 DLLLOCAL QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, const QoreString* str,
     const QoreString* quote, bool trim_unquoted, AbstractIteratorHelper* h = nullptr,
-    const QoreString* eol = nullptr);
+    const QoreString* eol = nullptr, bool keep_trailing_empty = false);
 DLLLOCAL bool inlist_intern(const QoreValue arg, const QoreListNode* l, ExceptionSink* xsink);
 DLLLOCAL QoreStringNode* format_float_intern(const QoreString& fmt, double num, ExceptionSink* xsink);
 DLLLOCAL QoreStringNode* format_float_intern(int prec, const QoreString& dsep, const QoreString& tsep, double num,

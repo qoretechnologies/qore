@@ -1161,6 +1161,14 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       regex metacharacters
     - @ref <string>::splitRegex() "<string>::splitRegex()" now accepts an optional \a limit parameter
       to cap the number of splits
+    - @ref Qore::split() "split()", @ref <string>::split() "<string>::split()" and
+      @ref <binary>::split() "<binary>::split()" now accept an optional \a keep_trailing_empty
+      parameter that keeps the empty final field produced by a subject ending with the separator, so
+      that <tt>join(sep, split(sep, str, False, True)) == str</tt> holds for every subject; the
+      default is @ref False, which preserves the previous behavior of dropping that one field.  This
+      also makes the eager forms agree with the lazy
+      @ref <string>::splitString() "<string>::splitString()", which has always yielded it.  See
+      @ref split_trailing_empty_fields
     - Perl-style case conversion escape sequences in regex replacement strings: \c \\U (uppercase until
       \c \\E), \c \\L (lowercase until \c \\E), \c \\u (uppercase next char), \c \\l (lowercase next char),
       \c \\E (end case conversion); all Unicode-aware
