@@ -646,8 +646,27 @@ public class ParameterGroup inherits Qore::Serializable {
         */
         hash<string, ParameterObject> parameters();
 
-        #! Any query param with type "object"? (OpenAPI 3 compatible)
-        string query_obj;
+        #! The object-valued query parameter that collects undeclared query arguments, if any
+        /** An object-valued query parameter can act as a catch-all: a query argument the operation
+            does not declare is folded into it, which is how an API that accepts arbitrary
+            \c "name[key]=value" arguments is described.
+
+            That only works when there is **exactly one** such parameter, because otherwise there is
+            no unambiguous destination — so this is set only in that case, and cleared as soon as a
+            second object-valued query parameter is declared.
+
+            @see @ref query_objs for every object-valued query parameter, however many there are
+        */
+        *string query_obj;
+
+        #! Every object-valued query parameter declared, by name
+        /** Any number is permitted.  OpenAPI 3 places no limit on them, and a real schema commonly
+            declares several: Stripe's \c "GET /v1/credit_notes/preview", for instance, declares
+            \c metadata, \c shipping_cost and others, each addressed by its own name in
+            \c "deepObject" style.  Each is validated against its own schema by name; only the
+            catch-all role in @ref query_obj requires there to be a single one.
+        */
+        hash<string, bool> query_objs;
     }
 
     #! Adds a parameter to the group
@@ -656,13 +675,14 @@ public class ParameterGroup inherits Qore::Serializable {
     }
 
     #! Adds a parameter to the group
+    /** @note Declaring more than one object-valued query parameter is legal and is accepted; it
+        only means the group has no unambiguous catch-all, so a query argument the operation does
+        not declare is reported as unknown rather than folded into one of them.
+    */
     addParameter(string key, ParameterObject p) {
         if (p.inLoc == "query" && p.schema && p.schema.type == "object") {
-            if (exists query_obj) {
-                throw "OPENAPI3-SCHEMA-ERROR", sprintf("Query parameter %y has already been defined with type "
-                    "\"object\"; cannot define subsequent parameter %y with the same type", query_obj, key);
-            }
-            query_obj = key;
+            query_objs{key} = True;
+            query_obj = query_objs.size() == 1 ? key : NOTHING;
         }
         parameters{key} = p;
     }

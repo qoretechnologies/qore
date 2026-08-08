@@ -406,6 +406,7 @@ public class OpenApi3Test inherits QUnit::Test {
             \testGeneratorNullableNestedNamedHashBodyParams());
         addTestCase("Test generator union type schemas", \testGeneratorUnionTypeSchemas());
         addTestCase("Test getTypeForReference/replaceTypeForReference", \testTypeForReference());
+        addTestCase("Test multiple object-valued query parameters", \testMultipleObjectQueryParams());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -415,6 +416,66 @@ public class OpenApi3Test inherits QUnit::Test {
 %ifdef NoYaml
         testSkip("no yaml module");
 %endif
+    }
+
+    #! An operation may declare any number of object-valued query parameters
+    /** OpenAPI 3 places no limit on them, and a real schema commonly declares several: Stripe's
+        \c "GET /v1/credit_notes/preview" declares \c metadata and \c shipping_cost, each
+        \c "style: deepObject" with \c "explode: true", so they serialize to disjoint and
+        unambiguous query strings (\c "metadata[k]=v" against
+        \c "shipping_cost[shipping_rate]=...").
+
+        This module used to reject the second one outright, because it treated "the object-valued
+        query parameter" and "the parameter that collects **undeclared** query arguments" as the
+        same thing.  Only the second role needs there to be exactly one, so the restriction made a
+        valid document unloadable — and the whole of Stripe's published schema with it.
+    */
+    testMultipleObjectQueryParams() {
+        checkModules();
+
+        hash<auto> meta = {
+            "name": "metadata", "in": "query", "style": "deepObject", "explode": True,
+            "schema": {"type": "object", "additionalProperties": {"type": "string"}},
+        };
+        hash<auto> shipping = {
+            "name": "shipping_cost", "in": "query", "style": "deepObject", "explode": True,
+            "schema": {"type": "object", "properties": {"shipping_rate": {"type": "string"}}},
+        };
+        hash<auto> plain = {"name": "limit", "in": "query", "schema": {"type": "integer"}};
+
+        hash<auto> third = {
+            "name": "discounts", "in": "query", "style": "deepObject", "explode": True,
+            "schema": {"type": "object", "properties": {"coupon": {"type": "string"}}},
+        };
+
+        # two object-valued query parameters: this is what used to be rejected outright
+        assertTrue(exists loadWithQueryParams((meta, shipping, plain)),
+            "two object-valued query parameters load");
+        # ...and any number beyond that is no different
+        assertTrue(exists loadWithQueryParams((meta, shipping, third, plain)),
+            "three object-valued query parameters load");
+        # one still acts as the catch-all for undeclared arguments, unchanged
+        assertTrue(exists loadWithQueryParams((meta, plain)),
+            "a single object-valued query parameter still loads");
+        # and none at all is still fine
+        assertTrue(exists loadWithQueryParams((plain,)),
+            "an operation with no object-valued query parameter loads");
+    }
+
+    #! Builds a one-operation schema whose query parameters are the ones given
+    private OpenApi3Schema loadWithQueryParams(list<auto> params) {
+        hash<auto> soh = ValidOpenApi3Schema + {
+            "paths": {
+                "/preview": {
+                    "get": {
+                        "operationId": "preview",
+                        "parameters": params,
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        return OpenApi3::OpenApi3Loader::fromString(my_make_json(soh), True);
     }
 
     testTypeForReference() {
