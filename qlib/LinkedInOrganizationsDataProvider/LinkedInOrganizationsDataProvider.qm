@@ -1,0 +1,473 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LinkedInOrganizationsDataProvider.qm Qore user module providing a data provider API for LinkedIn organization pages
+
+/*  LinkedInOrganizationsDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires LinkedInRestClient
+%requires RestClientIo
+
+module LinkedInOrganizationsDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for LinkedIn organization pages";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new LinkedInOrganizationsDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": LinkedInOrganizationsDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "LinkedIn Organizations",
+            "short_desc": "Read a LinkedIn Page's content, engagement and analytics",
+            "desc": "Provides access to a [LinkedIn](https://www.linkedin.com) Page's own data "
+                "through the "
+                "[Pages Data Portability APIs](https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview), "
+                "which LinkedIn provides so that Page administrators can retrieve the data their "
+                "organization has generated on the platform.\n\n"
+                "**Common use cases**:\n"
+                "- **Content**: list the posts a Page has published and read any one of them, "
+                "including drafts and scheduled posts\n"
+                "- **Engagement**: read the comments and reactions on a post, or a single "
+                "summary of every reaction and comment count on it\n"
+                "- **Audience**: list the members and pages that follow a Page, and the pages it "
+                "follows\n"
+                "- **Analytics**: break followers or page visitors down by industry, seniority, "
+                "job function, company size, country, region, or employee relationship\n"
+                "- **Triggers**: run a flow whenever the Page publishes a post\n\n"
+                "This application needs a LinkedIn developer application **approved for the Pages "
+                "Data Portability API product**, which grants the `r_dma_admin_pages_content` "
+                "permission. That approval is requested separately from the Page's *Products* tab "
+                "and takes several business days.\n\n"
+                "**Two limits are worth designing around**: LinkedIn rate-limits the feed and "
+                "follows APIs to **one request per 60 seconds**, and the data they return can be up "
+                "to **48 hours old**. Analytics counts are also deliberately perturbed and floored "
+                "to zero below an undisclosed threshold, to protect member privacy.\n\n"
+                "Member identities are shown only where the member has opted in to sharing their "
+                "data through these APIs — that setting is off by default, so many followers, "
+                "comments and reactions arrive without an identity attached.\n\n"
+                "To publish content as the signed-in member, use the **LinkedIn** application "
+                "instead.\n\n"
+                "LinkedIn is a trademark of LinkedIn Corporation",
+            "scheme": "linkedindma",
+            "logo": LinkedInOrganizationsLogo,
+            "logo_file_name": "linkedin-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::SocialMedia, DataProvider::AppGroup::Analytics),
+        });
+
+        # --- Identity Actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/get-current-member",
+            "action": "get-current-member",
+            "display_name": "Get Current Member",
+            "short_desc": "Get the authenticated member's profile",
+            "desc": "Retrieves the profile of the member whose authorization this connection "
+                "carries.\n\n"
+                "Useful for confirming which account a connection is bound to; the organizations "
+                "that account administers are what every other action can reach.",
+            "action_code": DPAT_API,
+            "groups": ("Identity",),
+            "output_type": LinkedInGetCurrentMemberDataProvider::ResponseType,
+        });
+
+        # --- Organization Actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/list-organizations",
+            "action": "list-organizations",
+            "display_name": "List Organizations",
+            "short_desc": "List the organizations the authenticated member administers",
+            "desc": "Lists the organizations the authenticated member administers, with each one's "
+                "name, description, logo, size, industries and page URL.\n\n"
+                "The `id` of an organization here is what every other action takes, and the "
+                "`organizational_page` URN is what LinkedIn's analytics and follows APIs address.",
+            "action_code": DPAT_API,
+            "groups": ("Organizations",),
+            "output_type": LinkedInListOrganizationsDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/get-organization",
+            "action": "get-organization",
+            "display_name": "Get Organization",
+            "short_desc": "Get one organization's profile",
+            "desc": "Retrieves one organization's profile: its name, description, tagline, website, "
+                "logo, cover photo, size, industries, specialties and page URL.",
+            "action_code": DPAT_API,
+            "groups": ("Organizations",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetOrganizationRequestDataType::Fields{"organization",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInGetOrganizationDataProvider::ResponseType,
+        });
+
+        # --- Content Actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/list-posts",
+            "action": "list-posts",
+            "display_name": "List Posts",
+            "short_desc": "List the posts an organization has published",
+            "desc": "Lists the posts an organization has published, newest first.\n\n"
+                "Pass the `cursor` from a response back in the next call to continue the listing. "
+                "A page can come back shorter than `count` even when more posts exist, so it is the "
+                "**presence of a cursor**, not a full page, that says the listing continues.\n\n"
+                "Reading with the `AUTHOR` view context also returns drafts and scheduled posts; a "
+                "scheduled post is the one with `scheduled_at` set.",
+            "action_code": DPAT_API,
+            "groups": ("Content",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListPostsRequestDataType::Fields{"organization",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListPostsRequestDataType::Fields{"count", "cursor"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListPostsRequestDataType::Fields{"view_context",}
+            ),
+            "output_type": LinkedInListPostsDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/get-post",
+            "action": "get-post",
+            "display_name": "Get Post",
+            "short_desc": "Get one of an organization's posts",
+            "desc": "Retrieves one of an organization's posts by URN, with its text, visibility, "
+                "attached content, distribution and timestamps.\n\n"
+                "A post is reachable when the organization authored it, or when it reshares a post "
+                "the organization authored.",
+            "action_code": DPAT_API,
+            "groups": ("Content",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetOrgPostRequestDataType::Fields{"post",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetOrgPostRequestDataType::Fields{"view_context",}
+            ),
+            "output_type": LinkedInGetOrgPostDataProvider::ResponseType,
+        });
+
+        # --- Engagement Actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/list-comments",
+            "action": "list-comments",
+            "display_name": "List Comments",
+            "short_desc": "List the comments on a post or comment",
+            "desc": "Lists the comments on a post, activity or comment, newest first, with each "
+                "one's text, author and timestamps.\n\n"
+                "A comment made by a member who has not opted in to sharing their data arrives "
+                "without its author **and without its text** — LinkedIn removes both together.",
+            "action_code": DPAT_API,
+            "groups": ("Engagement",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListCommentsRequestDataType::Fields{"entity",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListCommentsRequestDataType::Fields{"count", "cursor"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInListCommentsDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/list-reactions",
+            "action": "list-reactions",
+            "display_name": "List Reactions",
+            "short_desc": "List the reactions on a post or comment",
+            "desc": "Lists the individual reactions on a post, activity or comment, newest first, "
+                "with which reaction was given and when.\n\n"
+                "To get counts rather than individual reactions, use **Get Engagement Summary**, "
+                "which answers in one request.",
+            "action_code": DPAT_API,
+            "groups": ("Engagement",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListReactionsRequestDataType::Fields{"entity",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListReactionsRequestDataType::Fields{"count", "cursor"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInListReactionsDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/get-social-metadata",
+            "action": "get-social-metadata",
+            "display_name": "Get Engagement Summary",
+            "short_desc": "Get the reaction and comment counts of content",
+            "desc": "Retrieves how much engagement one or more posts, activities or comments have "
+                "received: the total number of reactions, the count of each reaction type, the "
+                "number of comments and whether the comment thread is still open.\n\n"
+                "Several URNs can be summarized in one call, which is far cheaper than listing "
+                "every reaction on each of them.",
+            "action_code": DPAT_API,
+            "groups": ("Engagement",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetSocialMetadataRequestDataType::Fields{"entities",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInGetSocialMetadataDataProvider::ResponseType,
+        });
+
+        # --- Audience Actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/list-followers",
+            "action": "list-followers",
+            "display_name": "List Followers",
+            "short_desc": "List the members and pages following an organization",
+            "desc": "Lists who follows an organization's page — members or other pages, chosen with "
+                "`edge_type` — and when each follow last changed.\n\n"
+                "A follower who has not opted in to sharing their data arrives with only a "
+                "timestamp; that setting is off by default, so expect many such entries.",
+            "action_code": DPAT_API,
+            "groups": ("Audience",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListFollowersRequestDataType::Fields{"organization",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListFollowersRequestDataType::Fields{"edge_type", "count", "cursor"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInListFollowersDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/list-following",
+            "action": "list-following",
+            "display_name": "List Following",
+            "short_desc": "List the pages an organization follows",
+            "desc": "Lists the organizational pages that an organization's own page follows.",
+            "action_code": DPAT_API,
+            "groups": ("Audience",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListFollowingRequestDataType::Fields{"organization",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInListFollowingRequestDataType::Fields{"count", "cursor"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInListFollowingDataProvider::ResponseType,
+        });
+
+        # --- Analytics Actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/get-follower-statistics",
+            "action": "get-follower-statistics",
+            "display_name": "Get Follower Statistics",
+            "short_desc": "Break an organization's followers down by demographic",
+            "desc": "Breaks an organization's current followers down by one member attribute — "
+                "industry, seniority, job function, company size, country, region, or whether they "
+                "are an employee — and reports how many followers fall into each value.\n\n"
+                "This is a snapshot of the page's followers as they stand now, not a count over a "
+                "period: LinkedIn ignores any date range for follower analytics. Use **Get Visitor "
+                "Statistics** for a figure that covers a period.\n\n"
+                "LinkedIn deliberately protects member privacy in these numbers: a count below an "
+                "undisclosed threshold is reported as `0`, and the same request repeated can return "
+                "slightly different values.",
+            "action_code": DPAT_API,
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetFollowerStatisticsRequestDataType::Fields{"organization",
+                    "dimension_type"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInGetFollowerStatisticsDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/get-visitor-statistics",
+            "action": "get-visitor-statistics",
+            "display_name": "Get Visitor Statistics",
+            "short_desc": "Break an organization's page visitors down by demographic",
+            "desc": "Breaks the members who visited an organization's page down by one member "
+                "attribute, and reports how many visits fall into each value.\n\n"
+                "Unlike follower statistics, this **does** honour a date range, and it can be "
+                "narrowed to a single section of the page — the jobs tab, the life tab, and so on — "
+                "with `source_type`.\n\n"
+                "The same privacy protections apply: small counts are reported as `0` and repeated "
+                "requests can differ slightly.",
+            "action_code": DPAT_API,
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetVisitorStatisticsRequestDataType::Fields{"organization",
+                    "dimension_type"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetVisitorStatisticsRequestDataType::Fields{"start", "end"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetVisitorStatisticsRequestDataType::Fields{"source_type",}
+            ),
+            "output_type": LinkedInGetVisitorStatisticsDataProvider::ResponseType,
+        });
+
+        # --- Events ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInOrganizationsDataProvider::AppName,
+            "path": "/events/" + LinkedInOrganizationsDataProvider::EVENT_NEW_POST,
+            "action": LinkedInOrganizationsDataProvider::EVENT_NEW_POST,
+            "display_name": "New Post",
+            "short_desc": "Fires when an organization publishes a post",
+            "desc": "Fires when an organization publishes a post, delivering the post itself.\n\n"
+                "Turning the trigger on establishes a baseline without replaying the "
+                "organization's history; only posts published afterwards are delivered, oldest "
+                "first.\n\n"
+                "LinkedIn rate-limits this API to one request per 60 seconds and its data can be up "
+                "to 48 hours behind, so a post is not delivered the moment it appears on LinkedIn. "
+                "Polling faster does not change that.",
+            "action_code": DPAT_EVENT,
+            "action_val": LinkedInOrganizationsDataProvider::EVENT_NEW_POST,
+            "groups": ("Content",),
+            "output_type": LinkedInOrgPostDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                NewPostWatchConstructorOptions
+                    - (keys LinkedInOrganizationsDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+    };
+}
+
+/** @mainpage LinkedInOrganizationsDataProvider Module
+
+    @tableofcontents
+
+    @section linkedinorganizationsdataproviderintro LinkedInOrganizationsDataProvider Introduction
+
+    The %LinkedInOrganizationsDataProvider module provides a data provider API for
+    [LinkedIn](https://www.linkedin.com) organization pages through the
+    [Pages Data Portability APIs](https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview),
+    which LinkedIn provides in response to the EU Digital Markets Act so that Page administrators
+    can retrieve the data their organization has generated on the platform.
+
+    The following classes are provided:
+    - @ref LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProvider
+      "LinkedInOrganizationsDataProvider": the main data provider class
+
+    @section linkedinorganizationsdataprovider_access Access
+
+    Every action requires the \c r_dma_admin_pages_content permission, which comes from a LinkedIn
+    developer application **approved for the Pages Data Portability API product**.  That approval is
+    requested from the application's \c Products tab and takes several business days; it is separate
+    from the products the member-facing %LinkedInDataProvider application uses.
+
+    @section linkedinorganizationsdataprovider_limits Rate Limits and Freshness
+
+    Two limits shape how these APIs should be used:
+
+    |!Limit|!Effect
+    |One request per 60 seconds on the feed and follows finders|A listing that walks several pages, and a trigger poll, must expect HTTP 429 and back off; the module retries with the \c Retry-After LinkedIn sends
+    |Data up to 48 hours delayed|Nothing here is real time, so a trigger cannot be made to fire promptly by polling harder
+
+    Analytics counts carry a third: LinkedIn floors a count below an undisclosed threshold to \c 0
+    and adds a randomization factor, so repeating the same request can return slightly different
+    numbers.  Those values are deliberately approximate and must not be treated as exact.
+
+    @section linkedinorganizationsdataprovider_cursors Cursor Paging
+
+    The DMA finders page with an opaque \c paginationCursor rather than an offset.  Two properties
+    matter:
+
+    - a page can be **shorter than requested** while more items remain, so only the presence of a
+      cursor says the listing continues;
+    - the cursor reports the position in a listing sorted **newest first**, so following it walks
+      *backwards* through history.  It is therefore not a "resume where we left off" token in the
+      way a delta feed's cursor is; see
+      @ref LinkedInOrganizationsDataProvider::LinkedInNewPostDataProvider
+      "LinkedInNewPostDataProvider" for what the \c new-post trigger does instead.
+
+    The cursor is also reported in two different places depending on the API family — nested under
+    \c metadata.paginationCursorMetdata for the feed finders (LinkedIn's own spelling) and directly
+    on \c metadata for the follows finders — and both are read.
+
+    @section linkedinorganizationsdataprovider_privacy Member Data
+
+    A LinkedIn member controls whether their identity and their interactions with a Page are shared
+    through these APIs, and the setting is **off by default**.  Where a member has not opted in,
+    LinkedIn omits the fields naming them: a follower arrives with only a timestamp, and a comment
+    arrives without its author *and without its text*.  Every affected field in this module's types
+    is optional and documented as such.
+
+    @section linkedinorganizationsdataproviderrelnotes Release Notes
+
+    @subsection linkedinorganizationsdataproviderv1_0 LinkedInOrganizationsDataProvider v1.0
+    - the initial version of the %LinkedInOrganizationsDataProvider module
+*/
+
+public namespace LinkedInOrganizationsDataProvider {
+}

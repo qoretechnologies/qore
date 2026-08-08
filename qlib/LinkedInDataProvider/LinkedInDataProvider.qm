@@ -1,0 +1,458 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LinkedInDataProvider.qm Qore user module providing a data provider API for LinkedIn
+
+/*  LinkedInDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires LinkedInRestClient
+%requires RestClientIo
+
+%requires json
+
+module LinkedInDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for LinkedIn";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new LinkedInDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": LinkedInDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "LinkedIn",
+            "short_desc": "Publish and manage content on LinkedIn as the signed-in member",
+            "desc": "Provides access to [LinkedIn](https://www.linkedin.com) for publishing and "
+                "managing content as the signed-in member, through the "
+                "[Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), "
+                "[Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api) "
+                "and "
+                "[Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) "
+                "APIs.\n\n"
+                "**Common use cases**:\n"
+                "- **Publishing**: post text, an article link, an image, a video, or a set of "
+                "images, and reshare someone else's post with your own commentary\n"
+                "- **Content management**: edit the text of a post you published, or delete it\n"
+                "- **Media**: upload an image or a video once and reuse its URN across several "
+                "posts\n\n"
+                "Mentions and hashtags are written **inline** in the post text: "
+                "`@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and "
+                "`#coding` is a hashtag.\n\n"
+                "Authentication is OAuth2 with a LinkedIn developer application carrying the "
+                "**Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** "
+                "products. Reading posts back (the **Get Post** action) additionally needs the "
+                "`r_member_social` permission, which LinkedIn grants only to approved "
+                "applications; add it to the connection's scopes once it has been approved.\n\n"
+                "To work with an organization's page content — its posts, comments, reactions, "
+                "followers and analytics — use the **LinkedIn Organizations** application "
+                "instead.\n\n"
+                "LinkedIn is a trademark of LinkedIn Corporation",
+            "scheme": "linkedin",
+            "logo": LinkedInLogo,
+            "logo_file_name": "linkedin-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::SocialMedia,),
+        });
+
+        # --- Identity Actions ---
+
+        # get-current-user
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/get-current-user",
+            "action": "get-current-user",
+            "display_name": "Get Current User",
+            "short_desc": "Get the signed-in member's profile",
+            "desc": "Retrieves the signed-in member's profile: name, email address, profile "
+                "picture and locale.\n\n"
+                "The `urn` field is the member's `urn:li:person:{id}` URN, which is what LinkedIn "
+                "APIs take wherever a member has to be named.",
+            "action_code": DPAT_API,
+            "groups": ("Identity",),
+            "output_type": LinkedInGetCurrentUserDataProvider::ResponseType,
+        });
+
+        # --- Publishing Actions ---
+
+        # create-text-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/create-text-post",
+            "action": "create-text-post",
+            "display_name": "Create Text Post",
+            "short_desc": "Publish a text post",
+            "desc": "Publishes a text-only post as the signed-in member.\n\n"
+                "Returns the post's URN and the URL a browser can open it at.",
+            "action_code": DPAT_API,
+            "groups": ("Publishing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateTextPostRequestDataType::Fields{"commentary",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateTextPostRequestDataType::Fields{"visibility",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateTextPostRequestDataType::Fields{"feed_distribution",
+                    "disable_resharing"}
+            ),
+            "output_type": LinkedInCreateTextPostDataProvider::ResponseType,
+        });
+
+        # create-article-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/create-article-post",
+            "action": "create-article-post",
+            "display_name": "Create Article Post",
+            "short_desc": "Publish a post linking to an article",
+            "desc": "Publishes a post that links to an article, shown as a card under the post's "
+                "text.\n\n"
+                "LinkedIn does **not** scrape the URL, so the title, description and thumbnail have "
+                "to be supplied here or the card appears bare. Upload a thumbnail with the "
+                "**Upload Image** action first and pass the image URN it returns.",
+            "action_code": DPAT_API,
+            "groups": ("Publishing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateArticlePostRequestDataType::Fields{"commentary", "article_url"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateArticlePostRequestDataType::Fields{"article_title",
+                    "article_description", "visibility"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateArticlePostRequestDataType::Fields{"article_thumbnail",
+                    "feed_distribution", "disable_resharing"}
+            ),
+            "output_type": LinkedInCreateArticlePostDataProvider::ResponseType,
+        });
+
+        # create-image-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/create-image-post",
+            "action": "create-image-post",
+            "display_name": "Create Image Post",
+            "short_desc": "Publish a post with an image",
+            "desc": "Uploads an image and publishes it as a post by the signed-in member.\n\n"
+                "LinkedIn accepts JPG, PNG and GIF. Supplying alt text is worth the effort: it is "
+                "what screen readers announce, and LinkedIn shows it when the image cannot be "
+                "loaded.",
+            "action_code": DPAT_API,
+            "groups": ("Publishing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateImagePostRequestDataType::Fields{"commentary", "image"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateImagePostRequestDataType::Fields{"alt_text", "visibility"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateImagePostRequestDataType::Fields{"title", "feed_distribution",
+                    "disable_resharing"}
+            ),
+            "output_type": LinkedInCreateImagePostDataProvider::ResponseType,
+        });
+
+        # create-video-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/create-video-post",
+            "action": "create-video-post",
+            "display_name": "Create Video Post",
+            "short_desc": "Publish a post with a video",
+            "desc": "Uploads a video and publishes it as a post by the signed-in member.\n\n"
+                "LinkedIn accepts MP4 between 75 KB and 500 MB, and between 3 seconds and 30 "
+                "minutes long. The upload is sent in parts, so a large video does not have to "
+                "start again from the beginning if one part fails.\n\n"
+                "LinkedIn processes a video after it is uploaded, so the post may take a short "
+                "while to become visible even though this action has already returned its URN.",
+            "action_code": DPAT_API,
+            "groups": ("Publishing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateVideoPostRequestDataType::Fields{"commentary", "video"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateVideoPostRequestDataType::Fields{"title", "visibility"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateVideoPostRequestDataType::Fields{"feed_distribution",
+                    "disable_resharing"}
+            ),
+            "output_type": LinkedInCreateVideoPostDataProvider::ResponseType,
+        });
+
+        # create-multi-image-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/create-multi-image-post",
+            "action": "create-multi-image-post",
+            "display_name": "Create Multi-Image Post",
+            "short_desc": "Publish a post with several images",
+            "desc": "Uploads several images and publishes them as one post that readers swipe "
+                "through.\n\n"
+                "LinkedIn requires between " + MinMultiImageCount + " and " + MaxMultiImageCount +
+                " images; the images appear in the order given. Alt texts are matched to the "
+                "images **by position**.",
+            "action_code": DPAT_API,
+            "groups": ("Publishing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateMultiImagePostRequestDataType::Fields{"commentary", "images"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateMultiImagePostRequestDataType::Fields{"alt_texts", "visibility"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInCreateMultiImagePostRequestDataType::Fields{"feed_distribution",
+                    "disable_resharing"}
+            ),
+            "output_type": LinkedInCreateMultiImagePostDataProvider::ResponseType,
+        });
+
+        # reshare-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/reshare-post",
+            "action": "reshare-post",
+            "display_name": "Reshare Post",
+            "short_desc": "Reshare an existing post",
+            "desc": "Reshares an existing post as the signed-in member, optionally with commentary "
+                "of your own above it.\n\n"
+                "Any post the member can see may be reshared, including an organization's.",
+            "action_code": DPAT_API,
+            "groups": ("Publishing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInResharePostRequestDataType::Fields{"post",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInResharePostRequestDataType::Fields{"commentary", "visibility"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInResharePostRequestDataType::Fields{"feed_distribution", "disable_resharing"}
+            ),
+            "output_type": LinkedInResharePostDataProvider::ResponseType,
+        });
+
+        # --- Content Management Actions ---
+
+        # update-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/update-post",
+            "action": "update-post",
+            "display_name": "Update Post",
+            "short_desc": "Change the text of a published post",
+            "desc": "Replaces the text of a post that has already been published.\n\n"
+                "LinkedIn marks an edited post as edited; the attached content of a post cannot be "
+                "changed after publication, only its text.",
+            "action_code": DPAT_API,
+            "groups": ("Content Management",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInUpdatePostRequestDataType::Fields{"post", "commentary"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInUpdatePostDataProvider::ResponseType,
+        });
+
+        # delete-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/delete-post",
+            "action": "delete-post",
+            "display_name": "Delete Post",
+            "short_desc": "Delete a post",
+            "desc": "Deletes a post.\n\n"
+                "Deletion is idempotent: deleting a post that is already gone succeeds rather than "
+                "failing.",
+            "action_code": DPAT_API,
+            "groups": ("Content Management",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInDeletePostRequestDataType::Fields{"post",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ),
+            "output_type": LinkedInDeletePostDataProvider::ResponseType,
+        });
+
+        # get-post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/get-post",
+            "action": "get-post",
+            "display_name": "Get Post",
+            "short_desc": "Retrieve a post by its URN",
+            "desc": "Retrieves a post by its URN, with its text, visibility, attached content and "
+                "timestamps.\n\n"
+                "**Requires the `r_member_social` permission**, which LinkedIn grants only to "
+                "approved applications; add it to the connection's scopes once the application has "
+                "been approved for it, otherwise this action fails with HTTP 403.\n\n"
+                "Timestamps are returned as dates: LinkedIn reports them as milliseconds since the "
+                "epoch and they are converted here.",
+            "action_code": DPAT_API,
+            "groups": ("Content Management",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetPostRequestDataType::Fields{"post",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInGetPostRequestDataType::Fields{"view_context",}
+            ),
+            "output_type": LinkedInGetPostDataProvider::ResponseType,
+        });
+
+        # --- Media Actions ---
+
+        # upload-image
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/upload-image",
+            "action": "upload-image",
+            "display_name": "Upload Image",
+            "short_desc": "Upload an image and get its URN",
+            "desc": "Uploads an image to LinkedIn and returns its URN, without posting it.\n\n"
+                "Use this when the same image is needed in more than one post, or as an article "
+                "post's thumbnail. An uploaded image can be reused across posts and ad formats "
+                "without uploading it again.",
+            "action_code": DPAT_API,
+            "groups": ("Media",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInUploadImageRequestDataType::Fields{"image",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInUploadImageRequestDataType::Fields{"owner",}
+            ),
+            "output_type": LinkedInUploadImageDataProvider::ResponseType,
+        });
+
+        # upload-video
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinkedInDataProvider::AppName,
+            "path": "/upload-video",
+            "action": "upload-video",
+            "display_name": "Upload Video",
+            "short_desc": "Upload a video and get its URN",
+            "desc": "Uploads a video to LinkedIn and returns its URN, without posting it.\n\n"
+                "The upload is sent in parts, so a large video does not have to start again from "
+                "the beginning if one part fails. LinkedIn processes the video afterwards; it can "
+                "be attached to a post before processing finishes.",
+            "action_code": DPAT_API,
+            "groups": ("Media",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInUploadVideoRequestDataType::Fields{"video",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                LinkedInUploadVideoRequestDataType::Fields{"owner",}
+            ),
+            "output_type": LinkedInUploadVideoDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage LinkedInDataProvider Module
+
+    @tableofcontents
+
+    @section linkedindataproviderintro LinkedInDataProvider Introduction
+
+    The %LinkedInDataProvider module provides a data provider API for
+    [LinkedIn](https://www.linkedin.com) member content through LinkedIn's versioned
+    [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api),
+    [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api)
+    and
+    [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api)
+    APIs.
+
+    The following classes are provided:
+    - @ref LinkedInDataProvider::LinkedInDataProvider "LinkedInDataProvider": the main data provider
+      class
+
+    @section linkedindataprovider_versioned The Versioned APIs, Not ugcPosts
+
+    LinkedIn's original content API, \c "/v2/ugcPosts", is documented as
+    <b>UGC Post API (Legacy)</b>, and its asset upload endpoint,
+    \c "assets?action=registerUpload", has likewise been superseded by the Images and Videos APIs.
+    This module targets the current versioned APIs under \c "/rest" instead, which is why it sends a
+    \c LinkedIn-Version header on every call; see @ref linkedinrestclient_versions.
+
+    That change also fixes a defect the legacy shape hides.  A versioned write answers \c 201 with an
+    **empty body** and returns the created post's URN in the \c x-restli-id response header only, so
+    an implementation that reads \c "id" out of the response body — as the \c ugcPosts endpoint
+    allowed — gets nothing back, silently, because the call itself succeeded.
+
+    @section linkedindataprovider_mentions Mentions and Hashtags
+
+    Mentions are written **inline** in the post text rather than as a separate list of offsets:
+
+    @verbatim
+Delighted to be working with @[Qore Technologies](urn:li:organization:2414183) on this #integration
+    @endverbatim
+
+    The display text must match the entity's name exactly, case included; if it does not, LinkedIn
+    renders it as ordinary text rather than failing.
+
+    @section linkedindataprovider_timestamps Timestamps
+
+    LinkedIn reports every timestamp as **milliseconds** since the epoch.  Each one is converted to a
+    %Qore date on the way out, so a consumer never has to know the unit.
+
+    @section linkedindataproviderrelnotes Release Notes
+
+    @subsection linkedindataproviderv1_0 LinkedInDataProvider v1.0
+    - the initial version of the %LinkedInDataProvider module
+*/
+
+public namespace LinkedInDataProvider {
+}

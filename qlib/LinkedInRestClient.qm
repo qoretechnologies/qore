@@ -1,0 +1,916 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LinkedInRestClient.qm Qore user module for calling LinkedIn REST services
+
+/*  LinkedInRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module LinkedInRestClient {
+    version = "1.0";
+    desc = "user module for calling LinkedIn REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("linkedin", LinkedInRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("linkedindma", LinkedInDmaRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage LinkedInRestClient Module
+
+    @tableofcontents
+
+    @section linkedinrestclientintro LinkedInRestClient Introduction
+
+    The %LinkedInRestClient module provides an API for calling
+    [LinkedIn REST API](https://learn.microsoft.com/en-us/linkedin/) services.
+
+    To use this module, use \c "%requires LinkedInRestClient" in your code.
+
+    All the public symbols in the module are defined in the LinkedInRestClient namespace.
+
+    The main classes are:
+    - @ref LinkedInRestClient::LinkedInRestClient "LinkedInRestClient":
+      the REST client API for communication with LinkedIn; it also automates authentication and
+      authorization to the target
+    - @ref LinkedInRestClient::LinkedInRestClientIo "LinkedInRestClientIo":
+      the same API on the asynchronous I/O controller
+    - @ref LinkedInRestClient::LinkedInRestConnection "LinkedInRestConnection":
+      a connection to the member API surface (the \c linkedin:// scheme)
+    - @ref LinkedInRestClient::LinkedInDmaRestConnection "LinkedInDmaRestConnection":
+      a connection to the Pages Data Portability (DMA) API surface (the \c linkedindma:// scheme)
+
+    @section linkedinrestclient_profiles One Client, Two API Profiles
+
+    LinkedIn serves its member APIs and its Pages Data Portability (DMA) APIs from **one host**
+    (\c https://api.linkedin.com) through **one OAuth2 flow**
+    (\c https://www.linkedin.com/oauth/v2/authorization and \c /accessToken).  The two differ in
+    exactly three things: the scopes they request, what a meaningful ping is, and which version
+    series their \c LinkedIn-Version header belongs to.
+
+    That difference is carried by an entry in
+    @ref LinkedInRestClient::LinkedInRestClientBase::ApiProfiles "ApiProfiles", selected with the
+    \c api_profile option, so there is one client and one OAuth2 implementation.  Duplicating the
+    LinkedIn OAuth2 layer across two client modules would mean fixing every LinkedIn auth bug twice.
+
+    The two connection classes are **siblings**: they share
+    @ref LinkedInRestClient::LinkedInRestConnectionBase "LinkedInRestConnectionBase", which
+    deliberately declares **no** \c DefaultUrl constant.  A %Qore constant reference resolves
+    lexically, at parse time, to the constant of the class whose body contains it — it does not
+    dispatch on the subclass — so a hierarchy in which a subclass shadows \c DefaultUrl silently
+    feeds the base class's URL to every inherited reader, including the one that persists corrected
+    options back to the configuration store.  With no constant to shadow, that cannot happen here.
+
+    @section linkedinrestclient_versions API Versions
+
+    LinkedIn versions its APIs with a \c LinkedIn-Version request header in \c YYYYMM form, and
+    **does not** default to the latest: a missing or sunset version header is an error.  There are
+    two independent version series, and a value from one is not valid in the other:
+
+    |!Series|!Used by|!Constant|!Cadence
+    |Marketing / versioned APIs|the \c member profile (Posts, Images, Videos)|@ref LinkedInRestClient::LinkedInRestClientBase::DefaultMemberApiVersion "DefaultMemberApiVersion"|monthly, supported at least one year
+    |Pages Data Portability|the \c dma profile|@ref LinkedInRestClient::LinkedInRestClientBase::DefaultDmaApiVersion "DefaultDmaApiVersion"|periodic
+
+    Both are exposed as the \c linkedin_version connection and client option, so a version can be
+    moved forward without a code change.
+
+    Requests under the \c "/rest" base path also require \c "X-Restli-Protocol-Version: 2.0.0";
+    @ref LinkedInRestClient::linkedin_api_headers() "linkedin_api_headers()" adds both headers for
+    those paths and neither for the unversioned \c "/v2" endpoints.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+
+%requires LinkedInRestClient
+
+LinkedInRestClient rest({
+    "oauth2_client_id": client_id,
+    "oauth2_client_secret": client_secret,
+});
+hash<auto> ans = rest.get("/v2/userinfo");
+printf("%Y\n", ans.body);
+    @endcode
+
+    @section linkedinrestclientrelnotes Release Notes
+
+    @subsection linkedinrestclientv1_0 LinkedInRestClient v1.0
+    - the initial version of the %LinkedInRestClient module
+*/
+
+#! the LinkedInRestClient namespace contains all the objects in the LinkedInRestClient module
+public namespace LinkedInRestClient {
+#! The base path for LinkedIn's versioned ("Rest.li 2.0") APIs
+public const LinkedInRestPrefix = "/rest";
+
+#! The base path for LinkedIn's unversioned APIs
+public const LinkedInV2Prefix = "/v2";
+
+#! The Rest.li protocol version required by every versioned LinkedIn API call
+public const RestliProtocolVersion = "2.0.0";
+
+#! The header naming the LinkedIn API version
+public const LinkedInVersionHeader = "LinkedIn-Version";
+
+#! The header naming the Rest.li protocol version
+public const RestliProtocolVersionHeader = "X-Restli-Protocol-Version";
+
+#! Returns the LinkedIn protocol headers required for the given request path
+/** LinkedIn's versioned APIs live under @ref LinkedInRestPrefix and require both a
+    \c LinkedIn-Version header (LinkedIn never defaults to the latest version; a missing header is an
+    error) and \c "X-Restli-Protocol-Version: 2.0.0".  The unversioned endpoints under
+    @ref LinkedInV2Prefix — notably the OpenID Connect \c "/v2/userinfo" endpoint — take neither, so
+    the headers are added only where they belong rather than unconditionally.
+
+    @param path the request path
+    @param version the LinkedIn API version in \c YYYYMM form
+    @param hdr additional headers, which win over the protocol headers
+
+    @return the header hash to send with the request
+*/
+public hash<auto> sub linkedin_api_headers(string path, string version, *hash<auto> hdr) {
+    # only "/rest", "/rest/..." and "/rest?..." are versioned; a path such as "/restricted" is not
+    if (path !~ /^\/rest([\/?]|$)/) {
+        return hdr ?? {};
+    }
+    return {
+        LinkedInVersionHeader: version,
+        RestliProtocolVersionHeader: RestliProtocolVersion,
+    } + (hdr ?? {});
+}
+
+#! Converts a LinkedIn timestamp to a %Qore date
+/** LinkedIn reports every timestamp as **milliseconds** since the epoch — \c publishedAt,
+    \c createdAt, \c lastModifiedAt, \c downloadUrlExpiresAt and the \c time of an audit stamp are
+    all 13-digit values.  Passing that integer through leaves every consumer to divide by 1000 and
+    hope it guessed the unit right.
+
+    @param ms milliseconds since 1970-01-01 UTC, or @ref nothing
+
+    @return the corresponding absolute date in UTC, or @ref nothing if \a ms was not a number
+*/
+public *date sub linkedin_ms_to_date(auto ms) {
+    if (!exists ms || (ms.typeCode() != NT_INT && ms.typeCode() != NT_FLOAT)) {
+        return;
+    }
+    return 1970-01-01Z + milliseconds(ms.toInt());
+}
+
+#! Converts a %Qore date to a LinkedIn timestamp
+/** The inverse of @ref linkedin_ms_to_date(); LinkedIn takes milliseconds since the epoch wherever
+    it accepts a timestamp.
+
+    @param d the date, or @ref nothing
+
+    @return milliseconds since 1970-01-01 UTC, or @ref nothing if \a d was not set
+*/
+public *int sub linkedin_date_to_ms(*date d) {
+    if (!exists d) {
+        return;
+    }
+    return get_epoch_milliseconds(d);
+}
+
+#! Encodes a LinkedIn URN for use in a URI path segment or query parameter value
+/** Every reserved character is percent-encoded, so \c "urn:li:ugcPost:12345" becomes
+    \c "urn%3Ali%3AugcPost%3A12345", which is the form LinkedIn documents for URNs in URLs.
+
+    @param urn the URN, used verbatim
+
+    @return the encoded URN
+*/
+public string sub linkedin_encode_urn(string urn) {
+    return encode_url(urn, True);
+}
+
+#! Builds a Rest.li \c "List(...)" value from a list of URNs
+/** Rest.li 2.0 batch requests take their IDs as \c "List(a,b,c)" where each element is
+    percent-encoded but the parentheses and the separating commas are **not** — encoding them
+    addresses a different resource, and LinkedIn rejects the request.
+
+    @param urns the URNs, used verbatim
+
+    @return the \c "List(...)" value
+*/
+public string sub linkedin_urn_list(softlist<string> urns) {
+    return sprintf("List(%s)", join(",", (map linkedin_encode_urn($1), urns)));
+}
+
+#! Common base class for LinkedInRestClient functionality
+public class LinkedInRestClientBase {
+    public {
+        #! Default LinkedIn API URL
+        const DefaultUrl = "https://api.linkedin.com";
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default OAuth2 authorization URL
+        const DefaultAuthUrl = "https://www.linkedin.com/oauth/v2/authorization";
+
+        #! Default OAuth2 token URL
+        const DefaultTokenUrl = "https://www.linkedin.com/oauth/v2/accessToken";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes for the \c "member" API profile
+        /** \c "openid", \c "profile" and \c "email" are the OpenID Connect scopes behind
+            \c "/v2/userinfo"; \c "w_member_social" is what allows posting as the authenticated
+            member.
+
+            Reading a member's own posts additionally requires \c "r_member_social", which LinkedIn
+            restricts to approved applications, so it is not requested by default; add it to the
+            connection's \c oauth2_scopes option once the application has been approved for it.
+        */
+        const MemberOAuth2Scopes = (
+            "openid",
+            "profile",
+            "email",
+            "w_member_social",
+        );
+
+        #! Default OAuth2 scopes for the \c "dma" API profile
+        /** Granted by the Pages Data Portability API product, which requires a separate LinkedIn
+            approval; see
+            https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview
+        */
+        const DmaOAuth2Scopes = (
+            "r_dma_admin_pages_content",
+        );
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Ping path for the \c "member" API profile
+        const MemberPingPath = "/v2/userinfo";
+
+        #! Ping path for the \c "dma" API profile
+        const DmaPingPath = "/rest/dmaMe";
+
+        #! The default LinkedIn API version for the \c "member" API profile
+        /** LinkedIn's Marketing / versioned API series publishes monthly and supports each version
+            for at least one year; see
+            https://learn.microsoft.com/en-us/linkedin/marketing/versioning
+        */
+        const DefaultMemberApiVersion = "202607";
+
+        #! The default LinkedIn API version for the \c "dma" API profile
+        /** The Pages Data Portability APIs have their own version series, published less often than
+            the Marketing series; a Marketing version is not valid here and vice versa.
+        */
+        const DefaultDmaApiVersion = "202605";
+
+        #! Ping headers for the \c "member" API profile
+        /** \c "/v2/userinfo" is unversioned, so it takes no protocol headers
+        */
+        const MemberPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Ping headers for the \c "dma" API profile
+        /** \c "/rest/dmaMe" is a versioned endpoint, so the ping fails without the version header
+        */
+        const DmaPingHeaders = {
+            "Accept": MimeTypeJson,
+            LinkedInVersionHeader: DefaultDmaApiVersion,
+            RestliProtocolVersionHeader: RestliProtocolVersion,
+        };
+
+        #! API profiles
+        /** LinkedIn serves its member APIs and its Pages Data Portability (DMA) APIs from one host
+            through one OAuth2 flow; the two differ only in which scopes they ask for, what a
+            meaningful ping is, and which version series their \c LinkedIn-Version header belongs
+            to.  A profile carries that difference, which is why there is one client class rather
+            than two.
+
+            Profile values are **defaults, not overrides**: an option the caller set explicitly
+            always wins.
+        */
+        const ApiProfiles = {
+            "member": {
+                "oauth2_scopes": MemberOAuth2Scopes,
+                "ping_method": DefaultPingMethod,
+                "ping_path": MemberPingPath,
+                "ping_headers": MemberPingHeaders,
+                "linkedin_version": DefaultMemberApiVersion,
+                # LinkedIn issues refresh tokens for member authorization only to applications
+                # approved for them; for everything else a refresh attempt fails and the member has
+                # to re-authorize, so the framework is told not to try
+                "oauth2_auto_refresh": False,
+            },
+            "dma": {
+                "oauth2_scopes": DmaOAuth2Scopes,
+                "ping_method": DefaultPingMethod,
+                "ping_path": DmaPingPath,
+                "ping_headers": DmaPingHeaders,
+                "linkedin_version": DefaultDmaApiVersion,
+            },
+        };
+
+        #! The API profile used when none is given
+        const DefaultApiProfile = "member";
+
+        #! Default constructor options
+        /** @par \c allow_any_response
+
+            An image or video byte stream is uploaded to a URL LinkedIn hands back, and the upload
+            response has an empty body with no content type at all; a post creation returns \c 201
+            with no body either.  Without this option the response-side codec raises an error on a
+            body it cannot decode in the declared type.
+        */
+        const DefaultOptions = {
+            "allow_any_response": True,
+            "data": DefaultData,
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_scopes": MemberOAuth2Scopes,
+            "oauth2_token_url": DefaultTokenUrl,
+            "url": DefaultUrl,
+        };
+    }
+
+    private:internal {
+        #! The LinkedIn API version this client sends
+        string linkedin_version = DefaultMemberApiVersion;
+    }
+
+    #! Returns options for the LinkedInRestClient constructors
+    /** @param opts0 the caller's options; the \c api_profile option selects an entry in
+        @ref ApiProfiles and is consumed here rather than passed on to the client
+
+        @return the options to pass to the client constructor
+
+        @throw LINKEDIN-API-PROFILE-ERROR the named profile is not known
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because the caller's option hash is very often a literal whose values happen to
+        # share a type ({"oauth2_client_id": "...", "oauth2_client_secret": "..."} infers
+        # hash<string, string>), and that narrowing survives the copy: adding the list-valued
+        # "oauth2_scopes" default to it would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+        # the API profile is resolved before the module defaults, so that a profile value counts as
+        # "already set" and the defaults do not overwrite it
+        string profile = (remove opts.api_profile) ?? DefaultApiProfile;
+        *hash<auto> conf = ApiProfiles{profile};
+        if (!exists conf) {
+            throw "LINKEDIN-API-PROFILE-ERROR", sprintf("unknown api_profile %y; known profiles: %y",
+                profile, keys ApiProfiles);
+        }
+        # profile values fill in only where the caller has not set the option itself
+        map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+
+    #! Resolves the LinkedIn API version from the caller's options
+    /** Resolved separately from @ref getOptions() because the client constructors pass the resolved
+        option hash straight to their base-class constructor, where there is no opportunity to
+        capture a second value.  The resolution order is the same: an explicit option wins, then the
+        API profile's default.
+
+        @param opts0 the caller's options
+
+        @return the LinkedIn API version to use
+
+        @throw LINKEDIN-API-PROFILE-ERROR the named \c api_profile is not known
+        @throw LINKEDIN-VERSION-ERROR the version is not in \c YYYYMM form
+    */
+    static string resolveVersion(*hash<auto> opts0) {
+        if (*string version = opts0.linkedin_version) {
+            if (version !~ /^[0-9]{6}$/) {
+                throw "LINKEDIN-VERSION-ERROR", sprintf("linkedin_version %y is not in YYYYMM form; "
+                    "LinkedIn API versions look like %y (Marketing) or %y (Pages Data Portability)",
+                    version, DefaultMemberApiVersion, DefaultDmaApiVersion);
+            }
+            return version;
+        }
+        string profile = opts0.api_profile ?? DefaultApiProfile;
+        *hash<auto> conf = ApiProfiles{profile};
+        if (!exists conf) {
+            throw "LINKEDIN-API-PROFILE-ERROR", sprintf("unknown api_profile %y; known profiles: %y",
+                profile, keys ApiProfiles);
+        }
+        return conf.linkedin_version ?? DefaultMemberApiVersion;
+    }
+
+    #! Returns an error description enriched with the LinkedIn API error message, if there is one
+    /** LinkedIn reports errors as
+        \c {"message": "...", "status": 403, "code": "ACCESS_DENIED", "serviceErrorCode": 100}.
+        \c message is the developer-facing prose and \c code the machine-readable identifier; the
+        older endpoints return only \c message.
+
+        @param desc the original exception description
+        @param body the decoded response body, if any
+
+        @return the description with the LinkedIn message appended when one was found
+    */
+    static string getErrorDesc(string desc, auto body) {
+        if (body.typeCode() != NT_HASH) {
+            return desc;
+        }
+        *string message = body.message.typeCode() == NT_STRING ? body.message : NOTHING;
+        *string code = body."code".typeCode() == NT_STRING ? body."code" : NOTHING;
+        if (!message.val() && !code.val()) {
+            return desc;
+        }
+        if (message.val() && code.val()) {
+            return sprintf("%s: %s (code: %s)", desc, message, code);
+        }
+        return sprintf("%s: %s", desc, message ?? code);
+    }
+
+    #! Sets the LinkedIn API version this client sends
+    private setLinkedInVersion(string version) {
+        linkedin_version = version;
+    }
+
+    #! Returns the LinkedIn API version this client sends
+    string getLinkedInVersion() {
+        return linkedin_version;
+    }
+
+    #! Returns the LinkedIn protocol headers for the given path, using this client's API version
+    /** @param path the request path
+        @param hdr additional headers, which win over the protocol headers
+
+        @return the header hash to send with the request
+
+        @see @ref LinkedInRestClient::linkedin_api_headers() "linkedin_api_headers()"
+    */
+    hash<auto> getApiHeaders(string path, *hash<auto> hdr) {
+        return linkedin_api_headers(path, linkedin_version, hdr);
+    }
+}
+
+#! REST client for the LinkedIn REST API
+/** This class requires the following options for LinkedIn authentication and authorization:
+    - \c oauth2_client_id: the OAuth2 client ID
+    - \c oauth2_client_secret: the OAuth2 client secret
+
+    Errors returned from LinkedIn are raised with the LinkedIn error code as the exception code
+    where the response carried one.
+*/
+public class LinkedInRestClient inherits RestClient::RestClient, LinkedInRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts valid options are the same as @ref RestClient::RestClient "RestClient" with the
+        following additions:
+        - \c api_profile: selects an entry in @ref LinkedInRestClientBase::ApiProfiles "ApiProfiles"
+          (\c "member" or \c "dma"); the default is \c "member"
+        - \c linkedin_version: the LinkedIn API version in \c YYYYMM form
+        @param do_not_connect if @ref False "False" (the default), then a connection will be
+        immediately established to the remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data
+        serialization, etc
+        @throw LINKEDIN-API-PROFILE-ERROR the named \c api_profile is not known
+        @throw LINKEDIN-VERSION-ERROR the \c linkedin_version is not in \c YYYYMM form
+    */
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(LinkedInRestClientBase::getOptions(opts), True) {
+        setLinkedInVersion(LinkedInRestClientBase::resolveVersion(opts));
+
+        if (!do_not_connect) {
+            if (!token) {
+                loginIntern();
+            } else {
+                connect();
+            }
+        }
+    }
+
+    #! sends the outgoing HTTP message and recodes the response to data
+    private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
+            *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type,
+            *string shdr, *code signer) {
+        try {
+            return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors,
+                assume_content_type, shdr, signer);
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow ex.err, LinkedInRestClientBase::getErrorDesc(ex.desc, info."response-body"),
+                ex.arg;
+        }
+    }
+}
+
+#! REST client for the LinkedIn REST API using multiplexed HTTP connections
+/** @see LinkedInRestClient for more information
+*/
+public class LinkedInRestClientIo inherits RestClientIo::RestClientIo, LinkedInRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options; see @ref LinkedInRestClient::constructor()
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(LinkedInRestClientBase::getOptions(opts), shared_mgr) {
+        setLinkedInVersion(LinkedInRestClientBase::resolveVersion(opts));
+    }
+}
+
+#! Common base class for the LinkedIn connection classes
+/** @note This class deliberately declares **no** \c DefaultUrl constant.  A %Qore constant
+    reference is resolved **lexically**, at parse time, to the constant of the class whose body
+    contains it; it does not dispatch on the subclass.  A hierarchy in which a subclass shadows
+    \c DefaultUrl therefore feeds the base class's value to every inherited reader — including
+    @ref setUpdateOptionsCode(), which writes corrected options **back to the configuration store**,
+    so the wrong URL is persisted and survives restarts.
+
+    With the constant declared only by the leaf classes, and read here through the virtual
+    @ref getDefaultUrl() accessor, there is nothing to shadow and the problem cannot arise.
+*/
+public class LinkedInRestConnectionBase inherits RestClient::RestConnection {
+    public {
+        #! options required to support the OAuth2 authorization code grant flow
+        const OAuth2AuthRequestOptions = (
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "oauth2_auth_url",
+            "oauth2_token_url",
+            "oauth2_redirect_url",
+        );
+
+        #! The \c linkedin_version connection option, shared by both connection classes
+        const LinkedInVersionOption = <ConnectionOptionInfo>{
+            "display_name": "LinkedIn API Version",
+            "short_desc": "The LinkedIn API version to send in the LinkedIn-Version header",
+            "type": "string",
+            "desc": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` "
+                "header with every versioned request.  LinkedIn never defaults to the latest "
+                "version: a missing or sunset version is an error, and each version is supported "
+                "for a limited time, so this must be moved forward periodically.\n\n"
+                "Note that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have "
+                "**separate** version series; a value from one series is not valid in the other.",
+        };
+    }
+
+    #! creates the connection object
+    constructor(string name, string description, string url, hash<auto> attributes = {},
+            hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the connection object from a configuration hash
+    /** @param config the connection configuration
+        @param attr the connection attributes
+        @param default_url the URL this connection normalizes to
+
+        @note \a default_url is a parameter rather than a read of a constant because the
+        normalization runs in a \c static, while evaluating the base constructor's arguments and
+        before there is an object to dispatch on
+    */
+    constructor(hash<auto> config, *hash<auto> attr, string default_url)
+            : RestConnection(LinkedInRestConnectionBase::getConfig(config, default_url), attr) {
+    }
+
+    #! returns config with the correct URL
+    private static hash<auto> getConfig(hash<auto> config, string default_url) {
+        if (!config.url || config.url != default_url) {
+            config.url = default_url;
+        }
+        return config;
+    }
+
+    #! Returns the canonical URL for this connection type
+    abstract string getDefaultUrl();
+
+    #! Returns the @ref LinkedInRestClientBase::ApiProfiles "API profile" this connection pins
+    abstract string getApiProfile();
+
+    #! returns @ref True as this connection returns a data provider with the getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns @ref True if the response was related to an authorization token error
+    /** Any 401 from LinkedIn indicates an expired or invalid token
+    */
+    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_deserialized,
+            *string body_content_type, auto body) {
+        return status_code == 401;
+    }
+
+    #! Corrects persisted options that no longer match this connection type
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            string default_url = getDefaultUrl();
+            if (url != default_url) {
+                update.url = default_url;
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+
+    #! Sets the auth code feature if supported
+    private checkAuthCodeFeature() {
+        if (opts{OAuth2AuthRequestOptions}.size() == OAuth2AuthRequestOptions.size()) {
+            features{RCF_OAUTH2_AUTH_CODE} = True;
+        }
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+        children_can_support_observers = True;
+    }
+
+    #! Returns the connection options with this connection's API profile pinned
+    private hash<auto> getProfileConnectionOptions(*hash<auto> rtopts) {
+        return getConnectionOptions(rtopts) + {
+            "api_profile": getApiProfile(),
+        };
+    }
+
+    #! returns a @ref LinkedInRestClient object
+    private LinkedInRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new LinkedInRestClient(getProfileConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable client object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new LinkedInRestClientIo(getProfileConnectionOptions(rtopts));
+    }
+}
+
+#! class for LinkedIn member REST connections; returns @ref LinkedInRestClient objects
+/** @see @ref linkedinrestclient_profiles
+*/
+public class LinkedInRestConnection inherits LinkedInRestConnectionBase {
+    public {
+        #! Default LinkedIn member REST API URL
+        const DefaultUrl = "linkedin://api.linkedin.com";
+
+        #! The URL used when a connection for this app is created with a generated URL
+        /** Qorus creates an app connection with \c auto_url by reading a URL constant off the
+            connection class by reflection, and it looks for \c DefaultConnectionUrl before
+            \c DefaultUrl; stating it explicitly keeps that resolution independent of the class
+            hierarchy.
+        */
+        const DefaultConnectionUrl = DefaultUrl;
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "LinkedIn",
+            "short_desc": "A connection to the LinkedIn member REST API",
+            "desc": "A connection to the [LinkedIn](https://www.linkedin.com) REST API for posting "
+                "and managing content as the authenticated member.\n\n"
+                "Requires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a "
+                "[LinkedIn developer application](https://www.linkedin.com/developers/apps) with "
+                "the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** "
+                "products enabled. The connection uses the `linkedin://` URL scheme",
+            "cls": Class::forName("LinkedInRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "linkedin": True,
+            },
+            "base_scheme_map": {
+                "https": "linkedin",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data" + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_auto_refresh": RestConnection::ConnectionScheme.options.oauth2_auto_refresh
+                        + <ConnectionOptionInfo>{
+                    "default_value": False,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::MemberOAuth2Scopes,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultTokenUrl,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::MemberPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::MemberPingPath,
+                },
+                "linkedin_version": LinkedInRestConnectionBase::LinkedInVersionOption
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultMemberApiVersion,
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+        };
+    }
+
+    #! creates the LinkedInRestConnection object
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : LinkedInRestConnectionBase(name, description, url, attributes, options) {
+    }
+
+    #! creates the LinkedInRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : LinkedInRestConnectionBase(config, attr, LinkedInRestConnection::DefaultUrl) {
+    }
+
+    #! Returns \c "linkedin://api.linkedin.com"
+    string getDefaultUrl() {
+        return DefaultUrl;
+    }
+
+    #! Returns \c "member"
+    string getApiProfile() {
+        return "member";
+    }
+
+    #! returns \c "linkedin"
+    string getType() {
+        return "linkedin";
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "LinkedIn";
+    }
+
+    #! returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the LinkedInDataProvider and creates the
+        # data provider object dynamically
+        load_module("LinkedInDataProvider");
+        return create_object("LinkedInDataProvider", getAsync());
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! class for LinkedIn Pages Data Portability (DMA) REST connections
+/** LinkedIn's Pages Data Portability APIs are served by the same host, and authorized by the same
+    OAuth2 flow, as the member APIs; the two differ only in the scopes they request, what a
+    meaningful ping is, and which version series applies.  That difference is carried by the
+    \c "dma" entry in @ref LinkedInRestClientBase::ApiProfiles "ApiProfiles", which this connection
+    pins, so there is no separate DMA client class to keep in step with LinkedIn's OAuth2 handling.
+
+    @see @ref linkedinrestclient_profiles
+*/
+public class LinkedInDmaRestConnection inherits LinkedInRestConnectionBase {
+    public {
+        #! Default LinkedIn DMA REST API URL
+        const DefaultUrl = "linkedindma://api.linkedin.com";
+
+        #! The URL used when a connection for this app is created with a generated URL
+        const DefaultConnectionUrl = DefaultUrl;
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "LinkedIn Organizations",
+            "short_desc": "A connection to the LinkedIn Pages Data Portability (DMA) REST API",
+            "desc": "A connection to the [LinkedIn](https://www.linkedin.com) Pages Data "
+                "Portability API product, which gives a LinkedIn Page administrator access to the "
+                "organization's posts, comments, reactions, followers and page analytics.\n\n"
+                "Requires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a "
+                "[LinkedIn developer application](https://www.linkedin.com/developers/apps) that "
+                "has been **approved for the Pages Data Portability API product** — a separate "
+                "LinkedIn approval that grants the `r_dma_admin_pages_content` permission and takes "
+                "several business days. The connection uses the `linkedindma://` URL scheme",
+            "cls": Class::forName("LinkedInDmaRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "linkedindma": True,
+            },
+            "base_scheme_map": {
+                "https": "linkedindma",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data" + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DmaOAuth2Scopes,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultTokenUrl,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DmaPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DmaPingPath,
+                },
+                "linkedin_version": LinkedInRestConnectionBase::LinkedInVersionOption
+                        + <ConnectionOptionInfo>{
+                    "default_value": LinkedInRestClientBase::DefaultDmaApiVersion,
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+        };
+    }
+
+    #! creates the LinkedInDmaRestConnection object
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : LinkedInRestConnectionBase(name, description, url, attributes, options) {
+    }
+
+    #! creates the LinkedInDmaRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : LinkedInRestConnectionBase(config, attr, LinkedInDmaRestConnection::DefaultUrl) {
+    }
+
+    #! Returns \c "linkedindma://api.linkedin.com"
+    string getDefaultUrl() {
+        return DefaultUrl;
+    }
+
+    #! Returns \c "dma"
+    string getApiProfile() {
+        return "dma";
+    }
+
+    #! returns \c "linkedindma"
+    string getType() {
+        return "linkedindma";
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "LinkedInOrganizations";
+    }
+
+    #! returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the LinkedInOrganizationsDataProvider and
+        # creates the data provider object dynamically
+        load_module("LinkedInOrganizationsDataProvider");
+        return create_object("LinkedInOrganizationsDataProvider", getAsync());
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

@@ -1,0 +1,897 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** LinkedInOrganizationsDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires Mime
+%requires RestClient
+%requires RestClientIo
+%requires LinkedInRestClient
+%requires LinkedInOrganizationsDataProvider
+
+%requires reflection
+
+%exec-class LinkedInOrganizationsDataProviderTest
+
+#! One recorded request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A LinkedIn DMA REST client that records requests instead of making them
+class FakeDmaRestClientIo inherits LinkedInRestClient::LinkedInRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor(*hash<auto> opts) : LinkedInRestClientIo({
+        "api_profile": "dma",
+        "oauth2_client_id": "test-id",
+        "oauth2_client_secret": "test-secret",
+        "oauth2_redirect_url": "https://example.com/oauth2-callback",
+        "token": "test-token",
+    } + (opts ?? {})) {
+    }
+
+    hash<RecordedRequest> req(int i) {
+        if (i >= requests.size()) {
+            throw "TEST-ERROR", sprintf("request %d requested but only %d were recorded", i,
+                requests.size());
+        }
+        return requests[i];
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    #! Queues the access-control response that names the member's organizations
+    /** NOTE: an explicit loop, not "map": "map {...}, list" merges its hash-valued results into ONE
+        hash rather than building a list of them
+    */
+    push_acls(softlist<string> org_ids) {
+        # NOTE: not named "elements"; that is a Qore operator and declaring a variable with that
+        # name is a parse error
+        list<auto> acls = ();
+        foreach string id in (org_ids) {
+            push acls, {
+                "state": "APPROVED",
+                "key": {"organization": "urn:li:organization:" + id, "role": "ADMINISTRATOR"},
+            };
+        }
+        push_response({"body": {"elements": acls}});
+    }
+
+    #! Queues an organization BATCH_GET response
+    push_organizations(hash<auto> orgs) {
+        push_response({"body": {"results": orgs}});
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+}
+
+#! Exposes the watch provider's polling internals, which are deliberately not public API
+class TestNewPostDataProvider inherits LinkedInOrganizationsDataProvider::LinkedInNewPostDataProvider {
+    public {
+        #! Every checkpoint written, in order
+        list<hash<auto>> checkpoints = ();
+
+        #! Every event delivered, in order
+        list<auto> events = ();
+    }
+
+    constructor(LinkedInRestClient::LinkedInRestClientIo rest, *hash<auto> options)
+            : LinkedInNewPostDataProvider(rest, options) {
+    }
+
+    #! Runs one poll
+    doPoll() {
+        pollOnce();
+    }
+
+    #! Collects the URNs a poll would deliver
+    list<string> collect() {
+        return collectNewPostUrns();
+    }
+
+    #! Restores a checkpoint as the framework would
+    restore(hash<auto> checkpoint) {
+        restoreCheckpoint(checkpoint);
+    }
+
+    #! Records the checkpoint instead of writing it to a store
+    private persistCheckpoint(hash<auto> checkpoint) {
+        push checkpoints, checkpoint;
+    }
+
+    #! Records the event instead of dispatching it to observers
+    private notifyObservers(string event_id, hash<auto> data) {
+        push events, data;
+    }
+
+    #! The test drives polling directly, so the provider is never actually stopping
+    private bool isStopping() {
+        return False;
+    }
+}
+
+public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
+    public {
+        const OrgId = "2414183";
+        const OrgUrn = "urn:li:organization:2414183";
+        const PageUrn = "urn:li:organizationalPage:2414183";
+        const PostUrn = "urn:li:share:1188488118";
+        const PostUrn2 = "urn:li:share:1177086984";
+        const CommentUrn = "urn:li:comment:(urn:li:activity:123,456)";
+
+        #! A minimal organization profile as the DMA API returns it
+        const SampleOrg = {
+            "id": 2414183,
+            "organizationalPage": PageUrn,
+            "localizedName": "Qore Technologies",
+            "localizedDescription": "Integration software",
+            "localizedTagline": "Automate everything",
+            "vanityName": "qore-technologies",
+            "staffCountRange": "SIZE_11_TO_50",
+            "organizationType": "PRIVATELY_HELD",
+            "entityStatus": "ACTIVE",
+            "foundedOn": {"year": 2012},
+            "industriesV2": ("urn:li:industry:4",),
+            "logoV2": {"cropped": {"downloadUrl": "https://media.licdn.com/logo.png"}},
+            "created": {"actor": "urn:li:person:ABC", "time": 1518028624160},
+        };
+    }
+
+    constructor() : Test("LinkedInOrganizationsDataProviderTest", "1.0") {
+        addTestCase("app registration", \appRegistrationTest());
+        addTestCase("action options", \actionOptionsTest());
+        addTestCase("urn helpers", \urnHelperTest());
+        addTestCase("chunking", \chunkTest());
+        addTestCase("cursor extraction", \cursorTest());
+        addTestCase("restli query encoding", \queryEncodingTest());
+        addTestCase("list organizations", \listOrganizationsTest());
+        addTestCase("get organization", \getOrganizationTest());
+        addTestCase("list posts", \listPostsTest());
+        addTestCase("get post", \getPostTest());
+        addTestCase("list comments", \listCommentsTest());
+        addTestCase("list reactions", \listReactionsTest());
+        addTestCase("engagement summary", \socialMetadataTest());
+        addTestCase("followers", \followersTest());
+        addTestCase("follower statistics", \followerStatisticsTest());
+        addTestCase("visitor statistics", \visitorStatisticsTest());
+        addTestCase("new-post trigger", \newPostTriggerTest());
+        set_return_value(main());
+    }
+
+    private FakeDmaRestClientIo client() {
+        return new FakeDmaRestClientIo();
+    }
+
+    #! Queues the two responses that resolve an organization to its page URN
+    private seedOrganization(FakeDmaRestClientIo rest) {
+        rest.push_organizations({OrgId: SampleOrg});
+    }
+
+    appRegistrationTest() {
+        hash<auto> app = DataProviderActionCatalog::getAppEx(
+            LinkedInOrganizationsDataProvider::AppName);
+        assertEq("LinkedInOrganizations", app.name);
+        # the scheme is what decides which connection class, and therefore which app, a connection
+        # resolves to; it must be the DMA scheme and not the member one
+        assertEq("linkedindma", app.scheme);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        assertTrue(app.logo.val());
+        assertTrue(inlist("Social Media Management", (map $1.toString(), app.groups)));
+
+        list<auto> actions = DataProviderActionCatalog::getActionsEx(
+            LinkedInOrganizationsDataProvider::AppName);
+        hash<string, hash<auto>> by_action = map {$1.action: $1}, actions;
+        assertTrue(exists by_action{"make-api-call"});
+
+        list<string> expected = (
+            "get-current-member", "list-organizations", "get-organization", "list-posts",
+            "get-post", "list-comments", "list-reactions", "get-social-metadata", "list-followers",
+            "list-following", "get-follower-statistics", "get-visitor-statistics",
+        );
+        foreach string name in (expected) {
+            assertTrue(exists by_action{name}, sprintf("action %y must be registered", name));
+            hash<auto> action = by_action{name};
+            assertEq(DPAT_API, action.action_code, name);
+            assertTrue(action.display_name.val(), name);
+            assertTrue(action.short_desc.val(), name);
+            assertTrue(action.desc.val(), name);
+            assertTrue(action.groups.val(), name);
+            assertTrue(exists action.output_type, sprintf("%y needs an output type", name));
+        }
+
+        # the trigger is an event action, not an API action
+        hash<auto> trigger = by_action{LinkedInOrganizationsDataProvider::EVENT_NEW_POST};
+        assertTrue(exists trigger, "the new-post trigger must be registered");
+        assertEq(DPAT_EVENT, trigger.action_code);
+        assertEq(LinkedInOrganizationsDataProvider::EVENT_NEW_POST, trigger.action_val);
+
+        assertEq(expected.size() + 2, actions.size(), "no action may be registered twice");
+
+        # every action path must resolve to a provider
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProvider dp(rest);
+        list<string> children = dp.getChildProviderNames();
+        foreach string name in (expected) {
+            assertTrue(inlist(name, children), sprintf("action %y must resolve to a provider", name));
+            assertEq(name, dp.getChildProviderEx(name).getName());
+        }
+        # the watch provider lives under an "events" container, matching its registered path
+        assertTrue(inlist("events", children));
+        AbstractDataProvider events = dp.getChildProviderEx("events");
+        assertEq((LinkedInOrganizationsDataProvider::EVENT_NEW_POST,),
+            events.getChildProviderNames());
+    }
+
+    actionOptionsTest() {
+        list<auto> actions = DataProviderActionCatalog::getActionsEx(
+            LinkedInOrganizationsDataProvider::AppName);
+        hash<string, hash<auto>> by_action = map {$1.action: $1}, actions;
+
+        # every organization-scoped action must offer the organization list rather than free text
+        foreach string name in (("get-organization", "list-posts", "list-followers",
+            "list-following", "get-follower-statistics", "get-visitor-statistics")) {
+            assertTrue(by_action{name}.options.organization.required, name);
+            assertEq("organizations", by_action{name}.options.organization.ref_data, name);
+        }
+        assertEq(0, by_action."list-organizations".options.size(),
+            "list-organizations takes no options");
+        assertEq(0, by_action."get-current-member".options.size(),
+            "get-current-member takes no options");
+        assertTrue(by_action."list-comments".options.entity.required);
+        assertTrue(by_action."get-social-metadata".options.entities.required);
+
+        # follower statistics must NOT offer a date range: LinkedIn ignores one for FOLLOWER
+        # analytics, so offering it would promise a filter that does not exist
+        assertFalse(by_action."get-follower-statistics".options.hasKey("start"));
+        assertFalse(by_action."get-follower-statistics".options.hasKey("end"));
+        # visitor statistics does honour one
+        assertTrue(by_action."get-visitor-statistics".options.hasKey("start"));
+        assertTrue(by_action."get-visitor-statistics".options.hasKey("end"));
+        assertTrue(by_action."get-visitor-statistics".options.hasKey("source_type"));
+    }
+
+    urnHelperTest() {
+        assertEq("2414183", LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::urnId(
+            OrgUrn));
+        assertEq("2414183", LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::urnId(
+            PageUrn));
+        # a composite URN has no single trailing ID; truncating it to its last component would
+        # address a different entity, so it must be rejected instead
+        assertThrows("LINKEDIN-URN-ERROR",
+            \LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::urnId(), CommentUrn);
+        assertThrows("LINKEDIN-URN-ERROR",
+            \LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::urnId(), "12345");
+
+        assertEq(OrgUrn,
+            LinkedInOrganizationsDataProvider::LinkedInOrgActionProviderBase::organizationUrn(OrgId));
+        # an already-qualified URN must be used verbatim rather than wrapped again
+        assertEq(OrgUrn,
+            LinkedInOrganizationsDataProvider::LinkedInOrgActionProviderBase::organizationUrn(OrgUrn));
+
+        assertEq("https://www.linkedin.com/feed/update/" + PostUrn + "/",
+            LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::postUrl(PostUrn));
+    }
+
+    chunkTest() {
+        list<auto> items = (1, 2, 3, 4, 5);
+        assertEq(((1, 2), (3, 4), (5,)),
+            LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::chunk(items, 2));
+        assertEq((items,),
+            LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::chunk(items, 10));
+        assertEq((),
+            LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::chunk((), 10));
+        assertThrows("LINKEDIN-BATCH-ERROR",
+            \LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::chunk(), (items, 0));
+    }
+
+    #! The DMA APIs report the cursor in two different places; both must be read
+    cursorTest() {
+        # the feed finders nest it, with LinkedIn's own misspelling of "Metadata"
+        assertEq("M18=", LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::nextCursor({
+            "metadata": {"paginationCursorMetdata": {"nextPaginationCursor": "M18="}},
+        }));
+        # ...and the spelling would be corrected without notice
+        assertEq("M18=", LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::nextCursor({
+            "metadata": {"paginationCursorMetadata": {"nextPaginationCursor": "M18="}},
+        }));
+        # the follows finders put it directly on metadata
+        assertEq("NV9f", LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::nextCursor({
+            "metadata": {"nextPaginationCursor": "NV9f"},
+        }));
+        # the end of the collection is an absent cursor, not an empty page
+        assertEq(NOTHING, LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::nextCursor({
+            "metadata": {}, "elements": ({"id": PostUrn},),
+        }));
+        assertEq(NOTHING,
+            LinkedInOrganizationsDataProvider::LinkedInOrganizationsUtil::nextCursor("not a hash"));
+    }
+
+    #! Rest.li structural values must reach LinkedIn with their punctuation literal
+    queryEncodingTest() {
+        string path = LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProviderBase::addQuery(
+            "/rest/x", {
+                "q": "roleAssignee",
+                "state": "(value:APPROVED)",
+                "timeRange": "(end:2,start:1)",
+                "author": OrgUrn,
+            });
+        # the finder name and the URN are ordinary values and are encoded
+        assertTrue(path =~ /q=roleAssignee/, path);
+        assertTrue(path =~ /author=urn%3Ali%3Aorganization%3A2414183/, path);
+        # the structural values are syntax and must survive verbatim
+        assertTrue(path =~ /state=\(value:APPROVED\)/, path);
+        assertTrue(path =~ /timeRange=\(end:2,start:1\)/, path);
+
+        assertEq("/rest/x",
+            LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProviderBase::addQuery(
+                "/rest/x", NOTHING));
+        # an existing query string must be extended, not replaced
+        assertTrue(
+            LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProviderBase::addQuery(
+                "/rest/x?a=1", {"b": "2"}) =~ /\?a=1&b=2/);
+    }
+
+    listOrganizationsTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInListOrganizationsDataProvider dp(rest);
+
+        # the same organization appears twice, because the member holds two roles on it
+        rest.push_response({"body": {"elements": (
+            {"key": {"organization": OrgUrn, "role": "ADMINISTRATOR"}, "state": "APPROVED"},
+            {"key": {"organization": OrgUrn, "role": "CONTENT_ADMINISTRATOR"}, "state": "APPROVED"},
+            {"key": {"organization": "urn:li:organization:99", "role": "ADMINISTRATOR"},
+                "state": "APPROVED"},
+        )}});
+        rest.push_organizations({
+            OrgId: SampleOrg,
+            "99": {"id": 99, "localizedName": "Other"},
+        });
+
+        hash<auto> rv = dp.doRequest();
+        assertEq(2, rv.organizations.size(), "an organization held under two roles is listed once");
+
+        assertEq("GET", rest.req(0).method);
+        assertTrue(rest.req(0).path =~ /^\/rest\/dmaOrganizationAcls\?/, rest.req(0).path);
+        assertTrue(rest.req(0).path =~ /q=roleAssignee/);
+        assertTrue(rest.req(0).path =~ /state=\(value:APPROVED\)/);
+        # the versioned endpoint must carry both protocol headers
+        assertEq(LinkedInRestClient::LinkedInRestClientBase::DefaultDmaApiVersion,
+            rest.req(0).headers{LinkedInRestClient::LinkedInVersionHeader});
+        assertEq("2.0.0", rest.req(0).headers{LinkedInRestClient::RestliProtocolVersionHeader});
+
+        # the Organizations API is keyed by the numeric ID, not by the URN
+        assertEq("/rest/dmaOrganizations?ids=List(2414183,99)", rest.req(1).path);
+
+        hash<auto> org = rv.organizations[0];
+        assertEq(OrgId, org.id);
+        assertEq(OrgUrn, org.urn);
+        assertEq(PageUrn, org.organizational_page);
+        assertEq("Qore Technologies", org.name);
+        assertEq("https://www.linkedin.com/company/qore-technologies", org.url);
+        assertEq(2012, org.founded_year);
+        assertEq("https://media.licdn.com/logo.png", org.logo_url);
+        # audit-stamp times are milliseconds and must arrive as dates
+        assertEq(2018-02-07T18:37:04.160Z, org.created.time);
+
+        # an empty access-control list must not trigger a batch request for nothing
+        rest.reset();
+        rest.push_response({"body": {"elements": ()}});
+        assertEq((), dp.doRequest().organizations);
+        assertEq(1, rest.requests.size());
+    }
+
+    getOrganizationTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInGetOrganizationDataProvider dp(rest);
+
+        rest.push_organizations({OrgId: SampleOrg});
+        hash<auto> org = dp.doRequest({"organization": OrgId});
+        assertEq("Qore Technologies", org.name);
+        assertEq("/rest/dmaOrganizations?ids=List(2414183)", rest.last().path);
+
+        # an organization LinkedIn will not return must be reported, not returned empty
+        rest.reset();
+        rest.push_organizations({});
+        assertThrows("LINKEDIN-ORGANIZATION-ERROR", \dp.doRequest(), {"organization": OrgId});
+    }
+
+    listPostsTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInListPostsDataProvider dp(rest);
+
+        rest.push_response({"body": {
+            "elements": ({"id": PostUrn}, {"id": PostUrn2}),
+            "metadata": {"paginationCursorMetdata": {"nextPaginationCursor": "M18="}},
+        }});
+        # the BATCH_GET result is an unordered map, deliberately returned here in the wrong order
+        rest.push_response({"body": {"results": {
+            PostUrn2: {"id": PostUrn2, "commentary": "older", "publishedAt": 1698953310455,
+                "created": {"time": 1698953310455}},
+            PostUrn: {"id": PostUrn, "commentary": "newer", "publishedAt": 1763375562669,
+                "lifecycleState": "PUBLISHED", "visibility": "PUBLIC",
+                "distribution": {"feedDistribution": "MAIN_FEED"},
+                "created": {"actor": "urn:li:organization:2414183", "time": 1763375562669}},
+        }}});
+
+        hash<auto> rv = dp.doRequest({"organization": OrgId, "count": 2});
+        assertEq("M18=", rv.cursor);
+        assertEq(2, rv.posts.size());
+        # the finder's order is the meaningful one and must survive the unordered batch result
+        assertEq(PostUrn, rv.posts[0].id);
+        assertEq(PostUrn2, rv.posts[1].id);
+        assertEq("newer", rv.posts[0].commentary);
+        assertEq("https://www.linkedin.com/feed/update/" + PostUrn + "/", rv.posts[0].url);
+        assertEq(2025-11-17T10:32:42.669Z, rv.posts[0].published_at);
+        assertEq("urn:li:organization:2414183", rv.posts[0].created.actor);
+
+        hash<RecordedRequest> finder = rest.req(0);
+        assertTrue(finder.path =~ /^\/rest\/dmaFeedContentsExternal\?/, finder.path);
+        assertTrue(finder.path =~ /q=postsByAuthor/);
+        assertTrue(finder.path =~ /author=urn%3Ali%3Aorganization%3A2414183/);
+        assertTrue(finder.path =~ /maxPaginationCount=2/);
+        assertFalse(finder.path =~ /paginationCursor=/, "no cursor on the first page");
+        assertTrue(rest.req(1).path =~ /viewContext=READER/);
+
+        # a supplied cursor continues the listing
+        rest.reset();
+        rest.push_response({"body": {"elements": (), "metadata": {}}});
+        rv = dp.doRequest({"organization": OrgId, "cursor": "M18="});
+        assertTrue(rest.req(0).path =~ /paginationCursor=M18%3D/, rest.req(0).path);
+        assertEq((), rv.posts);
+        assertEq(NOTHING, rv.cursor, "the end of the collection is an absent cursor");
+        assertEq(1, rest.requests.size(), "an empty page must not trigger a batch request");
+
+        # LinkedIn's page-size ceiling must be respected rather than passed through
+        rest.reset();
+        rest.push_response({"body": {"elements": (), "metadata": {}}});
+        dp.doRequest({"organization": OrgId, "count": 99999});
+        assertTrue(rest.req(0).path =~ /maxPaginationCount=1000/, rest.req(0).path);
+    }
+
+    getPostTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInGetOrgPostDataProvider dp(rest);
+
+        rest.push_response({"body": {"results": {PostUrn: {
+            "id": PostUrn,
+            "commentary": "hello",
+            "lifecycleState": "PUBLISHED",
+            "scheduledAt": 1763375562669,
+            "created": {"time": 1763375562669},
+        }}, "statuses": {PostUrn: 200}, "errors": {}}});
+        hash<auto> post = dp.doRequest({"post": PostUrn, "view_context": "AUTHOR"});
+        assertEq("hello", post.commentary);
+        # a scheduled post is identified by this field, which only the AUTHOR context returns
+        assertEq(2025-11-17T10:32:42.669Z, post.scheduled_at);
+        # the DMA Posts API supports only BATCH_GET, so a single post is a batch of one
+        assertEq("/rest/dmaPosts?ids=List(urn%3Ali%3Ashare%3A1188488118)&viewContext=AUTHOR",
+            rest.last().path);
+
+        rest.reset();
+        rest.push_response({"body": {"results": {}, "errors": {PostUrn: {"status": 403}}}});
+        assertThrows("LINKEDIN-POST-ERROR", \dp.doRequest(), {"post": PostUrn});
+    }
+
+    listCommentsTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInListCommentsDataProvider dp(rest);
+
+        rest.push_response({"body": {
+            "elements": ({"id": CommentUrn},),
+            "metadata": {"paginationCursorMetdata": {"nextPaginationCursor": "abc"}},
+        }});
+        rest.push_response({"body": {"results": {CommentUrn: {
+            "id": 456,
+            "object": "urn:li:activity:123",
+            "commentary": {"text": "Nice work", "attributes": ()},
+            "created": {"actor": "urn:li:organization:2414183", "time": 1763375562669},
+        }}}});
+
+        hash<auto> rv = dp.doRequest({"entity": "urn:li:activity:123"});
+        assertEq("abc", rv.cursor);
+        assertEq(1, rv.comments.size());
+        assertEq(CommentUrn, rv.comments[0].urn);
+        assertEq("456", rv.comments[0].id);
+        assertEq("Nice work", rv.comments[0].text);
+        assertEq("urn:li:activity:123", rv.comments[0].object);
+        assertTrue(rest.req(0).path =~ /q=commentsOnEntity/);
+        # a composite comment URN must be fully encoded inside List(), parentheses and comma
+        # included, or it addresses a different resource
+        assertEq("/rest/dmaComments?ids=List(urn%3Ali%3Acomment%3A%28urn%3Ali%3Aactivity%3A123%2C456%29)",
+            rest.req(1).path);
+
+        # a comment whose author has not consented arrives without an actor AND without its text
+        rest.reset();
+        rest.push_response({"body": {"elements": ({"id": CommentUrn},), "metadata": {}}});
+        rest.push_response({"body": {"results": {CommentUrn: {
+            "id": 456, "object": "urn:li:activity:123", "created": {"time": 1763375562669},
+        }}}});
+        rv = dp.doRequest({"entity": "urn:li:activity:123"});
+        assertEq(NOTHING, rv.comments[0].text);
+        assertEq(NOTHING, rv.comments[0].created.actor);
+        assertEq(2025-11-17T10:32:42.669Z, rv.comments[0].created.time);
+    }
+
+    listReactionsTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInListReactionsDataProvider dp(rest);
+
+        string reaction_urn = "urn:li:reaction:(urn:li:person:ABC,urn:li:activity:123)";
+        rest.push_response({"body": {"elements": ({"id": reaction_urn},), "metadata": {}}});
+        rest.push_response({"body": {"results": {reaction_urn: {
+            "reactionType": "PRAISE",
+            "entity": "urn:li:activity:123",
+            "created": {"actor": "urn:li:person:ABC", "time": 1689353471708},
+        }}}});
+
+        hash<auto> rv = dp.doRequest({"entity": "urn:li:activity:123"});
+        assertEq(1, rv.reactions.size());
+        assertEq("PRAISE", rv.reactions[0].reaction_type);
+        assertEq(reaction_urn, rv.reactions[0].urn);
+        assertEq(2023-07-14T16:51:11.708Z, rv.reactions[0].created.time);
+        assertTrue(rest.req(0).path =~ /q=reactionsOnEntity/);
+    }
+
+    socialMetadataTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInGetSocialMetadataDataProvider dp(rest);
+
+        rest.push_response({"body": {"results": {
+            PostUrn: {
+                "entity": PostUrn,
+                "commentsState": "OPEN",
+                "commentSummary": {"count": 5, "topLevelCount": 3},
+                "reactionSummaries": {
+                    "PRAISE": {"reactionType": "PRAISE", "count": 4},
+                    "LIKE": {"reactionType": "LIKE", "count": 11},
+                },
+            },
+        }}});
+
+        hash<auto> rv = dp.doRequest({"entities": (PostUrn,)});
+        assertEq(1, rv.entities.size());
+        hash<auto> meta = rv.entities[0];
+        assertEq(PostUrn, meta.entity);
+        assertEq(5, meta.comment_count);
+        assertEq(3, meta.top_level_comment_count);
+        assertEq("OPEN", meta.comments_state);
+        # the reaction map is flattened into a list and totalled, because neither question can be
+        # answered from a keyed map without iterating it
+        assertEq(15, meta.reaction_count);
+        assertEq(2, meta.reactions.size());
+        hash<string, int> by_type = map {$1.reaction_type: $1.count}, meta.reactions;
+        assertEq(11, by_type.LIKE);
+        assertEq(4, by_type.PRAISE);
+
+        # content with no engagement at all must report zeroes rather than nothing
+        rest.reset();
+        rest.push_response({"body": {"results": {PostUrn: {
+            "entity": PostUrn, "commentsState": "OPEN",
+            "commentSummary": {"count": 0, "topLevelCount": 0}, "reactionSummaries": {},
+        }}}});
+        meta = dp.doRequest({"entities": (PostUrn,)}).entities[0];
+        assertEq(0, meta.reaction_count);
+        assertEq((), meta.reactions);
+
+        assertThrows("LINKEDIN-REQUEST-ERROR", \dp.doRequest(), {"entities": ()});
+    }
+
+    followersTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInListFollowersDataProvider dp(rest);
+
+        # the follows API addresses an organizational PAGE, so the organization is resolved first
+        seedOrganization(rest);
+        rest.push_response({"body": {
+            "elements": (
+                {"follower": "urn:li:person:WIOb", "followee": PageUrn,
+                    "edgeType": "MEMBER_FOLLOWS_ORGANIZATIONAL_PAGE", "lastModifiedAt": 1701259792468},
+                # a follower who has not consented arrives with no follower URN at all
+                {"followee": PageUrn, "edgeType": "MEMBER_FOLLOWS_ORGANIZATIONAL_PAGE",
+                    "lastModifiedAt": 1699980274432},
+            ),
+            "metadata": {"nextPaginationCursor": "NV9f"},
+        }});
+
+        hash<auto> rv = dp.doRequest({"organization": OrgId, "count": 2});
+        assertEq("NV9f", rv.cursor, "the follows API reports its cursor directly on metadata");
+        assertEq(2, rv.follows.size());
+        assertEq("urn:li:person:WIOb", rv.follows[0].follower);
+        assertEq(2023-11-29T12:09:52.468Z, rv.follows[0].last_modified_at);
+        assertFalse(rv.follows[1].hasKey("follower"),
+            "an unconsented follower must be absent, not empty");
+
+        hash<RecordedRequest> req = rest.last();
+        assertTrue(req.path =~ /^\/rest\/dmaOrganizationalPageFollows\?/, req.path);
+        assertTrue(req.path =~ /q=followee/);
+        # the page URN, not the organization URN
+        assertTrue(req.path =~ /followee=urn%3Ali%3AorganizationalPage%3A2414183/, req.path);
+        assertTrue(req.path =~ /edgeType=MEMBER_FOLLOWS_ORGANIZATIONAL_PAGE/);
+
+        # the following direction uses the other finder
+        rest.reset();
+        seedOrganization(rest);
+        rest.push_response({"body": {"elements": (), "metadata": {}}});
+        LinkedInOrganizationsDataProvider::LinkedInListFollowingDataProvider following(rest);
+        following.doRequest({"organization": OrgId});
+        assertTrue(rest.last().path =~ /q=follower/, rest.last().path);
+        assertTrue(rest.last().path =~ /follower=urn%3Ali%3AorganizationalPage%3A2414183/);
+
+        # an organization with no page cannot be addressed by these APIs, and must say so
+        rest.reset();
+        rest.push_organizations({OrgId: SampleOrg - "organizationalPage"});
+        assertThrows("LINKEDIN-ORGANIZATION-ERROR", \dp.doRequest(), {"organization": OrgId});
+    }
+
+    followerStatisticsTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInGetFollowerStatisticsDataProvider dp(rest);
+
+        seedOrganization(rest);
+        rest.push_response({"body": {"elements": (
+            {"type": "FOLLOWER", "organizationalPage": PageUrn,
+                "value": {"totalCount": {"long": 42},
+                    "typeSpecificValue": {"followerEdgeAnalyticsValue":
+                        {"organicValue": 40, "sponsoredValue": 2}}},
+                "dimension": {"type": "INDUSTRY", "value": {"urn": "urn:li:industry:4"}}},
+            {"type": "FOLLOWER", "organizationalPage": PageUrn,
+                "value": {"totalCount": {"long": 8}},
+                "dimension": {"type": "INDUSTRY", "value": {"urn": "urn:li:industry:6"}}},
+        )}});
+
+        hash<auto> rv = dp.doRequest({"organization": OrgId, "dimension_type": "INDUSTRY"});
+        assertEq(2, rv.rows.size());
+        assertEq(50, rv.total);
+        assertEq("urn:li:industry:4", rv.rows[0].dimension);
+        assertEq(42, rv.rows[0].count);
+        assertEq(40, rv.rows[0].organic_count);
+        assertEq(2, rv.rows[0].sponsored_count);
+        assertEq("INDUSTRY", rv.rows[0].dimension_type);
+
+        hash<RecordedRequest> req = rest.last();
+        assertTrue(req.path =~ /^\/rest\/dmaOrganizationalPageEdgeAnalytics\?/, req.path);
+        assertTrue(req.path =~ /q=dimension/);
+        assertTrue(req.path =~ /analyticsType=FOLLOWER/);
+        assertTrue(req.path =~ /organizationalPage=urn%3Ali%3AorganizationalPage%3A2414183/);
+        # LinkedIn documents that it IGNORES timeRange for FOLLOWER analytics, so sending one would
+        # imply a filter that does not exist
+        assertFalse(req.path =~ /timeRange/, req.path);
+
+        # the company-size breakdown carries its value as a range string rather than a URN
+        rest.reset();
+        seedOrganization(rest);
+        rest.push_response({"body": {"elements": (
+            {"type": "FOLLOWER", "value": {"totalCount": {"long": 3}},
+                "dimension": {"type": "STAFF_COUNT_RANGE",
+                    "value": {"staffRangeCount": "SIZE_11_TO_50"}}},
+        )}});
+        rv = dp.doRequest({"organization": OrgId, "dimension_type": "STAFF_COUNT_RANGE"});
+        assertEq("SIZE_11_TO_50", rv.rows[0].dimension);
+    }
+
+    visitorStatisticsTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInGetVisitorStatisticsDataProvider dp(rest);
+
+        seedOrganization(rest);
+        rest.push_response({"body": {"elements": (
+            {"type": "VISITOR", "sourceType": "CAREER",
+                "value": {"totalCount": {"long": 42}, "typeSpecificValue":
+                    {"visitorEdgeAnalyticsValue": {"desktopCount": 30, "mobileCount": 12}}},
+                "dimension": {"type": "JOB_FUNCTION", "value": {"urn": "urn:li:function:8"}}},
+        )}});
+
+        hash<auto> rv = dp.doRequest({
+            "organization": OrgId,
+            "dimension_type": "JOB_FUNCTION",
+            "start": 2026-01-01Z,
+            "end": 2026-02-01Z,
+            "source_type": "CAREER",
+        });
+        assertEq(42, rv.rows[0].count);
+        assertEq(30, rv.rows[0].desktop_count);
+        assertEq(12, rv.rows[0].mobile_count);
+        assertEq("CAREER", rv.rows[0].source_type);
+
+        hash<RecordedRequest> req = rest.last();
+        assertTrue(req.path =~ /analyticsType=VISITOR/, req.path);
+        assertTrue(req.path =~ /sourceType=CAREER/);
+        # the time range is a Rest.li structural value in milliseconds, sent unencoded
+        assertTrue(req.path =~ /timeRange=\(start:1767225600000,end:1769904000000\)/, req.path);
+
+        # with no range at all the parameter must be omitted rather than sent empty
+        rest.reset();
+        seedOrganization(rest);
+        rest.push_response({"body": {"elements": ()}});
+        dp.doRequest({"organization": OrgId, "dimension_type": "INDUSTRY"});
+        assertFalse(rest.last().path =~ /timeRange/, rest.last().path);
+    }
+
+    #! The trigger must resume without replaying history and without missing a burst
+    newPostTriggerTest() {
+        FakeDmaRestClientIo rest = client();
+        TestNewPostDataProvider dp(rest, {"organization": OrgId});
+
+        # --- first poll: seed the baseline without firing events ---
+        rest.push_response({"body": {
+            "elements": ({"id": PostUrn}, {"id": PostUrn2}),
+            "metadata": {"paginationCursorMetdata": {"nextPaginationCursor": "more"}},
+        }});
+        dp.doPoll();
+        assertEq(0, dp.events.size(), "turning the trigger on must not replay history");
+        assertEq(1, dp.checkpoints.size());
+        assertEq(PostUrn, dp.checkpoints[0].last_urn, "the newest post becomes the baseline");
+        # the first poll must read exactly one page: the rest of the history is being discarded
+        assertEq(1, rest.requests.size());
+
+        # --- second poll: nothing new ---
+        rest.reset();
+        rest.push_response({"body": {
+            "elements": ({"id": PostUrn}, {"id": PostUrn2}), "metadata": {},
+        }});
+        dp.doPoll();
+        assertEq(0, dp.events.size());
+        assertEq(1, dp.checkpoints.size(), "an unchanged feed must not rewrite the checkpoint");
+
+        # --- third poll: two new posts, delivered oldest first ---
+        rest.reset();
+        rest.push_response({"body": {
+            "elements": ({"id": "urn:li:share:300"}, {"id": "urn:li:share:200"}, {"id": PostUrn}),
+            "metadata": {},
+        }});
+        rest.push_response({"body": {"results": {
+            "urn:li:share:200": {"id": "urn:li:share:200", "commentary": "first"},
+            "urn:li:share:300": {"id": "urn:li:share:300", "commentary": "second"},
+        }}});
+        dp.doPoll();
+        assertEq(2, dp.events.size());
+        # the feed is newest-first; a consumer must see a burst in publication order
+        assertEq("first", dp.events[0].commentary);
+        assertEq("second", dp.events[1].commentary);
+        assertEq(2, dp.checkpoints.size());
+        assertEq("urn:li:share:300", dp.checkpoints[1].last_urn);
+
+        # --- a burst spanning several pages: the cursor walks back to the checkpoint ---
+        rest.reset();
+        dp.events = ();
+        rest.push_response({"body": {
+            "elements": ({"id": "urn:li:share:500"},),
+            "metadata": {"paginationCursorMetdata": {"nextPaginationCursor": "p2"}},
+        }});
+        rest.push_response({"body": {
+            "elements": ({"id": "urn:li:share:400"}, {"id": "urn:li:share:300"}),
+            "metadata": {"paginationCursorMetdata": {"nextPaginationCursor": "p3"}},
+        }});
+        rest.push_response({"body": {"results": {
+            "urn:li:share:400": {"id": "urn:li:share:400", "commentary": "a"},
+            "urn:li:share:500": {"id": "urn:li:share:500", "commentary": "b"},
+        }}});
+        dp.doPoll();
+        assertEq(2, dp.events.size(), "a burst larger than one page must be delivered in full");
+        assertEq("a", dp.events[0].commentary);
+        assertEq("b", dp.events[1].commentary);
+        # three requests: two feed pages, then one batch resolve.  The walk stopped at the
+        # checkpoint rather than following the third cursor
+        assertEq(3, rest.requests.size());
+        assertTrue(rest.req(1).path =~ /paginationCursor=p2/, rest.req(1).path);
+        assertEq("urn:li:share:500", dp.checkpoints[dp.checkpoints.size() - 1].last_urn);
+
+        # --- a post the feed names but the Posts API will not return must not stall delivery ---
+        rest.reset();
+        dp.events = ();
+        rest.push_response({"body": {
+            "elements": ({"id": "urn:li:share:600"}, {"id": "urn:li:share:500"}), "metadata": {},
+        }});
+        rest.push_response({"body": {"results": {}}});
+        int before = dp.checkpoints.size();
+        dp.doPoll();
+        assertEq(0, dp.events.size());
+        assertEq(before + 1, dp.checkpoints.size(),
+            "an unresolvable post must still move the checkpoint forward");
+
+        # --- checkpoint restore ---
+        TestNewPostDataProvider restored(rest, {"organization": OrgId});
+        restored.restore({"version": 1, "last_urn": PostUrn});
+        rest.reset();
+        rest.push_response({"body": {"elements": ({"id": PostUrn},), "metadata": {}}});
+        restored.doPoll();
+        assertEq(0, restored.events.size(),
+            "a restored checkpoint must not replay, and must not re-seed a baseline");
+
+        # a malformed checkpoint must be rejected rather than silently treated as "no baseline",
+        # which would replay the organization's history
+        assertThrows("WATCH-CHECKPOINT-ERROR", \restored.restore(), {"version": 2, "last_urn": "x"});
+        assertThrows("WATCH-CHECKPOINT-ERROR", \restored.restore(), {"version": 1, "last_urn": ""});
+        assertThrows("WATCH-CHECKPOINT-ERROR", \restored.restore(), {});
+
+        # the organization is required: a trigger with no feed to follow is a configuration error
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new TestNewPostDataProvider(rest, {});
+        });
+    }
+}

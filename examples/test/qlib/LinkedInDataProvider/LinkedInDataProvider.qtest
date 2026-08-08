@@ -1,0 +1,1032 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** LinkedInDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires Mime
+%requires RestClient
+%requires RestClientIo
+%requires LinkedInRestClient
+%requires LinkedInDataProvider
+
+%requires reflection
+
+%exec-class LinkedInDataProviderTest
+
+#! One recorded request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+    #! True if the request went out on the raw (no-codec) path
+    bool raw;
+}
+
+#! A LinkedIn REST client that records requests instead of making them
+/** Responses are taken from a queue so that a multi-step flow -- the two-step image upload, the
+    multi-part video upload -- can be driven exactly as LinkedIn would drive it.  When the queue is
+    empty \c default_response is used.
+*/
+class FakeLinkedInRestClientIo inherits LinkedInRestClient::LinkedInRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor(*hash<auto> opts) : LinkedInRestClientIo({
+        "oauth2_client_id": "test-id",
+        "oauth2_client_secret": "test-secret",
+        "oauth2_redirect_url": "https://example.com/oauth2-callback",
+        # a static token stands in for a completed authorization-code flow, so that constructing the
+        # client does not try to authorize against LinkedIn
+        "token": "test-token",
+    } + (opts ?? {})) {
+    }
+
+    #! Returns the request at the given index
+    hash<RecordedRequest> req(int i) {
+        if (i >= requests.size()) {
+            throw "TEST-ERROR", sprintf("request %d requested but only %d were recorded", i,
+                requests.size());
+        }
+        return requests[i];
+    }
+
+    #! Returns the most recent request
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Queues a response
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    #! Queues the userinfo response that resolves the member URN
+    push_userinfo(string id = "ABC123") {
+        push_response({"body": {"sub": id}});
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr, bool raw) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+            "raw": raw,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        # a queued response may ask for an error, which is how LinkedIn's error envelopes are driven
+        # through the real error handling
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr, True);
+    }
+}
+
+#! A client for LinkedIn's media upload hosts that records uploads instead of making them
+class FakeUploadClient inherits RestClientIo::RestClientIo {
+    public {
+        #! Every upload made, in order
+        list<hash<RecordedRequest>> uploads = ();
+
+        #! The origins the provider bound a client to, in order
+        list<string> origins = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"headers": {"etag": "\"part-etag\""}};
+    }
+
+    constructor() : RestClientIo({"url": "https://www.linkedin.com"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        push uploads, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+            "raw": True,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+# The media upload host is reached with a client of its own -- a RestClientIo request resolves its
+# path against the client's own URL, so an upload URL on www.linkedin.com cannot go through the
+# api.linkedin.com client.  Subclassing is how the test substitutes that second client; the factory
+# method is deliberately not part of the module's public API.
+class TestUploadImageDataProvider inherits LinkedInDataProvider::LinkedInUploadImageDataProvider {
+    public { FakeUploadClient upload; }
+    constructor(LinkedInRestClient::LinkedInRestClientIo rest, FakeUploadClient upload)
+            : LinkedInUploadImageDataProvider(rest) { self.upload = upload; }
+    private RestClientIo::RestClientIo getUploadClient(string origin) {
+        push upload.origins, origin;
+        return upload;
+    }
+}
+
+class TestUploadVideoDataProvider inherits LinkedInDataProvider::LinkedInUploadVideoDataProvider {
+    public { FakeUploadClient upload; }
+    constructor(LinkedInRestClient::LinkedInRestClientIo rest, FakeUploadClient upload)
+            : LinkedInUploadVideoDataProvider(rest) { self.upload = upload; }
+    private RestClientIo::RestClientIo getUploadClient(string origin) {
+        push upload.origins, origin;
+        return upload;
+    }
+}
+
+class TestCreateImagePostDataProvider inherits LinkedInDataProvider::LinkedInCreateImagePostDataProvider {
+    public { FakeUploadClient upload; }
+    constructor(LinkedInRestClient::LinkedInRestClientIo rest, FakeUploadClient upload)
+            : LinkedInCreateImagePostDataProvider(rest) { self.upload = upload; }
+    private RestClientIo::RestClientIo getUploadClient(string origin) {
+        push upload.origins, origin;
+        return upload;
+    }
+}
+
+class TestCreateVideoPostDataProvider inherits LinkedInDataProvider::LinkedInCreateVideoPostDataProvider {
+    public { FakeUploadClient upload; }
+    constructor(LinkedInRestClient::LinkedInRestClientIo rest, FakeUploadClient upload)
+            : LinkedInCreateVideoPostDataProvider(rest) { self.upload = upload; }
+    private RestClientIo::RestClientIo getUploadClient(string origin) {
+        push upload.origins, origin;
+        return upload;
+    }
+}
+
+class TestCreateMultiImagePostDataProvider
+        inherits LinkedInDataProvider::LinkedInCreateMultiImagePostDataProvider {
+    public { FakeUploadClient upload; }
+    constructor(LinkedInRestClient::LinkedInRestClientIo rest, FakeUploadClient upload)
+            : LinkedInCreateMultiImagePostDataProvider(rest) { self.upload = upload; }
+    private RestClientIo::RestClientIo getUploadClient(string origin) {
+        push upload.origins, origin;
+        return upload;
+    }
+}
+
+public class LinkedInDataProviderTest inherits QUnit::Test {
+    public {
+        #! Content chosen so that a codec that base64-encodes it, or a text conversion, is visible
+        const BinaryContent = binary("head") + <00ff01fe02fd> + binary("tail");
+
+        const MemberUrn = "urn:li:person:ABC123";
+        const PostUrn = "urn:li:share:6844785523593134080";
+        const ImageUrn = "urn:li:image:C4E10AQFoyyAjHPMQuQ";
+        const VideoUrn = "urn:li:video:C5505AQH-oV1qvnFtKA";
+        const ImageUploadUrl = "https://www.linkedin.com/dms-uploads/C4E/uploaded-image/0?ca=x&sync=0";
+    }
+
+    constructor() : Test("LinkedInDataProviderTest", "1.0") {
+        addTestCase("app registration", \appRegistrationTest());
+        addTestCase("action options", \actionOptionsTest());
+        addTestCase("connections", \connectionTest());
+        addTestCase("protocol headers", \protocolHeaderTest());
+        addTestCase("urn encoding", \urnEncodingTest());
+        addTestCase("absolute url splitting", \splitUrlTest());
+        addTestCase("part id extraction", \partIdTest());
+        addTestCase("timestamp conversion", \timestampTest());
+        addTestCase("get current user", \getCurrentUserTest());
+        addTestCase("create text post", \createTextPostTest());
+        addTestCase("create article post", \createArticlePostTest());
+        addTestCase("create image post", \createImagePostTest());
+        addTestCase("create video post", \createVideoPostTest());
+        addTestCase("create multi-image post", \createMultiImagePostTest());
+        addTestCase("reshare post", \resharePostTest());
+        addTestCase("update post", \updatePostTest());
+        addTestCase("delete post", \deletePostTest());
+        addTestCase("get post", \getPostTest());
+        addTestCase("upload image", \uploadImageTest());
+        addTestCase("upload video", \uploadVideoTest());
+        addTestCase("error handling", \errorHandlingTest());
+        set_return_value(main());
+    }
+
+    private FakeLinkedInRestClientIo client(*hash<auto> opts) {
+        return new FakeLinkedInRestClientIo(opts);
+    }
+
+    #! Every action the application declares must exist, be described, and resolve to a provider
+    appRegistrationTest() {
+        hash<auto> app = DataProviderActionCatalog::getAppEx(LinkedInDataProvider::AppName);
+        assertEq("LinkedIn", app.name);
+        assertEq("linkedin", app.scheme);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        assertTrue(app.logo.val(), "the application must carry a logo");
+        assertTrue(app.desc.val());
+        assertEq(("Social Media Management",), (map $1.toString(), app.groups));
+
+        list<auto> actions = DataProviderActionCatalog::getActionsEx(LinkedInDataProvider::AppName);
+        hash<string, hash<auto>> by_action = map {$1.action: $1}, actions;
+
+        # the framework injects a generic API-call action into every REST-scheme application
+        assertTrue(exists by_action{"make-api-call"});
+
+        list<string> expected = (
+            "get-current-user",
+            "create-text-post",
+            "create-article-post",
+            "create-image-post",
+            "create-video-post",
+            "create-multi-image-post",
+            "reshare-post",
+            "update-post",
+            "delete-post",
+            "get-post",
+            "upload-image",
+            "upload-video",
+        );
+        foreach string name in (expected) {
+            assertTrue(exists by_action{name}, sprintf("action %y must be registered", name));
+            hash<auto> action = by_action{name};
+            assertEq(DPAT_API, action.action_code, name);
+            assertTrue(action.display_name.val(), sprintf("%y needs a display name", name));
+            assertTrue(action.short_desc.val(), sprintf("%y needs a short description", name));
+            assertTrue(action.desc.val(), sprintf("%y needs a description", name));
+            assertTrue(action.groups.val(), sprintf("%y needs a group", name));
+            assertTrue(exists action.output_type, sprintf("%y needs an output type", name));
+        }
+        assertEq(expected.size() + 1, actions.size(), "no action may be registered twice or by "
+            "accident");
+
+        # every registered action path must resolve to a child of the main provider
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInDataProvider dp(rest);
+        list<string> children = dp.getChildProviderNames();
+        foreach string name in (expected) {
+            assertTrue(inlist(name, children), sprintf("action %y must resolve to a provider", name));
+            AbstractDataProvider child = dp.getChildProviderEx(name);
+            assertEq(name, child.getName());
+        }
+        # the generic-call child is appended by the framework
+        assertEq(expected.size() + 1, children.size());
+    }
+
+    #! Required options must be marked required, and no action may declare an option it cannot use
+    actionOptionsTest() {
+        list<auto> actions = DataProviderActionCatalog::getActionsEx(LinkedInDataProvider::AppName);
+        hash<string, hash<auto>> by_action = map {$1.action: $1}, actions;
+
+        assertTrue(by_action."create-text-post".options.commentary.required);
+        assertFalse(by_action."create-text-post".options.visibility.required ?? False);
+        assertTrue(by_action."create-image-post".options.image.required);
+        assertTrue(by_action."create-video-post".options.video.required);
+        assertTrue(by_action."create-article-post".options.article_url.required);
+        assertTrue(by_action."create-multi-image-post".options.images.required);
+        assertTrue(by_action."delete-post".options.post.required);
+        assertTrue(by_action."update-post".options.commentary.required);
+        assertTrue(by_action."reshare-post".options.post.required);
+        # a reshare may carry no commentary of its own, unlike every other post-creation action
+        assertFalse(by_action."reshare-post".options.commentary.required ?? False);
+        assertEq(0, by_action."get-current-user".options.size(), "get-current-user takes no options");
+
+        # the shared visibility option must offer exactly the two member values
+        list<auto> vis = by_action."create-text-post".options.visibility.allowed_values;
+        assertEq(("PUBLIC", "CONNECTIONS"), (map $1.value, vis));
+    }
+
+    #! The two connections are siblings: each must keep its own scheme and its own API profile
+    connectionTest() {
+        hash<auto> copts = {"oauth2_client_id": "id", "oauth2_client_secret": "secret"};
+
+        LinkedInRestClient::LinkedInRestConnection member("member-test", "test",
+            LinkedInRestClient::LinkedInRestConnection::DefaultUrl, {}, copts);
+        assertEq("linkedin", member.getType());
+        assertEq("LinkedIn", member.getAppName());
+        assertEq("member", member.getApiProfile());
+        assertEq("linkedin://api.linkedin.com", member.getInfo().url);
+
+        LinkedInRestClient::LinkedInDmaRestConnection dma("dma-test", "test",
+            LinkedInRestClient::LinkedInDmaRestConnection::DefaultUrl, {}, copts);
+        assertEq("linkedindma", dma.getType());
+        assertEq("LinkedInOrganizations", dma.getAppName());
+        assertEq("dma", dma.getApiProfile());
+        assertEq("linkedindma://api.linkedin.com", dma.getInfo().url);
+
+        # A stored connection is rebuilt through the config-hash constructor.  Each class must
+        # normalize to ITS OWN scheme: a Qore constant reference resolves lexically, so a hierarchy
+        # that shadows DefaultUrl silently rewrites a connection's URL to its base class's -- and
+        # setUpdateOptionsCode() persists that back to the configuration store.
+        LinkedInRestClient::LinkedInDmaRestConnection dma2({
+            "name": "dma2", "desc": "test", "url": "linkedin://api.linkedin.com", "opts": copts,
+        });
+        assertEq("linkedindma://api.linkedin.com", dma2.getInfo().url);
+        LinkedInRestClient::LinkedInRestConnection member2({
+            "name": "member2", "desc": "test", "url": "linkedindma://api.linkedin.com",
+            "opts": copts,
+        });
+        assertEq("linkedin://api.linkedin.com", member2.getInfo().url);
+
+        # a connection already on its own scheme must not be "corrected" at all
+        hash<auto> persisted;
+        dma2.setUpdateOptionsCode(sub (AbstractConnection c, hash<auto> h) { persisted = h; });
+        assertEq(NOTHING, persisted, "a correct connection must not be rewritten");
+
+        # both schemes must be registered and resolve to this module
+        assertEq("linkedin", ConnectionSchemeCache::getSchemeEx("linkedin").schemes.firstKey());
+        assertEq("linkedindma",
+            ConnectionSchemeCache::getSchemeEx("linkedindma").schemes.firstKey());
+
+        # the two profiles differ in scopes, ping and version series
+        assertEq(("openid", "profile", "email", "w_member_social"),
+            member.getConnectionSchemeInfo().options.oauth2_scopes.default_value);
+        assertEq(("r_dma_admin_pages_content",),
+            dma.getConnectionSchemeInfo().options.oauth2_scopes.default_value);
+        assertEq("/v2/userinfo", member.getConnectionSchemeInfo().options.ping_path.default_value);
+        assertEq("/rest/dmaMe", dma.getConnectionSchemeInfo().options.ping_path.default_value);
+        assertNeq(member.getConnectionSchemeInfo().options.linkedin_version.default_value,
+            dma.getConnectionSchemeInfo().options.linkedin_version.default_value);
+    }
+
+    #! Versioned paths get the LinkedIn protocol headers; unversioned ones must not
+    protocolHeaderTest() {
+        hash<auto> versioned = LinkedInRestClient::linkedin_api_headers("/rest/posts", "202607");
+        assertEq("202607", versioned{LinkedInRestClient::LinkedInVersionHeader});
+        assertEq("2.0.0", versioned{LinkedInRestClient::RestliProtocolVersionHeader});
+
+        # "/v2/userinfo" is an unversioned OpenID Connect endpoint
+        assertEq({}, LinkedInRestClient::linkedin_api_headers("/v2/userinfo", "202607"));
+
+        # a path that merely starts with the same letters is not versioned
+        assertEq({}, LinkedInRestClient::linkedin_api_headers("/restricted", "202607"));
+        # ...but the bare prefix and a query directly on it are
+        assertTrue(LinkedInRestClient::linkedin_api_headers("/rest", "202607").hasKey(
+            LinkedInRestClient::LinkedInVersionHeader));
+        assertTrue(LinkedInRestClient::linkedin_api_headers("/rest?x=1", "202607").hasKey(
+            LinkedInRestClient::LinkedInVersionHeader));
+
+        # a caller-supplied header wins over the protocol default
+        hash<auto> overridden = LinkedInRestClient::linkedin_api_headers("/rest/posts", "202607", {
+            LinkedInRestClient::LinkedInVersionHeader: "202601",
+        });
+        assertEq("202601", overridden{LinkedInRestClient::LinkedInVersionHeader});
+
+        # the client resolves its version from the API profile, and an explicit option wins
+        FakeLinkedInRestClientIo member = client();
+        assertEq(LinkedInRestClient::LinkedInRestClientBase::DefaultMemberApiVersion,
+            member.getLinkedInVersion());
+        FakeLinkedInRestClientIo dma = client({"api_profile": "dma"});
+        assertEq(LinkedInRestClient::LinkedInRestClientBase::DefaultDmaApiVersion,
+            dma.getLinkedInVersion());
+        FakeLinkedInRestClientIo pinned = client({"linkedin_version": "202601"});
+        assertEq("202601", pinned.getLinkedInVersion());
+
+        # negative: an unknown profile and a malformed version are rejected rather than guessed at
+        assertThrows("LINKEDIN-API-PROFILE-ERROR", \client(), {"api_profile": "nope"});
+        assertThrows("LINKEDIN-VERSION-ERROR", \client(), {"linkedin_version": "2026-07"});
+        assertThrows("LINKEDIN-VERSION-ERROR", \client(), {"linkedin_version": "20260"});
+    }
+
+    #! A URN in a URL must be fully percent-encoded; a Rest.li List() must not be
+    urnEncodingTest() {
+        assertEq("urn%3Ali%3Ashare%3A123", LinkedInRestClient::linkedin_encode_urn("urn:li:share:123"));
+        # the parentheses and the separating commas are structural and must survive verbatim
+        assertEq("List(urn%3Ali%3Ashare%3A1,urn%3Ali%3Ashare%3A2)",
+            LinkedInRestClient::linkedin_urn_list(("urn:li:share:1", "urn:li:share:2")));
+        assertEq("List(urn%3Ali%3Ashare%3A1)",
+            LinkedInRestClient::linkedin_urn_list("urn:li:share:1"));
+        assertEq("List()", LinkedInRestClient::linkedin_urn_list(()));
+    }
+
+    #! An upload URL is on a different host, so it must split into an origin and a path
+    splitUrlTest() {
+        hash<auto> split = LinkedInDataProvider::LinkedInDataProviderBase::splitAbsoluteUrl(
+            ImageUploadUrl);
+        assertEq("https://www.linkedin.com", split.origin);
+        # the query is part of the request path and is signed, so it must survive intact
+        assertEq("/dms-uploads/C4E/uploaded-image/0?ca=x&sync=0", split.path);
+
+        hash<auto> with_port = LinkedInDataProvider::LinkedInDataProviderBase::splitAbsoluteUrl(
+            "https://upload.example.com:8443/a/b");
+        assertEq("https://upload.example.com:8443", with_port.origin);
+        assertEq("/a/b", with_port.path);
+
+        # a relative URL cannot be sent anywhere and must be rejected rather than guessed at
+        assertThrows("LINKEDIN-UPLOAD-ERROR",
+            \LinkedInDataProvider::LinkedInDataProviderBase::splitAbsoluteUrl(), "/just/a/path");
+    }
+
+    #! finalizeUpload takes unquoted ETags in part order
+    partIdTest() {
+        assertEq("abc", LinkedInDataProvider::LinkedInDataProviderBase::getPartId(
+            {"headers": {"etag": "\"abc\""}}, VideoUrn, 0, 10));
+        # LinkedIn's own sample returns the ETag unquoted
+        assertEq("/ambry-video/signedId/AQ.bin",
+            LinkedInDataProvider::LinkedInDataProviderBase::getPartId(
+                {"headers": {"etag": "/ambry-video/signedId/AQ.bin"}}, VideoUrn, 0, 10));
+        # without an ETag the part cannot be named in the finalize request, so this must fail loudly
+        assertThrows("LINKEDIN-UPLOAD-ERROR",
+            \LinkedInDataProvider::LinkedInDataProviderBase::getPartId(),
+            ({"headers": {}, "status_code": 200}, VideoUrn, 0, 10));
+    }
+
+    #! LinkedIn timestamps are milliseconds, not seconds
+    timestampTest() {
+        # 1634790968774 ms = 2021-10-21T04:36:08.774Z
+        date d = LinkedInDataProvider::LinkedInUtil::msToDate(1634790968774);
+        assertEq(2021-10-21T04:36:08.774Z, d);
+        assertEq(1634790968774, LinkedInDataProvider::LinkedInUtil::dateToMs(d));
+        assertEq(NOTHING, LinkedInDataProvider::LinkedInUtil::msToDate(NOTHING));
+        assertEq(NOTHING, LinkedInDataProvider::LinkedInUtil::dateToMs(NOTHING));
+        # a string is not a timestamp and must not be coerced into one
+        assertEq(NOTHING, LinkedInDataProvider::LinkedInUtil::msToDate("not a number"));
+
+        assertEq("https://www.linkedin.com/feed/update/" + PostUrn + "/",
+            LinkedInDataProvider::LinkedInUtil::postUrl(PostUrn));
+        assertEq(NOTHING, LinkedInDataProvider::LinkedInUtil::postUrl("12345"));
+        assertEq(NOTHING, LinkedInDataProvider::LinkedInUtil::postUrl(NOTHING));
+    }
+
+    getCurrentUserTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInGetCurrentUserDataProvider dp(rest);
+
+        rest.push_response({"body": {
+            "sub": "ABC123",
+            "name": "Ada Lovelace",
+            "given_name": "Ada",
+            "family_name": "Lovelace",
+            "email": "ada@example.com",
+            "email_verified": True,
+            "picture": "https://media.licdn.com/pic.jpg",
+            "locale": {"country": "US", "language": "en"},
+        }});
+        hash<auto> user = dp.doRequest();
+        assertEq("GET", rest.last().method);
+        assertEq("/v2/userinfo", rest.last().path);
+        # the unversioned endpoint must not be sent the versioned protocol headers
+        assertFalse(rest.last().headers.hasKey(LinkedInRestClient::LinkedInVersionHeader));
+        assertEq(MemberUrn, user.urn);
+        assertEq("ABC123", user.sub);
+        assertEq("ada@example.com", user.email);
+        # LinkedIn returns the locale in two shapes; both must come back as one string
+        assertEq("en-US", user.locale);
+
+        rest.reset();
+        rest.push_response({"body": {"sub": "X", "locale": "de-DE"}});
+        assertEq("de-DE", dp.doRequest().locale);
+
+        rest.reset();
+        rest.push_response({"body": {"sub": "X", "locale": {"language": "fr"}}});
+        assertEq("fr", dp.doRequest().locale);
+
+        rest.reset();
+        rest.push_response({"body": {"sub": "X"}});
+        assertEq(NOTHING, dp.doRequest().locale);
+
+        # without "sub" there is no member URN, and every post would be authored by nobody
+        rest.reset();
+        rest.push_response({"body": {"name": "No Subject"}});
+        assertThrows("LINKEDIN-USER-ERROR", \dp.doRequest());
+    }
+
+    createTextPostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInCreateTextPostDataProvider dp(rest);
+
+        rest.push_userinfo();
+        # a LinkedIn versioned write answers 201 with an EMPTY body; the URN is in a header only
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+
+        hash<auto> rv = dp.doRequest({
+            "commentary": "Hello #world",
+            "visibility": "CONNECTIONS",
+        });
+        assertEq(PostUrn, rv.id);
+        assertEq("https://www.linkedin.com/feed/update/" + PostUrn + "/", rv.url);
+
+        assertEq(2, rest.requests.size(), "one userinfo lookup then one post");
+        hash<RecordedRequest> post = rest.req(1);
+        assertEq("POST", post.method);
+        assertEq("/rest/posts", post.path);
+        # the versioned endpoint must carry both protocol headers
+        assertEq(LinkedInRestClient::LinkedInRestClientBase::DefaultMemberApiVersion,
+            post.headers{LinkedInRestClient::LinkedInVersionHeader});
+        assertEq("2.0.0", post.headers{LinkedInRestClient::RestliProtocolVersionHeader});
+
+        assertEq(MemberUrn, post.body.author);
+        assertEq("Hello #world", post.body.commentary);
+        assertEq("CONNECTIONS", post.body.visibility);
+        assertEq("PUBLISHED", post.body.lifecycleState);
+        assertEq(False, post.body.isReshareDisabledByAuthor);
+        assertEq("MAIN_FEED", post.body.distribution.feedDistribution);
+        assertEq((), post.body.distribution.targetEntities);
+        assertFalse(post.body.hasKey("content"), "a text post carries no content member");
+
+        # defaults are applied when the options are omitted; the member URN is already cached, so
+        # no userinfo response is queued here
+        rest.reset();
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+        dp.doRequest({"commentary": "defaults"});
+        assertEq("PUBLIC", rest.last().body.visibility);
+        assertEq("MAIN_FEED", rest.last().body.distribution.feedDistribution);
+
+        # the member URN is resolved once per provider object and then reused
+        rest.reset();
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+        dp.doRequest({"commentary": "again"});
+        assertEq(1, rest.requests.size(), "the member URN must not be looked up again");
+
+        # a write that returns neither a header nor a body id must fail rather than return nothing
+        rest.reset();
+        rest.push_response({"status_code": 201, "headers": {}});
+        assertThrows("LINKEDIN-RESPONSE-ERROR", \dp.doRequest(), {"commentary": "x"});
+    }
+
+    createArticlePostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInCreateArticlePostDataProvider dp(rest);
+
+        rest.push_userinfo();
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+        dp.doRequest({
+            "commentary": "Worth a read",
+            "article_url": "https://example.com/post",
+            "article_title": "A title",
+            "article_description": "A description",
+            "article_thumbnail": ImageUrn,
+        });
+        hash<auto> article = rest.last().body.content.article;
+        assertEq("https://example.com/post", article.source);
+        assertEq("A title", article.title);
+        assertEq("A description", article.description);
+        assertEq(ImageUrn, article.thumbnail);
+
+        # omitted optional fields must be absent rather than null: LinkedIn rejects a null field
+        rest.reset();
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+        dp.doRequest({"commentary": "bare", "article_url": "https://example.com/x"});
+        hash<auto> bare = rest.last().body.content.article;
+        assertEq(("source",), keys bare);
+    }
+
+    createImagePostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        FakeUploadClient upload();
+        TestCreateImagePostDataProvider dp(rest, upload);
+
+        rest.push_userinfo();
+        rest.push_response({"body": {"value": {"image": ImageUrn, "uploadUrl": ImageUploadUrl}}});
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+
+        hash<auto> rv = dp.doRequest({
+            "commentary": "a picture",
+            "image": {"name": "photo.png", "content": make_base64_string(BinaryContent)},
+            "alt_text": "a description for screen readers",
+            "title": "Photo",
+        });
+        assertEq(PostUrn, rv.id);
+
+        # 1: userinfo, 2: initializeUpload, 3: create post -- the byte upload goes elsewhere
+        assertEq(3, rest.requests.size());
+        hash<RecordedRequest> init = rest.req(1);
+        assertEq("POST", init.method);
+        assertEq("/rest/images?action=initializeUpload", init.path);
+        assertEq(MemberUrn, init.body.initializeUploadRequest.owner);
+
+        # the bytes must reach LinkedIn unchanged: the ordinary request path would hand them to the
+        # JSON codec, which base64-encodes a binary into a string, and LinkedIn would store that and
+        # report success
+        assertEq(1, upload.uploads.size());
+        assertEq("https://www.linkedin.com", upload.origins[0]);
+        assertEq("PUT", upload.uploads[0].method);
+        assertEq("/dms-uploads/C4E/uploaded-image/0?ca=x&sync=0", upload.uploads[0].path);
+        assertTrue(upload.uploads[0].raw, "the media upload must use the raw request path");
+        assertEq(BinaryContent, upload.uploads[0].body, "the uploaded bytes must be unchanged");
+        assertEq(MimeTypePng, upload.uploads[0].headers."Content-Type");
+
+        hash<auto> media = rest.req(2).body.content.media;
+        assertEq(ImageUrn, media.id);
+        assertEq("a description for screen readers", media.altText);
+        assertEq("Photo", media.title);
+
+        # an initialization that returns no URN or no upload URL must fail rather than post nothing
+        rest.reset();
+        rest.push_response({"body": {"value": {"image": ImageUrn}}});
+        assertThrows("LINKEDIN-UPLOAD-ERROR", \dp.doRequest(), {
+            "commentary": "x",
+            "image": {"name": "a.png", "content": make_base64_string(BinaryContent)},
+        });
+    }
+
+    createVideoPostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        FakeUploadClient upload();
+        TestCreateVideoPostDataProvider dp(rest, upload);
+
+        # a two-part upload: the second instruction's range runs past the end of the content, which
+        # is what LinkedIn returns for any size that is not an exact multiple of the part size
+        binary content = BinaryContent + BinaryContent + BinaryContent;
+        int total = content.size();
+        rest.push_userinfo();
+        rest.push_response({"body": {"value": {
+            "video": VideoUrn,
+            "uploadToken": "tok-123",
+            "uploadInstructions": (
+                {"uploadUrl": "https://www.linkedin.com/dms-uploads/v/0", "firstByte": 0,
+                    "lastByte": 9},
+                {"uploadUrl": "https://www.linkedin.com/dms-uploads/v/1", "firstByte": 10,
+                    "lastByte": 4194303},
+            ),
+        }}});
+        upload.push_response({"headers": {"etag": "\"etag-0\""}});
+        upload.push_response({"headers": {"etag": "etag-1"}});
+        rest.push_response({"body": {}});
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+
+        hash<auto> rv = dp.doRequest({
+            "commentary": "a video",
+            "video": {"name": "clip.mp4", "content": make_base64_string(content)},
+            "title": "Clip",
+        });
+        assertEq(PostUrn, rv.id);
+
+        # 1: userinfo, 2: initializeUpload, 3: finalizeUpload, 4: create post
+        assertEq(4, rest.requests.size());
+        assertEq("/rest/videos?action=initializeUpload", rest.req(1).path);
+        assertEq(total, rest.req(1).body.initializeUploadRequest.fileSizeBytes);
+        assertEq(MemberUrn, rest.req(1).body.initializeUploadRequest.owner);
+
+        # each part must carry exactly its own byte range, and the last must stop at the end of the
+        # content rather than at the end of its nominal part
+        assertEq(2, upload.uploads.size());
+        assertEq(content[0..9], upload.uploads[0].body);
+        assertEq(content[10..(total - 1)], upload.uploads[1].body);
+        assertEq(total, upload.uploads[0].body.size() + upload.uploads[1].body.size(),
+            "the parts together must be the whole video");
+        assertTrue(upload.uploads[0].raw);
+        assertEq(LinkedInDataProvider::VideoContentType, upload.uploads[0].headers."Content-Type");
+
+        # finalizeUpload names the parts by their ETags, unquoted and in part order
+        hash<RecordedRequest> fin = rest.req(2);
+        assertEq("/rest/videos?action=finalizeUpload", fin.path);
+        assertEq(VideoUrn, fin.body.finalizeUploadRequest.video);
+        assertEq("tok-123", fin.body.finalizeUploadRequest.uploadToken);
+        assertEq(("etag-0", "etag-1"), fin.body.finalizeUploadRequest.uploadedPartIds);
+
+        assertEq(VideoUrn, rest.req(3).body.content.media.id);
+        assertEq("Clip", rest.req(3).body.content.media.title);
+    }
+
+    createMultiImagePostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        FakeUploadClient upload();
+        TestCreateMultiImagePostDataProvider dp(rest, upload);
+
+        rest.push_userinfo();
+        rest.push_response({"body": {"value": {"image": ImageUrn + "1",
+            "uploadUrl": "https://www.linkedin.com/u/1"}}});
+        rest.push_response({"body": {"value": {"image": ImageUrn + "2",
+            "uploadUrl": "https://www.linkedin.com/u/2"}}});
+        rest.push_response({"body": {"value": {"image": ImageUrn + "3",
+            "uploadUrl": "https://www.linkedin.com/u/3"}}});
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": PostUrn}});
+
+        hash<auto> file = {"name": "a.jpg", "content": make_base64_string(BinaryContent)};
+        dp.doRequest({
+            "commentary": "three pictures",
+            "images": (file, file + {"name": "b.jpg"}, file + {"name": "c.jpg"}),
+            "alt_texts": ("first", "second"),
+        });
+
+        assertEq(3, upload.uploads.size(), "every image must be uploaded");
+        list<auto> images = rest.last().body.content.multiImage.images;
+        # "map" merges hash-valued results into ONE hash rather than building a list of them, so an
+        # implementation using it here would post a single image instead of three
+        assertEq(3, images.size(), "every image must appear in the post");
+        assertEq(ImageUrn + "1", images[0].id);
+        assertEq(ImageUrn + "2", images[1].id);
+        assertEq(ImageUrn + "3", images[2].id);
+        # alt texts are matched by position, and a shorter list leaves the rest without one
+        assertEq("first", images[0].altText);
+        assertEq("second", images[1].altText);
+        assertFalse(images[2].hasKey("altText"));
+
+        # LinkedIn's own bounds must be enforced before anything is uploaded
+        rest.reset();
+        assertThrows("LINKEDIN-POST-ERROR", \dp.doRequest(), {
+            "commentary": "one is not enough",
+            "images": (file,),
+        });
+        assertEq(0, rest.requests.size(), "nothing may be uploaded for a rejected request");
+    }
+
+    resharePostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInResharePostDataProvider dp(rest);
+
+        rest.push_userinfo();
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": "urn:li:share:999"}});
+        dp.doRequest({"post": PostUrn, "commentary": "worth sharing"});
+        assertEq(PostUrn, rest.last().body.reshareContext.parent);
+        assertEq("worth sharing", rest.last().body.commentary);
+
+        # a reshare with no commentary must omit the member entirely; LinkedIn rejects a null one
+        rest.reset();
+        rest.push_response({"status_code": 201, "headers": {"x-restli-id": "urn:li:share:999"}});
+        dp.doRequest({"post": PostUrn});
+        assertFalse(rest.last().body.hasKey("commentary"));
+        assertEq(PostUrn, rest.last().body.reshareContext.parent);
+    }
+
+    updatePostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInUpdatePostDataProvider dp(rest);
+
+        rest.push_response({"status_code": 204, "headers": {}});
+        hash<auto> rv = dp.doRequest({"post": PostUrn, "commentary": "edited"});
+        assertTrue(rv.success);
+        assertEq(PostUrn, rv.id);
+
+        hash<RecordedRequest> req = rest.last();
+        # a Rest.li partial update is a POST distinguished from a creation only by this header
+        assertEq("POST", req.method);
+        assertEq("PARTIAL_UPDATE", req.headers{LinkedInDataProvider::RestliMethodHeader});
+        assertEq("/rest/posts/urn%3Ali%3Ashare%3A6844785523593134080", req.path);
+        assertEq("edited", req.body.patch."$set".commentary);
+    }
+
+    deletePostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInDeletePostDataProvider dp(rest);
+
+        rest.push_response({"status_code": 204, "headers": {}});
+        hash<auto> rv = dp.doRequest({"post": PostUrn});
+        assertTrue(rv.success);
+        assertEq(PostUrn, rv.id);
+
+        hash<RecordedRequest> req = rest.last();
+        assertEq("DELETE", req.method);
+        assertEq("DELETE", req.headers{LinkedInDataProvider::RestliMethodHeader});
+        # the URN must be percent-encoded; unencoded colons address a different resource
+        assertEq("/rest/posts/urn%3Ali%3Ashare%3A6844785523593134080", req.path);
+    }
+
+    getPostTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInGetPostDataProvider dp(rest);
+
+        rest.push_response({"body": {
+            "id": PostUrn,
+            "author": MemberUrn,
+            "commentary": "the text",
+            "visibility": "PUBLIC",
+            "lifecycleState": "PUBLISHED",
+            "isReshareDisabledByAuthor": False,
+            "publishedAt": 1634790968774,
+            "createdAt": 1634790968743,
+            "lastModifiedAt": 1634790968774,
+            "distribution": {"feedDistribution": "MAIN_FEED", "thirdPartyDistributionChannels": ()},
+            "lifecycleStateInfo": {"isEditedByAuthor": True},
+            "content": {"media": {"id": ImageUrn, "altText": "alt", "title": "t"}},
+            "reshareContext": {"parent": "urn:li:share:1", "root": "urn:li:share:0"},
+        }});
+        hash<auto> post = dp.doRequest({"post": PostUrn, "view_context": "AUTHOR"});
+
+        assertEq("/rest/posts/urn%3Ali%3Ashare%3A6844785523593134080?viewContext=AUTHOR",
+            rest.last().path);
+        assertEq(PostUrn, post.id);
+        assertEq("https://www.linkedin.com/feed/update/" + PostUrn + "/", post.url);
+        assertEq("the text", post.commentary);
+        assertEq("PUBLISHED", post.lifecycle_state);
+        assertEq("MAIN_FEED", post.feed_distribution);
+        assertTrue(post.is_edited_by_author);
+        # LinkedIn's millisecond timestamps must arrive as dates
+        assertEq(2021-10-21T04:36:08.774Z, post.published_at);
+        assertEq(2021-10-21T04:36:08.743Z, post.created_at);
+        assertEq(ImageUrn, post.content.media.id);
+        assertEq("alt", post.content.media.alt_text);
+        assertEq("urn:li:share:1", post.reshare_parent);
+        assertEq("urn:li:share:0", post.reshare_root);
+
+        # the default view context is the published version
+        rest.reset();
+        rest.push_response({"body": {"id": PostUrn}});
+        dp.doRequest({"post": PostUrn});
+        assertTrue(rest.last().path =~ /viewContext=READER$/);
+
+        # a response that is not a post must be reported, not returned as an empty hash
+        rest.reset();
+        rest.push_response({"body": "not a post"});
+        assertThrows("LINKEDIN-RESPONSE-ERROR", \dp.doRequest(), {"post": PostUrn});
+    }
+
+    uploadImageTest() {
+        FakeLinkedInRestClientIo rest = client();
+        FakeUploadClient upload();
+        TestUploadImageDataProvider dp(rest, upload);
+
+        rest.push_userinfo();
+        rest.push_response({"body": {"value": {"image": ImageUrn, "uploadUrl": ImageUploadUrl}}});
+        hash<auto> asset = dp.doRequest({
+            "image": {"name": "photo.png", "content": make_base64_string(BinaryContent)},
+        });
+        assertEq(ImageUrn, asset.id);
+        assertEq(MemberUrn, asset.owner);
+        assertEq(BinaryContent, upload.uploads[0].body);
+
+        # an explicit owner must be used verbatim, and no member lookup made at all
+        rest.reset();
+        rest.push_response({"body": {"value": {"image": ImageUrn, "uploadUrl": ImageUploadUrl}}});
+        LinkedInDataProvider::LinkedInUploadImageDataProvider fresh_dp =
+            new TestUploadImageDataProvider(rest, upload);
+        hash<auto> owned = fresh_dp.doRequest({
+            "image": {"name": "photo.png", "content": make_base64_string(BinaryContent)},
+            "owner": "urn:li:organization:2414183",
+        });
+        assertEq("urn:li:organization:2414183", owned.owner);
+        assertEq(1, rest.requests.size(), "an explicit owner must not trigger a userinfo lookup");
+        assertEq("urn:li:organization:2414183",
+            rest.req(0).body.initializeUploadRequest.owner);
+
+        # already-decoded content is accepted as well as base64
+        rest.reset();
+        rest.push_response({"body": {"value": {"image": ImageUrn, "uploadUrl": ImageUploadUrl}}});
+        fresh_dp.doRequest({
+            "image": {"name": "photo.png", "content": BinaryContent},
+            "owner": "urn:li:organization:1",
+        });
+        assertEq(BinaryContent, upload.uploads[upload.uploads.size() - 1].body);
+    }
+
+    uploadVideoTest() {
+        FakeLinkedInRestClientIo rest = client();
+        FakeUploadClient upload();
+        TestUploadVideoDataProvider dp(rest, upload);
+
+        rest.push_response({"body": {"value": {
+            "video": VideoUrn,
+            # LinkedIn returns an empty upload token for a single-part upload, and the field is
+            # still required in the finalize request
+            "uploadToken": "",
+            "uploadInstructions": (
+                {"uploadUrl": "https://www.linkedin.com/dms-uploads/v/0", "firstByte": 0,
+                    "lastByte": 4194303},
+            ),
+        }}});
+        rest.push_response({"body": {}});
+
+        hash<auto> asset = dp.doRequest({
+            "video": {"name": "clip.mp4", "content": make_base64_string(BinaryContent)},
+            "owner": "urn:li:organization:2414183",
+        });
+        assertEq(VideoUrn, asset.id);
+        assertEq(1, upload.uploads.size());
+        # the single instruction's range is far past the end of the content; only the content may be
+        # sent
+        assertEq(BinaryContent, upload.uploads[0].body);
+        assertEq("", rest.last().body.finalizeUploadRequest.uploadToken);
+        assertEq(("part-etag",), rest.last().body.finalizeUploadRequest.uploadedPartIds);
+
+        # an initialization that returns no instructions must fail rather than finalize an empty
+        # upload
+        rest.reset();
+        rest.push_response({"body": {"value": {"video": VideoUrn, "uploadInstructions": ()}}});
+        assertThrows("LINKEDIN-UPLOAD-ERROR", \dp.doRequest(), {
+            "video": {"name": "clip.mp4", "content": make_base64_string(BinaryContent)},
+            "owner": "urn:li:organization:1",
+        });
+    }
+
+    #! A LinkedIn error envelope must reach the caller, not be swallowed behind a bare status
+    errorHandlingTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInDeletePostDataProvider dp(rest);
+
+        rest.push_response({"throw_status": 403, "body": {
+            "message": "Not enough permissions to access: DELETE /posts",
+            "status": 403,
+            "code": "ACCESS_DENIED",
+        }});
+        try {
+            dp.doRequest({"post": PostUrn});
+            fail("the request must not succeed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertTrue(ex.desc =~ /Not enough permissions/, ex.desc);
+            assertTrue(ex.desc =~ /ACCESS_DENIED/, ex.desc);
+            # the path is what tells the reader which call failed
+            assertTrue(ex.desc =~ /urn%3Ali%3Ashare/, ex.desc);
+        }
+
+        # a 4xx that is not a throttle must not be retried
+        rest.reset();
+        rest.push_response({"throw_status": 404, "body": {"message": "Could not find entity"}});
+        assertThrows("REST-RESPONSE-ERROR", \dp.doRequest(), {"post": PostUrn});
+        assertEq(1, rest.requests.size(), "a 404 must not be retried");
+
+        # an error body that is not a LinkedIn envelope must still surface the status rather than
+        # being reported as a decoding failure
+        rest.reset();
+        rest.push_response({"throw_status": 400, "body": "<html>bad request</html>"});
+        assertThrows("REST-RESPONSE-ERROR", \dp.doRequest(), {"post": PostUrn});
+
+        # a throttle IS retried, up to the limit, and LinkedIn's Retry-After is honoured -- a zero
+        # here is what keeps this test fast rather than sleeping through the backoff
+        rest.reset();
+        int retries = LinkedInDataProvider::LinkedInDataProviderBase::MaxIoRetries;
+        foreach int i in (xrange(0, retries)) {
+            rest.push_response({"throw_status": 429, "headers": {"retry-after": "0"}});
+        }
+        assertThrows("REST-RESPONSE-ERROR", \dp.doRequest(), {"post": PostUrn});
+        assertEq(retries, rest.requests.size(), "a throttle must be retried up to the limit");
+    }
+}

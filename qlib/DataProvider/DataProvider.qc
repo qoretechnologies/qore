@@ -208,6 +208,9 @@ public class DataProvider {
 
             "linear": "LinearDataProvider",
 
+            "linkedin": "LinkedInDataProvider",
+            "linkedinorg": "LinkedInOrganizationsDataProvider",
+
             "mcpclient": "McpClientDataProvider",
 
             "ml": "DataProviderML",
