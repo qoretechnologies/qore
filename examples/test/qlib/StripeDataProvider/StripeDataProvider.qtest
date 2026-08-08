@@ -267,6 +267,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         addTestCase("authentication styles", \authenticationTest());
         addTestCase("webhook events", \webhookEventTest());
         addTestCase("webhook delivery verification", \webhookVerificationTest());
+        addTestCase("webhook endpoint lifecycle", \webhookLifecycleTest());
         # live tests; each skips unless a connection is named
         addTestCase("live account and balance", \liveAccountTest());
         addTestCase("live listings", \liveListingTest());
@@ -946,6 +947,70 @@ public class StripeDataProviderTest inherits QUnit::Test {
         object cl = keyconn.getAsync(False);
         assertEq("StripeRestClientIo", cl.className());
         assertTrue(exists cl.getDefaultHeaders(){StripeRestClientBase::ApiVersionHeader});
+    }
+
+
+    webhookLifecycleTest() {
+        # the delivery tests inject a signing secret directly; this covers how the endpoint is actually
+        # created in Stripe and taken away again, which is what produces that secret
+        hash<auto> created = {};
+        hash<auto> deleted = {};
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            DataProvider::DataProviderWebhook::registerWebhookApis(
+                auto sub (hash<auto> config) {
+                    created = config;
+                    return {"url": "https://qorus.example.com/webhook/1", "ctx": "ctx-1"};
+                },
+                sub (hash<auto> info) {
+                    deleted = info;
+                }
+            );
+        }
+
+        FakeStripeRestClient rest();
+        rest.push_response({"body": {"id": "we_test_1", "secret": "whsec_from_stripe"}});
+        StripeChargeSucceededEventDataProvider ep(rest);
+
+        ep.observersReady();
+
+        # the endpoint is registered with Stripe for exactly the event this provider watches, and pinned
+        # to the API version the actions were generated from: without that Stripe formats event payloads
+        # to the account's default version, which may not be the shape this module documents
+        assertEq("POST", rest.last().method);
+        assertEq("/v1/webhook_endpoints", rest.last().path);
+        hash<auto> body = rest.last().body;
+        assertEq(("charge.succeeded",), body.enabled_events);
+        assertEq(StripeSchema::Provenance.api_version, body.api_version);
+        assertEq("https://qorus.example.com/webhook/1", body.url);
+        assertRegex("charge-succeeded", body.description);
+        # the callback the framework will deliver to
+        assertEq("POST", created.method);
+        assertTrue(created.callback.callp());
+
+        # removing the provider takes the endpoint away again rather than leaving it accumulating
+        # deliveries for a workflow that no longer exists
+        rest.reset();
+        rest.push_response({"body": {"id": "we_test_1", "deleted": True}});
+        ep.stopEvents();
+        assertEq("DELETE", rest.last().method);
+        assertEq("/v1/webhook_endpoints/we_test_1", rest.last().path);
+        assertEq("https://qorus.example.com/webhook/1", deleted.url);
+
+        # stopping twice must not try to delete twice
+        rest.reset();
+        ep.stopEvents();
+        assertEq(0, rest.requests.size());
+
+        # an endpoint Stripe returns without a signing secret cannot verify anything that arrives, which
+        # is worse than having no endpoint at all
+        FakeStripeRestClient rest2();
+        rest2.push_response({"body": {"id": "we_test_2"}});
+        StripeChargeSucceededEventDataProvider ep2(rest2);
+        assertThrows("STRIPE-WEBHOOK-ERROR", "no signing secret", \ep2.observersReady());
+
+        # and with no client at all there is nothing to register against
+        StripeChargeSucceededEventDataProvider ep3();
+        assertThrows("STRIPE-WEBHOOK-ERROR", "no REST client", \ep3.observersReady());
     }
 
 }
