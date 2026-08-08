@@ -353,6 +353,31 @@ QoreValue ManagedDatasource::execRaw(const QoreString *query_str, ExceptionSink 
    return Datasource::execRaw(query_str, xsink);
 }
 
+int ManagedDatasource::bulkLoadBegin(const QoreString* table, const QoreListNode* columns,
+        const QoreHashNode* options, ExceptionSink* xsink) {
+    DatasourceActionHelper dbah(*this, xsink, DAH_ACQUIRE);
+    if (!dbah) {
+        return -1;
+    }
+    return Datasource::bulkLoadBegin(table, columns, options, xsink);
+}
+
+int ManagedDatasource::bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink) {
+    DatasourceActionHelper dbah(*this, xsink, DAH_ACQUIRE);
+    if (!dbah) {
+        return -1;
+    }
+    return Datasource::bulkLoadRows(rows, xsink);
+}
+
+int ManagedDatasource::bulkLoadEnd(bool success, ExceptionSink* xsink) {
+    DatasourceActionHelper dbah(*this, xsink, getAutoCommit() ? DAH_RELEASE : DAH_ACQUIRE);
+    if (!dbah) {
+        return -1;
+    }
+    return Datasource::bulkLoadEnd(success, xsink);
+}
+
 QoreHashNode* ManagedDatasource::describe(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {
    DatasourceActionHelper dbah(*this, xsink);
    if (!dbah)

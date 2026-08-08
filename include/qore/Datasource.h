@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     The Datasource class provides the low-level interface to Qore DBI drivers.
 
@@ -374,6 +374,41 @@ public:
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT QoreValue execRaw(const QoreString* query_str, ExceptionSink* xsink);
+
+    //! Starts a driver-native bulk-load operation.
+    /** @param table SQL-rendered target table name
+        @param columns SQL-rendered target columns in row-hash order
+        @param options optional driver-specific options
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return 0 if started, 1 if dynamically unavailable, -1 on error
+        @throw DBI-BULK-LOAD-ERROR invalid arguments, unavailable capability, active protocol, or driver error
+
+        A successful call must be followed by bulkLoadEnd(), including when bulkLoadRows() fails.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int bulkLoadBegin(const QoreString* table, const QoreListNode* columns,
+        const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Sends one hash-of-columns block to an active driver-native bulk-load operation.
+    /** @param rows the row block
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return 0 for OK, -1 on error
+        @throw DBI-BULK-LOAD-ERROR invalid arguments, inactive protocol, or driver error
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink);
+
+    //! Ends an active driver-native bulk-load operation.
+    /** @param success true to finish the operation, false to abort it
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return 0 for OK, -1 on error
+        @throw DBI-BULK-LOAD-ERROR inactive protocol or driver error
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int bulkLoadEnd(bool success, ExceptionSink* xsink);
 
     //! executes SQL that returns a result set and then returns a hash description of the result set
     /**

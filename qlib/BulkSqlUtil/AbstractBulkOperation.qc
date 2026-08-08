@@ -80,6 +80,9 @@ on_error ds.rollback();
             const hash<string, string> OptionKeys = {
                 "block_size": sprintf("the row block size used for bulk DML / batch operations; default: %y",
                     OptionDefaults.block_size),
+                "bulk_load": "native bulk-load policy for inserts: False disables it, True requires it, and \"auto\" "
+                    "uses it when eligible and available",
+                "bulk_load_options": "optional driver-specific native bulk-load options",
                 "info_log": "a call reference / closure for informational logging",
                 "stream_bounds": sprintf("report the operation as a bounded stream to a datasource mutation "
                     "observer, if one is registered; default: %y", OptionDefaults.stream_bounds),
@@ -88,6 +91,7 @@ on_error ds.rollback();
             #! default option values
             const hash<string, auto> OptionDefaults = {
                 "block_size": 1000,
+                "bulk_load": False,
                 "stream_bounds": True,
             };
         }
@@ -134,6 +138,18 @@ on_error ds.rollback();
 
             #! total payload bytes reported to the observer so far
             int stream_consumed = 0;
+
+            #! native bulk-load selection policy: "off", "auto", or "require"
+            string bulk_load_mode = "off";
+
+            #! optional driver-specific native bulk-load options
+            *hash<auto> bulk_load_options;
+
+            #! True after native eligibility and availability have been resolved for this stream
+            bool bulk_load_checked = False;
+
+            #! True while the driver owns the active stream and native protocol session
+            bool bulk_load_active = False;
         }
 
         #! creates the object from the supplied arguments
@@ -141,6 +157,9 @@ on_error ds.rollback();
             @param target the target table object
             @param opts an optional hash of options for the object as follows:
             - \c "block_size": the number of rows executed at once (default: 1000)
+            - \c "bulk_load": native bulk-load policy for inserts: @ref False "False" disables it (default),
+              @ref True "True" requires it, and \c "auto" uses it when eligible and available
+            - \c "bulk_load_options": optional driver-specific native bulk-load options
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
             - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
@@ -157,6 +176,9 @@ on_error ds.rollback();
             @param target the target table object
             @param opts an optional hash of options for the object as follows:
             - \c "block_size": the number of rows executed at once (default: 1000)
+            - \c "bulk_load": native bulk-load policy for inserts: @ref False "False" disables it (default),
+              @ref True "True" requires it, and \c "auto" uses it when eligible and available
+            - \c "bulk_load_options": optional driver-specific native bulk-load options
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
             - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
@@ -176,12 +198,12 @@ on_error ds.rollback();
             if (hbuf.firstValue()) {
                 # the operation is being destroyed with data it never wrote, so the stream did not
                 # complete; the boundary is reported before the error is raised
-                streamEnd(False);
+                finishStream(False);
                 throw "BLOCK-ERROR", sprintf("there %s still %d row%s of data in the internal cache; make sure to call %s::flush() or %s::discard() before destroying the object to flush all data to the database", hbuf.firstValue().size() == 1 ? "is" : "are", hbuf.firstValue().size(), hbuf.firstValue().size() == 1 ? "" : "s", self.className(), self.className());
             }
             # backstop for callers that commit on the datasource directly rather than through
             # commit() or endStream(); everything queued was written
-            streamEnd(True);
+            finishStream(True);
         }
 
         #! queues row data in the block buffer; the block buffer is flushed to the DB if the buffer size reaches the limit defined by the \c block_size option; does not commit the transaction
@@ -412,6 +434,31 @@ on_error ds.rollback();
             if (opts.info_log)
                 info_log = opts.info_log;
 
+            if (exists opts.bulk_load) {
+                switch (opts.bulk_load.typeCode()) {
+                    case NT_BOOLEAN:
+                        bulk_load_mode = opts.bulk_load ? "require" : "off";
+                        break;
+                    case NT_STRING:
+                        if (opts.bulk_load != "auto") {
+                            throw "BULK-SQL-OPERATION-ERROR", sprintf("invalid bulk_load option %y; expected False, "
+                                "True, or \"auto\"", opts.bulk_load);
+                        }
+                        bulk_load_mode = "auto";
+                        break;
+                    default:
+                        throw "BULK-SQL-OPERATION-ERROR", sprintf("invalid bulk_load option type %y; expected bool "
+                            "or string", opts.bulk_load.fullType());
+                }
+            }
+            if (exists opts.bulk_load_options) {
+                if (opts.bulk_load_options.typeCode() != NT_HASH) {
+                    throw "BULK-SQL-OPERATION-ERROR", sprintf("invalid bulk_load_options option type %y; expected "
+                        "a hash", opts.bulk_load_options.fullType());
+                }
+                bulk_load_options = opts.bulk_load_options;
+            }
+
             stream_bounds = exists opts.stream_bounds
                 ? parse_boolean(opts.stream_bounds)
                 : OptionDefaults.stream_bounds;
@@ -433,6 +480,7 @@ on_error ds.rollback();
                 return;
             }
             # a rejection here throws, and nothing has been written yet
+            stream_consumed = 0;
             ds.reportMutationStreamBegin(0);
             stream_started = True;
         }
@@ -462,6 +510,61 @@ on_error ds.rollback();
             # raises an exception from it
             stream_started = False;
             table.getDatasource().reportMutationStreamEnd(stream_consumed, ok);
+        }
+
+        #! selects and starts the native bulk-load path on the first flush, if requested
+        /** @return @ref True "True" when the driver owns stream reporting and row delivery
+        */
+        private bool startNativeLoad() {
+            if (bulk_load_active) {
+                return True;
+            }
+            if (bulk_load_checked || bulk_load_mode == "off") {
+                return False;
+            }
+            bulk_load_checked = True;
+
+            if (!nativeLoadEligible()) {
+                if (bulk_load_mode == "require") {
+                    throw "BULK-SQL-OPERATION-ERROR", "native bulk loading was required, but this operation uses "
+                        "returning values, a row callback, SQL value expressions, or is not an insert";
+                }
+                return False;
+            }
+            if (!table.hasBulkLoad()) {
+                if (bulk_load_mode == "require") {
+                    throw "BULK-SQL-OPERATION-ERROR", sprintf("native bulk loading was required, but driver %y does "
+                        "not provide it", table.getDatasource().getDriverName());
+                }
+                return False;
+            }
+
+            hash<auto> data = hbuf + cval;
+            *hash<auto> driver_options = (bulk_load_options ?? {}) + ("stream_bounds": stream_bounds);
+            if (!table.bulkLoadBegin(data, driver_options)) {
+                if (bulk_load_mode == "require") {
+                    throw "BULK-SQL-OPERATION-ERROR", sprintf("native bulk loading was required, but driver %y "
+                        "reported that it is unavailable for this operation", table.getDatasource().getDriverName());
+                }
+                return False;
+            }
+            bulk_load_active = True;
+            return True;
+        }
+
+        #! ends whichever layer owns the current bounded stream
+        private finishStream(bool ok) {
+            if (bulk_load_active) {
+                # clear first so an exception from the driver cannot cause a duplicate end call
+                bulk_load_active = False;
+                bulk_load_checked = False;
+                table.bulkLoadEnd(ok);
+                return;
+            }
+            streamEnd(ok);
+            if (!stream_started) {
+                bulk_load_checked = False;
+            }
         }
 
         #! returns the payload size in bytes of the buffered block about to be written
@@ -640,21 +743,29 @@ on_error ds.rollback();
 
         #! flushes queued data to the database
         private flushIntern() {
+            bool native_load = startNativeLoad();
+
             # report the stream boundary before anything is written, so that an observer that
             # refuses the operation stops it before the first row reaches the database
-            streamBegin();
+            if (!native_load) {
+                streamBegin();
+            }
 
             # any failure once the stream has started ends it; the boundary is reported exactly
             # once, and this is registered before anything that could throw with the stream open -
             # including the payload measurement below - so the stream can never be left open.  A
             # refusal from streamBegin() itself is deliberately outside this handler: the stream was
             # never started, and the core reports that terminal event itself
-            on_error streamEnd(False);
+            on_error finishStream(False);
 
-            int bytes = stream_started ? getBlockBytes() : 0;
+            int bytes = !native_load && stream_started ? getBlockBytes() : 0;
 
             # flush data to the DB; implemented in subclasses
-            flushImpl();
+            if (native_load) {
+                table.bulkLoadRows(hbuf + cval);
+            } else {
+                flushImpl();
+            }
             # update row count
             int bs = hbuf.firstValue().lsize();
             row_count += bs;
@@ -666,7 +777,9 @@ on_error ds.rollback();
 
             # this is an admission point: an observer that has seen more than it will admit stops
             # the operation here, after this block and before the transaction can commit
-            streamProgress(bytes);
+            if (!native_load) {
+                streamProgress(bytes);
+            }
         }
 
         #! discards any buffered batched data; this method should be called before destroying the object if an error occurs
@@ -706,7 +819,7 @@ on_error ds.rollback();
             delete hbuf;
             # the operation is being abandoned, so anything already written is not going to be
             # committed by it
-            streamEnd(False);
+            finishStream(False);
         }
 
         #! reports the end of the bounded stream without flushing or ending the transaction
@@ -738,7 +851,7 @@ on_error ds.rollback();
             @since %BulkSqlUtil 1.5
         */
         endStream() {
-            streamEnd(True);
+            finishStream(True);
         }
 
         #! flushes any queued data and commits the transaction
@@ -746,7 +859,7 @@ on_error ds.rollback();
             flush();
             # the stream boundary is reported before the transaction outcome, so that a consumer
             # sees the operation close before the commit it belongs to
-            streamEnd(True);
+            finishStream(True);
             table.commit();
         }
 
@@ -778,5 +891,13 @@ on_error ds.rollback();
 
         #! flushes queued data to the database
         abstract private flushImpl();
+
+        #! returns @ref True "True" if this concrete operation is eligible for native bulk loading
+        /** Existing custom operation subclasses remain source-compatible and use the ordinary path
+            unless they explicitly opt in by overriding this method.
+        */
+        private bool nativeLoadEligible() {
+            return False;
+        }
     }
 }

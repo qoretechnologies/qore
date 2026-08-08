@@ -53,8 +53,13 @@
 #define DBITEST_OPT_ROWS "rows"
 //! driver option giving the chunk size used by the simulated bounded stream
 #define DBITEST_OPT_STREAM_CHUNK "stream-chunk"
+//! driver option returning native bulk-load protocol statistics
+#define DBITEST_OPT_BULK_LOAD_STATS "bulk-load-stats"
+//! driver option resetting native bulk-load protocol statistics
+#define DBITEST_OPT_BULK_LOAD_RESET "bulk-load-reset"
 
 static DBIDriver* DBID_DBITEST = nullptr;
+static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
 
 static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void dbitest_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -69,9 +74,39 @@ public:
     int64 rows = 1;
     //! chunk size for the simulated bounded stream
     int64 stream_chunk = 4096;
+    //! true while the native bulk-load protocol is active
+    bool bulk_load_active = false;
+    //! true after this native operation reported a stream begin boundary
+    bool bulk_stream_started = false;
+    //! total serialized bytes in the active native operation
+    int64 bulk_consumed = 0;
+    //! successful native begin calls
+    int64 bulk_begins = 0;
+    //! native row-block calls
+    int64 bulk_blocks = 0;
+    //! rows accepted through the native protocol
+    int64 bulk_rows = 0;
+    //! native end calls
+    int64 bulk_ends = 0;
+    //! ordinary prepared-statement executions
+    int64 stmt_execs = 0;
+    //! ordinary direct SQL executions
+    int64 direct_execs = 0;
+    //! commit calls
+    int64 commits = 0;
 
     DLLLOCAL bool faultIs(const char* f) const {
         return fault == f;
+    }
+
+    DLLLOCAL void resetBulkStats() {
+        bulk_begins = 0;
+        bulk_blocks = 0;
+        bulk_rows = 0;
+        bulk_ends = 0;
+        stmt_execs = 0;
+        direct_execs = 0;
+        commits = 0;
     }
 };
 
@@ -214,6 +249,12 @@ static QoreHashNode* dbitest_select_row(Datasource* ds, const QoreString* str, c
         xsink->raiseException("DBI-TEST-SELECT-ERROR", "injected select failure");
         return nullptr;
     }
+    // PgsqlTable resolves an unqualified name against pg_temp before loading metadata.  The mock
+    // target is a normal table, so return no row for this one catalog probe; all other selects keep
+    // the deterministic canned result used by the existing dbitest suite.
+    if (str && strstr(str->c_str(), "pg_my_temp_schema")) {
+        return nullptr;
+    }
     return dbitest_row(0);
 }
 
@@ -242,6 +283,8 @@ static QoreValue dbitest_exec_intern(Datasource* ds, const QoreString* str, Exce
         return total;
     }
 
+    ++conn->direct_execs;
+
     if (conn->faultIs("abort-on-exec")) {
         xsink->raiseException("DBI-TEST-CONNECTION-ERROR", "injected connection loss while executing a statement");
         ds->connectionAborted(xsink);
@@ -265,6 +308,7 @@ static QoreValue dbitest_execraw(Datasource* ds, const QoreString* str, Exceptio
 
 static int dbitest_commit(Datasource* ds, ExceptionSink* xsink) {
     DbiTestConn* conn = get_conn(ds);
+    ++conn->commits;
     if (conn->faultIs("abort-on-commit")) {
         xsink->raiseException("DBI-TEST-CONNECTION-ERROR", "injected connection loss while committing");
         ds->connectionAborted(xsink);
@@ -298,6 +342,154 @@ static QoreStringNode* dbitest_get_driver_real_name(Datasource* ds, ExceptionSin
     return new QoreStringNode("DBI Test Driver");
 }
 
+//! returns the logical row count and validates the hash-of-columns shape
+static int64 dbitest_bulk_row_count(const QoreHashNode* rows, ExceptionSink* xsink) {
+    int64 count = -1;
+    ConstHashIterator hi(rows);
+    int64 col = 0;
+    while (hi.next()) {
+        if (col && !(col % 100) && qore_check_cancel(xsink, "dbitest native bulk-load row count")) {
+            return -1;
+        }
+        QoreValue value = hi.get();
+        ++col;
+        if (value.getType() != NT_LIST) {
+            continue;
+        }
+        int64 size = value.get<const QoreListNode>()->size();
+        if (count < 0) {
+            count = size;
+        } else if (count != size) {
+            xsink->raiseException("DBI-TEST-BULK-LOAD-ERROR", "column '%s' has " QLLD " rows; expected " QLLD,
+                hi.getKey(), size, count);
+            return -1;
+        }
+    }
+    return count < 0 ? (rows->empty() ? 0 : 1) : count;
+}
+
+//! returns a stable serialized-size approximation for one mock-driver value
+static int64 dbitest_bulk_value_bytes(QoreValue value, ExceptionSink* xsink) {
+    if (value.isNullOrNothing()) {
+        return 2;
+    }
+    if (value.getType() == NT_BINARY) {
+        return value.get<const BinaryNode>()->size();
+    }
+    QoreStringValueHelper str(value, QCS_UTF8, xsink);
+    return *xsink ? -1 : str->strlen();
+}
+
+//! starts the deterministic native bulk-load simulation
+static int dbitest_bulk_load_begin(Datasource* ds, const QoreString* table, const QoreListNode* columns,
+        const QoreHashNode* options, ExceptionSink* xsink) {
+    DbiTestConn* conn = get_conn(ds);
+    if (conn->faultIs("bulk-unavailable")) {
+        return 1;
+    }
+    if (conn->bulk_load_active) {
+        xsink->raiseException("DBI-TEST-BULK-LOAD-ERROR", "a native bulk-load operation is already active");
+        return -1;
+    }
+    if (!table || table->empty() || !columns || columns->empty()) {
+        xsink->raiseException("DBI-TEST-BULK-LOAD-ERROR", "a target table and at least one column are required");
+        return -1;
+    }
+
+    conn->bulk_consumed = 0;
+    conn->bulk_stream_started = false;
+    bool stream_bounds = true;
+    if (options) {
+        QoreValue value = options->getKeyValue("stream_bounds");
+        if (value.getType() == NT_BOOLEAN) {
+            stream_bounds = value.getAsBool();
+        }
+    }
+    if (stream_bounds && ds->sqlMutationObserverActive()) {
+        if (ds->reportMutationStreamBegin(0, xsink)) {
+            return -1;
+        }
+        conn->bulk_stream_started = true;
+    }
+    conn->bulk_load_active = true;
+    ++conn->bulk_begins;
+    return 0;
+}
+
+//! accepts one deterministic native row block and reports cumulative serialized bytes
+static int dbitest_bulk_load_rows(Datasource* ds, const QoreHashNode* rows, ExceptionSink* xsink) {
+    DbiTestConn* conn = get_conn(ds);
+    if (!conn->bulk_load_active) {
+        xsink->raiseException("DBI-TEST-BULK-LOAD-ERROR", "no native bulk-load operation is active");
+        return -1;
+    }
+    int64 row_count = dbitest_bulk_row_count(rows, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    int64 bytes = row_count;
+    ConstHashIterator hi(rows);
+    int64 col = 0;
+    while (hi.next()) {
+        if (col && !(col % 100) && qore_check_cancel(xsink, "dbitest native bulk-load column serialization")) {
+            return -1;
+        }
+        QoreValue value = hi.get();
+        if (value.getType() == NT_LIST) {
+            ConstListIterator li(value.get<const QoreListNode>());
+            int64 row = 0;
+            while (li.next()) {
+                if (row && !(row % 100)
+                    && qore_check_cancel(xsink, "dbitest native bulk-load value serialization")) {
+                    return -1;
+                }
+                int64 value_bytes = dbitest_bulk_value_bytes(li.getValue(), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                bytes += value_bytes + 1;
+                ++row;
+            }
+        } else {
+            int64 value_bytes = dbitest_bulk_value_bytes(value, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            bytes += (value_bytes + 1) * row_count;
+        }
+        ++col;
+    }
+
+    ++conn->bulk_blocks;
+    conn->bulk_rows += row_count;
+    conn->bulk_consumed += bytes;
+    if (conn->faultIs("bulk-rows")) {
+        xsink->raiseException("DBI-TEST-BULK-LOAD-ERROR", "injected native bulk-load row failure");
+        return -1;
+    }
+    if (conn->bulk_stream_started && ds->reportMutationStreamProgress(conn->bulk_consumed, xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
+//! finishes or aborts the deterministic native bulk-load simulation
+static int dbitest_bulk_load_end(Datasource* ds, bool success, ExceptionSink* xsink) {
+    DbiTestConn* conn = get_conn(ds);
+    if (!conn->bulk_load_active) {
+        xsink->raiseException("DBI-TEST-BULK-LOAD-ERROR", "no native bulk-load operation is active");
+        return -1;
+    }
+    conn->bulk_load_active = false;
+    ++conn->bulk_ends;
+    if (conn->bulk_stream_started) {
+        conn->bulk_stream_started = false;
+        ds->reportMutationStreamEnd(conn->bulk_consumed, success, xsink);
+    }
+    return *xsink ? -1 : 0;
+}
+
 static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val, ExceptionSink* xsink) {
     DbiTestConn* conn = get_conn(ds);
     if (!conn) {
@@ -317,6 +509,12 @@ static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val,
         conn->stream_chunk = val.getAsBigInt();
         return 0;
     }
+    if (!strcmp(opt, DBITEST_OPT_BULK_LOAD_RESET)) {
+        if (val.getAsBool()) {
+            conn->resetBulkStats();
+        }
+        return 0;
+    }
     return 0;
 }
 
@@ -333,6 +531,18 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
     }
     if (!strcmp(opt, DBITEST_OPT_STREAM_CHUNK)) {
         return conn->stream_chunk;
+    }
+    if (!strcmp(opt, DBITEST_OPT_BULK_LOAD_STATS)) {
+        ReferenceHolder<QoreHashNode> stats(new QoreHashNode(autoTypeInfo), nullptr);
+        stats->setKeyValue("begins", conn->bulk_begins, nullptr);
+        stats->setKeyValue("blocks", conn->bulk_blocks, nullptr);
+        stats->setKeyValue("rows", conn->bulk_rows, nullptr);
+        stats->setKeyValue("ends", conn->bulk_ends, nullptr);
+        stats->setKeyValue("stmt_execs", conn->stmt_execs, nullptr);
+        stats->setKeyValue("direct_execs", conn->direct_execs, nullptr);
+        stats->setKeyValue("sql_execs", conn->stmt_execs + conn->direct_execs, nullptr);
+        stats->setKeyValue("commits", conn->commits, nullptr);
+        return stats.release();
     }
     return QoreValue();
 }
@@ -371,6 +581,7 @@ static int dbitest_stmt_exec(SQLStatement* stmt, ExceptionSink* xsink) {
     Datasource* ds = stmt->getDatasource();
     DbiTestConn* conn = ds ? get_conn(ds) : nullptr;
     if (conn) {
+        ++conn->stmt_execs;
         if (conn->faultIs("abort-on-exec")) {
             xsink->raiseException("DBI-TEST-CONNECTION-ERROR",
                 "injected connection loss while executing a statement");
@@ -444,8 +655,7 @@ static int dbitest_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
 
 /* ------------------------------------------------------------------------------ module glue */
 
-static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
-    qore_dbi_method_list methods;
+static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load) {
     methods.add(QDBI_METHOD_OPEN, dbitest_open);
     methods.add(QDBI_METHOD_CLOSE, dbitest_close);
     methods.add(QDBI_METHOD_SELECT, dbitest_select);
@@ -462,6 +672,12 @@ static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
     methods.add(QDBI_METHOD_GET_SERVER_VERSION, dbitest_get_server_version);
     methods.add(QDBI_METHOD_GET_CLIENT_VERSION, dbitest_get_client_version);
     methods.add(QDBI_METHOD_GET_DRIVER_REAL_NAME, dbitest_get_driver_real_name);
+
+    if (bulk_load) {
+        methods.add(QDBI_METHOD_BULK_LOAD_BEGIN, dbitest_bulk_load_begin);
+        methods.add(QDBI_METHOD_BULK_LOAD_ROWS, dbitest_bulk_load_rows);
+        methods.add(QDBI_METHOD_BULK_LOAD_END, dbitest_bulk_load_end);
+    }
 
     methods.add(QDBI_METHOD_STMT_PREPARE, dbitest_stmt_prepare);
     methods.add(QDBI_METHOD_STMT_PREPARE_RAW, dbitest_stmt_prepare_raw);
@@ -485,14 +701,30 @@ static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
     methods.add(QDBI_METHOD_OPT_GET, dbitest_opt_get);
 
     methods.registerOption(DBITEST_OPT_FAULT, "the fault to inject: \"\", \"select\", \"exec\", \"commit\", "
-        "\"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", or \"stream\"", stringTypeInfo);
+        "\"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", \"stream\", "
+        "\"bulk-unavailable\", or \"bulk-rows\"", stringTypeInfo);
     methods.registerOption(DBITEST_OPT_ROWS, "the number of rows reported as affected by exec operations",
         bigIntTypeInfo);
     methods.registerOption(DBITEST_OPT_STREAM_CHUNK, "the chunk size in bytes used by the simulated bounded stream",
         bigIntTypeInfo);
+    methods.registerOption(DBITEST_OPT_BULK_LOAD_STATS, "native bulk-load protocol statistics");
+    methods.registerOption(DBITEST_OPT_BULK_LOAD_RESET, "reset native bulk-load protocol statistics", boolTypeInfo);
+}
+
+static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    qore_dbi_method_list methods;
+    dbitest_add_methods(methods, true);
 
     DBID_DBITEST = DBI.registerDriver("dbitest", methods, DBI_CAP_TRANSACTION_MANAGEMENT | DBI_CAP_BIND_BY_VALUE
         | DBI_CAP_HAS_EXECRAW | DBI_CAP_HAS_SELECT_ROW | DBI_CAP_HAS_DESCRIBE);
+
+    // A second name with the same deterministic behavior but no native methods proves the capability
+    // fallback without depending on any optional external database module.
+    qore_dbi_method_list no_bulk_methods;
+    dbitest_add_methods(no_bulk_methods, false);
+    DBID_DBITEST_NO_BULK = DBI.registerDriver("dbitestnobulk", no_bulk_methods,
+        DBI_CAP_TRANSACTION_MANAGEMENT | DBI_CAP_BIND_BY_VALUE | DBI_CAP_HAS_EXECRAW
+        | DBI_CAP_HAS_SELECT_ROW | DBI_CAP_HAS_DESCRIBE);
 }
 
 static void dbitest_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

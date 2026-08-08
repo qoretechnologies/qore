@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -101,6 +101,9 @@ struct DBIDriverFunctions {
     q_dbi_get_server_version_t get_server_version = nullptr;
     q_dbi_get_client_version_t get_client_version = nullptr;
     q_dbi_get_driver_real_name_t get_driver_real_name = nullptr;
+    q_dbi_bulk_load_begin_t bulk_load_begin = nullptr;
+    q_dbi_bulk_load_rows_t bulk_load_rows = nullptr;
+    q_dbi_bulk_load_end_t bulk_load_end = nullptr;
 
     dbi_driver_stmt stmt;
     dbi_driver_opt opt;
@@ -273,6 +276,22 @@ struct qore_dbi_private {
             return QoreValue();
         }
         return f.execRawSQL(ds, sql, xsink);
+    }
+
+    DLLLOCAL int bulkLoadBegin(Datasource* ds, const QoreString* table, const QoreListNode* columns,
+            const QoreHashNode* options, ExceptionSink* xsink) const {
+        assert(f.bulk_load_begin);
+        return f.bulk_load_begin(ds, table, columns, options, xsink);
+    }
+
+    DLLLOCAL int bulkLoadRows(Datasource* ds, const QoreHashNode* rows, ExceptionSink* xsink) const {
+        assert(f.bulk_load_rows);
+        return f.bulk_load_rows(ds, rows, xsink);
+    }
+
+    DLLLOCAL int bulkLoadEnd(Datasource* ds, bool success, ExceptionSink* xsink) const {
+        assert(f.bulk_load_end);
+        return f.bulk_load_end(ds, success, xsink);
     }
 
     DLLLOCAL QoreHashNode* describe(Datasource* ds, const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {

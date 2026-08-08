@@ -127,6 +127,46 @@ db.execRaw("create table my_tab (id number, some_text varchar2(30))");
  */
 abstract auto AbstractDatasource::execRaw(string sql) [flags=NAMED_ARGS];
 
+//! Starts a driver-native bulk-load operation
+/** This is the low-level protocol used by BulkSqlUtil for explicitly requested native bulk inserts.
+
+    @param table the SQL-rendered target table name
+    @param columns SQL-rendered target column names in row-hash order
+    @param options optional driver-specific options
+    @return @ref True when started; @ref False when the mechanism is dynamically unavailable
+    @throw ABSTRACT-DATASOURCE-ERROR this method was not implemented by the concrete datasource subclass
+
+    @since %Qore 3.0
+*/
+bool AbstractDatasource::bulkLoadBegin(string table, list<string> columns, *hash<auto> options)
+        [flags=NAMED_ARGS] {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "native bulk loading; it is implemented in Datasource and DatasourcePool for example");
+    return false;
+}
+
+//! Sends one block to an active driver-native bulk-load operation
+/** @param rows a hash of column lists or scalar constants
+    @throw ABSTRACT-DATASOURCE-ERROR this method was not implemented by the concrete datasource subclass
+
+    @since %Qore 3.0
+*/
+nothing AbstractDatasource::bulkLoadRows(hash<auto> rows) {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "native bulk loading; it is implemented in Datasource and DatasourcePool for example");
+}
+
+//! Ends an active driver-native bulk-load operation
+/** @param success @ref True to finish normally; @ref False to abort
+    @throw ABSTRACT-DATASOURCE-ERROR this method was not implemented by the concrete datasource subclass
+
+    @since %Qore 3.0
+*/
+nothing AbstractDatasource::bulkLoadEnd(bool success) {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "native bulk loading; it is implemented in Datasource and DatasourcePool for example");
+}
+
 //! Executes an %SQL select statement on the server and (normally) returns the result as a hash (column names) of lists (column values per row)
 /** The usual return format of this method is suitable for use with @ref context "context statements", for easy iteration and processing of query results.
     Alternatively, the HashListIterator class can be used to iterate the return value of this method.

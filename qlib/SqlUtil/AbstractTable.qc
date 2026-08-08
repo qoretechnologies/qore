@@ -11269,6 +11269,45 @@ string sql = table.getAlignSqlString(table2);
     #! returns @ref True "True" if the underlying DB driver supports bulk DML operations
     abstract bool hasArrayBind();
 
+    #! returns @ref True "True" if the underlying DB driver supports native bulk loading
+    /** Native bulk loading is distinct from array binding and is never selected automatically by
+        SqlUtil.  BulkSqlUtil uses this capability only when requested for a BulkInsertOperation.
+
+        @since %SqlUtil 3.2.0
+    */
+    bool hasBulkLoad() {
+        return (ds.getCapabilities() & DBI_CAP_HAS_BULK_LOAD) != 0;
+    }
+
+    #! starts a driver-native bulk-load operation for this table
+    /** @param data the first hash-of-columns block; only its ordered keys are used
+        @param options optional driver-specific native bulk-load options
+        @return @ref True if the driver started the operation; @ref False if it is dynamically unavailable
+
+        @since %SqlUtil 3.2.0
+    */
+    bool bulkLoadBegin(hash<auto> data, *hash<auto> options) {
+        return ds.bulkLoadBegin(getSqlName(), cast<list<string>>(getColumnSqlNames(keys data)), options);
+    }
+
+    #! sends one hash-of-columns block through an active driver-native bulk-load operation
+    /** @param data the row block
+
+        @since %SqlUtil 3.2.0
+    */
+    bulkLoadRows(hash<auto> data) {
+        ds.bulkLoadRows(data);
+    }
+
+    #! ends an active driver-native bulk-load operation
+    /** @param success @ref True "True" to finish normally; @ref False "False" to abort
+
+        @since %SqlUtil 3.2.0
+    */
+    bulkLoadEnd(bool success) {
+        ds.bulkLoadEnd(success);
+    }
+
     #! transforms bind arguments for bulk DML operations
     /** Override in subclasses to apply driver-specific transformations to bind values
         before they are passed to a prepared statement for bulk execution.

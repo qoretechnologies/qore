@@ -1213,6 +1213,94 @@ QoreValue Datasource::execRaw(const QoreString* query_str, ExceptionSink* xsink)
     return exec_internal(false, query_str, nullptr, xsink);
 }
 
+int Datasource::bulkLoadBegin(const QoreString* table, const QoreListNode* columns, const QoreHashNode* options,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    if (!table || table->empty() || !columns || columns->empty()) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "a target table and at least one target column are required");
+        return -1;
+    }
+    if (!(getCapabilities() & DBI_CAP_HAS_BULK_LOAD)) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "the '%s' driver does not implement native bulk loading",
+            getDriverName());
+        return -1;
+    }
+    if (priv->bulk_load_active) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "a native bulk-load operation is already active on this "
+            "datasource");
+        return -1;
+    }
+
+    // Match ordinary mutating operations: explicitly start a transaction when the driver requires
+    // it, then keep the datasource allocated until the caller commits or rolls back.
+    const bool tx_begin = !priv->autocommit && !priv->in_transaction;
+    if (tx_begin && beginImplicitTransaction(xsink)) {
+        return -1;
+    }
+    if (tx_begin && priv->getMutationCtx()) {
+        priv->dispatchMutationTxBegin(xsink);
+    }
+
+    int rc = qore_dbi_private::get(*priv->dsl)->bulkLoadBegin(this, table, columns, options, xsink);
+    if (*xsink) {
+        rc = -1;
+    } else if (rc != 0 && rc != 1) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "driver '%s' returned invalid bulk-load begin status %d",
+            getDriverName(), rc);
+        rc = -1;
+    } else {
+        priv->bulk_load_active = rc == 0;
+    }
+
+    // If an explicit transaction was started, record it even when the native mechanism is
+    // dynamically unavailable; an automatic caller immediately continues with the ordinary insert
+    // fallback in that same transaction.
+    if (tx_begin) {
+        priv->statementExecuted(rc < 0 ? -1 : 0);
+    }
+    return rc;
+}
+
+int Datasource::bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!rows) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "a native bulk-load row block is required");
+        return -1;
+    }
+    if (!priv->bulk_load_active) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "no native bulk-load operation is active on this datasource");
+        return -1;
+    }
+    int rc = qore_dbi_private::get(*priv->dsl)->bulkLoadRows(this, rows, xsink);
+    if (rc && !*xsink) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "driver '%s' failed to send a native bulk-load row block",
+            getDriverName());
+        return -1;
+    }
+    return *xsink ? -1 : rc;
+}
+
+int Datasource::bulkLoadEnd(bool success, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!priv->bulk_load_active) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "no native bulk-load operation is active on this datasource");
+        return -1;
+    }
+
+    // Clear first so an exception from the driver cannot leave the core session permanently active.
+    priv->bulk_load_active = false;
+    int rc = qore_dbi_private::get(*priv->dsl)->bulkLoadEnd(this, success, xsink);
+    if (rc && !*xsink) {
+        xsink->raiseException("DBI-BULK-LOAD-ERROR", "driver '%s' failed to end a native bulk-load operation",
+            getDriverName());
+        rc = -1;
+    }
+    if (success && !rc && !*xsink && priv->autocommit) {
+        autoCommit(xsink);
+    }
+    return *xsink ? -1 : rc;
+}
+
 QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
     if (ds_mutation_read_pre(priv, xsink)) {

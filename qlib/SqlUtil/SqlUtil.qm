@@ -118,6 +118,8 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_2_0 SqlUtil v3.2.0
+    - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to
+      @ref SqlUtil::AbstractTable "AbstractTable" for opt-in use by BulkSqlUtil
     - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
       bounded, driver-independent recovery of complete idempotent transaction
       bodies after database failover and datasource-pool timeout errors

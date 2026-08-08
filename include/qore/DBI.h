@@ -59,6 +59,7 @@
 #define DBI_CAP_OPTION_PASSTHRU          (1 << 18) //!< supports all options; all options are passed through to the driver
 #define DBI_CAP_HAS_TYPED_SELECT         (1 << 19) //!< provides native typed select APIs (set automatically by the Qore library)
 #define DBI_CAP_HAS_COLUMNAR_SELECT      (1 << 20) //!< provides native columnar select/fetch APIs (set automatically by the Qore library)
+#define DBI_CAP_HAS_BULK_LOAD            (1 << 21) //!< provides the native bulk-load API (set automatically by the Qore library)
 
 #define BN_PLACEHOLDER  0
 #define BN_VALUE        1
@@ -104,8 +105,11 @@
 #define QDBI_METHOD_SELECT_ROWS_TYPED        36
 #define QDBI_METHOD_SELECT_COLUMNAR          37
 #define QDBI_METHOD_STMT_FETCH_COLUMNAR      38
+#define QDBI_METHOD_BULK_LOAD_BEGIN          39
+#define QDBI_METHOD_BULK_LOAD_ROWS           40
+#define QDBI_METHOD_BULK_LOAD_END            41
 
-#define QDBI_VALID_CODES 38
+#define QDBI_VALID_CODES 41
 
 /* DBI EVENT Types
    all DBI events must have the following keys:
@@ -326,6 +330,52 @@ typedef int (*q_dbi_stmt_close_t)(SQLStatement* stmt, ExceptionSink* xsink);
 typedef int (*q_dbi_option_set_t)(Datasource* ds, const char* opt, const QoreValue val, ExceptionSink* xsink);
 typedef QoreValue (*q_dbi_option_get_t)(const Datasource* ds, const char* opt);
 
+//! signature for starting a native bulk-load operation
+/** The driver must validate dynamic availability before starting the native operation.  Returning 1
+    allows a caller using an automatic policy to fall back to ordinary inserts; returning -1 is a
+    hard error and requires an exception in \a xsink.
+
+    The table and column names are already rendered for use in SQL by SqlUtil.  Driver-specific
+    behavior can be selected with \a options.
+
+    @param ds the Datasource for the connection
+    @param table the SQL-rendered target table name
+    @param columns SQL-rendered target column names in the same order as the rows hash
+    @param options optional driver-specific bulk-load options
+    @param xsink if any errors occur, error information should be added to this object
+    @return 0 if the native operation was started, 1 if it is dynamically unavailable, -1 on error
+    @throw driver-specific exception for invalid input or a hard native-mechanism failure
+
+    @since %Qore 3.0
+*/
+typedef int (*q_dbi_bulk_load_begin_t)(Datasource* ds, const QoreString* table, const QoreListNode* columns,
+    const QoreHashNode* options, ExceptionSink* xsink);
+
+//! signature for sending one block of rows to a native bulk-load operation
+/** @param ds the Datasource for the connection
+    @param rows a hash of column lists or scalar constants; hash order matches the columns passed to begin
+    @param xsink if any errors occur, error information should be added to this object
+    @return 0 for OK, -1 on error
+    @throw driver-specific exception for invalid input or native row-delivery failure
+
+    @since %Qore 3.0
+*/
+typedef int (*q_dbi_bulk_load_rows_t)(Datasource* ds, const QoreHashNode* rows, ExceptionSink* xsink);
+
+//! signature for ending a native bulk-load operation
+/** Drivers own mutation-observer stream reporting for native bulk loads and must report exactly one
+    end boundary for every begin boundary they successfully reported.
+
+    @param ds the Datasource for the connection
+    @param success true to finish the load normally, false to abort it
+    @param xsink if any errors occur, error information should be added to this object
+    @return 0 for OK, -1 on error
+    @throw driver-specific exception for native finalization or abort failure
+
+    @since %Qore 3.0
+*/
+typedef int (*q_dbi_bulk_load_end_t)(Datasource* ds, bool success, ExceptionSink* xsink);
+
 //! signature for the DBI "describe" method
 /**
     @param ds the Datasource for the connection
@@ -423,6 +473,13 @@ public:
     DLLEXPORT void add(int code, q_dbi_stmt_fetch_rows_t method);
     // covers next
     DLLEXPORT void add(int code, q_dbi_stmt_next_t method);
+
+    // covers native bulk-load begin
+    DLLEXPORT void add(int code, q_dbi_bulk_load_begin_t method);
+    // covers native bulk-load rows
+    DLLEXPORT void add(int code, q_dbi_bulk_load_rows_t method);
+    // covers native bulk-load end
+    DLLEXPORT void add(int code, q_dbi_bulk_load_end_t method);
 
     // covers set option
     DLLEXPORT void add(int code, q_dbi_option_set_t method);
