@@ -118,6 +118,11 @@ class FakeLinkedInRestClientIo inherits LinkedInRestClient::LinkedInRestClientIo
             "raw": raw,
         };
         hash<auto> resp = responses ? shift responses : default_response;
+        # a queued response may ask for a transport-level failure, which is how the I/O retry set is
+        # driven -- those errors carry no HTTP status at all
+        if (resp.throw_err) {
+            throw resp.throw_err, "simulated transport failure";
+        }
         # a queued response may ask for an error, which is how LinkedIn's error envelopes are driven
         # through the real error handling
         if (resp.throw_status) {
@@ -212,6 +217,14 @@ class FakeUploadClient inherits RestClientIo::RestClientIo {
 # path against the client's own URL, so an upload URL on www.linkedin.com cannot go through the
 # api.linkedin.com client.  Subclassing is how the test substitutes that second client; the factory
 # method is deliberately not part of the module's public API.
+#! Exposes the generic-call client factory, which is deliberately not public API
+class TestGenericCallProvider inherits LinkedInDataProvider::LinkedInGetCurrentUserDataProvider {
+    constructor(LinkedInRestClient::LinkedInRestClientIo rest) : LinkedInGetCurrentUserDataProvider(rest) {}
+    *object genericCallClient() {
+        return getRestClientForGenericCallImpl();
+    }
+}
+
 class TestUploadImageDataProvider inherits LinkedInDataProvider::LinkedInUploadImageDataProvider {
     public { FakeUploadClient upload; }
     constructor(LinkedInRestClient::LinkedInRestClientIo rest, FakeUploadClient upload)
@@ -312,6 +325,11 @@ public class LinkedInDataProviderTest inherits QUnit::Test {
         addTestCase("upload image", \uploadImageTest());
         addTestCase("upload video", \uploadVideoTest());
         addTestCase("error handling", \errorHandlingTest());
+        addTestCase("sync client", \syncClientTest());
+        addTestCase("generic call client", \genericCallClientTest());
+        addTestCase("io retries", \ioRetryTest());
+        addTestCase("file content types", \contentTypeTest());
+        addTestCase("post content normalization", \postContentTest());
         # live tests; each skips unless a connection is named
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live api version", \liveApiVersionTest());
@@ -1055,6 +1073,144 @@ public class LinkedInDataProviderTest inherits QUnit::Test {
         }
         assertThrows("REST-RESPONSE-ERROR", \dp.doRequest(), {"post": PostUrn});
         assertEq(retries, rest.requests.size(), "a throttle must be retried up to the limit");
+    }
+
+    #! The synchronous client is public API and must resolve its profile the same way
+    /** Every provider in this module holds the async client, so nothing else here would ever
+        construct the synchronous one — and a divergence between the two would surface only in
+        whatever code outside the module used it.
+    */
+    syncClientTest() {
+        hash<auto!> opts = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_url": "https://example.com/cb",
+            "token": "test-token",
+        };
+        LinkedInRestClient::LinkedInRestClient member(opts, True);
+        assertEq("https://api.linkedin.com", member.getUrl());
+        assertEq(LinkedInRestClient::LinkedInRestClientBase::DefaultMemberApiVersion,
+            member.getLinkedInVersion());
+        assertEq("2.0.0", member.getApiHeaders("/rest/posts")
+            {LinkedInRestClient::RestliProtocolVersionHeader});
+        assertEq({}, member.getApiHeaders("/v2/userinfo"));
+
+        LinkedInRestClient::LinkedInRestClient dma(opts + {"api_profile": "dma"}, True);
+        assertEq(LinkedInRestClient::LinkedInRestClientBase::DefaultDmaApiVersion,
+            dma.getLinkedInVersion());
+
+        # the profile and version errors are raised by the shared resolution, so both clients throw
+        assertThrows("LINKEDIN-API-PROFILE-ERROR", sub () {
+            new LinkedInRestClient::LinkedInRestClient(opts + {"api_profile": "nope"}, True);
+        });
+        assertThrows("LINKEDIN-VERSION-ERROR", sub () {
+            new LinkedInRestClient::LinkedInRestClient(opts + {"linkedin_version": "26-07"}, True);
+        });
+    }
+
+    #! The client handed to the framework's generic API call must carry the protocol headers
+    /** The generic-call provider dispatches straight through whatever client it is given, with no
+        chance to add a header per request.  Every versioned LinkedIn endpoint requires a
+        \c LinkedIn-Version header and rejects a request without one, so a client discovered
+        reflectively would fail on the entire "/rest" surface — the failure would look like a
+        broken endpoint rather than a missing header.
+    */
+    genericCallClientTest() {
+        FakeLinkedInRestClientIo rest = client();
+        TestGenericCallProvider dp(rest);
+        *object generic = dp.genericCallClient();
+        assertTrue(exists generic, "a client is provided for the generic API call");
+        hash<auto> hdr = generic.getDefaultHeaders();
+        assertEq(rest.getLinkedInVersion(), hdr{LinkedInRestClient::LinkedInVersionHeader},
+            "the generic client sends this connection's API version");
+        assertEq(LinkedInRestClient::RestliProtocolVersion,
+            hdr{LinkedInRestClient::RestliProtocolVersionHeader});
+        assertEq(rest.getUrl(), generic.getUrl(), "it addresses the same host");
+    }
+
+    #! A transport failure is retried; an API error is not
+    /** The retry set covers errors that carry no HTTP status at all, so they take a different path
+        through the handler than a 429 or a 5xx does.
+    */
+    ioRetryTest() {
+        FakeLinkedInRestClientIo rest = client();
+        LinkedInDataProvider::LinkedInDeletePostDataProvider dp(rest);
+
+        rest.push_response({"throw_err": "SOCKET-CLOSED"});
+        rest.push_response({"throw_err": "SOCKET-SSL-ERROR"});
+        rest.push_response({"status_code": 204, "headers": {}});
+        hash<auto> rv = dp.doRequest({"post": PostUrn});
+        assertTrue(rv.success, "the call succeeds once the transport recovers");
+        assertEq(3, rest.requests.size(), "each transport failure is retried");
+
+        # an error outside the retry set is final, however many attempts remain
+        rest.reset();
+        rest.push_response({"throw_err": "SOCKET-BIND-ERROR"});
+        assertThrows("SOCKET-BIND-ERROR", \dp.doRequest(), {"post": PostUrn});
+        assertEq(1, rest.requests.size(), "an unrecognized transport error is not retried");
+
+        # a transport failure that never clears stops at the limit rather than looping
+        rest.reset();
+        foreach int i in (xrange(0, LinkedInDataProvider::LinkedInDataProviderBase::MaxIoRetries)) {
+            rest.push_response({"throw_err": "SOCKET-CLOSED"});
+        }
+        assertThrows("SOCKET-CLOSED", \dp.doRequest(), {"post": PostUrn});
+        assertEq(LinkedInDataProvider::LinkedInDataProviderBase::MaxIoRetries,
+            rest.requests.size());
+    }
+
+    #! A file's content type comes from the value, then its name, then the caller's fallback
+    contentTypeTest() {
+        # an explicit MIME type wins
+        assertEq(MimeTypePng, LinkedInDataProvider::LinkedInDataProviderBase::getFileContentType(
+            {"name": "x.jpg", "mime_type": MimeTypePng}, MimeTypeJpeg));
+        # "auto" is the FileDataType placeholder meaning "work it out", and must never be sent as a
+        # MIME type -- LinkedIn would reject it
+        assertEq(MimeTypePng, LinkedInDataProvider::LinkedInDataProviderBase::getFileContentType(
+            {"name": "photo.png", "mime_type": "auto"}, MimeTypeJpeg));
+        # with no usable type, the name decides
+        assertEq(MimeTypePng, LinkedInDataProvider::LinkedInDataProviderBase::getFileContentType(
+            {"name": "photo.png"}, MimeTypeJpeg));
+        # and with neither, the caller's fallback stands
+        assertEq(LinkedInDataProvider::VideoContentType,
+            LinkedInDataProvider::LinkedInDataProviderBase::getFileContentType({},
+                LinkedInDataProvider::VideoContentType));
+        assertEq(MimeTypeJpeg, LinkedInDataProvider::LinkedInDataProviderBase::getFileContentType(
+            {"name": "no-extension", "mime_type": "auto"}, MimeTypeJpeg));
+
+        # content is accepted base64-encoded or already decoded
+        assertEq(BinaryContent, LinkedInDataProvider::LinkedInDataProviderBase::getFileContent(
+            {"content": make_base64_string(BinaryContent)}));
+        assertEq(BinaryContent, LinkedInDataProvider::LinkedInDataProviderBase::getFileContent(
+            {"content": BinaryContent}));
+        assertEq(binary(), LinkedInDataProvider::LinkedInDataProviderBase::getFileContent({}));
+    }
+
+    #! Every shape a post's content union can take is normalized, not just the one in the samples
+    postContentTest() {
+        hash<auto> multi = LinkedInDataProvider::LinkedInUtil::normalizePost({
+            "id": PostUrn,
+            "content": {"multiImage": {"images": (
+                {"id": ImageUrn + "1", "altText": "first"},
+                {"id": ImageUrn + "2"},
+            )}},
+        });
+        assertEq(2, multi.content.multi_image.size());
+        assertEq(ImageUrn + "1", multi.content.multi_image[0].id);
+        assertEq("first", multi.content.multi_image[0].alt_text);
+        assertEq(NOTHING, multi.content.multi_image[1].alt_text);
+
+        hash<auto> article = LinkedInDataProvider::LinkedInUtil::normalizePost({
+            "id": PostUrn,
+            "content": {"article": {"source": "https://example.com/a", "title": "t",
+                "description": "d", "thumbnail": ImageUrn}},
+        });
+        assertEq("https://example.com/a", article.content.article.source);
+        assertEq(ImageUrn, article.content.article.thumbnail);
+
+        # a post with no content at all must not gain an empty content member
+        hash<auto> bare = LinkedInDataProvider::LinkedInUtil::normalizePost({"id": PostUrn});
+        assertFalse(bare.hasKey("content"));
     }
 
     # --- Live tests (require -c <connection>; writes additionally require -W) ---

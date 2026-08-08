@@ -179,6 +179,11 @@ class TestNewPostDataProvider inherits LinkedInOrganizationsDataProvider::Linked
         restoreCheckpoint(checkpoint);
     }
 
+    #! Returns the example event data the catalogue would show
+    auto example() {
+        return getExampleEventDataImpl(LinkedInOrganizationsDataProvider::EVENT_NEW_POST);
+    }
+
     #! Records the checkpoint instead of writing it to a store
     private persistCheckpoint(hash<auto> checkpoint) {
         push checkpoints, checkpoint;
@@ -249,6 +254,11 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
         addTestCase("follower statistics", \followerStatisticsTest());
         addTestCase("visitor statistics", \visitorStatisticsTest());
         addTestCase("new-post trigger", \newPostTriggerTest());
+        addTestCase("get current member", \getCurrentMemberTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("batch chunking", \batchChunkTest());
+        addTestCase("trigger page bound", \pollPageBoundTest());
+        addTestCase("trigger example data", \exampleEventDataTest());
         # live tests; each skips unless a connection is named
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live api version", \liveApiVersionTest());
@@ -915,6 +925,174 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
         assertThrows("CONSTRUCTOR-ERROR", sub () {
             new TestNewPostDataProvider(rest, {});
         });
+    }
+
+    getCurrentMemberTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInGetCurrentMemberDataProvider dp(rest);
+
+        rest.push_response({"body": {
+            "id": "lDq9nwxUL8",
+            "localizedFirstName": "David",
+            "localizedLastName": "Nichols",
+            "localizedHeadline": "Integration",
+        }});
+        hash<auto> m = dp.doRequest();
+        assertEq("/rest/dmaMe", rest.last().path);
+        # the DMA identity endpoint is versioned, unlike the member app's OpenID Connect one
+        assertEq(LinkedInRestClient::LinkedInRestClientBase::DefaultDmaApiVersion,
+            rest.last().headers{LinkedInRestClient::LinkedInVersionHeader});
+        assertEq("urn:li:person:lDq9nwxUL8", m.urn);
+        assertEq("David", m.first_name);
+        assertEq("Nichols", m.last_name);
+        # the whole profile is passed through as well, for fields this type does not name
+        assertEq("lDq9nwxUL8", m.raw.id);
+
+        # the localized fields also arrive as {localized: {...}} maps on some responses
+        rest.reset();
+        rest.push_response({"body": {
+            "id": "X",
+            "firstName": {"localized": {"en_US": "Ada"}},
+            "lastName": {"localized": {"en_US": "Lovelace"}},
+        }});
+        m = dp.doRequest();
+        assertEq("Ada", m.first_name);
+        assertEq("Lovelace", m.last_name);
+
+        # a response with no id yields no URN rather than a malformed one
+        rest.reset();
+        rest.push_response({"body": {}});
+        assertEq(NOTHING, dp.doRequest().urn);
+    }
+
+    #! The organization dropdown every organization-scoped action depends on
+    /** Without this, every action that names an organization degrades to a free-text field the user
+        has to paste a numeric ID into.  It is also the only consumer of the two-call
+        access-control-then-batch-resolve path outside list-organizations.
+    */
+    referenceDataTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProvider dp(rest);
+
+        assertEq({"organizations": True}, dp.getSupportedReferenceData(),
+            "the provider offers organization reference data");
+
+        rest.push_acls((OrgId, "99"));
+        rest.push_organizations({
+            OrgId: SampleOrg,
+            "99": {"id": 99, "localizedName": "Other Co", "logoV2":
+                {"cropped": {"downloadUrl": "https://media.licdn.com/other.png"}}},
+        });
+        *list<hash<AllowedValueInfo>> values = dp.getReferenceData("organizations");
+        assertEq(2, values.size());
+        # the VALUE is the numeric ID the actions take, not the URN
+        assertEq(OrgId, values[0].value);
+        assertEq(SampleOrg.localizedName, values[0].display_name);
+        assertEq("https://media.licdn.com/logo.png", values[0].image,
+            "the logo is offered so the dropdown can show it");
+        assertEq("99", values[1].value);
+        assertEq("Other Co", values[1].display_name);
+
+        # reference data must never propagate a failure into the form: an unreachable API yields an
+        # empty list, so the field falls back to free text rather than breaking the whole action
+        rest.reset();
+        rest.push_response({"throw_status": 403, "body": {"message": "denied"}});
+        assertEq((), dp.getReferenceData("organizations"));
+
+        # an unknown reference type is not answered
+        assertEq(NOTHING, dp.getReferenceData("nonexistent"));
+    }
+
+    #! A batch larger than one request is split, and every entry still comes back
+    /** A composite comment or reaction URN is long and a URL has a finite length, so a listing that
+        resolves more URNs than fit in one request must send several.  Getting this wrong truncates
+        results silently: the listing simply returns fewer items than the feed named.
+    */
+    batchChunkTest() {
+        FakeDmaRestClientIo rest = client();
+        LinkedInOrganizationsDataProvider::LinkedInListPostsDataProvider dp(rest);
+
+        int count = LinkedInOrganizationsDataProvider::MaxBatchSize + 10;
+        list<auto> feed = ();
+        hash<auto> results = {};
+        foreach int i in (xrange(0, count)) {
+            string urn = sprintf("urn:li:share:%d", 1000 + i);
+            push feed, {"id": urn};
+            results{urn} = {"id": urn, "commentary": sprintf("post %d", i)};
+        }
+        rest.push_response({"body": {"elements": feed, "metadata": {}}});
+        # the resolve step is split, so each request gets its own response
+        rest.push_response({"body": {"results": results}});
+        rest.push_response({"body": {"results": results}});
+
+        hash<auto> rv = dp.doRequest({"organization": OrgId, "count": count});
+        assertEq(count, rv.posts.size(), "every post the feed named is resolved");
+        # 1 feed request + ceil(60/50) = 2 batch requests
+        assertEq(3, rest.requests.size(), "the resolve step is split into batches");
+        # the finder's order survives the split
+        assertEq("urn:li:share:1000", rv.posts[0].id);
+        assertEq(sprintf("urn:li:share:%d", 1000 + count - 1), rv.posts[count - 1].id);
+    }
+
+    #! A poll stops walking the feed rather than reading an organization's whole history
+    /** The walk ends when it reaches the checkpointed post.  If that post has been deleted it is
+        never reached, so without a bound the poll would page back through everything the
+        organization has ever published -- at one rate-limited request per page.
+    */
+    pollPageBoundTest() {
+        FakeDmaRestClientIo rest = client();
+        TestNewPostDataProvider dp(rest, {"organization": OrgId});
+        dp.restore({"version": 1, "last_urn": "urn:li:share:deleted"});
+
+        # every page names posts the checkpoint never matches, and always offers another cursor
+        int pages = LinkedInOrganizationsDataProvider::LinkedInNewPostDataProvider::MaxPollPages + 5;
+        foreach int i in (xrange(0, pages)) {
+            rest.push_response({"body": {
+                "elements": ({"id": sprintf("urn:li:share:%d", 9000 + i)},),
+                "metadata": {"paginationCursorMetdata": {"nextPaginationCursor": sprintf("p%d", i)}},
+            }});
+        }
+        # the batch resolve that follows returns nothing, which must not stall the checkpoint
+        rest.push_response({"body": {"results": {}}});
+        dp.doPoll();
+
+        int feed_calls = 0;
+        foreach hash<RecordedRequest> r in (rest.requests) {
+            if (r.path =~ /dmaFeedContentsExternal/) {
+                ++feed_calls;
+            }
+        }
+        assertEq(LinkedInOrganizationsDataProvider::LinkedInNewPostDataProvider::MaxPollPages,
+            feed_calls, "the walk stops at the page bound instead of reading the whole history");
+    }
+
+    #! The catalogue's example event data comes from a real post, or a static one
+    exampleEventDataTest() {
+        FakeDmaRestClientIo rest = client();
+        TestNewPostDataProvider dp(rest, {"organization": OrgId});
+
+        rest.push_response({"body": {"elements": ({"id": PostUrn},), "metadata": {}}});
+        rest.push_response({"body": {"results": {PostUrn: {
+            "id": PostUrn, "commentary": "a real post", "publishedAt": 1763375562669,
+        }}}});
+        hash<auto> live = dp.example();
+        assertEq(PostUrn, live.id);
+        assertEq("a real post", live.commentary);
+
+        # an organization that has never posted still needs an example, so a static one stands in
+        rest.reset();
+        rest.push_response({"body": {"elements": (), "metadata": {}}});
+        hash<auto> fallback = dp.example();
+        assertTrue(fallback.id.val(), "a static example is returned when there is no real post");
+        assertTrue(fallback.commentary.val());
+        # and it must be the same shape the trigger actually delivers
+        assertTrue(exists fallback.url);
+        assertEq(NT_DATE, fallback.published_at.typeCode());
+
+        # an API failure must not prevent the catalogue from showing an example
+        rest.reset();
+        rest.push_response({"throw_status": 403, "body": {"message": "denied"}});
+        assertTrue(dp.example().id.val());
     }
 
     # --- Live tests (require -c <connection>) ---

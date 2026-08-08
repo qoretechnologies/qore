@@ -448,7 +448,12 @@ public class LinkedInDataProviderBase inherits DataProvider::AbstractDataProvide
             return file.mime_type;
         }
         if (file.name.val()) {
-            if (*string from_name = get_mime_type_from_ext(file.name)) {
+            *string from_name = get_mime_type_from_ext(file.name);
+            # get_mime_type_from_ext() answers with the generic octet-stream when the name tells it
+            # nothing, and that is *less* informative than the caller's own default -- an image
+            # uploaded as "application/octet-stream" is declared wrongly, where the caller's
+            # fallback names the type the action actually deals in
+            if (from_name.val() && from_name != MimeTypeOctetStream) {
                 return from_name;
             }
         }

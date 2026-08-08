@@ -105,8 +105,80 @@ public class RestSchemaPrunerTest inherits QUnit::Test {
         addTestCase("source is not modified", \immutableTest());
         addTestCase("deterministic output", \deterministicTest());
         addTestCase("json pointer resolution", \pointerTest());
+        addTestCase("swagger 2 definitions", \swaggerTest());
+        addTestCase("escaped member names", \escapedNameTest());
         addTestCase("negative cases", \negativeTest());
         set_return_value(main());
+    }
+
+    #! A Swagger 2 document keeps its reachable "definitions" and drops the rest
+    /** Swagger 2 puts its schemas in a top-level \c definitions container rather than under
+        \c components, and a schema-driven application may still be pinned to one, so the generic
+        container branch has to handle it.
+    */
+    swaggerTest() {
+        hash<auto> swagger = {
+            "swagger": "2.0",
+            "info": {"title": "legacy", "version": "1.0"},
+            "basePath": "/v1",
+            "paths": {
+                "/thing": {
+                    "get": {"responses": {"200": {"schema": {"$ref": "#/definitions/Thing"}}}},
+                    "post": {"responses": {"200": {"schema": {"$ref": "#/definitions/Ignored"}}}},
+                },
+            },
+            "definitions": {
+                "Thing": {"properties": {"part": {"$ref": "#/definitions/Part"}}},
+                "Part": {"type": "string"},
+                "Ignored": {"type": "string"},
+                "Orphan": {"type": "string"},
+            },
+            "securityDefinitions": {"key": {"type": "apiKey", "name": "k", "in": "header"}},
+        };
+        hash<PruneResultInfo> r = RestSchemaPruner::prune(swagger,
+            (<SchemaOperationInfo>{"method": "GET", "path": "/thing"},));
+        assertEq(("get",), keys r.schema.paths."/thing");
+        # the transitive closure works the same way in the Swagger container
+        assertEq(("Thing", "Part"), keys r.schema.definitions);
+        # Swagger 2 metadata is kept wholesale, security definitions included: a security scheme is
+        # named rather than referenced, so reachability analysis would wrongly discard it
+        assertEq("2.0", r.schema.swagger);
+        assertEq("/v1", r.schema.basePath);
+        assertEq(swagger.securityDefinitions, r.schema.securityDefinitions);
+    }
+
+    #! A component whose NAME contains "/" or "~" is matched through its escaped pointer
+    /** A member name is escaped when it appears in a pointer, so the reachability check has to
+        escape the name the same way before looking it up.  Comparing the raw name against the
+        pointer would drop exactly those components, and only from schemas that use such names --
+        the kind of defect that survives every test written against tidy fixtures.
+    */
+    escapedNameTest() {
+        hash<auto> doc = {
+            "openapi": "3.0.0",
+            "paths": {
+                "/x": {"get": {"responses": {"200": {"content": {"application/json": {"schema": {
+                    "properties": {
+                        "slash": {"$ref": "#/components/schemas/a~1b"},
+                        "tilde": {"$ref": "#/components/schemas/c~0d"},
+                    },
+                }}}}}}},
+            },
+            "components": {"schemas": {
+                "a/b": {"type": "string"},
+                "c~d": {"type": "integer"},
+                "plain": {"type": "boolean"},
+            }},
+        };
+        hash<PruneResultInfo> r = RestSchemaPruner::prune(doc,
+            (<SchemaOperationInfo>{"method": "GET", "path": "/x"},));
+        assertEq(("a/b", "c~d"), keys r.schema.components.schemas,
+            "components named through escaped pointers are kept, and only those");
+
+        # and the same escaping applied directly
+        assertEq({"a/b": {"type": "string"}}, RestSchemaPruner::keepReachable(
+            {"a/b": {"type": "string"}, "other": {}}, "#/components/schemas/",
+            {"#/components/schemas/a~1b": True}));
     }
 
     #! Only the selected method/path operations survive

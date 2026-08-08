@@ -133,32 +133,6 @@ public class LinkedInUtil {
         return rv;
     }
 
-    #! Normalizes an Images API or Videos API asset resource
-    static hash<auto> normalizeMediaAsset(hash<auto> asset) {
-        hash<auto!> rv = {
-            "id": asset.id,
-            "owner": asset.owner,
-            "status": asset.status,
-            "download_url": asset.downloadUrl,
-            "download_url_expires_at": LinkedInUtil::msToDate(asset.downloadUrlExpiresAt),
-        };
-        if (exists asset.processingFailureReason) {
-            rv.processing_failure_reason = asset.processingFailureReason;
-        }
-        if (exists asset.duration) {
-            rv.duration_ms = asset.duration;
-        }
-        if (exists asset.thumbnail) {
-            rv.thumbnail = asset.thumbnail;
-        }
-        if (exists asset.aspectRatioWidth) {
-            rv.aspect_ratio_width = asset.aspectRatioWidth;
-        }
-        if (exists asset.aspectRatioHeight) {
-            rv.aspect_ratio_height = asset.aspectRatioHeight;
-        }
-        return rv;
-    }
 }
 
 #! The article content of a post
@@ -426,6 +400,12 @@ public class LinkedInCreatedPostDataType inherits HashDataType {
 public const LinkedInCreatedPostDataType = new LinkedInCreatedPostDataType();
 
 #! A LinkedIn media asset (image or video)
+/** @note Deliberately limited to what an upload can actually report.  LinkedIn's asset resources
+    also carry a processing status, download URL, duration and aspect ratio, but a token holding
+    only \c w_member_social is **write-only** on \c "/rest/images" and \c "/rest/videos" — reading
+    the asset back returns HTTP 403 on exactly the connections these actions are meant for.  Naming
+    those fields here would promise output the actions can never produce.
+*/
 public class LinkedInMediaAssetDataType inherits HashDataType {
     private {
         const Fields = {
@@ -433,7 +413,10 @@ public class LinkedInMediaAssetDataType inherits HashDataType {
                 "display_name": "Media URN",
                 "short_desc": "The asset's URN",
                 "desc": "The asset's URN (`urn:li:image:...` or `urn:li:video:...`); this is the "
-                    "value a post's content takes",
+                    "value a post's content takes.\n\n"
+                    "LinkedIn processes an asset asynchronously after it is uploaded, so it may "
+                    "still be processing when this returns; a post can be created with it "
+                    "regardless, and LinkedIn publishes the post once processing completes.",
                 "type": AbstractDataProviderTypeMap."string",
             },
             "owner": {
@@ -441,58 +424,6 @@ public class LinkedInMediaAssetDataType inherits HashDataType {
                 "short_desc": "The URN of the entity that owns the asset",
                 "desc": "The URN of the entity that owns the asset",
                 "type": AbstractDataProviderTypeMap."*string",
-            },
-            "status": {
-                "display_name": "Status",
-                "short_desc": "The asset's processing status",
-                "desc": "The asset's processing status: `WAITING_UPLOAD`, `PROCESSING`, "
-                    "`AVAILABLE` or `PROCESSING_FAILED`.\n\n"
-                    "An asset can be attached to a post while it is still `PROCESSING`; LinkedIn "
-                    "publishes the post once processing completes.",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "download_url": {
-                "display_name": "Download URL",
-                "short_desc": "A URL the asset can be downloaded from",
-                "desc": "A URL the asset can be downloaded from; only present once the asset is "
-                    "available",
-                "type": AbstractDataProviderTypeMap."*uri",
-            },
-            "download_url_expires_at": {
-                "display_name": "Download URL Expiry",
-                "short_desc": "When the download URL stops working",
-                "desc": "When the download URL stops working",
-                "type": AbstractDataProviderTypeMap."*date",
-            },
-            "processing_failure_reason": {
-                "display_name": "Processing Failure Reason",
-                "short_desc": "Why processing failed",
-                "desc": "Why processing failed; only present when the status is `PROCESSING_FAILED`",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "duration_ms": {
-                "display_name": "Duration (ms)",
-                "short_desc": "The video's length in milliseconds",
-                "desc": "The video's length in milliseconds; videos only",
-                "type": AbstractDataProviderTypeMap."*int",
-            },
-            "thumbnail": {
-                "display_name": "Thumbnail URL",
-                "short_desc": "A URL of the video's thumbnail",
-                "desc": "A URL of the video's thumbnail; videos only",
-                "type": AbstractDataProviderTypeMap."*uri",
-            },
-            "aspect_ratio_width": {
-                "display_name": "Aspect Ratio Width",
-                "short_desc": "The aspect ratio width (16 for 16:9)",
-                "desc": "The aspect ratio width (16 for 16:9)",
-                "type": AbstractDataProviderTypeMap."*float",
-            },
-            "aspect_ratio_height": {
-                "display_name": "Aspect Ratio Height",
-                "short_desc": "The aspect ratio height (9 for 16:9)",
-                "desc": "The aspect ratio height (9 for 16:9)",
-                "type": AbstractDataProviderTypeMap."*float",
             },
         };
     }
