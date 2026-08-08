@@ -264,6 +264,23 @@ the phase, not during it.
 
 ## Phase T — Stripe
 
+> **Status: code complete (2026-08-08), unpushed.** All five deliverables are implemented and
+> tested. What remains is operational: live verification against a real Stripe account, and the
+> flag day (the app name `Stripe` collides with the TS catalogue, so the TS app must be deleted
+> first). Commits: `d4f497062` (generic layer), `b588b0d69` (Stripe app), `8d50c8684` (drift),
+> `0d183fc41` (webhooks), plus root fixes `1403dd57e` and `44ca4ef47`.
+>
+> The two open questions below were both answered "yes, generalize":
+> §T.1 became `qlib/RestSchemaActions/`, which the other ~18 schema-driven apps can now use, and
+> §T.2 became `DataProvider::WebhookSignature` in `qlib/DataProvider/WebhookSupport.qc`.
+> Generalizing the second immediately paid for itself: it exposed that **both** existing verifiers
+> had the HMAC key and data arguments swapped and so rejected every genuine delivery.
+>
+> One deliberate scope change: **38 operations are exported, not 37.** `GET /v1/accounts` was added
+> so the connected-account option can be a dropdown; the TS app provided that through a helper that
+> called an endpoint outside its own allowed-path set.
+
+
 `apps/stripe` is 3413 lines and contains **zero hand-written actions**. Its surface
 comes from two places: actions generated from an OpenAPI document (§T.1), and 13
 webhook triggers (§T.2). Only the first raises a real question.
@@ -412,12 +429,12 @@ its size by an order of magnitude.
 1. **Live tenants**: a GCP project with a service account (phase G); a LinkedIn
    developer application for the member scopes and a second, separately approved,
    DMA application (phase L); a Stripe account with webhook access (phase T).
-2. **§T.1 scope** — is schema-driven app-action registration funded as
-   infrastructure for ~19 apps, or is Stripe hand-written as 20 actions? This
-   changes phase T from a large infrastructure item to a small port, and changes
-   what the other 18 apps cost later.
-3. **Should webhook signature verification be generalised** (§T.2)? Only 2 of the
-   16 webhook providers verify (EasyPost, Mailgun), and none of the 24 webhook
-   apps in `module-v8` do. Stripe forces the issue because forged payment events
-   are a real risk, but the fix belongs on the shared webhook layer rather than in
-   one app.
+2. ~~**§T.1 scope**~~ — **ANSWERED: funded as infrastructure.** Built as
+   `qlib/RestSchemaActions/`: manifest, request flattening, declarative UX overlay,
+   wire codecs, reference data and drift reporting. The other ~18 schema-driven apps
+   can now be ported without repeating any of it.
+3. ~~**Should webhook signature verification be generalised** (§T.2)?~~ — **ANSWERED: yes.**
+   Built as `DataProvider::WebhookSignature`. Generalizing it exposed that both existing
+   verifiers had the `hmac()` key and data arguments swapped, computing the digest over the
+   key rather than with it, so both rejected every genuine delivery. The remaining 14
+   non-verifying providers can now adopt it.
