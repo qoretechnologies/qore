@@ -38,7 +38,12 @@
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_Datasource.h"
+#include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/DatasourcePool.h"
+#include "qore/intern/ManagedDatasource.h"
+#include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
@@ -2962,6 +2967,70 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
     sock->dbgForceFdSwapNextWait();
     return QoreValue();
 }
+
+//! Debug-only: arm a one-shot connection abort for an exact mutation \c "op_id".
+/** A consumer of the datasource mutation observer cannot otherwise produce a structural
+    LOST_CONNECTION outcome on a real driver: connection_aborted is settable only from inside a
+    driver, and the mock dbitest driver is not installed, so it cannot serve an end-to-end test
+    against a real database server.
+
+    The abort itself is real, not simulated: it runs the ordinary
+    Datasource::connectionAborted() path, which ends the transaction, marks the connection aborted
+    and closes it, so the server discards the in-flight transaction exactly as it would on a genuine
+    connection loss.  The outcome the observer then sees is produced by the existing classification
+    code with no special casing.
+
+    Because the abort is applied at the core boundary rather than inside a driver, it works
+    identically on every DBI driver.
+
+    The arming is stored on the shared mutation context, so arming a DatasourcePool covers whichever
+    pooled connection the calling thread is allocated.
+
+    @param ds the Datasource or DatasourcePool to arm
+    @param op_id the exact declared operation identity to abort on; an empty string disarms
+    @param when the boundary; see @ref sql_mutation_debug_fault_codes
+ */
+static QoreValue f_dbg_ds_arm_connection_abort(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR",
+            "dbg_ds_arm_connection_abort() requires an AbstractDatasource argument");
+        return QoreValue();
+    }
+    const QoreStringNode* op_id = get_param_value(params, 1).get<const QoreStringNode>();
+    const int when = (int)get_param_value(params, 2).getAsBigInt();
+
+    QoreObject* o = const_cast<QoreObject*>(obj);
+    SqlMutationContext* ctx = nullptr;
+
+    ReferenceHolder<ManagedDatasource> mds(
+        reinterpret_cast<ManagedDatasource*>(o->getReferencedPrivateData(CID_DATASOURCE, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (mds) {
+        ctx = mds->getOrCreateMutationContext();
+    } else {
+        ReferenceHolder<DatasourcePool> dsp(
+            reinterpret_cast<DatasourcePool*>(o->getReferencedPrivateData(CID_DATASOURCEPOOL, xsink)), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!dsp) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ds_arm_connection_abort() requires a Datasource "
+                "or DatasourcePool argument; got an object of class '%s'", o->getClassName());
+            return QoreValue();
+        }
+        // the pool owns the context under its own lock, so it does the arming itself
+        dsp->dbgArmConnectionAbort(op_id ? op_id->c_str() : nullptr, when);
+        return QoreValue();
+    }
+
+    assert(ctx);
+    ctx->dbgArmFault(op_id ? op_id->c_str() : nullptr, when);
+    return QoreValue();
+}
 #endif
 
 // --- code flag oracle (debug builds only) ---
@@ -3184,6 +3253,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_ds_arm_connection_abort", f_dbg_ds_arm_connection_abort,
+        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 3,
+        QC_ABSTRACTDATASOURCE->getTypeInfo(), QORE_PARAM_NO_ARG, "ds",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "op_id",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "when");
 #endif
 
     // code flag oracle; the mask on each of these is the point of the declaration, so it must match

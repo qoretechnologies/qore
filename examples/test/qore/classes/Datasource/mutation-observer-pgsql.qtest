@@ -61,6 +61,10 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
 
         const OptionColumn = 22;
 
+        # mirrors SQL_MUTATION_FAULT_AFTER_EXEC in include/qore/intern/SqlMutationContext.h, which
+        # is compiled only in debug builds and so is not exported as a %Qore constant
+        const FaultAfterExec = 1;
+
         const OpInfo = <SqlMutationInfo>{
             "op_id": "pg-op-1",
             "path_id": "mutation_observer_test.insert",
@@ -87,6 +91,7 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         addTestCase("pgsql admission rejection", \admissionRejectionTest());
         addTestCase("pgsql prepared statement", \preparedStatementTest());
         addTestCase("pgsql pool", \poolTest());
+        addTestCase("pgsql armed abort is replay safe", \armedAbortReplaySafeTest());
 
         set_return_value(main());
     }
@@ -289,5 +294,63 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         assertEq("tenant-1", obs.outcome().arg);
         assertEq(1, dsp.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
         dsp.rollback();
+    }
+
+    #! a deterministic replay-safe failover against a real PostgreSQL server
+    /** This is the case the dbitest mock driver cannot cover: dbitest is not installed, so it can
+        never stand in for a real database in an end-to-end test.  The abort here runs the ordinary
+        connection-loss path, so the PostgreSQL backend really does discard the transaction, and the
+        row written before the abort must not survive.
+    */
+    armedAbortReplaySafeTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 1}));
+            ds.exec(sprintf("insert into %s values (%%v, %%v)", TableName), 1, "one");
+            try {
+                call_function("dbg_ds_arm_connection_abort", ds, OpInfo.op_id, FaultAfterExec);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                    testSkip("debug build required for dbg_ds_arm_connection_abort()");
+                }
+                rethrow;
+            }
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.exec(),
+                (sprintf("insert into %s values (%%v, %%v)", TableName), 2, "two"));
+        }
+
+        # the statement was executed and no commit was attempted, so the same reservation may be
+        # reused for the replay
+        hash<SqlMutationEventInfo> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC).last();
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, post.outcome);
+        assertTrue(post.replay_safe);
+        assertEq("pg-op-1", post.info.op_id);
+        assertEq("pgsql", post.driver);
+
+        # the transaction is terminated by the connection loss and is never reported as a commit
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, out.outcome);
+        assertTrue(out.replay_safe);
+        assertFalse(ds.currentThreadInTransaction());
+
+        # the server really discarded the transaction: neither row survived
+        obs.reset();
+        ds.open();
+        assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+        ds.commit();
+
+        # the replay presents the same op_id with a higher attempt and commits for real
+        obs.reset();
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 2}));
+            ds.exec(sprintf("insert into %s values (%%v, %%v)", TableName), 1, "one");
+            ds.commit();
+        }
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertEq(2, obs.outcome().info.attempt);
+        assertEq(1, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+        ds.commit();
     }
 }

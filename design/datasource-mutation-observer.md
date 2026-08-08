@@ -422,6 +422,38 @@ Test matrix:
 - concurrent pools and tenants, with no cross-talk between two pools in one process;
 - PostgreSQL equivalents where `QORE_DB_CONNSTR_PGSQL` is set, guarded by `%try-module pgsql`.
 
+### Deterministic faults on a real driver
+
+`dbitest` cannot cover an end-to-end test against a real database server, because it is not
+installed and is not a real driver.  For that case a debug build registers one builtin:
+
+```qore
+dbg_ds_arm_connection_abort(AbstractDatasource ds, string op_id, int when);
+```
+
+It arms a one-shot connection abort for an exact declared `op_id`, at either
+`SQL_MUTATION_FAULT_AFTER_EXEC` (after the statement has been executed and before any commit, giving
+`LOST_CONNECTION` with `replay_safe` `True`) or `SQL_MUTATION_FAULT_ON_COMMIT` (with the
+`commit_in_progress` flag set, giving `COMMIT_AMBIGUOUS`).  An arming that does not match the
+current operation's `op_id` is left untouched, and a match consumes it.
+
+Three properties make this a real outcome rather than a simulated one:
+
+- the abort runs the ordinary `Datasource::connectionAborted()` path, so the connection is really
+  closed and the server really discards the in-flight transaction;
+- the resulting outcome is produced by the existing classification code, with no special casing for
+  the fault;
+- because the abort is applied at the core boundary rather than inside a driver, it behaves
+  identically on every DBI driver.
+
+The arming lives on the `SqlMutationContext`, which a `DatasourcePool` shares with every connection
+it pools, so a test can arm the pool without knowing which connection its thread will be allocated.
+
+Everything here is compiled only when `DEBUG` is defined: a release build registers no function and
+carries no fault state, so there is no way to reach any of it in production.  Tests call the builtin
+by name through `call_function()` and skip when it is absent, so a release-build test run skips
+rather than failing to parse.
+
 ## Performance
 
 `bench/cases/bench_datasource_mutation_observer.qr` measures the monitored and unmonitored statement

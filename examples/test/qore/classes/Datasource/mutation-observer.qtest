@@ -81,6 +81,13 @@ public class MutationObserverTest inherits QUnit::Test {
             "effect": SQL_MUTATION_EFFECT_MAY_GROW,
             "max_growth_bytes": 1048576,
         };
+
+        # debug fault boundary codes; these mirror the SQL_MUTATION_FAULT_* values in
+        # include/qore/intern/SqlMutationContext.h, which are compiled only in debug builds and so
+        # are not exported as %Qore constants
+        const FaultNone = 0;
+        const FaultAfterExec = 1;
+        const FaultOnCommit = 2;
     }
 
     private {
@@ -98,6 +105,10 @@ public class MutationObserverTest inherits QUnit::Test {
         addTestCase("autocommit commit ambiguity", \autocommitAmbiguityTest());
         addTestCase("restartable failover", \failoverTest());
         addTestCase("failover replay identity", \failoverReplayTest());
+        addTestCase("armed abort identity", \armedAbortIdentityTest());
+        addTestCase("armed abort is replay safe", \armedAbortReplaySafeTest());
+        addTestCase("armed abort on commit is ambiguous", \armedAbortCommitAmbiguousTest());
+        addTestCase("armed abort on a prepared statement", \armedAbortStatementTest());
         addTestCase("admission rejection", \admissionRejectionTest());
         addTestCase("admission rejection in a transaction", \admissionRejectionInTransactionTest());
         addTestCase("admission exception is terminal", \admissionExceptionTerminalTest());
@@ -331,6 +342,152 @@ public class MutationObserverTest inherits QUnit::Test {
         assertEq(2, second.info.attempt);
         # the replay is a new transaction, so the transaction identity differs
         assertNeq(first.tx_id, second.tx_id);
+    }
+
+    #! arms a one-shot debug connection abort, skipping the test in a release build
+    /** dbg_ds_arm_connection_abort() is registered only in debug builds, so it is called by name:
+        a release-build test run sees an unresolved function and skips instead of failing to parse.
+    */
+    private armAbort(Datasource ds, string op_id, int when) {
+        try {
+            call_function("dbg_ds_arm_connection_abort", ds, op_id, when);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_ds_arm_connection_abort()");
+            }
+            rethrow;
+        }
+    }
+
+    #! the armed abort is keyed on an exact op_id and is consumed by the operation it matched
+    armedAbortIdentityTest() {
+        Datasource ds = getDs();
+
+        # an arming for a different operation must never disturb this one
+        armAbort(ds, "some-other-op", FaultAfterExec);
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            assertEq(1, ds.exec("insert into t values (1)"));
+        }
+        assertEq(SQL_MUTATION_OUTCOME_OK, obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC)[0].outcome);
+        ds.rollback();
+
+        # an undeclared operation carries no op_id, so nothing can match it
+        obs.reset();
+        assertEq(1, ds.exec("insert into t values (1)"));
+        assertEq(SQL_MUTATION_OUTCOME_OK, obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC)[0].outcome);
+        ds.rollback();
+
+        # the matching operation aborts, and the arming is consumed by it
+        obs.reset();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            armAbort(ds, OpInfo.op_id, FaultAfterExec);
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.exec(), "insert into t values (1)");
+        }
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION,
+            obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC)[0].outcome);
+
+        # one-shot: the same operation runs normally on the next attempt with no re-arming
+        obs.reset();
+        ds.open();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            assertEq(1, ds.exec("insert into t values (1)"));
+        }
+        assertEq(SQL_MUTATION_OUTCOME_OK, obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC)[0].outcome);
+        ds.rollback();
+
+        # arming with an empty op_id disarms
+        obs.reset();
+        armAbort(ds, OpInfo.op_id, FaultAfterExec);
+        armAbort(ds, "", FaultNone);
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            assertEq(1, ds.exec("insert into t values (1)"));
+        }
+        assertEq(SQL_MUTATION_OUTCOME_OK, obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC)[0].outcome);
+        ds.rollback();
+    }
+
+    #! an armed abort after execution is a structural replay-safe failover
+    armedAbortReplaySafeTest() {
+        Datasource ds = getDs();
+
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 1}));
+            ds.exec("insert into t values (1)");
+            armAbort(ds, OpInfo.op_id, FaultAfterExec);
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.exec(), "insert into t values (2)");
+        }
+
+        # the statement was executed and no commit was attempted, so the operation may be replayed
+        # against the same reservation
+        hash<SqlMutationEventInfo> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC).last();
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, post.outcome);
+        assertTrue(post.replay_safe);
+        assertEq("op-1", post.info.op_id);
+        assertEq(1, post.info.attempt);
+
+        # the transaction is terminated by the same connection loss, and is never reported as a
+        # commit of any kind
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, out.outcome);
+        assertTrue(out.replay_safe);
+        assertEq(SQL_STMT_CLASS_ROLLBACK, out.stmt_class);
+        assertFalse(ds.currentThreadInTransaction());
+
+        # the replay presents the same op_id with a higher attempt and commits normally
+        obs.reset();
+        ds.open();
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 2}));
+            ds.exec("insert into t values (2)");
+            ds.commit();
+        }
+        hash<SqlMutationEventInfo> replay = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, replay.outcome);
+        assertEq("op-1", replay.info.op_id);
+        assertEq(2, replay.info.attempt);
+        assertNeq(out.tx_id, replay.tx_id);
+    }
+
+    #! an armed abort during a commit is ambiguous and is never reported as a rollback
+    armedAbortCommitAmbiguousTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            ds.exec("insert into t values (1)");
+            armAbort(ds, OpInfo.op_id, FaultOnCommit);
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.commit());
+        }
+
+        # the core cannot know whether the server applied the commit, so a consumer must not release
+        # the reservation
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
+        assertFalse(out.replay_safe);
+        assertEq(SQL_STMT_CLASS_COMMIT, out.stmt_class);
+    }
+
+    #! a prepared statement reaches the same armed boundary
+    armedAbortStatementTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            # arm before the statement exists: a release build skips here, and a bound but
+            # unexecuted SQLStatement must not be left behind by the skip
+            armAbort(ds, OpInfo.op_id, FaultAfterExec);
+            SQLStatement stmt(ds);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \stmt.exec());
+        }
+
+        hash<SqlMutationEventInfo> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC).last();
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, post.outcome);
+        assertTrue(post.replay_safe);
+        assertEq(SQL_STMT_CLASS_STMT_EXEC, post.stmt_class);
     }
 
     admissionRejectionTest() {

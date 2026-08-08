@@ -1127,6 +1127,15 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
     //printd(5, "Datasource::exec_internal() this=%p, autocommit=%d, in_transaction=%d, xsink=%d\n", this,
     //    priv->autocommit, priv->in_transaction, xsink->isException());
 
+#ifdef DEBUG
+    // the statement has been executed and no commit has been attempted: this is the replay-safe
+    // boundary a test arms to prove restartable failover on a real driver
+    if (!*xsink && priv->dbgCheckArmedFault(SQL_MUTATION_FAULT_AFTER_EXEC, xsink)) {
+        rv.discard(xsink);
+        rv = QoreValue();
+    }
+#endif
+
     if (priv->connection_aborted) {
         assert(*xsink);
         assert(!rv);

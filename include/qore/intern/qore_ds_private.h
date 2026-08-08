@@ -330,6 +330,37 @@ struct qore_ds_private {
         dispatchMutationEvent(term, xsink);
     }
 
+#ifdef DEBUG
+    //! triggers an armed debug connection abort when the current operation matches it
+    /** Debug builds only.  The abort goes through the ordinary Datasource::connectionAborted()
+        path, so the connection is really closed and the server really discards the transaction;
+        nothing about the resulting outcome is synthesized.  The exception is required: the
+        connection_aborted paths assert that one is active.
+
+        @param when the boundary being passed; see @ref sql_mutation_debug_fault_codes
+
+        @return true if the connection was aborted, in which case an exception has been raised
+    */
+    DLLLOCAL bool dbgCheckArmedFault(int when, ExceptionSink* xsink) {
+        SqlMutationContext* ctx = getMutationCtx();
+        if (!ctx || !ctx->dbgFaultArmed()) {
+            return false;
+        }
+        ReferenceHolder<QoreHashNode> decl(ctx->getDeclaration(), xsink);
+        if (!decl) {
+            return false;
+        }
+        QoreStringNodeValueHelper op_id(decl->getKeyValue("op_id"));
+        if (ctx->dbgTakeArmedFault(op_id->c_str()) != when) {
+            return false;
+        }
+        xsink->raiseException(SQL_MUTATION_DEBUG_ABORT_ERR, "debug connection abort armed for op_id %s "
+            "triggered at boundary %d", op_id->c_str(), when);
+        connectionAborted(xsink);
+        return true;
+    }
+#endif
+
     //! emits a transaction start event
     DLLLOCAL void dispatchMutationTxBegin(ExceptionSink* xsink) {
         if (!observes(SQL_MUTATION_MASK_TX)) {
@@ -438,7 +469,15 @@ struct qore_ds_private {
         // the flag is what makes commit ambiguity structural: any failure or connection loss while
         // it is set means the core cannot know whether the server applied the commit
         commit_in_progress = true;
+#ifdef DEBUG
+        // an abort armed for the commit boundary is triggered with the flag set, so that it is
+        // classified as ambiguous exactly as a real connection loss during a commit would be
+        int rc = dbgCheckArmedFault(SQL_MUTATION_FAULT_ON_COMMIT, xsink)
+            ? -1
+            : qore_dbi_private::get(*dsl)->commit(ds, xsink);
+#else
         int rc = qore_dbi_private::get(*dsl)->commit(ds, xsink);
+#endif
         commit_in_progress = false;
         // a commit that did not demonstrably succeed is always ambiguous and is never reported as a
         // rollback: the server may have applied it

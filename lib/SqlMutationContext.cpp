@@ -287,6 +287,38 @@ void SqlMutationContext::getNewTransactionId(std::string& tx_id) {
     tx_id = buf;
 }
 
+#ifdef DEBUG
+void SqlMutationContext::dbgArmFault(const char* op_id, int when) {
+    AutoLocker al(m);
+    if (when == SQL_MUTATION_FAULT_NONE || !op_id || !*op_id) {
+        dbg_fault_op_id.clear();
+        dbg_fault_when = SQL_MUTATION_FAULT_NONE;
+        dbg_fault_armed.store(false, std::memory_order_relaxed);
+        return;
+    }
+    dbg_fault_op_id = op_id;
+    dbg_fault_when = when;
+    dbg_fault_armed.store(true, std::memory_order_relaxed);
+}
+
+int SqlMutationContext::dbgTakeArmedFault(const char* op_id) {
+    if (!op_id || !*op_id || !dbg_fault_armed.load(std::memory_order_relaxed)) {
+        return SQL_MUTATION_FAULT_NONE;
+    }
+    AutoLocker al(m);
+    if (dbg_fault_op_id != op_id) {
+        // an operation the test did not arm must never be disturbed
+        return SQL_MUTATION_FAULT_NONE;
+    }
+    const int when = dbg_fault_when;
+    // one-shot: the arming is consumed by the operation it matched
+    dbg_fault_op_id.clear();
+    dbg_fault_when = SQL_MUTATION_FAULT_NONE;
+    dbg_fault_armed.store(false, std::memory_order_relaxed);
+    return when;
+}
+#endif
+
 int SqlMutationContext::dispatch(const SqlMutationEvent& ev, const Datasource& ds, ExceptionSink* xsink) {
     assert(xsink);
 
