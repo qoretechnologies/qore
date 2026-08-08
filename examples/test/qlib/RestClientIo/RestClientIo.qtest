@@ -690,6 +690,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("copyWithUrl preserves the subclass", \testCopyWithUrlPreservesClass());
         addTestCase("getConstructorOptions returns original caller opts",
             \testGetConstructorOptions());
+        addTestCase("credentials are redacted in reported request headers",
+            \testCredentialRedaction());
         addTestCase("restDoRawRequest sends pre-serialized body as-is",
             \testRestDoRawRequest());
 
@@ -2442,6 +2444,48 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
         assertEq(200, resp.status_code);
         assertEq(True, exists resp.body.request_headers.authorization);
+    }
+
+    testCredentialRedaction() {
+        # a request is reported with the headers that were sent, and a credential must not be among
+        # them: that metadata reaches log files, bug reports and ticket attachments, and a bearer token
+        # or password that gets there has to be treated as compromised
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+        rest.setUserPassword("testuser", "testpass");
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
+        assertEq(200, resp.status_code);
+        # the header name is kept: knowing a request carried authorization is diagnostic
+        assertTrue(exists resp.request_headers.authorization);
+        assertEq("<redacted>", resp.request_headers.authorization);
+        assertEq(-1, sprintf("%y", resp.request_headers).find("testpass"));
+        # the client itself still holds the real value, so requests keep working
+        assertRegex("^Basic ", rest.getDefaultHeaders().authorization);
+        # and a header that is not a credential is untouched
+        assertRegex("Qore-RestClientIo/", resp.request_headers."user-agent");
+
+        # the same has to hold on the error path, which is where an exception carries the headers;
+        # this needs a client that throws rather than passing the error response through
+        RestClientIo::RestClientIo strict = createClient({"error_passthru": False});
+        on_exit strict.close();
+        strict.setUserPassword("testuser", "testpass");
+        try {
+            strict.restGet("/error");
+            fail("an error response must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq("<redacted>", ex.arg.request_headers.authorization);
+            assertEq(-1, sprintf("%y", ex).find("testpass"));
+        }
+
+        # matching is case-insensitive, as HTTP header names are
+        assertEq({"X-Api-Key": "<redacted>", "Accept": "application/json"},
+            RestClientIo::RestClientIo::redactHeaders({
+                "X-Api-Key": "secret-value",
+                "Accept": "application/json",
+            }));
+        assertNothing(RestClientIo::RestClientIo::redactHeaders());
     }
 
     testBasicAuthClear() {

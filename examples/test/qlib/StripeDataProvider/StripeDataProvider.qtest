@@ -270,6 +270,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         addTestCase("live listings", \liveListingTest());
         addTestCase("live error handling", \liveErrorTest());
         addTestCase("live customer round trip", \liveCustomerRoundTripTest());
+        addTestCase("live credential redaction", \liveCredentialRedactionTest());
 
         set_return_value(main());
     }
@@ -750,13 +751,19 @@ public class StripeDataProviderTest inherits QUnit::Test {
         # the nested metadata object survived form encoding
         assertEq("1", created.metadata.qore_test);
 
+        bool removed = False;
         on_exit {
-            # always remove the object this test created, whatever happened above
-            try {
-                dp.getChildProviderEx("delete-customer").doRequest({"customer": created.id});
-            } catch (hash<ExceptionInfo> ex) {
-                printf("WARNING: could not delete test customer %y: %s\n", created.id,
-                    get_exception_string(ex));
+            # remove the object this test created, whatever happened above; the delete below is the last
+            # assertion of the happy path, so this only has work to do when something failed before it
+            if (!removed) {
+                try {
+                    dp.getChildProviderEx("delete-customer").doRequest({"customer": created.id});
+                } catch (hash<ExceptionInfo> ex) {
+                    # only the message: an exception from a REST client carries the request context, and
+                    # printing it wholesale would put the credential in the test output
+                    printf("WARNING: could not delete test customer %y: %s: %s\n", created.id, ex.err,
+                        ex.desc);
+                }
             }
         }
 
@@ -773,6 +780,33 @@ public class StripeDataProviderTest inherits QUnit::Test {
 
         hash<auto> deleted = dp.getChildProviderEx("delete-customer").doRequest({"customer": created.id});
         assertTrue(deleted.deleted);
+        removed = True;
+    }
+
+    liveCredentialRedactionTest() {
+        *StripeRestClientIo rest = getLiveClient();
+        if (!rest) {
+            return;
+        }
+        StripeDataProvider dp(rest);
+        AbstractDataProvider gc = dp.getChildProviderEx("get-customer");
+
+        # a failed request is reported with the headers that were sent, and a credential must not be
+        # among them: an exception ends up in log files, bug reports and ticket attachments, and a
+        # bearer token that reaches any of those has to be treated as compromised
+        try {
+            gc.doRequest({"customer": "cus_qore_does_not_exist"});
+            fail("retrieving a non-existent customer must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            *hash<auto> sent = ex.arg.request_headers;
+            assertTrue(sent.hasKey("authorization") || sent.hasKey("Authorization"),
+                "the header name is kept, because knowing a request was authorized is diagnostic");
+            string value = (sent.authorization ?? sent.Authorization).toString();
+            assertEq("<redacted>", value);
+            # and nothing anywhere in the exception carries the live key
+            assertEq(-1, sprintf("%y", ex).find("rk_"), "no restricted key anywhere in the exception");
+            assertEq(-1, sprintf("%y", ex).find("sk_"), "no secret key anywhere in the exception");
+        }
     }
 
 }

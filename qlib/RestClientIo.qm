@@ -660,6 +660,27 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
 
         public {
+            #! Request headers whose values are removed from response and error metadata
+            /** A failed request is reported with the headers that were sent, so that a caller can see
+                what went out.  A credential is not diagnostic information: an authorization header
+                copied into an exception ends up in log files, bug reports and ticket attachments, and a
+                bearer token or API key that reaches any of those has to be treated as compromised.
+
+                Matched without regard to case, as HTTP header names are case-insensitive.
+
+                @since RestClientIo 1.1
+            */
+            const SensitiveRequestHeaders = {
+                "authorization": True,
+                "proxy-authorization": True,
+                "cookie": True,
+                "x-api-key": True,
+                "api-key": True,
+                "apikey": True,
+                "x-auth-token": True,
+                "x-amz-security-token": True,
+            };
+
             #! Accept header list
             const SupportsCbor =
                 exists_function("make_cbor") && exists_function("parse_cbor")
@@ -2812,6 +2833,26 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @throw REST-RESPONSE-ERROR if \a req_error_passthru is False and status >= 300
         */
+        #! Returns the given request headers with credential values removed
+        /** @param hdr the headers that were sent
+
+            @return the headers with the value of every header named in @ref SensitiveRequestHeaders
+            replaced by \c "<redacted>"; the header names are kept, because knowing that a request
+            carried authorization is diagnostic while the credential itself is not
+
+            @since RestClientIo 1.1
+        */
+        static *hash<auto> redactHeaders(*hash<auto> hdr) {
+            if (!hdr) {
+                return hdr;
+            }
+            hash<auto> rv = {};
+            foreach hash<auto> i in (hdr.pairIterator()) {
+                rv{i.key} = SensitiveRequestHeaders{i.key.lwr()} ? "<redacted>" : i.value;
+            }
+            return rv;
+        }
+
         private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw,
                 bool req_error_passthru, bool req_allow_any_response, string method,
                 string path, *hash<auto> request_headers, *data request_body) {
@@ -2875,7 +2916,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         "response_body_raw": response_body_raw,
                         "request_method": method,
                         "request_path": path,
-                        "request_headers": request_headers,
+                        "request_headers": RestClientIo::redactHeaders(request_headers),
                         "request_body": request_body,
                         "protocol": raw.protocol,
                     };
@@ -2889,7 +2930,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 "response_body_raw": response_body_raw,
                 "request_method": method,
                 "request_path": path,
-                "request_headers": request_headers,
+                "request_headers": RestClientIo::redactHeaders(request_headers),
                 "request_body": request_body,
                 "protocol": raw.protocol,
             };
