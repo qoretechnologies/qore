@@ -28,6 +28,7 @@
 %requires Util
 %requires QUnit
 %requires DataProvider
+%requires ConnectionProvider
 %requires StripeDataProvider
 %requires StripeRestClient
 %requires RestClientIo
@@ -238,7 +239,18 @@ public class StripeDataProviderTest inherits QUnit::Test {
         list<hash<DataProviderActionInfo>> actions;
     }
 
-    constructor() : Test("StripeDataProviderTest", "1.0") {
+    public {
+        #! command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+            "write": "W,write-tests",
+        };
+
+        #! Width of the option column in the usage text
+        const OptionColumn = 26;
+    }
+
+    constructor() : Test("StripeDataProviderTest", "1.0", \ARGV, MyOpts) {
         aset = StripeSchema::getActionSet();
         actions = aset.getActionInfoList(StripeDataProvider::AppName);
 
@@ -253,8 +265,20 @@ public class StripeDataProviderTest inherits QUnit::Test {
         addTestCase("connection", \connectionTest());
         addTestCase("webhook events", \webhookEventTest());
         addTestCase("webhook delivery verification", \webhookVerificationTest());
+        # live tests; each skips unless a connection is named
+        addTestCase("live account and balance", \liveAccountTest());
+        addTestCase("live listings", \liveListingTest());
+        addTestCase("live error handling", \liveErrorTest());
+        addTestCase("live customer round trip", \liveCustomerRoundTripTest());
 
         set_return_value(main());
+    }
+
+    #! Prints the extra options this suite accepts
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name for live tests", OptionColumn);
+        printOption("-W,--write-tests", "enable live tests that create and delete objects", OptionColumn);
     }
 
     provenanceTest() {
@@ -599,6 +623,156 @@ public class StripeDataProviderTest inherits QUnit::Test {
         ep.reset();
         ep.deliverRaw({"body": body, "hdr": {"STRIPE-SIGNATURE": ep.sign(body, ts)}});
         assertEq(1, ep.notified.size());
+    }
+
+
+    # --- Live tests (require -c <connection>; writes additionally require -W) ---
+
+    #! Returns a client for the connection named on the command line, or skips the test
+    /** Works either side of the flag day.  A native \c "stripe" connection is used directly; a connection
+        still serving the TypeScript application is used by seeding a native client from its stored
+        credentials, which is how this application can be verified against a real account before the
+        TypeScript one is removed.
+    */
+    private *StripeRestClientIo getLiveClient() {
+        *string conn_name = m_options.conn ?? ENV.STRIPE_CONNECTION;
+        if (!conn_name.val()) {
+            testSkip("no connection specified; use -c,--connection=ARG or set STRIPE_CONNECTION");
+            return;
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        if (conn.getType() == "stripe") {
+            return cast<StripeRestClientIo>(conn.getAsync());
+        }
+        *string token = conn.getInfo({"with_passwords": True}).opts.token;
+        if (!token.val()) {
+            throw "OPTION-ERROR", sprintf("connection %y is type %y and has no stored token to seed a "
+                "native client with; use a native \"stripe\" connection, or one still serving the "
+                "TypeScript application that has been authorized", conn_name, conn.getType());
+        }
+        return new StripeRestClientIo({"api_key": token});
+    }
+
+    liveAccountTest() {
+        *StripeRestClientIo rest = getLiveClient();
+        if (!rest) {
+            return;
+        }
+        StripeDataProvider dp(rest);
+
+        # the account the credentials authenticate as, which also proves the pinned API version is
+        # accepted: Stripe rejects a version it does not recognize
+        hash<auto> acct = dp.getChildProviderEx("get-account").doRequest();
+        assertRegex("^acct_", acct.id);
+        assertTrue(acct.country.val(), "the account declares a country");
+        assertEq(StripeRestClientBase::DefaultApiVersion, rest.getApiVersion());
+
+        # the balance response shape is a contract this module publishes, so upstream drift fails here
+        hash<auto> bal = dp.getChildProviderEx("get-balance").doRequest();
+        assertEq("balance", bal.object);
+        assertEq(NT_LIST, bal.available.typeCode());
+        assertEq(NT_LIST, bal.pending.typeCode());
+        if (bal.available) {
+            assertEq(NT_INT, bal.available[0].amount.typeCode(),
+                "balance amounts are integers in the currency's smallest unit");
+            assertTrue(bal.available[0].currency.val());
+        }
+    }
+
+    liveListingTest() {
+        *StripeRestClientIo rest = getLiveClient();
+        if (!rest) {
+            return;
+        }
+        StripeDataProvider dp(rest);
+
+        # every listing returns the same envelope, and this module publishes it rather than unwrapping
+        # it, because has_more is what a caller needs to paginate
+        foreach string action in (("list-customers", "list-charges", "list-invoices",
+            "list-payment-intents", "list-refunds", "list-balance-transactions")) {
+            hash<auto> resp = dp.getChildProviderEx(action).doRequest({"limit": 1});
+            assertEq("list", resp.object, action + ": envelope object");
+            assertEq(NT_LIST, resp.data.typeCode(), action + ": data is a list");
+            assertEq(NT_BOOLEAN, resp.has_more.typeCode(), action + ": has_more is a boolean");
+            assertLe(1, resp.data.size(), action + ": limit is honored");
+        }
+
+        # the persons listing is the endpoint Stripe's schema declares twice and answers on once
+        hash<auto> people = dp.getChildProviderEx("list-account-people").doRequest({
+            "account": dp.getChildProviderEx("get-account").doRequest().id,
+            "limit": 1,
+        });
+        assertEq("list", people.object);
+    }
+
+    liveErrorTest() {
+        *StripeRestClientIo rest = getLiveClient();
+        if (!rest) {
+            return;
+        }
+        StripeDataProvider dp(rest);
+        AbstractDataProvider gc = dp.getChildProviderEx("get-customer");
+
+        # a real Stripe error reaches the caller with its status and its error envelope intact, rather
+        # than as an opaque failure
+        try {
+            gc.doRequest({"customer": "cus_qore_does_not_exist"});
+            fail("retrieving a non-existent customer must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("invalid_request_error", ex.arg.body.error.type);
+            assertRegex("No such customer", ex.arg.body.error.message);
+        }
+    }
+
+    liveCustomerRoundTripTest() {
+        *StripeRestClientIo rest = getLiveClient();
+        if (!rest) {
+            return;
+        }
+        if (!m_options.write) {
+            testSkip("write tests not enabled; use -W,--write-tests");
+            return;
+        }
+        StripeDataProvider dp(rest);
+
+        # a create/retrieve/update/delete round trip, which is also what proves the form encoding on a
+        # live account: metadata travels as Stripe's deepObject form, not as JSON
+        hash<auto> created = dp.getChildProviderEx("create-customer").doRequest({
+            "email": "qore-test@example.com",
+            "name": "Qore Test Customer",
+            "description": "created by the Qore StripeDataProvider test suite",
+            "metadata": {"qore_test": "1"},
+        });
+        assertRegex("^cus_", created.id);
+        assertEq("qore-test@example.com", created.email);
+        # the nested metadata object survived form encoding
+        assertEq("1", created.metadata.qore_test);
+
+        on_exit {
+            # always remove the object this test created, whatever happened above
+            try {
+                dp.getChildProviderEx("delete-customer").doRequest({"customer": created.id});
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: could not delete test customer %y: %s\n", created.id,
+                    get_exception_string(ex));
+            }
+        }
+
+        hash<auto> fetched = dp.getChildProviderEx("get-customer").doRequest({"customer": created.id});
+        assertEq(created.id, fetched.id);
+        # Stripe carries created as a count of seconds, and the response is published unconverted
+        assertEq(NT_INT, fetched.created.typeCode());
+
+        hash<auto> updated = dp.getChildProviderEx("update-customer").doRequest({
+            "customer": created.id,
+            "name": "Qore Test Customer (updated)",
+        });
+        assertEq("Qore Test Customer (updated)", updated.name);
+
+        hash<auto> deleted = dp.getChildProviderEx("delete-customer").doRequest({"customer": created.id});
+        assertTrue(deleted.deleted);
     }
 
 }
