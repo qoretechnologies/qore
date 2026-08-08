@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BulkUpsertOperation class definition
 
-/*  BulkUpsertOperation.qc Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  BulkUpsertOperation.qc Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -85,6 +85,8 @@ on_error ds.rollback();
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
+            - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
+              is registered (default: @ref True "True"); see @ref bulk_bounded_streams
             - \c "upsert_strategy": the upsert strategy to use; default SqlUtil::AbstractTable::UpsertAuto; see
               @ref upsert_options for possible values for the upsert strategy
         */
@@ -97,6 +99,8 @@ on_error ds.rollback();
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
+            - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
+              is registered (default: @ref True "True"); see @ref bulk_bounded_streams
             - \c "upsert_strategy": the upsert strategy to use; default SqlUtil::AbstractTable::UpsertAuto; see
               @ref upsert_options for possible values for the upsert strategy
         */

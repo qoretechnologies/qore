@@ -36,7 +36,7 @@
 %requires(reexport) SqlUtil
 
 module BulkSqlUtil {
-    version = "1.4";
+    version = "1.5";
     desc = "user module performing bulk DML operations with SqlUtil";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -66,7 +66,46 @@ module BulkSqlUtil {
 
     See the above classes for detailed information and examples.
 
+    @section bulk_bounded_streams Bounded Streams
+
+    A bulk operation writes its data incrementally, one \c block_size block at a time, so it is a
+    bounded stream in the sense of the
+    @ref Qore::SQL::AbstractDatasource::setMutationObserver() "datasource mutation observer": it reports a
+    @ref Qore::SQL::SQL_MUTATION_EVENT_STREAM_BEGIN "STREAM_BEGIN" boundary before the first block reaches the
+    database, a @ref Qore::SQL::SQL_MUTATION_EVENT_STREAM_PROGRESS "STREAM_PROGRESS" event after each block, and a
+    @ref Qore::SQL::SQL_MUTATION_EVENT_STREAM_END "STREAM_END" boundary when the operation ends.
+
+    \c STREAM_BEGIN and \c STREAM_PROGRESS are admission points, so an observer can stop a bulk operation that has
+    written more than it will admit.  Because progress is reported after each block rather than at the end, the
+    operation is stopped <b>before the surrounding transaction can commit</b>, and the rows already written are
+    discarded by the caller's rollback.
+
+    Two properties make this useful in practice:
+    - it is driver-neutral: the reporting is implemented over the ordinary block flush path, so it does not depend
+      on a native bulk-load mechanism such as PostgreSQL \c COPY, and it behaves identically on DBI drivers with and
+      without @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND "array bind" support
+    - it costs nothing when unused: no events are reported unless a mutation observer is registered on the
+      datasource, so operations on unmonitored datasources behave exactly as before
+
+    The consumed byte count is the serialized size of the values written, which is the same measure a producer uses
+    to compute the \c "max_growth_bytes" of its declaration, so declared and consumed byte counts are comparable.
+
+    Reporting can be turned off per operation with the \c "stream_bounds" option.  When the transaction is committed
+    on the datasource directly rather than through
+    @ref BulkSqlUtil::AbstractBulkOperation::commit() "AbstractBulkOperation::commit()", call
+    @ref BulkSqlUtil::AbstractBulkOperation::endStream() "AbstractBulkOperation::endStream()" first so that the
+    observer sees the stream's end boundary before the transaction outcome.
+
     @section bulksqlutil_relnotes Release Notes
+
+    @subsection bulksqlutil_v1_5 BulkSqlUtil v1.5
+    - bulk operations now report themselves as bounded streams to a datasource mutation observer, so that an
+      observer can stop an operation that exceeds what it will admit before the transaction commits; see
+      @ref bulk_bounded_streams
+    - added @ref BulkSqlUtil::AbstractBulkOperation::endStream() "AbstractBulkOperation::endStream()" and the
+      \c "stream_bounds" option
+    - the type of @ref BulkSqlUtil::AbstractBulkOperation::OptionDefaults "AbstractBulkOperation::OptionDefaults"
+      widened from \c hash<string, int> to \c hash<string, auto> to carry the boolean \c "stream_bounds" default
 
     @subsection bulksqlutil_v1_4 BulkSqlUtil v1.4
     - bulk inserts now forward caller-requested \c returning columns through every flush block and deliver each
