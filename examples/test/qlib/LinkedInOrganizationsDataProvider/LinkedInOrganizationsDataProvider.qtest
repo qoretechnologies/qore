@@ -197,6 +197,15 @@ class TestNewPostDataProvider inherits LinkedInOrganizationsDataProvider::Linked
 
 public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
     public {
+        #! command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+            "org": "o,organization=s",
+        };
+
+        #! Width of the option column in the usage text
+        const OptionColumn = 26;
+
         const OrgId = "2414183";
         const OrgUrn = "urn:li:organization:2414183";
         const PageUrn = "urn:li:organizationalPage:2414183";
@@ -222,7 +231,7 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
         };
     }
 
-    constructor() : Test("LinkedInOrganizationsDataProviderTest", "1.0") {
+    constructor() : Test("LinkedInOrganizationsDataProviderTest", "1.0", \ARGV, MyOpts) {
         addTestCase("app registration", \appRegistrationTest());
         addTestCase("action options", \actionOptionsTest());
         addTestCase("urn helpers", \urnHelperTest());
@@ -240,7 +249,20 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
         addTestCase("follower statistics", \followerStatisticsTest());
         addTestCase("visitor statistics", \visitorStatisticsTest());
         addTestCase("new-post trigger", \newPostTriggerTest());
+        # live tests; each skips unless a connection is named
+        addTestCase("live connection", \liveConnectionTest());
+        addTestCase("live api version", \liveApiVersionTest());
+        addTestCase("live organizations", \liveOrganizationsTest());
+        addTestCase("live content and engagement", \liveContentTest());
+        addTestCase("live audience and analytics", \liveAudienceTest());
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name for live tests", OptionColumn);
+        printOption("-o,--organization=ARG", "organization ID for live tests (default: the first "
+            "administered)", OptionColumn);
     }
 
     private FakeDmaRestClientIo client() {
@@ -893,5 +915,234 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
         assertThrows("CONSTRUCTOR-ERROR", sub () {
             new TestNewPostDataProvider(rest, {});
         });
+    }
+
+    # --- Live tests (require -c <connection>) ---
+
+    #! Returns the connection named on the command line, or skips the test
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn ?? ENV.LINKEDIN_ORG_CONNECTION;
+        if (!conn_name.val()) {
+            testSkip("no connection specified; use -c,--connection=ARG or set "
+                "LINKEDIN_ORG_CONNECTION");
+            return;
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        if (conn.getType() != "linkedindma") {
+            # a connection still serving the TypeScript application reads as
+            # "tsrest-linkedinorganizations" inside Qorus and as "invalid" outside it, since that
+            # scheme is not registered here; either way it is not what these tests can drive
+            throw "OPTION-ERROR", sprintf("connection %y is type %y, but these tests need a native "
+                "\"linkedindma\" connection on the \"linkedindma://\" scheme.  A connection still "
+                "serving the TypeScript application is replaced on this application's flag day",
+                conn_name, conn.getType());
+        }
+        return conn;
+    }
+
+    #! Returns the organization to test against: the one named on the command line, or the first
+    private *string getLiveOrganization(AbstractDataProvider prov) {
+        if (m_options.org.val()) {
+            return m_options.org;
+        }
+        hash<auto> r = prov.getChildProviderEx("list-organizations").doRequest();
+        if (!r.organizations) {
+            testSkip("the authenticated member administers no organizations; use -o to name one");
+            return;
+        }
+        return r.organizations[0].id;
+    }
+
+    liveConnectionTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        assertEq("LinkedInOrganizations", conn.getAppName());
+        hash<PingInfo> info = conn.ping(True);
+        assertEq(True, info.ok, sprintf("ping failed: %s", info.info ?? ""));
+    }
+
+    #! Fails when the DMA API version this connection sends stops being accepted
+    /** **This is the drift guard that matters most**, and it is not hypothetical: the TypeScript
+        application this module replaces pins \c 202502, which LinkedIn has since retired, so every
+        one of its calls now fails with \c 426 \c "Requested version 20250201 is not active" —
+        including its connection ping.  That application simply stopped working, silently, on the
+        day the version was sunset.
+
+        LinkedIn runs **two independent version series** and a value from one is not valid in the
+        other: the Pages Data Portability series this connection uses is versioned separately from
+        the Marketing series the member application uses.  Neither defaults to the latest — a
+        missing header is rejected outright.
+
+        When this test fails, raise
+        @ref LinkedInRestClient::LinkedInRestClientBase::DefaultDmaApiVersion "DefaultDmaApiVersion"
+        (and the \c linkedin_version option on existing connections) to a version LinkedIn still
+        lists as supported for **Pages Data Portability**.
+    */
+    liveApiVersionTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        object rest = conn.getAsync();
+        string version = rest.getLinkedInVersion();
+        assertTrue(version =~ /^[0-9]{6}$/, sprintf("the connection sends a version: %y", version));
+
+        int status;
+        string message = "";
+        try {
+            hash<auto> resp = rest.restDoRequest("GET", "/rest/dmaMe", NOTHING,
+                rest.getApiHeaders("/rest/dmaMe"));
+            status = resp.status_code;
+        } catch (hash<ExceptionInfo> ex) {
+            status = ex.arg.status_code ?? -1;
+            if (ex.arg.body.typeCode() == NT_HASH && ex.arg.body.message.typeCode() == NT_STRING) {
+                message = ex.arg.body.message;
+            }
+        }
+        assertEq(200, status, sprintf("LinkedIn Pages Data Portability version %y is no longer "
+            "accepted (%s); raise DefaultDmaApiVersion and any linkedin_version connection option "
+            "to a supported version", version, message));
+    }
+
+    #! Fails when the organization profile stops carrying what the rest of the module addresses
+    /** The analytics and follows APIs address an **organizational page**, not an organization, and
+        the page URN is read from the profile rather than assembled from the ID — nothing in
+        LinkedIn's contract promises the two share a number.  If that field disappears, half the
+        application stops working, so it is asserted directly.
+    */
+    liveOrganizationsTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        hash<auto> r = prov.getChildProviderEx("list-organizations").doRequest();
+        assertEq(NT_LIST, r.organizations.typeCode(), "a list of organizations is returned");
+        if (!r.organizations) {
+            testSkip("the authenticated member administers no organizations");
+            return;
+        }
+        hash<auto> org = r.organizations[0];
+        assertTrue(org.id.val(), "the organization reports its numeric ID");
+        assertEq("urn:li:organization:" + org.id, org.urn);
+        assertTrue(org.organizational_page =~ /^urn:li:organizationalPage:/,
+            sprintf("the profile still carries the organizationalPage URN that the analytics and "
+                "follows actions address: %y", org.organizational_page));
+        assertTrue(org.name.val(), "the organization reports a name");
+
+        # the same organization must be retrievable on its own
+        hash<auto> one = prov.getChildProviderEx("get-organization").doRequest({
+            "organization": org.id,
+        });
+        assertEq(org.id, one.id);
+        assertEq(org.name, one.name);
+    }
+
+    #! Fails when the feed, post or engagement contracts change
+    /** Asserts the three things a listing silently depends on: that the feed finder still reports
+        its continuation cursor where the module reads it (LinkedIn nests it under
+        \c paginationCursorMetdata, spelled as LinkedIn spells it), that a post URN the feed names
+        still resolves through the batch endpoint, and that an engagement summary still totals.
+
+        @note the feed finder is rate-limited to one request per 60 seconds, so this case is
+        deliberately written to make a single feed call
+    */
+    liveContentTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        *string org = getLiveOrganization(prov);
+        if (!org) {
+            return;
+        }
+        hash<auto> posts = prov.getChildProviderEx("list-posts").doRequest({
+            "organization": org,
+            "count": 5,
+        });
+        assertEq(NT_LIST, posts.posts.typeCode(), "a list of posts is returned");
+        if (!posts.posts) {
+            testSkip(sprintf("organization %y has published no posts", org));
+            return;
+        }
+        hash<auto> post = posts.posts[0];
+        assertTrue(post.id =~ /^urn:li:(share|ugcPost|groupPost):/,
+            sprintf("the post carries a URN: %y", post.id));
+        assertEq("https://www.linkedin.com/feed/update/" + post.id + "/", post.url);
+        # LinkedIn reports its timestamps as milliseconds; a change of unit would show up as a date
+        # thousands of years out rather than as an error
+        if (exists post.published_at) {
+            assertTrue(post.published_at > 2000-01-01Z && post.published_at < now_us() + 1D,
+                sprintf("the published date is plausible: %y", post.published_at));
+        }
+
+        # the post the feed named must resolve on its own
+        hash<auto> one = prov.getChildProviderEx("get-post").doRequest({"post": post.id});
+        assertEq(post.id, one.id);
+
+        # engagement summary: the authoritative counts
+        hash<auto> meta = prov.getChildProviderEx("get-social-metadata").doRequest({
+            "entities": (post.id,),
+        });
+        assertEq(1, meta.entities.size());
+        hash<auto> m = meta.entities[0];
+        assertEq(post.id, m.entity);
+        assertTrue(m.reaction_count >= 0, "a reaction total is reported");
+        assertTrue(m.comment_count >= 0, "a comment total is reported");
+        # the per-type counts must add up to the total the module computes from them
+        int summed = 0;
+        foreach hash<auto> x in (m.reactions) {
+            summed += x.count;
+        }
+        assertEq(m.reaction_count, summed, "the reaction total is the sum of the per-type counts");
+    }
+
+    #! Fails when the follows or analytics contracts change
+    /** @note the follows finder is rate-limited to one request per 60 seconds
+    */
+    liveAudienceTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        *string org = getLiveOrganization(prov);
+        if (!org) {
+            return;
+        }
+        hash<auto> follows = prov.getChildProviderEx("list-followers").doRequest({
+            "organization": org,
+            "count": 5,
+        });
+        assertEq(NT_LIST, follows.follows.typeCode(), "a list of follows is returned");
+        foreach hash<auto> f in (follows.follows) {
+            assertTrue(f.followee =~ /^urn:li:organizationalPage:/,
+                sprintf("the followee is the page: %y", f.followee));
+            assertEq("MEMBER_FOLLOWS_ORGANIZATIONAL_PAGE", f.edge_type);
+            # "follower" is absent for a member who has not consented; that is expected, so only its
+            # shape is asserted when it is present
+            if (exists f.follower) {
+                assertTrue(f.follower =~ /^urn:li:/, sprintf("follower URN: %y", f.follower));
+            }
+        }
+
+        # analytics must return a well-formed breakdown.  It is legitimately EMPTY for a small page:
+        # LinkedIn floors any count below an undisclosed threshold to zero to protect member
+        # privacy, so the shape is asserted rather than the content
+        hash<auto> stats = prov.getChildProviderEx("get-follower-statistics").doRequest({
+            "organization": org,
+            "dimension_type": "INDUSTRY",
+        });
+        assertEq(NT_LIST, stats.rows.typeCode(), "a breakdown is returned");
+        int total = 0;
+        foreach hash<auto> row in (stats.rows) {
+            assertEq("INDUSTRY", row.dimension_type);
+            assertTrue(row.dimension.val(), "each row names the value it counts");
+            total += row.count;
+        }
+        assertEq(stats.total, total, "the reported total is the sum of the rows");
     }
 }

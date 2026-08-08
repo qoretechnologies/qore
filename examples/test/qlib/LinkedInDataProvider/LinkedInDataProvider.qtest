@@ -265,6 +265,21 @@ class TestCreateMultiImagePostDataProvider
 
 public class LinkedInDataProviderTest inherits QUnit::Test {
     public {
+        #! command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+            "write": "W,write-tests",
+        };
+
+        #! Width of the option column in the usage text
+        const OptionColumn = 26;
+
+        #! A valid 8x8 PNG, base64-encoded, for the live image-upload test
+        const TestPngBase64 =
+            "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAa0lEQVR42g3JQQEAMAgDMaQgBSl1"
+            "ckiplEpBypZvqoouplCxhYsUV1Q13UyjZhs3aa5/DD3MoGEHDxlufogWIyRWWEScfiy9zKJlFy9Z"
+            "bn+YNmNk1tjEnH+EDhMUNjgkXH4cfcyhYw8fOe54rbtXwfd3AKcAAAAASUVORK5CYII=";
+
         #! Content chosen so that a codec that base64-encodes it, or a text conversion, is visible
         const BinaryContent = binary("head") + <00ff01fe02fd> + binary("tail");
 
@@ -275,7 +290,7 @@ public class LinkedInDataProviderTest inherits QUnit::Test {
         const ImageUploadUrl = "https://www.linkedin.com/dms-uploads/C4E/uploaded-image/0?ca=x&sync=0";
     }
 
-    constructor() : Test("LinkedInDataProviderTest", "1.0") {
+    constructor() : Test("LinkedInDataProviderTest", "1.0", \ARGV, MyOpts) {
         addTestCase("app registration", \appRegistrationTest());
         addTestCase("action options", \actionOptionsTest());
         addTestCase("connections", \connectionTest());
@@ -297,7 +312,19 @@ public class LinkedInDataProviderTest inherits QUnit::Test {
         addTestCase("upload image", \uploadImageTest());
         addTestCase("upload video", \uploadVideoTest());
         addTestCase("error handling", \errorHandlingTest());
+        # live tests; each skips unless a connection is named
+        addTestCase("live connection", \liveConnectionTest());
+        addTestCase("live api version", \liveApiVersionTest());
+        addTestCase("live get current user", \liveGetCurrentUserTest());
+        addTestCase("live post lifecycle", \livePostLifecycleTest());
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name for live tests", OptionColumn);
+        printOption("-W,--write-tests", "also run live tests that PUBLISH to the account under test",
+            OptionColumn);
     }
 
     private FakeLinkedInRestClientIo client(*hash<auto> opts) {
@@ -1028,5 +1055,176 @@ public class LinkedInDataProviderTest inherits QUnit::Test {
         }
         assertThrows("REST-RESPONSE-ERROR", \dp.doRequest(), {"post": PostUrn});
         assertEq(retries, rest.requests.size(), "a throttle must be retried up to the limit");
+    }
+
+    # --- Live tests (require -c <connection>; writes additionally require -W) ---
+
+    #! Returns the connection named on the command line, or skips the test
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn ?? ENV.LINKEDIN_CONNECTION;
+        if (!conn_name.val()) {
+            testSkip("no connection specified; use -c,--connection=ARG or set LINKEDIN_CONNECTION");
+            return;
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        if (conn.getType() != "linkedin") {
+            # a connection still serving the TypeScript application this module replaces reads as
+            # "tsrest-linkedin" inside Qorus and as "invalid" outside it, since that scheme is not
+            # registered here.  It answers to the same app name but exposes different action names,
+            # so driving these tests through one would fail confusingly rather than obviously
+            throw "OPTION-ERROR", sprintf("connection %y is type %y, but these tests need a native "
+                "\"linkedin\" connection on the \"linkedin://\" scheme.  A connection still serving "
+                "the TypeScript application is replaced on this application's flag day", conn_name,
+                conn.getType());
+        }
+        return conn;
+    }
+
+    liveConnectionTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        assertEq("LinkedIn", conn.getAppName());
+        hash<PingInfo> info = conn.ping(True);
+        assertEq(True, info.ok, sprintf("ping failed: %s", info.info ?? ""));
+        assertTrue(info.time > 0s, "the ping reports how long it took");
+    }
+
+    #! Fails when the API version this connection sends stops being accepted
+    /** **This is the drift guard that matters most for LinkedIn.**  LinkedIn versions its APIs with
+        a \c LinkedIn-Version header, supports each version for a limited time, and then **rejects**
+        it: a sunset version is answered \c 426 \c "Requested version YYYYMM01 is not active", not
+        served with a warning and not silently upgraded.  Every versioned call an application makes
+        stops working on that day.
+
+        A pinned version is therefore a perishable asset, and this test is what makes its expiry
+        visible: when it fails, raise
+        @ref LinkedInRestClient::LinkedInRestClientBase::DefaultMemberApiVersion
+        "DefaultMemberApiVersion" (and the \c linkedin_version option on existing connections) to a
+        version LinkedIn still lists as supported.
+
+        The probe deliberately expects HTTP 403 rather than success: reading a member's posts needs
+        \c r_member_social, which most applications do not hold.  That is fine here, because LinkedIn
+        validates the version **before** it checks permissions — so any answer other than a version
+        rejection proves the version was accepted.
+    */
+    liveApiVersionTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        object rest = conn.getAsync();
+        string version = rest.getLinkedInVersion();
+        assertTrue(version =~ /^[0-9]{6}$/, sprintf("the connection sends a version: %y", version));
+
+        int status;
+        string message = "";
+        try {
+            hash<auto> resp = rest.restDoRequest("GET",
+                "/rest/posts?q=author&author=urn%3Ali%3Aperson%3AAAA&count=1", NOTHING,
+                rest.getApiHeaders("/rest/posts"));
+            status = resp.status_code;
+        } catch (hash<ExceptionInfo> ex) {
+            status = ex.arg.status_code ?? -1;
+            if (ex.arg.body.typeCode() == NT_HASH && ex.arg.body.message.typeCode() == NT_STRING) {
+                message = ex.arg.body.message;
+            }
+        }
+        assertNeq(426, status, sprintf("LinkedIn Marketing API version %y is NO LONGER ACTIVE (%s); "
+            "raise DefaultMemberApiVersion and any linkedin_version connection option to a "
+            "supported version", version, message));
+        assertFalse(message =~ /not active/, sprintf("version %y rejected: %s", version, message));
+    }
+
+    #! Fails when the userinfo endpoint stops returning what the module builds a member URN from
+    /** Every post names its author, and the author URN is assembled from the \c sub claim of this
+        endpoint.  If \c sub disappears or is renamed, nothing can be published at all — so the
+        contract is asserted directly rather than inferred from a successful call.
+    */
+    liveGetCurrentUserTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        hash<auto> user = prov.getChildProviderEx("get-current-user").doRequest();
+
+        assertTrue(user.sub.val(), "the userinfo endpoint still returns a \"sub\" claim");
+        assertEq("urn:li:person:" + user.sub, user.urn, "the member URN is built from \"sub\"");
+        assertTrue(user.name.val(), "the profile still carries a name");
+        # the locale arrives either as a string or as {country, language}; both must normalize
+        if (exists user.locale) {
+            assertEq(NT_STRING, user.locale.typeCode(), "the locale is normalized to one string");
+        }
+    }
+
+    #! Publishes a text post and an image post, verifies them, and removes them again
+    /** This is the only way to prove three things offline tests cannot:
+
+        - a versioned write answers \c 201 with an **empty body** and returns the created post's URN
+          in the \c x-restli-id response header alone, so a change there is invisible until nothing
+          comes back;
+        - the media upload URL LinkedIn hands out is on a **different host**, so it cannot be
+          reached through this connection's client at all;
+        - the image bytes must arrive unencoded.  A codec that base64s them into a JSON string is
+          accepted by the upload endpoint and reported as success, and only the asset is wrong.
+
+        Both posts are created with \c feed_distribution \c NONE, so they are not distributed to any
+        feed and are reachable only by URN, and both are deleted on the way out even if an assertion
+        fails.
+
+        This **publishes to the account under test**, so it runs only with \c -W,--write-tests.
+    */
+    livePostLifecycleTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        if (!m_options.write) {
+            testSkip("live write tests publish to the account under test; use -W,--write-tests");
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        list<string> created = ();
+        on_exit {
+            foreach string urn in (created) {
+                try {
+                    prov.getChildProviderEx("delete-post").doRequest({"post": urn});
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("WARNING: could not delete test post %y: %s: %s\n", urn, ex.err, ex.desc);
+                }
+            }
+        }
+
+        string stamp = sprintf("%d", clock_getmicros());
+        hash<auto> text = prov.getChildProviderEx("create-text-post").doRequest({
+            "commentary": sprintf("Qore LinkedInDataProvider integration test %s; not distributed "
+                "to any feed, deleted immediately.", stamp),
+            "visibility": "CONNECTIONS",
+            "feed_distribution": "NONE",
+        });
+        push created, text.id;
+        assertTrue(text.id =~ /^urn:li:(share|ugcPost):/,
+            sprintf("the created post URN comes back from the x-restli-id header: %y", text.id));
+        assertEq("https://www.linkedin.com/feed/update/" + text.id + "/", text.url);
+
+        hash<auto> image = prov.getChildProviderEx("create-image-post").doRequest({
+            "commentary": sprintf("Qore LinkedInDataProvider image upload test %s.", stamp),
+            "image": {
+                "name": "qore-test.png",
+                "content": TestPngBase64,
+                "mime_type": MimeTypePng,
+            },
+            "alt_text": "An 8 by 8 pixel test gradient",
+            "visibility": "CONNECTIONS",
+            "feed_distribution": "NONE",
+        });
+        push created, image.id;
+        # LinkedIn rejects an upload whose body is not a decodable image, so a post created with an
+        # image URN is evidence the bytes crossed to the upload host unencoded
+        assertTrue(image.id =~ /^urn:li:(share|ugcPost):/,
+            sprintf("the image post was created: %y", image.id));
+        assertNeq(text.id, image.id, "each post gets its own URN");
     }
 }
