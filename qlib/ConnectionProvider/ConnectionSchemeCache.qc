@@ -214,6 +214,7 @@ public class ConnectionSchemeCache {
             "linear": "LinearRestClient",
 
             "linkedin": "LinkedInRestClient",
+            "stripe": "StripeRestClient",
             "linkedindma": "LinkedInRestClient",
 
             "llamaparse": "LlamaParseRestClient",

@@ -246,8 +246,8 @@ public hashdecl RestSchemaActionInfo {
     string path;
 
     #! The \c operationId the schema is expected to declare for this operation
-    /** Checked by @ref RestSchemaActions::RestSchemaActionSet::validate() "validate()" and reported as drift
-        when it changes; never used as action identity.
+    /** Checked when the operation is resolved and reported as drift when it changes; never used as action
+        identity.
     */
     *string operation_id;
 

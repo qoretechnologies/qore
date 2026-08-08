@@ -1,0 +1,444 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** StripeDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires StripeDataProvider
+%requires StripeRestClient
+%requires RestClientIo
+
+%requires json
+
+%exec-class StripeDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A Stripe REST client that records requests instead of making them
+class FakeStripeRestClient inherits StripeRestClient::StripeRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : StripeRestClientIo({"api_key": "sk_test_fake"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+public class StripeDataProviderTest inherits QUnit::Test {
+    public {
+        #! Actions that legitimately open with an empty form
+        /** Retrieving the account or the balance takes no arguments at all beyond Stripe's \c "expand"
+            control, so there is nothing to show; every other action must offer something.
+        */
+        const NoInputActions = {
+            "get-account": True,
+            "get-balance": True,
+        };
+
+        #! The operations the application is intended to export
+        /** 37 of these are the operations the TypeScript application selected; \c "GET /v1/accounts" was
+            added so that connected-account options can be a dropdown, which the previous application
+            provided through a helper that called an endpoint outside its own allowed set.
+        */
+        const ExpectedOperations = (
+            "GET /v1/account",
+            "GET /v1/accounts",
+            "POST /v1/account_links",
+            "DELETE /v1/accounts/{account}",
+            "GET /v1/accounts/{account}",
+            "POST /v1/accounts/{account}",
+            "GET /v1/accounts/{account}/external_accounts",
+            "POST /v1/accounts/{account}/external_accounts",
+            "POST /v1/accounts/{account}/login_links",
+            "GET /v1/accounts/{account}/people",
+            "POST /v1/accounts/{account}/people",
+            "GET /v1/balance",
+            "GET /v1/balance/history",
+            "GET /v1/balance/history/{id}",
+            "GET /v1/charges",
+            "POST /v1/charges",
+            "GET /v1/charges/{charge}",
+            "POST /v1/charges/{charge}",
+            "GET /v1/customers",
+            "POST /v1/customers",
+            "DELETE /v1/customers/{customer}",
+            "GET /v1/customers/{customer}",
+            "POST /v1/customers/{customer}",
+            "GET /v1/customers/{customer}/balance_transactions",
+            "POST /v1/customers/{customer}/balance_transactions",
+            "GET /v1/customers/{customer}/sources",
+            "POST /v1/customers/{customer}/sources",
+            "GET /v1/customers/{customer}/subscriptions",
+            "POST /v1/customers/{customer}/subscriptions",
+            "GET /v1/invoices",
+            "POST /v1/invoices",
+            "DELETE /v1/invoices/{invoice}",
+            "GET /v1/invoices/{invoice}",
+            "POST /v1/invoices/{invoice}",
+            "GET /v1/payment_intents",
+            "POST /v1/payment_intents",
+            "GET /v1/refunds",
+            "POST /v1/refunds",
+        );
+    }
+
+    private {
+        RestSchemaActionSet aset;
+        list<hash<DataProviderActionInfo>> actions;
+    }
+
+    constructor() : Test("StripeDataProviderTest", "1.0") {
+        aset = StripeSchema::getActionSet();
+        actions = aset.getActionInfoList(StripeDataProvider::AppName);
+
+        addTestCase("schema provenance", \provenanceTest());
+        addTestCase("exported operations", \exportedOperationsTest());
+        addTestCase("action presentation", \actionPresentationTest());
+        addTestCase("action paths resolve", \actionPathTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("timestamp conversion", \timestampTest());
+        addTestCase("request reconstruction", \requestReconstructionTest());
+        addTestCase("response contract", \responseContractTest());
+        addTestCase("connection", \connectionTest());
+
+        set_return_value(main());
+    }
+
+    provenanceTest() {
+        # the vendored schema has to be the revision the manifest was reviewed against, and the API version
+        # the client sends has to be the one that schema describes; a mismatch means the declared response
+        # types and what Stripe actually returns can disagree
+        hash<StripeSchemaProvenanceInfo> p = StripeSchema::Provenance;
+        assertEq("2026-07-29.dahlia", p.api_version);
+        assertEq(p.api_version, StripeRestClientBase::DefaultApiVersion);
+        assertRegex("^[0-9a-f]{64}$", p.source_sha256);
+        assertRegex("stripe/openapi", p.source_url);
+
+        OpenApi3Schema schema = StripeSchema::getSchema();
+        assertEq(p.api_version, schema.info.version);
+        # the scheme declared by the schema must survive: a client built from it must not talk plaintext
+        assertEq("https://api.stripe.com", schema.getTargetUrl());
+    }
+
+    exportedOperationsTest() {
+        # every intended operation is exported exactly once, and nothing else is
+        list<string> exported = ();
+        foreach string name in (aset.getActionNames()) {
+            RestSchemaActionOperation op = aset.getOperationEx(name);
+            exported += sprintf("%s %s", op.getMethod(), op.getPath());
+        }
+        assertEq(ExpectedOperations.size(), exported.size());
+        assertEq(sort(ExpectedOperations), sort(exported));
+        # ... exactly once each
+        assertEq(exported.size(), (keys (map {$1: True}, exported)).size());
+
+        # action IDs are unique and stable, and independent of Stripe's operationId values
+        assertEq(exported.size(), aset.getActionNames().size());
+    }
+
+    actionPresentationTest() {
+        # an action with an empty form, no output type or no documentation does not meet the checklist,
+        # however valid the request it generates would be
+        foreach hash<DataProviderActionInfo> a in (actions) {
+            assertEq(DPAT_API, a.action_code, a.action + ": action code");
+            assertEq("/" + a.action, a.path, a.action + ": path");
+            assertTrue(a.display_name.val(), a.action + ": display name");
+            assertTrue(a.short_desc.val(), a.action + ": short description");
+            assertTrue(a.desc.val(), a.action + ": description");
+            assertTrue(a.groups.val(), a.action + ": groups");
+            assertTrue(exists a.output_type, a.action + ": output type");
+            assertTrue(a.options.val(), a.action + ": options");
+            # a short description is a single plain-text line
+            assertLt(90, a.short_desc.size(), a.action + ": short description length");
+            assertEq(-1, a.short_desc.find("\n"), a.action + ": short description is one line");
+
+            # something has to be visible when the form opens, unless the operation genuinely takes no
+            # meaningful input -- these two accept only Stripe's "expand" control
+            bool visible = False;
+            foreach hash<auto> o in (a.options.iterator()) {
+                if (o.required || o.preselected) {
+                    visible = True;
+                    break;
+                }
+            }
+            if (NoInputActions{a.action}) {
+                assertEq(("expand",), keys a.options, a.action + ": takes no input beyond \"expand\"");
+            } else {
+                assertTrue(visible, a.action + ": has an initially visible option");
+            }
+        }
+    }
+
+    actionPathTest() {
+        # an action whose path does not resolve exists in the catalog but cannot be executed
+        FakeStripeRestClient rest();
+        StripeDataProvider root(rest);
+        aset.validateActionPaths(root);
+        # the framework injects a generic API-call child into every REST-scheme provider, so there is one
+        # more child than there are actions
+        list<string> children = root.getChildProviderNames();
+        assertEq(actions.size() + 1, children.size());
+        assertEq(actions.size(), (map $1, children, $1 != "__call__").size());
+        assertNothing(root.getChildProvider("no-such-action"));
+
+        AbstractDataProvider child = root.getChildProviderEx("get-customer");
+        assertTrue(child.getInfo().supports_request);
+        assertEq("Get Customer", child.getDisplayName());
+    }
+
+    referenceDataTest() {
+        # every identifier that the application can list is offered as a dropdown rather than free text
+        hash<string, hash<RestSchemaReferenceDataInfo>> rd = aset.getReferenceDataDecls();
+        assertEq(("stripe-account", "stripe-customer", "stripe-charge", "stripe-invoice",
+            "stripe-payment-intent", "stripe-balance-transaction"), keys rd);
+
+        # the reference data behind the customer selector really is the customer listing; the application
+        # this replaces populated its invoice selector from the payment-intents endpoint
+        assertEq("list-customers", rd."stripe-customer".action);
+        assertEq("list-invoices", rd."stripe-invoice".action);
+        assertEq("list-payment-intents", rd."stripe-payment-intent".action);
+
+        # the only option in the application taking an invoice ID gets the invoice listing
+        RestSchemaActionOperation op = aset.getOperationEx("list-customer-balance-transactions");
+        assertEq("stripe-invoice", op.getRequestFields().invoice.getAttributes().ref_data);
+
+        # a customer selector reaches the customer-scoped actions
+        map assertEq("stripe-customer", aset.getOperationEx($1).getRequestFields().customer.getAttributes().ref_data,
+            $1 + ": customer reference data"),
+            ("get-customer", "update-customer", "delete-customer", "list-customer-sources", "list-invoices");
+
+        # a dropdown is filled by executing the listing action and mapping its records
+        FakeStripeRestClient rest();
+        StripeDataProvider root(rest);
+        AbstractDataProvider gc = root.getChildProviderEx("get-customer");
+        assertEq({"stripe-customer": True}, gc.getSupportedReferenceData());
+        rest.push_response({"body": {"data": (
+            {"id": "cus_1", "email": "a@example.com"},
+            {"id": "cus_2"},
+        ), "has_more": False}});
+        *list<hash<AllowedValueInfo>> values = gc.getReferenceData("stripe-customer");
+        assertEq(2, values.size());
+        assertEq("cus_1", values[0].value);
+        assertEq("a@example.com", values[0].display_name);
+        # a customer with no email shows its ID rather than an empty row
+        assertEq("cus_2", values[1].display_name);
+        # the dropdown asks for one full page rather than walking the collection
+        assertRegex("limit=100", rest.last().path);
+    }
+
+    timestampTest() {
+        # Stripe's timestamps are counts of SECONDS since the epoch; presenting them as milliseconds is
+        # wrong by a factor of 1000, which is a defect the previous application shipped
+        hash<string, list<string>> expected = {
+            "create-invoice": ("due_date", "effective_at", "automatically_finalizes_at"),
+            "update-invoice": ("due_date", "effective_at", "automatically_finalizes_at"),
+            "create-customer-subscription": ("trial_end", "billing_cycle_anchor", "cancel_at",
+                "backdate_start_date"),
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            RestSchemaActionOperation op = aset.getOperationEx(i.key);
+            foreach string field in (i.value) {
+                assertEq(RestSchemaActionCodecs::UnixSeconds, op.getFlatMap(){field}.codec,
+                    sprintf("%s.%s codec", i.key, field));
+                assertEq(NT_DATE, op.getRequestFields(){field}.getType().getBaseTypeCode(),
+                    sprintf("%s.%s type", i.key, field));
+            }
+        }
+
+        # a date supplied by a user reaches the wire as Unix seconds
+        RestSchemaActionOperation ci = aset.getOperationEx("create-invoice");
+        hash<auto> wire = ci.unflatten({"customer": "cus_1", "due_date": 2026-09-01T00:00:00Z});
+        assertEq(1788220800, wire.req.body.due_date);
+        # ... and comes back as the same date
+        assertEq(2026-09-01T00:00:00Z, ci.flatten(wire).due_date);
+    }
+
+    requestReconstructionTest() {
+        FakeStripeRestClient rest();
+        StripeDataProvider root(rest);
+
+        # a path variable is substituted into the URI and query arguments are appended
+        rest.push_response({"body": {"id": "cus_1", "object": "customer"}});
+        auto resp = root.getChildProviderEx("get-customer").doRequest({
+            "customer": "cus_1",
+            "expand": ("sources",),
+        });
+        assertEq({"id": "cus_1", "object": "customer"}, resp);
+        assertEq("GET", rest.last().method);
+        assertEq("/v1/customers/cus_1?expand=sources", rest.last().path);
+        # every request carries the pinned API version; the client merges its default headers below the
+        # point this fake intercepts, so the header is asserted on the client itself
+        assertEq(StripeRestClientBase::DefaultApiVersion,
+            rest.getDefaultHeaders(){StripeRestClientBase::ApiVersionHeader});
+
+        # a form-encoded body with a nested object and an array uses Stripe's deepObject encoding
+        rest.reset();
+        rest.push_response({"body": {"id": "cus_2", "object": "customer"}});
+        root.getChildProviderEx("create-customer").doRequest({
+            "email": "a@example.com",
+            "name": "Test",
+            "metadata": {"order_id": "6735"},
+            "expand": ("sources",),
+        });
+        assertEq("POST", rest.last().method);
+        assertEq("/v1/customers", rest.last().path);
+        assertEq(MimeTypeFormUrlEncoded, rest.last().headers."Content-Type");
+        string body = rest.last().body.toString();
+        assertRegex("email=a%40example.com", body);
+        assertRegex("metadata%5Border_id%5D=6735", body);
+        assertRegex("expand%5B0%5D=sources", body);
+
+        # a DELETE reaches the right method and path
+        rest.reset();
+        rest.push_response({"body": {"id": "cus_1", "deleted": True}});
+        root.getChildProviderEx("delete-customer").doRequest({"customer": "cus_1"});
+        assertEq("DELETE", rest.last().method);
+        assertEq("/v1/customers/cus_1", rest.last().path);
+
+        # a missing path variable is reported rather than sent as a literal placeholder; the request type
+        # is validated before the request is built, so a required path variable is caught there first
+        AbstractDataProvider gc = root.getChildProviderEx("get-customer");
+        assertThrows("INVALID-REQUEST", "mandatory string field \"customer\"", \gc.doRequest(),
+            {"expand": ("sources",)});
+
+        # an error response reaches the caller with its context
+        rest.reset();
+        rest.push_response({"throw_status": 404, "body": {"error": {"message": "No such customer"}}});
+        assertThrows("REST-RESPONSE-ERROR", "HTTP 404", \gc.doRequest(), {"customer": "cus_missing"});
+    }
+
+    responseContractTest() {
+        # the action publishes the success response body, not the HTTP envelope
+        RestSchemaActionOperation gc = aset.getOperationEx("get-customer");
+        assertEq("200", gc.getResponseCode());
+        # this operation returns a customer or a deleted customer, so its output is the union of both
+        assertRegex("customer", gc.getResponseType().getName());
+
+        # a listing keeps its envelope, because has_more is what a caller needs to paginate
+        RestSchemaActionOperation lc = aset.getOperationEx("list-customers");
+        assertEq(("data", "has_more", "object", "url"), keys lc.getResponseType().getFields());
+        assertEq(NT_LIST, lc.getResponseType().getFields().data.getType().getBaseTypeCode());
+
+        # a representative response conforms to the published output type
+        FakeStripeRestClient rest();
+        StripeDataProvider root(rest);
+        rest.push_response({"body": {
+            "object": "list",
+            "url": "/v1/customers",
+            "has_more": False,
+            "data": ({
+                "id": "cus_1",
+                "object": "customer",
+                "email": "a@example.com",
+                "created": 1709294400,
+                "livemode": False,
+            },),
+        }});
+        auto resp = root.getChildProviderEx("list-customers").doRequest({"limit": 1});
+        assertEq(1, resp.data.size());
+        assertEq("cus_1", resp.data[0].id);
+        assertFalse(resp.has_more);
+        # the type accepts the value the service returned
+        assertEq(resp, lc.getResponseType().acceptsValue(resp));
+    }
+
+    connectionTest() {
+        StripeRestConnection conn("stripe-test", "test connection", "stripe://api.stripe.com", {}, {
+            "api_key": "sk_test_fake",
+        });
+        assertEq("stripe", conn.getType());
+        assertTrue(conn.hasDataProvider());
+        # the scheme is what decides the connection class, so it has to be registered
+        assertTrue(exists ConnectionSchemeCache::getScheme("stripe"));
+
+        # the API version travels on every request, and a connected account can be named for all of them
+        StripeRestClientIo c({"api_key": "sk_test_fake", "stripe_account": "acct_1"});
+        assertEq(StripeRestClientBase::DefaultApiVersion, c.getApiVersion());
+        assertEq("acct_1", c.getDefaultHeaders(){StripeRestClientBase::AccountHeader});
+
+        # an explicitly supplied header wins over the default
+        StripeRestClientIo c2({"api_key": "sk_test_fake", "stripe_version": "2020-08-27"});
+        assertEq("2020-08-27", c2.getApiVersion());
+
+        # an unknown data provider option is reported rather than ignored
+        assertThrows("CONSTRUCTOR-ERROR", "unknown option", sub () { new StripeDataProvider({"bogus": 1}); });
+    }
+}

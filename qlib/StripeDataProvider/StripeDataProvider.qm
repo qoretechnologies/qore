@@ -1,0 +1,165 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file StripeDataProvider.qm Qore user module providing a data provider API for Stripe
+
+/*  StripeDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires StripeRestClient
+%requires RestClientIo
+
+%requires json
+
+module StripeDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Stripe";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new StripeDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": StripeDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Stripe",
+            "short_desc": "Take payments and manage customers, invoices and payouts in Stripe",
+            "desc": "Provides access to [Stripe](https://stripe.com), the payments platform, for taking "
+                "money and managing everything around it.\n\n"
+                "**Common use cases**:\n"
+                "- **Payments**: start a payment, refund it in full or in part, and look up what was "
+                "charged and what it cost\n"
+                "- **Customers**: create and update customers, attach payment sources to them, and credit "
+                "or debit their balance\n"
+                "- **Billing**: raise invoices and subscribe customers to recurring prices\n"
+                "- **Reconciliation**: read the balance and the transactions behind each payout, so a "
+                "deposit can be matched against the payments that made it up\n"
+                "- **Connect**: onboard connected accounts, add their payout destinations and the people "
+                "on their legal entity, and act on their behalf\n\n"
+                "Actions are generated from Stripe's own OpenAPI 3 schema, pinned to one API version, so "
+                "the fields an action offers and the shape it returns are the ones Stripe documents for "
+                "that version.\n\n"
+                "Authentication is a Stripe secret or restricted key, or an access token from Stripe "
+                "Connect's OAuth2 flow. A **restricted key**, limited to the resources the integration "
+                "needs, is the better choice in production.\n\n"
+                "Stripe is a trademark of Stripe, Inc.",
+            "scheme": "stripe",
+            "logo": Priv::StripeLogo,
+            "logo_file_name": "stripe-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Payments,),
+        });
+
+        # register every action in the manifest
+        RestSchemaActionSet action_set = StripeSchema::getActionSet();
+        action_set.registerActions(StripeDataProvider::AppName);
+    };
+}
+
+/** @mainpage StripeDataProvider Module
+
+    @tableofcontents
+
+    @section stripedataproviderintro StripeDataProvider Introduction
+
+    The %StripeDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [Stripe](https://stripe.com), the payments platform.
+
+    @section stripedataprovider_generated Generated, Not Hand-Written
+
+    The actions this application exports are **generated from Stripe's own OpenAPI 3 schema** by the
+    @ref restschemaactionsintro "RestSchemaActions" module, rather than being hand-written.  A schema
+    describes the transport contract precisely and is maintained by Stripe; duplicating several hundred
+    request and response fields in %Qore would mean finding and reproducing every upstream change by
+    hand.
+
+    What a schema cannot say is which of an operation's fields a user should see first, which
+    identifiers should be selectable rather than typed, or that a wire-level integer is really a date.
+    Those come from an application-owned manifest and UX overlay in
+    @ref StripeDataProvider::StripeManifest "StripeManifest".
+
+    @section stripedataprovider_pinned The Pinned Schema
+
+    The schema is committed to this module rather than fetched at run time, so an upstream change
+    cannot alter the contract of an action that existing workflows already call:
+
+    |!Property|!Value
+    |Source|https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json
+    |SHA-256|\c 3653ad45bbec54fcbe461c541c908355b715018bdf455a0e11b27bedb2cbdee5
+    |Stripe API version|\c 2026-07-29.dahlia
+    |Imported|2026-08-08
+
+    The committed copy is pruned to the exported operations and everything they reference — 21 of 416
+    paths and 1022 of 1440 component schemas.  That is not only a size reduction: parsing the full
+    document takes around 45 seconds, which is not a reasonable cost for an application exposing a few
+    dozen operations.
+
+    The @ref StripeRestClient::StripeRestClientBase::DefaultApiVersion "Stripe-Version" header sent by
+    the @ref striperestclientintro "StripeRestClient" module is pinned to the same release, so what the
+    actions declare and what Stripe returns describe the same API.  **The schema and that header must
+    be updated together.**
+
+    @section stripedataprovider_actions Actions
+
+    38 operations are exported, in these groups:
+
+    |!Group|!What it covers
+    |Account|the account the credentials belong to
+    |Balance|funds Stripe holds, and the ledger behind each payout
+    |Charges|charges, including the legacy direct-charge API
+    |Customers|customers, their payment sources, balance entries and subscriptions
+    |Invoices|invoices
+    |Payment Intents|starting a payment
+    |Refunds|refunding a payment
+    |Connected Accounts|Stripe Connect onboarding and management
+
+    Identifier options are dropdowns wherever the application exports an operation that can list the
+    values, so a user picks a customer rather than pasting a \c cus_ ID.
+
+    @section stripedataprovider_amounts Amounts and Timestamps
+
+    Two conventions are worth knowing before using these actions:
+
+    - **Amounts are integers in the currency's smallest unit.** \c 2000 is $20.00 in USD, but ¥2000 in
+      JPY, which has no minor unit.
+    - **Stripe's timestamps are counts of seconds since the epoch.** Every one of them is presented as
+      a %Qore @ref date "date" and converted on the way out, so the unit is decided once rather than by
+      each caller.
+
+    @section stripedataproviderrelnotes Release Notes
+
+    @subsection stripedataproviderv1_0 StripeDataProvider v1.0
+    - the initial version of the %StripeDataProvider module
+*/
+
+#! contains all public definitions in the StripeDataProvider module
+public namespace StripeDataProvider {
+}

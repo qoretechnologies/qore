@@ -431,16 +431,22 @@ public class RestSchemaActionOperation {
         bool body_required = body.required ?? False;
         AbstractDataField body_field = schema.getFieldFromSchema("body", "REST request body argument",
             body.schema, body_required);
-        *hash<string, AbstractDataField> body_fields = info.flatten_body
-            ? body_field.getType().getFields()
-            : NOTHING;
-        if (!body_fields) {
-            # the body is not an object (or the manifest asked for it whole), so there is nothing to lift:
-            # present the body as a single option
+        AbstractDataProviderType body_type = body_field.getType();
+
+        # an object body is flattened to its properties; anything else -- an array or a scalar -- has no
+        # properties to lift and is presented whole.  The distinction is the base type, not whether any
+        # fields came back: an object body declaring no properties contributes no options at all, and
+        # presenting an empty envelope as a "body" option would be worse than useless.  Some schemas
+        # declare exactly that on operations that take no input.
+        if (!info.flatten_body || body_type.getBaseTypeCode() != NT_HASH) {
             derived{RSAL_BODY_ROOT} += {
                 "wire_name": "body",
                 "field": body_field,
             };
+            return;
+        }
+        *hash<string, AbstractDataField> body_fields = body_type.getFields();
+        if (!body_fields) {
             return;
         }
         foreach hash<auto> i in (body_fields.pairIterator()) {

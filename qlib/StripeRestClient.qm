@@ -1,0 +1,441 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file StripeRestClient.qm Qore user module for calling Stripe REST API services
+
+/*  StripeRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module StripeRestClient {
+    version = "1.0";
+    desc = "User module for calling Stripe REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("stripe", StripeRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage StripeRestClient Module
+
+    @tableofcontents
+
+    @section striperestclientintro StripeRestClient Introduction
+
+    The %StripeRestClient module provides an API for calling Stripe's REST API services.
+
+    To use this module, use \c "%requires StripeRestClient" in your code.
+
+    All the public symbols in the module are defined in the StripeRestClient namespace.
+
+    The main classes are:
+    - @ref StripeRestClient::StripeRestClient "StripeRestClient": the REST client for the Stripe API
+    - @ref StripeRestClient::StripeRestClientIo "StripeRestClientIo": the same client on the
+      asynchronous I/O transport, which is what data providers use
+    - @ref StripeRestClient::StripeRestConnection "StripeRestConnection": a connection object to
+      Stripe (based on the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section striperestclient_auth Authentication
+
+    Stripe authenticates with a bearer token, which is either a secret API key or an access token
+    issued by Stripe Connect's OAuth2 flow.  Both are sent the same way, so the \c api_key option and
+    the OAuth2 options are alternatives:
+
+    |!Option|!Use
+    |\c api_key|a secret key from the Stripe dashboard, for an integration acting as your own account
+    |OAuth2 options|Stripe Connect, for a platform acting on behalf of accounts that authorized it
+
+    A secret key grants full access to the account it belongs to, so it is marked sensitive and should
+    come from the connection rather than from code.  Stripe also publishes **restricted** keys, which
+    can be limited to the resources an integration actually needs; a restricted key works here exactly
+    as a secret key does and is the better choice for a production integration.
+
+    @section striperestclient_version The API Version
+
+    Every Stripe account is pinned to an API version, and Stripe changes response shapes between
+    versions.  Rather than let the account's default decide what a request returns, this client sends
+    an explicit \c Stripe-Version header on every request, defaulting to
+    @ref StripeRestClient::StripeRestClientBase::DefaultApiVersion "DefaultApiVersion" — the version of
+    the schema that the @ref stripedataproviderintro "StripeDataProvider" module's actions are
+    generated from.
+
+    Overriding \c stripe_version is therefore only correct together with a schema imported from the
+    same release; a mismatch means the declared response type and the actual response can disagree.
+
+    @section striperestclient_account Acting on Behalf of a Connected Account
+
+    A Stripe Connect platform acts on behalf of a connected account by sending a \c Stripe-Account
+    header.  Set the \c stripe_account option to do that for every request made through the
+    connection.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires StripeRestClient
+
+StripeRestClientIo stripe({"api_key": ENV.STRIPE_API_KEY});
+hash<auto> result = stripe.get("/v1/customers?limit=1");
+printf("Customers: %Y\n", result.body);
+    @endcode
+
+    @section striperestclientrelnotes Release Notes
+
+    @subsection striperestclientv1_0 StripeRestClient v1.0
+    - the initial version of the %StripeRestClient module
+*/
+
+#! the StripeRestClient namespace contains all the objects in the StripeRestClient module
+public namespace StripeRestClient {
+#! Common base class for StripeRestClient functionality
+public class StripeRestClientBase {
+    public {
+        #! Default Stripe API URL
+        const DefaultUrl = "https://api.stripe.com";
+
+        #! Default data serialization
+        /** Stripe request bodies are form-encoded; responses are always JSON, which is selected by the
+            response content type rather than by this option
+        */
+        const DefaultData = "url";
+
+        #! The Stripe API version sent with every request
+        /** This is the version of the vendored schema that the
+            @ref stripedataproviderintro "StripeDataProvider" module generates its actions from; changing
+            one without the other makes the declared response types wrong.
+        */
+        const DefaultApiVersion = "2026-07-29.dahlia";
+
+        #! The HTTP header carrying the Stripe API version
+        const ApiVersionHeader = "Stripe-Version";
+
+        #! The HTTP header naming the connected account to act on behalf of
+        const AccountHeader = "Stripe-Account";
+
+        #! Default OAuth2 authorization URL for Stripe Connect
+        const DefaultAuthUrl = "https://connect.stripe.com/oauth/authorize";
+
+        #! Default OAuth2 token URL for Stripe Connect
+        const DefaultTokenUrl = "https://connect.stripe.com/oauth/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes for Stripe Connect
+        /** \c "read_write" is what a platform needs to create and modify objects on a connected
+            account; \c "read_only" is available for integrations that only read.
+        */
+        const DefaultOAuth2Scopes = ("read_write",);
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** Retrieving the balance is the cheapest authenticated read Stripe offers: it takes no
+            arguments, creates nothing, and fails clearly when the credentials are wrong.
+        */
+        const DefaultPingPath = "/v1/balance";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        /** @note The OAuth2 grant type is deliberately **not** defaulted.  Stripe authenticates either
+            with an API key or through Stripe Connect's OAuth2 flow, and setting a grant type makes the
+            client demand the rest of the OAuth2 options — so defaulting one would break every API-key
+            connection.  The Connect authorization and token URLs are defaulted, because they are inert
+            until a grant type selects the OAuth2 flow and are then already correct.
+        */
+        const DefaultOptions = {
+            "data": DefaultData,
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_token_url": DefaultTokenUrl,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns options for the StripeRestClient constructors
+    /** Consumes the Stripe-specific options and turns them into the transport options that express
+        them: \c api_key becomes the bearer token, and \c stripe_version and \c stripe_account become
+        headers sent with every request.
+
+        @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows to
+        # that type, and the narrowing survives the copy: adding the list-valued "oauth2_scopes" default
+        # to hash<string, string> would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        # a secret or restricted key is sent as a bearer token, which is also how an OAuth2 access
+        # token is sent, so the two authentication styles converge here
+        if (*string api_key = remove opts.api_key) {
+            if (!opts.token.val()) {
+                opts.token = api_key;
+            }
+        }
+
+        string version = (remove opts.stripe_version) ?? DefaultApiVersion;
+        *string account = remove opts.stripe_account;
+
+        # caller-supplied headers win, so an explicit header is never silently replaced
+        hash<auto!> headers = {ApiVersionHeader: version};
+        if (account.val()) {
+            headers{AccountHeader} = account;
+        }
+        opts.headers = headers + (opts.headers ?? {});
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+
+    #! Returns the Stripe API version this client sends
+    string getApiVersion() {
+        return getDefaultHeaders(){StripeRestClientBase::ApiVersionHeader} ?? DefaultApiVersion;
+    }
+
+    #! Returns the default headers sent with every request
+    abstract *hash<auto> getDefaultHeaders();
+}
+
+#! Stripe REST client
+public class StripeRestClient inherits RestClient::RestClient, StripeRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options; see
+        @ref StripeRestClient::StripeRestClientBase::getOptions() "getOptions()" for the Stripe-specific
+        options
+        @param do_not_connect if @ref False the object will immediately attempt to connect
+    */
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(StripeRestClientBase::getOptions(opts), do_not_connect) {
+    }
+
+    #! Returns the default headers sent with every request
+    *hash<auto> getDefaultHeaders() {
+        return headers;
+    }
+}
+
+#! Stripe REST client for non-blocking I/O
+public class StripeRestClientIo inherits RestClientIo::RestClientIo, StripeRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(StripeRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Returns the default headers sent with every request
+    *hash<auto> getDefaultHeaders() {
+        return headers;
+    }
+}
+
+#! Class for Stripe REST connections
+public class StripeRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Stripe connection URL
+        const DefaultConnectionUrl = "stripe://api.stripe.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Stripe REST Connection",
+            "short_desc": "A connection to the Stripe REST API",
+            "desc": "A connection to the [Stripe](https://stripe.com) REST API for payments, billing "
+                "and connected accounts.\n\n"
+                "Stripe processes payments and manages the objects around them — customers, charges, "
+                "invoices, subscriptions, refunds and payouts — so an integration can charge a "
+                "customer, issue an invoice, reconcile a payout or onboard a connected account "
+                "without handling card data itself.\n\n"
+                "**Authentication** is a bearer token, which is either:\n"
+                "- a secret or restricted key from the Stripe dashboard, set as `api_key`, for an "
+                "integration acting as your own account; or\n"
+                "- an access token from Stripe Connect's OAuth2 flow, for a platform acting on behalf "
+                "of accounts that authorized it.\n\n"
+                "A **restricted key** can be limited to the resources the integration actually needs "
+                "and is the better choice in production; a secret key grants full access to the "
+                "account.\n\n"
+                "**Rate limits** are 100 read and 100 write requests per second in live mode and 25 of "
+                "each in test mode; Stripe returns HTTP 429 when they are exceeded.\n\n"
+                "Stripe is a trademark of Stripe, Inc.",
+            "cls": Class::forName("StripeRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "stripe": True,
+            },
+            "base_scheme_map": {
+                "https": "stripe",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "api_key": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "A Stripe secret or restricted key",
+                    "type": "string",
+                    "desc": "A Stripe secret key (`sk_live_…` or `sk_test_…`) or restricted key "
+                        "(`rk_live_…` or `rk_test_…`), sent as a bearer token.\n\n"
+                        "**To obtain one:**\n"
+                        "1. Log in to the Stripe dashboard\n"
+                        "2. Go to Developers > API keys\n"
+                        "3. Reveal the secret key, or create a restricted key limited to the "
+                        "resources this integration needs\n\n"
+                        "**Note:** a test-mode key only ever sees test data, which makes it the right "
+                        "choice while building an integration. Leave this unset when authenticating "
+                        "with Stripe Connect's OAuth2 flow instead.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultTokenUrl,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultPingPath,
+                },
+                "stripe_account": <ConnectionOptionInfo>{
+                    "display_name": "Connected Account",
+                    "short_desc": "Act on behalf of this connected account",
+                    "type": "string",
+                    "desc": "The ID of a Stripe Connect account (`acct_…`) that every request through "
+                        "this connection acts on behalf of, sent as the `Stripe-Account` header.\n\n"
+                        "Leave this unset for an integration working with your own account. Set it "
+                        "when a platform manages one connected account through this connection; a "
+                        "platform working with many accounts should instead leave it unset and supply "
+                        "the account per request.",
+                },
+                "stripe_version": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "The Stripe API version sent with every request",
+                    "type": "string",
+                    "default_value": StripeRestClientBase::DefaultApiVersion,
+                    "desc": "The Stripe API version sent as the `Stripe-Version` header with every "
+                        "request.\n\n"
+                        "Stripe changes response shapes between versions, so requests are pinned to a "
+                        "version explicitly rather than following the account's default. The default "
+                        "here is the version of the API schema that the **Stripe** application's "
+                        "actions are generated from.\n\n"
+                        "**Change this only together with a matching schema**: pointing the connection "
+                        "at a different version makes the declared response types disagree with what "
+                        "Stripe actually returns.",
+                },
+            },
+        };
+    }
+
+    #! Creates the StripeRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL
+        @param attributes various attributes
+        @param options connection options
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! Creates the StripeRestConnection object
+    /** @param config with the following keys:
+        - name: the connection name
+        - display_name: the display name
+        - short_desc: a short description in plain text
+        - desc: a long description with markdown formatting
+        - url: the connection URL
+        - opts: connection options
+        @param attr optional connection attributes
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "stripe";
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the Stripe data provider for this connection
+    /** @param subtype the data provider subtype, if any
+        @param options the data provider options, if any
+
+        @return the data provider for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and pinged
+        # without it
+        load_module("StripeDataProvider");
+        return create_object("StripeDataProvider", getAsync());
+    }
+
+    #! Returns a StripeRestClient object
+    private StripeRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new StripeRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new StripeRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}
