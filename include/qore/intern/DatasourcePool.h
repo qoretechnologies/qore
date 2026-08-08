@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -277,6 +277,11 @@ public:
     DLLLOCAL int reportMutationStreamBegin(int64 declared_bytes, ExceptionSink* xsink);
     DLLLOCAL int reportMutationStreamProgress(int64 consumed_bytes, ExceptionSink* xsink);
     DLLLOCAL int reportMutationStreamEnd(int64 consumed_bytes, bool ok, ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! arms a one-shot debug connection abort on the pool-wide context; see lib/ql_debug.cpp
+    DLLLOCAL void dbgArmConnectionAbort(const char* op_id, int when);
+#endif
 
     // functions supporting DatasourceStatementHelper
     DLLLOCAL DatasourceStatementHelper* helperRefSelfImpl() {

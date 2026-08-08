@@ -287,6 +287,40 @@ void SqlMutationContext::getNewTransactionId(std::string& tx_id) {
     tx_id = buf;
 }
 
+#ifdef DEBUG
+void SqlMutationContext::dbgArmFault(const char* op_id, int when) {
+    AutoLocker al(m);
+    if (when == SQL_MUTATION_FAULT_NONE || !op_id || !*op_id) {
+        dbg_fault_op_id.clear();
+        dbg_fault_when = SQL_MUTATION_FAULT_NONE;
+        dbg_fault_armed.store(false, std::memory_order_relaxed);
+        return;
+    }
+    dbg_fault_op_id = op_id;
+    dbg_fault_when = when;
+    dbg_fault_armed.store(true, std::memory_order_relaxed);
+}
+
+bool SqlMutationContext::dbgTakeArmedFault(const char* op_id, int when) {
+    if (!op_id || !*op_id || when == SQL_MUTATION_FAULT_NONE
+        || !dbg_fault_armed.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    AutoLocker al(m);
+    // the arming is consumed only when the operation and the boundary both match: an operation
+    // passes several boundaries, so consuming it on the operation alone would let an earlier
+    // boundary silently swallow an arming meant for a later one
+    if (dbg_fault_op_id != op_id || dbg_fault_when != when) {
+        return false;
+    }
+    // one-shot: the arming is consumed by the boundary it matched
+    dbg_fault_op_id.clear();
+    dbg_fault_when = SQL_MUTATION_FAULT_NONE;
+    dbg_fault_armed.store(false, std::memory_order_relaxed);
+    return true;
+}
+#endif
+
 int SqlMutationContext::dispatch(const SqlMutationEvent& ev, const Datasource& ds, ExceptionSink* xsink) {
     assert(xsink);
 

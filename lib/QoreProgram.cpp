@@ -369,6 +369,14 @@ unsigned qore_program_private::programIdCounter = 1;
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
     registerProgram();
+    // every member of this object now exists, so the Program can serve as a runtime context; until
+    // this point code reached from the base constructor can see the Program but must not switch
+    // into it
+    constructed = true;
+    // the parent's external data is copied here rather than from setParent(), so that a module's
+    // copy hook runs against a complete Program, as AbstractQoreProgramExternalData::copy()
+    // documents
+    copyExternalData();
 }
 
 void qore_program_private::registerProgram() {
@@ -1041,17 +1049,28 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     prepended_module_paths = p_pgm->priv->prepended_module_paths;
     appended_module_paths = p_pgm->priv->appended_module_paths;
 
-    // copy external data if present
-    if (!(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) && !p_pgm->priv->extmap.empty()) {
-        {
-            AutoLocker al(p_pgm->priv->plock);
-            for (auto& i : p_pgm->priv->extmap) {
-                extmap.insert(extmap_t::value_type(i.first, i.second->copy(pgm)));
-            }
+    // the external data of the parent is copied after this Program is fully constructed; see
+    // copyExternalData(), called from qore_program_private's constructor
+    ext_parent = (!(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) && !p_pgm->priv->extmap.empty())
+        ? p_pgm
+        : nullptr;
+}
+
+void qore_program_private_base::copyExternalData() {
+    if (!ext_parent) {
+        return;
+    }
+    QoreProgram* p_pgm = ext_parent;
+    ext_parent = nullptr;
+
+    {
+        AutoLocker al(p_pgm->priv->plock);
+        for (auto& i : p_pgm->priv->extmap) {
+            extmap.insert(extmap_t::value_type(i.first, i.second->copy(pgm)));
         }
-        for (auto& i : extmap) {
-            i.second->init();
-        }
+    }
+    for (auto& i : extmap) {
+        i.second->init();
     }
 }
 

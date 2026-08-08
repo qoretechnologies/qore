@@ -1,0 +1,370 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires BulkSqlUtil
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class BulkSqlUtilStreamTest
+
+#! collects bounded stream events for assertions
+class StreamCollector {
+    public {
+        list<hash<SqlMutationEventInfo>> events();
+        #! stop the stream once this many bytes have been consumed; 0 = never
+        int abort_after = 0;
+        #! refuse the stream at its begin boundary
+        bool reject_begin = False;
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        events += ev;
+        if (reject_begin && ev.event == SQL_MUTATION_EVENT_STREAM_BEGIN) {
+            return <SqlMutationDecisionInfo>{
+                "admit": False,
+                "err": "STREAM-REFUSED",
+                "desc": "the bulk operation was refused before it started",
+            };
+        }
+        if (abort_after && ev.event == SQL_MUTATION_EVENT_STREAM_PROGRESS
+            && ev.consumed_bytes > abort_after) {
+            return <SqlMutationDecisionInfo>{
+                "admit": False,
+                "err": "STREAM-OVER-BUDGET",
+                "desc": sprintf("the bulk operation consumed %d bytes", ev.consumed_bytes),
+            };
+        }
+        return NOTHING;
+    }
+
+    reset() {
+        events = ();
+        abort_after = 0;
+        reject_begin = False;
+    }
+
+    #! returns only the bounded stream events
+    list<hash<SqlMutationEventInfo>> streamEvents() {
+        return map $1, events, $1.event >= SQL_MUTATION_EVENT_STREAM_BEGIN
+            && $1.event <= SQL_MUTATION_EVENT_STREAM_END;
+    }
+
+    list<int> streamCodes() {
+        return map $1.event, streamEvents();
+    }
+}
+
+#! verifies that a bulk operation reports itself as a bounded stream
+/** The reporting is driver-neutral: it is implemented in BulkSqlUtil over the existing block flush
+    path, so it does not depend on a native bulk-load mechanism such as PostgreSQL \c COPY, and it
+    behaves identically on drivers with and without \c DBI_CAP_HAS_ARRAY_BIND.
+*/
+public class BulkSqlUtilStreamTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        const OptionColumn = 22;
+
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "bulk-op-1",
+            "path_id": "bulk_stream_test.insert",
+            "op_code": 7,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 1048576,
+        };
+
+        const TableName = "qore_bulk_stream_test";
+
+        #! rows per queued batch; the block size is smaller so that several blocks are flushed
+        const RowCount = 20;
+        const BlockSize = 5;
+    }
+
+    private {
+        StreamCollector obs();
+        *string connstr;
+    }
+
+    constructor() : Test("BulkSqlUtilStreamTest", "1.0", \ARGV, MyOpts) {
+        connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL ?? ENV.QORE_DB_CONNSTR;
+
+        addTestCase("bounded stream reporting", \boundedStreamTest());
+        addTestCase("stream overrun stops before commit", \streamOverrunTest());
+        addTestCase("stream refused before it starts", \streamRejectedTest());
+        addTestCase("discard ends the stream", \discardTest());
+        addTestCase("flush failure ends the stream", \flushFailureEndsStreamTest());
+        addTestCase("no observer means no events", \noObserverTest());
+        addTestCase("stream_bounds disabled", \streamBoundsDisabledTest());
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--conn=ARG", "set the DB connection string", OptionColumn);
+    }
+
+    private Datasource getDs() {
+%ifdef NoPgsql
+        testSkip("pgsql module not available");
+%endif
+        if (!connstr.val()) {
+            testSkip("no DB connection; set QORE_DB_CONNSTR_PGSQL");
+        }
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+            ds.setAutoCommit(False);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("no DB connection: " + ex.err + ": " + ex.desc);
+        }
+        return ds;
+    }
+
+    #! creates the test table with no observer attached
+    private Datasource setupTable() {
+        Datasource ds = getDs();
+        ds.execRaw(sprintf("drop table if exists %s", TableName));
+        ds.execRaw(sprintf("create table %s (id integer, val varchar(64))", TableName));
+        ds.commit();
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        return ds;
+    }
+
+    private dropTable(Datasource ds) {
+        ds.clearMutationObserver();
+        try {
+            ds.rollback();
+            ds.execRaw(sprintf("drop table if exists %s", TableName));
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore cleanup failures
+        }
+    }
+
+    #! returns a table object for the test table
+    private SqlUtil::AbstractTable getTable(Datasource ds) {
+        return (new SqlUtil::Table(ds, TableName)).getTable();
+    }
+
+    #! queues the given number of rows in the operation
+    private queueRows(BulkInsertOperation op, int count) {
+        for (int i = 0; i < count; ++i) {
+            op.queueData({"id": i, "val": sprintf("value-%d", i)});
+        }
+    }
+
+    boundedStreamTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+            on_error op.discard();
+            queueRows(op, RowCount);
+            op.flush();
+            op.endStream();
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        # one begin, one progress report per flushed block, and one end boundary
+        assertEq(SQL_MUTATION_EVENT_STREAM_BEGIN, l[0].event);
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, l.last().event);
+        assertEq(RowCount / BlockSize, (map $1, l, $1.event == SQL_MUTATION_EVENT_STREAM_PROGRESS).size());
+
+        # progress is cumulative and strictly increasing, and the declared bound is carried through
+        list<int> consumed = map $1.consumed_bytes,
+            (map $1, l, $1.event == SQL_MUTATION_EVENT_STREAM_PROGRESS);
+        assertEq(consumed, sort(consumed));
+        assertGt(0, consumed[0]);
+        assertGt(consumed[0], consumed.last());
+        assertEq(OpInfo.max_growth_bytes, l[0].declared_bytes);
+        assertEq(SQL_STMT_CLASS_STREAM, l[0].stmt_class);
+        assertEq(OpInfo.op_id, l[0].info.op_id);
+
+        # the end boundary reports the total and the operation succeeded
+        assertEq(consumed.last(), l.last().consumed_bytes);
+        assertEq(SQL_MUTATION_OUTCOME_OK, l.last().outcome);
+
+        # the rows are really there
+        ds.commit();
+        assertEq(RowCount, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    streamOverrunTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        # stop the operation partway through the second block
+        obs.abort_after = 20;
+        bool stopped = False;
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+            try {
+                queueRows(op, RowCount);
+                op.flush();
+                op.endStream();
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("STREAM-OVER-BUDGET", ex.err);
+                stopped = True;
+                op.discard();
+            }
+        }
+        assertTrue(stopped);
+
+        # the operation was stopped at an admission point, not by a database failure
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, l.last().event);
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, l.last().outcome);
+        assertTrue(l.last().replay_safe);
+
+        # it stopped partway through: some rows were written, but not all of them.  These rows are
+        # visible only inside this uncommitted transaction
+        int written = ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c;
+        assertGt(0, written);
+        assertLt(RowCount, written);
+
+        # nothing was committed: the rows written before the stop are discarded by the rollback
+        ds.rollback();
+        assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    streamRejectedTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        obs.reject_begin = True;
+        bool refused = False;
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+            try {
+                queueRows(op, RowCount);
+                op.flush();
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("STREAM-REFUSED", ex.err);
+                refused = True;
+                op.discard();
+            }
+        }
+        assertTrue(refused);
+
+        # exactly one begin and one terminal event, and no progress in between
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_END), obs.streamCodes());
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, obs.streamEvents().last().outcome);
+
+        # the refusal happened before the first row reached the database
+        ds.rollback();
+        assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    discardTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+            queueRows(op, RowCount);
+            op.flush();
+            # abandoning the operation ends the stream and reports that it did not complete
+            op.discard();
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, l.last().event);
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, l.last().outcome);
+        # exactly one end boundary, even though the object was destroyed after discard()
+        assertEq(1, (map $1, l, $1.event == SQL_MUTATION_EVENT_STREAM_END).size());
+
+        ds.rollback();
+        assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    #! a failure while the stream is open still closes it
+    /** the end boundary must be reported however the flush fails, so that a consumer never sees a
+        stream left open; the write here fails in the database because the table is gone
+    */
+    flushFailureEndsStreamTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+            on_error op.discard();
+            queueRows(op, BlockSize);
+            op.flush();
+
+            # drop the table underneath the operation so that the next block fails in the server
+            ds.commit();
+            ds.execRaw(sprintf("drop table %s", TableName));
+            ds.commit();
+
+            # fewer rows than block_size, so the failure happens in the explicit flush below rather
+            # than in the automatic flush inside queueData()
+            queueRows(op, BlockSize - 1);
+            assertThrows("DBI:PGSQL:ERROR", \op.flush());
+            op.discard();
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        # exactly one end boundary, reporting that the operation did not complete
+        assertEq(1, (map $1, l, $1.event == SQL_MUTATION_EVENT_STREAM_END).size());
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, l.last().event);
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, l.last().outcome);
+        ds.rollback();
+    }
+
+    noObserverTest() {
+        Datasource ds = getDs();
+        on_exit dropTable(ds);
+        ds.execRaw(sprintf("drop table if exists %s", TableName));
+        ds.execRaw(sprintf("create table %s (id integer, val varchar(64))", TableName));
+        ds.commit();
+
+        # with no observer registered the operation behaves exactly as before
+        assertFalse(ds.hasMutationObserver());
+        {
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize});
+            on_error op.discard();
+            queueRows(op, RowCount);
+            op.flush();
+        }
+        ds.commit();
+        assertEq(RowCount, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    streamBoundsDisabledTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            BulkInsertOperation op(getTable(ds), {"block_size": BlockSize, "stream_bounds": False});
+            on_error op.discard();
+            queueRows(op, RowCount);
+            op.flush();
+        }
+
+        # the operation is still observed as ordinary statements, but reports no stream boundaries
+        assertEq((), obs.streamEvents());
+        assertGt(0, obs.events.size());
+
+        ds.commit();
+        assertEq(RowCount, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+}

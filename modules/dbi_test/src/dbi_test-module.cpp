@@ -139,7 +139,10 @@ static int dbitest_run_copy(Datasource* ds, int64 total_bytes, int64 chunk, Exce
     if (chunk <= 0) {
         chunk = 4096;
     }
+    DbiTestConn* conn = get_conn(ds);
     if (ds->reportMutationStreamBegin(total_bytes, xsink)) {
+        // the consumer refused the stream before it started; a real driver sends nothing and
+        // reports no end boundary of its own
         return -1;
     }
     int64 consumed = 0;
@@ -147,6 +150,15 @@ static int dbitest_run_copy(Datasource* ds, int64 total_bytes, int64 chunk, Exce
         consumed += chunk;
         if (consumed > total_bytes) {
             consumed = total_bytes;
+        }
+        if (conn->faultIs("stream") && consumed >= total_bytes / 2) {
+            // the server failed while the payload was being sent; this is a driver failure and not
+            // a consumer rejection, and the two must remain distinguishable at the end boundary
+            xsink->raiseException("DBI-TEST-STREAM-ERROR", "injected stream failure");
+            ExceptionSink end_xsink;
+            ds->reportMutationStreamEnd(consumed, false, &end_xsink);
+            end_xsink.clear();
+            return -1;
         }
         if (ds->reportMutationStreamProgress(consumed, xsink)) {
             // the caller aborted the stream; report the end so that the consumer sees the boundary
@@ -473,7 +485,7 @@ static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
     methods.add(QDBI_METHOD_OPT_GET, dbitest_opt_get);
 
     methods.registerOption(DBITEST_OPT_FAULT, "the fault to inject: \"\", \"select\", \"exec\", \"commit\", "
-        "\"rollback\", \"abort-on-exec\", \"abort-on-commit\", or \"stmt-exec\"", stringTypeInfo);
+        "\"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", or \"stream\"", stringTypeInfo);
     methods.registerOption(DBITEST_OPT_ROWS, "the number of rows reported as affected by exec operations",
         bigIntTypeInfo);
     methods.registerOption(DBITEST_OPT_STREAM_CHUNK, "the chunk size in bytes used by the simulated bounded stream",

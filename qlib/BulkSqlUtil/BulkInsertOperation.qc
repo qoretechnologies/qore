@@ -100,6 +100,8 @@ on_error ds.rollback();
             @param opts an optional hash of options for the object as follows:
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
+            - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
+              is registered (default: @ref True "True"); see @ref bulk_bounded_streams
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "returning": optional column names or returning descriptors to retrieve for every inserted row
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single
@@ -117,6 +119,8 @@ on_error ds.rollback();
             @param opts an optional hash of options for the object as follows:
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
+            - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
+              is registered (default: @ref True "True"); see @ref bulk_bounded_streams
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "returning": optional column names or returning descriptors to retrieve for every inserted row
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single

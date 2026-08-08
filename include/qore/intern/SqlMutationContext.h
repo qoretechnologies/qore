@@ -152,6 +152,30 @@
 //! the error code raised for an invalid mutation declaration
 #define SQL_MUTATION_DECLARATION_ERR "SQL-MUTATION-DECLARATION-ERROR"
 
+#ifdef DEBUG
+/** @defgroup sql_mutation_debug_fault_codes SQL mutation debug fault boundary codes
+
+    Debug builds only.  Values selecting the boundary at which an armed connection abort is
+    triggered; see dbg_ds_arm_connection_abort() in lib/ql_debug.cpp.
+*/
+///@{
+//! no fault is armed
+#define SQL_MUTATION_FAULT_NONE             0
+//! abort the connection after the statement has been executed and before any commit
+/** the operation is reported with \c LOST_CONNECTION and \c replay_safe \c True
+*/
+#define SQL_MUTATION_FAULT_AFTER_EXEC       1
+//! abort the connection while a commit is in flight
+/** the transaction is reported with \c COMMIT_AMBIGUOUS, since the core cannot know whether the
+    server applied the commit
+*/
+#define SQL_MUTATION_FAULT_ON_COMMIT        2
+///@}
+
+//! the error code raised by an armed debug connection abort
+#define SQL_MUTATION_DEBUG_ABORT_ERR "DBI:DBG:CONNECTION-ABORTED"
+#endif
+
 class Datasource;
 class ResolvedCallReferenceNode;
 
@@ -258,6 +282,38 @@ public:
     //! returns a new unique transaction identity for this context
     DLLLOCAL void getNewTransactionId(std::string& tx_id);
 
+#ifdef DEBUG
+    //! arms a one-shot connection abort for the operation with the given \c "op_id"
+    /** Debug builds only; exposed to %Qore as dbg_ds_arm_connection_abort() so that a test can
+        produce a structural connection loss at an exact operation boundary on a real driver,
+        deterministically and with no sleep, poll, retry, or randomness.
+
+        The arming lives on the context rather than on the connection because a DatasourcePool
+        shares one context with every connection it pools: a test arms the pool without knowing
+        which connection its thread will be allocated.
+
+        @param op_id the exact declared operation identity to abort on
+        @param when the boundary; see @ref sql_mutation_debug_fault_codes
+    */
+    DLLLOCAL void dbgArmFault(const char* op_id, int when);
+
+    //! returns true if the arming matches \a op_id and \a when, consuming it
+    /** The arming is one-shot, so a test can never see a second abort it did not ask for, and it is
+        consumed only by the exact boundary it names: an operation passes several boundaries, so
+        matching on the operation alone would let an earlier boundary swallow an arming meant for a
+        later one.
+
+        @param op_id the declared operation identity at the boundary being passed
+        @param when the boundary being passed; see @ref sql_mutation_debug_fault_codes
+    */
+    DLLLOCAL bool dbgTakeArmedFault(const char* op_id, int when);
+
+    //! returns true if any fault is armed
+    DLLLOCAL bool dbgFaultArmed() const {
+        return dbg_fault_armed.load(std::memory_order_relaxed);
+    }
+#endif
+
     //! delivers an event to the observer
     /** The observer is called with a clean ExceptionSink; anything it raises is assimilated into
         \a xsink afterwards, so that a driver exception already present in \a xsink is always
@@ -302,6 +358,15 @@ private:
 
     //! process-unique identity for this context, assigned lazily; 0 = not yet assigned
     mutable std::atomic<int64> ctx_id{0};
+
+#ifdef DEBUG
+    //! the operation identity the armed fault applies to; empty = no fault armed
+    std::string dbg_fault_op_id;
+    //! the armed boundary; see @ref sql_mutation_debug_fault_codes
+    int dbg_fault_when = SQL_MUTATION_FAULT_NONE;
+    //! fast-path flag; only ever written with the lock held
+    std::atomic<bool> dbg_fault_armed{false};
+#endif
 
     tmap_t tmap;
 

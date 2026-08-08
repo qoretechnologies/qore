@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     NOTE that 2 copies of connection values are kept in case
     the values are changed while a connection is in use
@@ -1127,6 +1127,15 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
     //printd(5, "Datasource::exec_internal() this=%p, autocommit=%d, in_transaction=%d, xsink=%d\n", this,
     //    priv->autocommit, priv->in_transaction, xsink->isException());
 
+#ifdef DEBUG
+    // the statement has been executed and no commit has been attempted: this is the replay-safe
+    // boundary a test arms to prove restartable failover on a real driver
+    if (!*xsink && priv->dbgCheckArmedFault(SQL_MUTATION_FAULT_AFTER_EXEC, xsink)) {
+        rv.discard(xsink);
+        rv = QoreValue();
+    }
+#endif
+
     if (priv->connection_aborted) {
         assert(*xsink);
         assert(!rv);
@@ -1576,6 +1585,7 @@ int Datasource::reportMutationStreamBegin(int64 declared_bytes, ExceptionSink* x
         }
     }
     priv->stream_declared_bytes = declared_bytes;
+    priv->stream_rejected = false;
 
     if (!priv->observes(SQL_MUTATION_MASK_STREAM)) {
         return 0;
@@ -1601,6 +1611,8 @@ int Datasource::reportMutationStreamEnd(int64 consumed_bytes, bool ok, Exception
     assert(xsink);
     const int64 declared_bytes = priv->stream_declared_bytes;
     priv->stream_declared_bytes = -1;
+    const bool rejected = priv->stream_rejected;
+    priv->stream_rejected = false;
 
     if (!priv->observes(SQL_MUTATION_MASK_STREAM)) {
         return 0;
@@ -1608,7 +1620,16 @@ int Datasource::reportMutationStreamEnd(int64 consumed_bytes, bool ok, Exception
     SqlMutationEvent ev(SQL_MUTATION_EVENT_STREAM_END, SQL_STMT_CLASS_STREAM);
     ev.declared_bytes = declared_bytes;
     ev.consumed_bytes = consumed_bytes < 0 ? 0 : consumed_bytes;
-    ev.outcome = ok ? SQL_MUTATION_OUTCOME_OK : SQL_MUTATION_OUTCOME_ERROR;
+    if (ok) {
+        ev.outcome = SQL_MUTATION_OUTCOME_OK;
+    } else if (rejected) {
+        // the consumer stopped the stream at an admission point; this is distinct from a driver
+        // failure, and no commit can have been attempted, so the operation can be replayed
+        ev.outcome = SQL_MUTATION_OUTCOME_NOT_EXECUTED;
+        ev.replay_safe = 1;
+    } else {
+        ev.outcome = SQL_MUTATION_OUTCOME_ERROR;
+    }
     ev.driver_xsink = xsink;
     // stream end is a notification: it cannot reject anything that has already been streamed
     priv->dispatchMutationEvent(ev, xsink);

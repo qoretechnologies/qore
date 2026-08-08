@@ -15,10 +15,19 @@ class StreamCollector {
         list<hash<SqlMutationEventInfo>> events();
         #! abort the stream once this many bytes have been consumed; 0 = never
         int abort_after = 0;
+        #! refuse the stream at its begin boundary
+        bool reject_begin = False;
     }
 
     *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
         events += ev;
+        if (reject_begin && ev.event == SQL_MUTATION_EVENT_STREAM_BEGIN) {
+            return <SqlMutationDecisionInfo>{
+                "admit": False,
+                "err": "STREAM-REFUSED",
+                "desc": "the stream was refused before it started",
+            };
+        }
         if (abort_after && ev.event == SQL_MUTATION_EVENT_STREAM_PROGRESS
             && ev.consumed_bytes > abort_after) {
             return <SqlMutationDecisionInfo>{
@@ -33,6 +42,7 @@ class StreamCollector {
     reset() {
         events = ();
         abort_after = 0;
+        reject_begin = False;
     }
 
     list<hash<SqlMutationEventInfo>> streamEvents() {
@@ -59,6 +69,8 @@ public class MutationStreamTest inherits QUnit::Test {
         addTestCase("driver stream", \driverStreamTest());
         addTestCase("declared bytes fallback", \declaredBytesFallbackTest());
         addTestCase("stream abort", \streamAbortTest());
+        addTestCase("stream begin rejected", \streamBeginRejectedTest());
+        addTestCase("stream driver failure", \streamDriverFailureTest());
         addTestCase("qore level stream", \qoreLevelStreamTest());
         addTestCase("unmonitored stream", \unmonitoredStreamTest());
 
@@ -132,7 +144,55 @@ public class MutationStreamTest inherits QUnit::Test {
         assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_PROGRESS,
             SQL_MUTATION_EVENT_STREAM_PROGRESS, SQL_MUTATION_EVENT_STREAM_END), map $1.event, l);
         assertEq(800, l.last().consumed_bytes);
+        # the producer's own end boundary reports the rejection: the consumer stopped the stream, so
+        # the outcome is "not executed" and not a driver failure, and nothing was committed
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, l.last().outcome);
+        assertTrue(l.last().replay_safe);
+    }
+
+    #! a stream refused before it starts still reports exactly one terminal event
+    streamBeginRejectedTest() {
+        Datasource ds = getDs();
+        obs.reject_begin = True;
+        {
+            SqlMutationDeclaration decl(ds, CopyInfo);
+            assertThrows("STREAM-REFUSED", \ds.execRaw(), "dbitest-copy 1000");
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        # the producer never started the stream, so it emits no end boundary of its own; the core
+        # supplies it so that the operation's lifetime always closes
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_END), map $1.event, l);
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, l.last().outcome);
+        assertTrue(l.last().replay_safe);
+        assertEq(0, l.last().consumed_bytes);
+        assertEq(1000, l.last().declared_bytes);
+        assertEq("copy-1", l.last().info.op_id);
+
+        # the refusal did not leave stream state behind for the next stream on this datasource
+        obs.reset();
+        {
+            SqlMutationDeclaration decl(ds, CopyInfo);
+            assertEq(1000, ds.execRaw("dbitest-copy 1000"));
+        }
+        assertEq(SQL_MUTATION_OUTCOME_OK, obs.streamEvents().last().outcome);
+    }
+
+    #! a driver failure mid-stream stays distinguishable from a consumer rejection
+    streamDriverFailureTest() {
+        Datasource ds = getDs();
+        ds.setOption("fault", "stream");
+        {
+            SqlMutationDeclaration decl(ds, CopyInfo);
+            assertThrows("DBI-TEST-STREAM-ERROR", \ds.execRaw(), "dbitest-copy 1000");
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        assertEq(SQL_MUTATION_EVENT_STREAM_END, l.last().event);
+        # the database failed while the payload was being sent; this is not a refusal, and the core
+        # must not claim the operation was not executed
         assertEq(SQL_MUTATION_OUTCOME_ERROR, l.last().outcome);
+        assertEq(NOTHING, l.last().replay_safe);
     }
 
     qoreLevelStreamTest() {

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -405,6 +405,14 @@ int QoreSQLStatement::execIntern(DBActionHelper& dba, ExceptionSink* xsink) {
     }
 
     int rc = qore_dbi_private::get(*priv->ds->getDriver())->stmt_exec(this, xsink);
+#ifdef DEBUG
+    // a prepared statement carries the same declaration as any other operation, so it reaches the
+    // same armed replay-safe boundary; this runs before the status is set so that the statement is
+    // left exactly as a driver-side connection abort would leave it
+    if (!rc && !*xsink && dsp->dbgCheckArmedFault(SQL_MUTATION_FAULT_AFTER_EXEC, xsink)) {
+        rc = -1;
+    }
+#endif
     if (!rc)
         status = STMT_EXECED;
 

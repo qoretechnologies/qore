@@ -65,16 +65,32 @@ static void qore_bump_method_dispatch_epoch() {
 AbstractQoreClassUserData::~AbstractQoreClassUserData() {
 }
 
+//! returns nullptr if \a pgm is still inside its own constructor
+/** A Program publishes QoreProgram::priv and creates its namespace tree from
+    qore_program_private_base's constructor, before any member of qore_program_private exists, so
+    code running from there can reach it: qore_program_private_base::setParent() runs the
+    external-data copy hook of every module attached to the parent, and such a hook may execute Qore
+    code - the python module's does, creating and discarding an object whose class has a destructor.
+
+    Switching the thread into that Program would attach to it, and attaching increments
+    qore_program_private::debug_program_counter, which is raw memory until the derived constructor
+    runs.  Returning nullptr leaves the method in the caller's context, which is always a fully
+    constructed Program.
+*/
+static QoreProgram* qore_check_pgm_context(QoreProgram* pgm) {
+    return (pgm && qore_program_private::isConstructed(*pgm)) ? pgm : nullptr;
+}
+
 static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgram* explicit_pgm = nullptr) {
     const qore_class_private* c = qore_class_private::get(cls);
     if (!c) {
-        return explicit_pgm;
+        return qore_check_pgm_context(explicit_pgm);
     }
     if (c->spgm) {
-        return c->spgm;
+        return qore_check_pgm_context(c->spgm);
     }
     if (explicit_pgm) {
-        return explicit_pgm;
+        return qore_check_pgm_context(explicit_pgm);
     }
     // No source Program and no explicit Program (e.g. a builtin/system class such as a Qorus
     // UserApi/ServiceApi/JobApi imported into an interface Program): only switch into the namespace's
@@ -84,7 +100,7 @@ static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgra
     // e.g. blocks a dom=THREAD_CONTROL builtin (get_thread_data()) the API calls on behalf of the
     // interface.  Returning nullptr here matches the pre-AOT behavior (no Program switch).
     QoreProgram* nspgm = c->ns ? c->ns->getProgram() : nullptr;
-    return (nspgm && nspgm != ::getProgram()) ? nspgm : nullptr;
+    return (nspgm && nspgm != ::getProgram()) ? qore_check_pgm_context(nspgm) : nullptr;
 }
 
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,

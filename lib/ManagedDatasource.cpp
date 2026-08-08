@@ -62,13 +62,17 @@ DatasourceActionHelper::~DatasourceActionHelper() {
 void ManagedDatasource::cleanup(ExceptionSink *xsink) {
     // this thread has the transaction lock
     AutoLocker al(&ds_lock);
-    assert(isInTransaction());
 
-    xsink->raiseException("DATASOURCE-TRANSACTION-EXCEPTION", "%s:%s@%s: TID %d terminated while in a transaction; " \
-        "transaction will be automatically rolled back and the lock released", getDriverName(),
-        getUsernameStr().c_str(), getDBNameStr().c_str(), q_gettid());
-    Datasource::rollback(xsink);
-    setTransactionStatus(false);
+    // the thread resource is registered whenever this thread acquires the connection, which a
+    // prepared statement does when it is bound, with or without a transaction in progress; with no
+    // transaction there is nothing to roll back and nothing to report, only the lock to release
+    if (isInTransaction()) {
+        xsink->raiseException("DATASOURCE-TRANSACTION-EXCEPTION", "%s:%s@%s: TID %d terminated while in a " \
+            "transaction; transaction will be automatically rolled back and the lock released", getDriverName(),
+            getUsernameStr().c_str(), getDBNameStr().c_str(), q_gettid());
+        Datasource::rollback(xsink);
+        setTransactionStatus(false);
+    }
     releaseLockIntern();
 }
 
@@ -402,17 +406,29 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
     //printd(5, "ManagedDatasource::closeUnlocked() this: %p priv: %p %s:%s@%s open: %d trans: %d\n", this, qore_ds_private::get(*this), getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), isOpen(), isInTransaction());
 
     if (isOpen()) {
-        if (isInTransaction()) {
+        const bool in_transaction = isInTransaction();
+
+        // the thread resource is registered whenever this thread acquires the connection, which a
+        // prepared statement does when it is bound, with or without a transaction in progress.  It
+        // must be removed on every close: Datasource::close() below frees the driver's connection
+        // data, so a resource left registered would run cleanup() - and the driver's rollback -
+        // against a closed connection
+        const bool held = !remove_thread_resource(this);
+
+        if (in_transaction) {
             if (!wasConnectionAborted()) {
                 // FIXME: check for statement
                 xsink->raiseException("DATASOURCE-TRANSACTION-EXCEPTION", "%s:%s@%s: Datasource closed while in a transaction; transaction will be automatically rolled back and the lock released", getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str());
                 Datasource::rollback(xsink);
             }
-            remove_thread_resource(this);
             setTransactionStatus(false);
-            // force-exit the transaction lock
-            forceReleaseLockIntern();
             rc = -1;
+        }
+
+        if (in_transaction || held) {
+            // force-exit the transaction lock; the connection is about to be closed, so leaving the
+            // lock held would keep every other thread from ever reopening the datasource
+            forceReleaseLockIntern();
         }
 
         Datasource::close();

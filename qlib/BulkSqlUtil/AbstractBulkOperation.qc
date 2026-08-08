@@ -81,11 +81,14 @@ on_error ds.rollback();
                 "block_size": sprintf("the row block size used for bulk DML / batch operations; default: %y",
                     OptionDefaults.block_size),
                 "info_log": "a call reference / closure for informational logging",
+                "stream_bounds": sprintf("report the operation as a bounded stream to a datasource mutation "
+                    "observer, if one is registered; default: %y", OptionDefaults.stream_bounds),
             };
 
             #! default option values
-            const hash<string, int> OptionDefaults = {
+            const hash<string, auto> OptionDefaults = {
                 "block_size": 1000,
+                "stream_bounds": True,
             };
         }
 
@@ -122,6 +125,15 @@ on_error ds.rollback();
 
             #! True when input_keys has been initialized, including by an empty record
             bool input_template_set = False;
+
+            #! True if this operation reports itself as a bounded stream when an observer is present
+            bool stream_bounds;
+
+            #! True once the stream begin boundary has been reported
+            bool stream_started = False;
+
+            #! total payload bytes reported to the observer so far
+            int stream_consumed = 0;
         }
 
         #! creates the object from the supplied arguments
@@ -131,6 +143,8 @@ on_error ds.rollback();
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
+            - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
+              is registered (default: @ref True "True"); see @ref bulk_bounded_streams
         */
         constructor(string name, SqlUtil::Table target, *hash opts) {
             opname = name;
@@ -145,6 +159,8 @@ on_error ds.rollback();
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
+            - \c "stream_bounds": report the operation as a bounded stream to a datasource mutation observer, if one
+              is registered (default: @ref True "True"); see @ref bulk_bounded_streams
         */
         constructor(string name, SqlUtil::AbstractTable target, *hash opts) {
             opname = name;
@@ -157,8 +173,15 @@ on_error ds.rollback();
             discard() before destroying the object
         */
         destructor() {
-            if (hbuf.firstValue())
+            if (hbuf.firstValue()) {
+                # the operation is being destroyed with data it never wrote, so the stream did not
+                # complete; the boundary is reported before the error is raised
+                streamEnd(False);
                 throw "BLOCK-ERROR", sprintf("there %s still %d row%s of data in the internal cache; make sure to call %s::flush() or %s::discard() before destroying the object to flush all data to the database", hbuf.firstValue().size() == 1 ? "is" : "are", hbuf.firstValue().size(), hbuf.firstValue().size() == 1 ? "" : "s", self.className(), self.className());
+            }
+            # backstop for callers that commit on the datasource directly rather than through
+            # commit() or endStream(); everything queued was written
+            streamEnd(True);
         }
 
         #! queues row data in the block buffer; the block buffer is flushed to the DB if the buffer size reaches the limit defined by the \c block_size option; does not commit the transaction
@@ -388,6 +411,94 @@ on_error ds.rollback();
 
             if (opts.info_log)
                 info_log = opts.info_log;
+
+            stream_bounds = exists opts.stream_bounds
+                ? parse_boolean(opts.stream_bounds)
+                : OptionDefaults.stream_bounds;
+        }
+
+        #! reports the begin boundary of the bounded stream if it has not been reported yet
+        /** The boundary is reported lazily from the first flush, so an operation that never writes
+            anything reports nothing at all.
+
+            @throw SQL-MUTATION-REJECTED the observer refused the operation; the error code and
+            description are supplied by the observer
+        */
+        private streamBegin() {
+            if (stream_started || !stream_bounds) {
+                return;
+            }
+            AbstractDatasource ds = table.getDatasource();
+            if (!ds.hasMutationObserver()) {
+                return;
+            }
+            # a rejection here throws, and nothing has been written yet
+            ds.reportMutationStreamBegin(0);
+            stream_started = True;
+        }
+
+        #! reports progress after a block has been written; throws if the observer stops the stream
+        /** This is an admission point: an observer that has seen more bytes than it will admit stops
+            the operation here, before the surrounding transaction can commit.
+
+            @param bytes the payload size of the block just written
+        */
+        private streamProgress(int bytes) {
+            if (!stream_started) {
+                return;
+            }
+            stream_consumed += bytes;
+            table.getDatasource().reportMutationStreamProgress(stream_consumed);
+        }
+
+        #! reports the end boundary of the bounded stream exactly once
+        /** @param ok False if the operation did not complete successfully
+        */
+        private streamEnd(bool ok) {
+            if (!stream_started) {
+                return;
+            }
+            # cleared first so that the boundary can never be reported twice, even if the observer
+            # raises an exception from it
+            stream_started = False;
+            table.getDatasource().reportMutationStreamEnd(stream_consumed, ok);
+        }
+
+        #! returns the payload size in bytes of the buffered block about to be written
+        /** The measure is the serialized size of the values themselves, which is the same measure a
+            producer uses to compute the \c "max_growth_bytes" of its declaration, so that declared
+            and consumed byte counts are comparable.
+
+            @return the total payload size in bytes of the current block
+        */
+        private int getBlockBytes() {
+            int bytes = 0;
+            foreach auto vals in ((hbuf + cval).iterator()) {
+                if (vals.typeCode() == NT_LIST) {
+                    map bytes += getValueBytes($1), vals;
+                } else {
+                    # a constant column value is repeated once per row in the block
+                    bytes += getValueBytes(vals) * hbuf.firstValue().lsize();
+                }
+            }
+            return bytes;
+        }
+
+        #! returns the serialized size in bytes of a single bound value
+        private int getValueBytes(auto val) {
+            switch (val.typeCode()) {
+                case NT_NOTHING:
+                case NT_NULL:
+                    # the canonical representation of a NULL
+                    return 2;
+                case NT_STRING:
+                    return val.strlen();
+                case NT_BINARY:
+                    return val.size();
+                case NT_BOOLEAN:
+                    return 1;
+            }
+            return sprintf("%s", val).strlen();
         }
 
         #! sets up the block buffer given the initial template hash of lists for inserting
@@ -529,6 +640,19 @@ on_error ds.rollback();
 
         #! flushes queued data to the database
         private flushIntern() {
+            # report the stream boundary before anything is written, so that an observer that
+            # refuses the operation stops it before the first row reaches the database
+            streamBegin();
+
+            # any failure once the stream has started ends it; the boundary is reported exactly
+            # once, and this is registered before anything that could throw with the stream open -
+            # including the payload measurement below - so the stream can never be left open.  A
+            # refusal from streamBegin() itself is deliberately outside this handler: the stream was
+            # never started, and the core reports that terminal event itself
+            on_error streamEnd(False);
+
+            int bytes = stream_started ? getBlockBytes() : 0;
+
             # flush data to the DB; implemented in subclasses
             flushImpl();
             # update row count
@@ -539,6 +663,10 @@ on_error ds.rollback();
                     row_count);
             # reset internal buffer
             map hbuf.$1 = (), keys hbuf;
+
+            # this is an admission point: an observer that has seen more than it will admit stops
+            # the operation here, after this block and before the transaction can commit
+            streamProgress(bytes);
         }
 
         #! discards any buffered batched data; this method should be called before destroying the object if an error occurs
@@ -576,11 +704,49 @@ on_error ds.rollback();
         */
         discard() {
             delete hbuf;
+            # the operation is being abandoned, so anything already written is not going to be
+            # committed by it
+            streamEnd(False);
+        }
+
+        #! reports the end of the bounded stream without flushing or ending the transaction
+        /** Call this before committing when the transaction is committed on the datasource directly
+            rather than through commit(), so that a mutation observer sees the stream's end boundary
+            before the transaction outcome rather than after it.  It is a no-op when no stream is in
+            progress, and calling it more than once is harmless.
+
+            @par Example:
+            @code{.py}
+{
+    on_success {
+        op.flush();
+        op.endStream();
+        ds.commit();
+    }
+    on_error {
+        op.discard();
+        ds.rollback();
+    }
+    map op.queueData($1), data.iterator();
+}
+            @endcode
+
+            @see
+            - flush()
+            - discard()
+
+            @since %BulkSqlUtil 1.5
+        */
+        endStream() {
+            streamEnd(True);
         }
 
         #! flushes any queued data and commits the transaction
         nothing commit() {
             flush();
+            # the stream boundary is reported before the transaction outcome, so that a consumer
+            # sees the operation close before the commit it belongs to
+            streamEnd(True);
             table.commit();
         }
 

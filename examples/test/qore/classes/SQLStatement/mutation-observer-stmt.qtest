@@ -159,8 +159,12 @@ public class MutationObserverStmtTest inherits QUnit::Test {
         stmt.bind(1);
         assertThrows("STMT-REJECTED", \stmt.exec());
 
-        # the statement was not executed
-        assertEq((SQL_MUTATION_EVENT_PRE_EXEC,), obs.codes());
+        # the statement was not executed, and the rejected admission event is closed by a terminal
+        # event carrying the same statement class as the prepared statement itself
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_POST_EXEC), obs.codes());
+        assertEq(SQL_MUTATION_OUTCOME_NOT_EXECUTED, obs.events[1].outcome);
+        assertTrue(obs.events[1].replay_safe);
+        assertEq(SQL_STMT_CLASS_STMT_EXEC, obs.events[1].stmt_class);
         obs.decision = NOTHING;
         stmt.close();
         ds.rollback();

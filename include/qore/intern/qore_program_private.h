@@ -560,6 +560,24 @@ public:
     bool user_requested_exec_mode = false;
     bool inherited_user_requested_exec_mode = false;
     QoreParseOptions inherited_exec_mode_parse_options;
+
+    //! the parent whose external data is copied once this Program is fully constructed
+    /** nullptr when there is nothing to copy; see copyExternalData()
+    */
+    QoreProgram* ext_parent = nullptr;
+
+    //! set once the Program's constructor has run to completion
+    /** QoreProgram::priv is published, and the Program's namespace tree is created and owned by the
+        new Program, from qore_program_private_base's constructor - before any member of the derived
+        qore_program_private exists.  Code running from there can therefore reach a Program that
+        cannot yet be used as a runtime context: setParent() runs the external-data copy hooks of
+        every module attached to the parent, and such a hook may execute Qore code.
+
+        This member lives in the base class so that it is false for the whole of that window, and it
+        is declared with a default initializer rather than being set in the constructor body, so it
+        is already false before the base constructor's body runs.
+    */
+    bool constructed = false;
     bool ir_dump = false;
     bool ir_fallback_warn = false;
     bool ir_fallback_warned = false;
@@ -937,6 +955,15 @@ protected:
     saved_obj_map_t saved_objects;
 
     DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
+
+    //! copies the parent's external data into this Program and initializes it
+    /** Called from qore_program_private's constructor rather than from setParent(), because
+        AbstractQoreProgramExternalData::copy() documents that "the call is made after the child
+        program has been completely set up" and modules rely on it: the python module's hook runs
+        Qore code, which needs a Program that can be attached to.  setParent() runs from
+        qore_program_private_base's constructor, where no member of the derived class exists yet.
+    */
+    DLLLOCAL void copyExternalData();
 
     // for independent programs (not inherited from another QoreProgram object)
     DLLLOCAL void newProgram();
@@ -2828,6 +2855,15 @@ public:
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;
+    }
+
+    //! returns true if the Program's constructor has run to completion
+    /** A Program is reachable from code running inside its own constructor - see the "constructed"
+        member - and must not be selected as a thread's runtime context until it is complete;
+        attaching to it touches members of qore_program_private that do not exist yet.
+    */
+    DLLLOCAL static bool isConstructed(const QoreProgram& pgm) {
+        return pgm.priv->constructed;
     }
 
     DLLLOCAL static void clearThreadData(QoreProgram& pgm, ExceptionSink* xsink) {

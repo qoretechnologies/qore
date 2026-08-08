@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class StmtConnectionLifecycleTest
+
+#! verifies the connection/thread-resource lifecycle of a prepared statement
+/** A prepared statement acquires the connection when it is bound, which registers the datasource as
+    a thread resource so that the connection lock is released if the thread exits.  Binding does not
+    start a transaction, so the thread resource can be registered with no transaction in progress,
+    and every path that closes the datasource or cleans up the thread has to cope with that.
+
+    Before the fix, closing a datasource in that state left the thread resource registered while
+    Datasource::close() freed the driver's connection data, so the eventual thread cleanup ran the
+    driver's rollback against a closed connection and crashed the process.
+
+    The mock dbitest driver is used so that this runs with no external database.
+*/
+public class StmtConnectionLifecycleTest inherits QUnit::Test {
+    constructor() : Test("StmtConnectionLifecycleTest", "1.0", \ARGV) {
+        addTestCase("bound statement destroyed", \boundStatementDestroyedTest());
+        addTestCase("bound statement then close", \boundStatementCloseTest());
+        addTestCase("bound statement in another thread", \boundStatementThreadTest());
+        addTestCase("destroyed datasource cleanup", \destroyedDatasourceCleanupTest());
+        addTestCase("open transaction still rolls back", \openTransactionCloseTest());
+
+        set_return_value(main());
+    }
+
+    private Datasource getDs() {
+        Datasource ds;
+        try {
+            ds = new Datasource("dbitest:u/p@db");
+            ds.setAutoCommit(False);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+        return ds;
+    }
+
+    #! binding acquires the connection without starting a transaction
+    boundStatementDestroyedTest() {
+        Datasource ds = getDs();
+        assertFalse(ds.currentThreadInTransaction());
+        {
+            SQLStatement stmt(ds);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            # binding acquires the connection - currentThreadInTransaction() reports that this
+            # thread holds it - but no statement has been executed, so no transaction was started
+            assertTrue(ds.currentThreadInTransaction());
+        }
+        # destroying the statement without executing it leaves the datasource usable
+        assertEq(1, ds.exec("insert into t values (1)"));
+        ds.rollback();
+    }
+
+    #! closing the datasource in that state must not leave a thread resource behind
+    /** the resource would later run the driver's rollback against a connection whose data
+        Datasource::close() has already freed
+    */
+    boundStatementCloseTest() {
+        Datasource ds = getDs();
+        {
+            SQLStatement stmt(ds);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+        }
+        # closing with the connection held but no transaction in progress reports nothing
+        ds.close();
+        # the connection lock was released with the connection, so the datasource is not left
+        # locked by this thread
+        assertFalse(ds.currentThreadInTransaction());
+
+        # and it can be reopened and used again
+        ds.open();
+        assertEq(1, ds.exec("insert into t values (1)"));
+        ds.rollback();
+    }
+
+    #! a thread that exits holding a bound statement releases the connection and reports nothing
+    boundStatementThreadTest() {
+        Datasource ds = getDs();
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            SQLStatement stmt(ds);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            # the thread exits here holding the connection with no transaction in progress
+        }();
+        c.waitForZero();
+
+        # no transaction was in progress, so nothing was rolled back and the connection lock was
+        # released: this thread can use the datasource immediately
+        assertFalse(ds.currentThreadInTransaction());
+        assertEq(1, ds.exec("insert into t values (1)"));
+        ds.rollback();
+    }
+
+    #! a datasource destroyed while its connection is held must not be rolled back afterwards
+    /** This is the shape that crashed the process: the datasource is destroyed first, which frees
+        the driver's connection data, and the thread resource left registered behind it then ran the
+        driver's rollback against that freed data when the thread exited.
+    */
+    destroyedDatasourceCleanupTest() {
+        Counter c(1);
+        *string driver;
+        background sub () {
+            on_exit c.dec();
+            {
+                Datasource ds("dbitest:u/p@db");
+                ds.setAutoCommit(False);
+                ds.open();
+                SQLStatement stmt(ds);
+                stmt.prepare("insert into t values (%v)");
+                stmt.bind(1);
+                driver = ds.getDriverName();
+                # the datasource is destroyed here with its connection still held
+            }
+            # and the thread exits here
+        }();
+        c.waitForZero();
+
+        # the thread body ran to completion, and cleaning the thread up afterwards did not run the
+        # driver's rollback against the connection its datasource had already closed - which
+        # crashed the process before the fix
+        assertEq("dbitest", driver);
+    }
+
+    #! closing with a real transaction open must still roll it back and report it
+    /** the no-transaction handling above must not weaken this
+    */
+    openTransactionCloseTest() {
+        Datasource ds = getDs();
+        ds.exec("insert into t values (1)");
+        assertTrue(ds.currentThreadInTransaction());
+
+        # closing while a transaction is in progress is still an error, and the transaction is
+        # still rolled back
+        assertThrows("DATASOURCE-TRANSACTION-EXCEPTION", "rolled back", \ds.close());
+        assertFalse(ds.currentThreadInTransaction());
+
+        ds.open();
+        assertEq(1, ds.exec("insert into t values (2)"));
+        ds.rollback();
+    }
+}

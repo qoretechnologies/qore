@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     The Datasource class provides the low-level interface to Qore DBI drivers.
 
@@ -111,6 +111,12 @@ struct qore_ds_private {
     int64 tx_seq = 0;
     // declared size in bytes of the bounded stream in progress; -1 = no stream in progress
     int64 stream_declared_bytes = -1;
+    //! set when a bounded stream admission point rejected the stream in progress
+    /** it distinguishes a stream that the consumer stopped from one that the driver failed, so that
+        the terminal stream event can report the exact outcome; see
+        design/datasource-mutation-observer.md
+    */
+    bool stream_rejected = false;
 
     // interface for the parent class
     DatasourceStatementHelper* dsh;
@@ -274,8 +280,86 @@ struct qore_ds_private {
         ev.tx_seq = ++tx_seq;
         ev.in_transaction = in_transaction;
         ev.autocommit = autocommit;
-        return ctx->dispatch(ev, *ds, xsink);
+        int rc = ctx->dispatch(ev, *ds, xsink);
+        if (rc && ev.isAdmission()) {
+            dispatchMutationNotExecuted(ev, xsink);
+        }
+        return rc;
     }
+
+    //! emits the terminal event for an operation that an admission point rejected
+    /** The event closes the operation's lifetime for a consumer that tracks reservations by
+        \c "op_id": without it a rejected operation would leave an unpaired admission event, and a
+        rejection outside a transaction would produce no terminal event at all.
+
+        It cannot be emitted from SqlMutationContext::dispatch() itself, because the re-entrancy
+        depth that suppresses observer-issued operations is still held there; it is emitted here,
+        after that depth has been released.
+
+        The event is a notification: the operation has already been refused, so the return value is
+        ignored.  The rejection exception is passed for reporting only and is not consumed.
+
+        @param ev the rejected admission event
+    */
+    DLLLOCAL void dispatchMutationNotExecuted(const SqlMutationEvent& ev, ExceptionSink* xsink) {
+        assert(ev.isAdmission());
+        // a rejected stream in progress is closed by its producer's terminal event, which reports
+        // the rejection through the "stream_rejected" flag; emitting here would duplicate it
+        if (ev.event == SQL_MUTATION_EVENT_STREAM_PROGRESS) {
+            stream_rejected = true;
+            return;
+        }
+        if (ev.event == SQL_MUTATION_EVENT_STREAM_BEGIN) {
+            // the producer never started the stream, so it emits no terminal event of its own
+            stream_declared_bytes = -1;
+            SqlMutationEvent term(SQL_MUTATION_EVENT_STREAM_END, SQL_STMT_CLASS_STREAM);
+            term.declared_bytes = ev.declared_bytes;
+            term.consumed_bytes = 0;
+            term.outcome = SQL_MUTATION_OUTCOME_NOT_EXECUTED;
+            // the operation was refused before execution, so no commit can have been attempted
+            term.replay_safe = 1;
+            term.driver_xsink = xsink;
+            dispatchMutationEvent(term, xsink);
+            return;
+        }
+        assert(ev.event == SQL_MUTATION_EVENT_PRE_EXEC);
+        SqlMutationEvent term(SQL_MUTATION_EVENT_POST_EXEC, ev.stmt_class);
+        term.outcome = SQL_MUTATION_OUTCOME_NOT_EXECUTED;
+        term.replay_safe = 1;
+        term.driver_xsink = xsink;
+        dispatchMutationEvent(term, xsink);
+    }
+
+#ifdef DEBUG
+    //! triggers an armed debug connection abort when the current operation matches it
+    /** Debug builds only.  The abort goes through the ordinary Datasource::connectionAborted()
+        path, so the connection is really closed and the server really discards the transaction;
+        nothing about the resulting outcome is synthesized.  The exception is required: the
+        connection_aborted paths assert that one is active.
+
+        @param when the boundary being passed; see @ref sql_mutation_debug_fault_codes
+
+        @return true if the connection was aborted, in which case an exception has been raised
+    */
+    DLLLOCAL bool dbgCheckArmedFault(int when, ExceptionSink* xsink) {
+        SqlMutationContext* ctx = getMutationCtx();
+        if (!ctx || !ctx->dbgFaultArmed()) {
+            return false;
+        }
+        ReferenceHolder<QoreHashNode> decl(ctx->getDeclaration(), xsink);
+        if (!decl) {
+            return false;
+        }
+        QoreStringNodeValueHelper op_id(decl->getKeyValue("op_id"));
+        if (!ctx->dbgTakeArmedFault(op_id->c_str(), when)) {
+            return false;
+        }
+        xsink->raiseException(SQL_MUTATION_DEBUG_ABORT_ERR, "debug connection abort armed for op_id %s "
+            "triggered at boundary %d", op_id->c_str(), when);
+        connectionAborted(xsink);
+        return true;
+    }
+#endif
 
     //! emits a transaction start event
     DLLLOCAL void dispatchMutationTxBegin(ExceptionSink* xsink) {
@@ -385,7 +469,15 @@ struct qore_ds_private {
         // the flag is what makes commit ambiguity structural: any failure or connection loss while
         // it is set means the core cannot know whether the server applied the commit
         commit_in_progress = true;
+#ifdef DEBUG
+        // an abort armed for the commit boundary is triggered with the flag set, so that it is
+        // classified as ambiguous exactly as a real connection loss during a commit would be
+        int rc = dbgCheckArmedFault(SQL_MUTATION_FAULT_ON_COMMIT, xsink)
+            ? -1
+            : qore_dbi_private::get(*dsl)->commit(ds, xsink);
+#else
         int rc = qore_dbi_private::get(*dsl)->commit(ds, xsink);
+#endif
         commit_in_progress = false;
         // a commit that did not demonstrably succeed is always ambiguous and is never reported as a
         // rollback: the server may have applied it

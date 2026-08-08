@@ -672,6 +672,24 @@ ds.setMutationObserver(\admission.event(), SQL_MUTATION_MASK_DEFAULT, tenant_id)
     - an exception thrown by the observer propagates and the operation is not executed.  Admission
       is fail-closed by design.
 
+    Every rejected admission point - whether rejected by an \c "admit" @ref False "False" decision or
+    by a fail-closed observer exception - is followed by exactly one terminal notification carrying
+    @ref Qore::SQL::SQL_MUTATION_OUTCOME_NOT_EXECUTED "SQL_MUTATION_OUTCOME_NOT_EXECUTED" and
+    \c "replay_safe" @ref True "True", so that an observer tracking operations by \c "op_id" always
+    sees the operation's lifetime close.  This matters most when nothing else would report one: a
+    rejection outside a transaction is followed by no rollback, so no
+    @ref Qore::SQL::SQL_MUTATION_EVENT_OUTCOME "SQL_MUTATION_EVENT_OUTCOME" event is ever emitted.
+
+    |!Rejected at|!Terminal event
+    |\c SQL_MUTATION_EVENT_PRE_EXEC|\c SQL_MUTATION_EVENT_POST_EXEC, pairing the admission event
+    |\c SQL_MUTATION_EVENT_STREAM_BEGIN|\c SQL_MUTATION_EVENT_STREAM_END; the producer never started \
+        the stream, so it reports no end boundary of its own
+    |\c SQL_MUTATION_EVENT_STREAM_PROGRESS|\c SQL_MUTATION_EVENT_STREAM_END, reported by the producer \
+        of the stream it stopped
+
+    The terminal event reports the rejection exception in its \c "ex" key without consuming it, and
+    it cannot re-enter the callback that produced the rejection.
+
     At a notification event:
     - the return value is ignored;
     - an exception thrown by the observer is raised <b>after</b> the real outcome has been
