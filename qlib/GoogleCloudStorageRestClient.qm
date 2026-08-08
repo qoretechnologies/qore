@@ -1,0 +1,517 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GoogleCloudStorageRestClient.qm Qore user module for Google Cloud Storage
+
+/*  GoogleCloudStorageRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires GcpAuth
+
+module GoogleCloudStorageRestClient {
+    version = "1.0";
+    desc = "user module for calling Google Cloud Storage REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("gcs",
+            GoogleCloudStorageRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage GoogleCloudStorageRestClient Module
+
+    @tableofcontents
+
+    @section googlecloudstoragerestclientintro GoogleCloudStorageRestClient Introduction
+
+    The %GoogleCloudStorageRestClient module provides a REST client for
+    [Google Cloud Storage](https://cloud.google.com/storage) — Google's object
+    storage service, addressed through the
+    [JSON API](https://cloud.google.com/storage/docs/json_api) at
+    <tt>https://storage.googleapis.com</tt>.
+
+    Authentication uses @ref gcpauthintro "GcpAuth" — either an explicit
+    service-account JSON key or Application Default Credentials.  Unlike the
+    consumer-facing Google products served by the \c GoogleRestClient module,
+    Google Cloud Storage in a real GCP deployment is reached with a
+    **service account** rather than interactive user consent, so there is no
+    \c authorization_code grant here.
+
+    The main classes are:
+    - @ref GoogleCloudStorageRestClient::GoogleCloudStorageRestClient — sync client
+    - @ref GoogleCloudStorageRestClient::GoogleCloudStorageRestClientIo — async client
+    - @ref GoogleCloudStorageRestConnection — connection
+
+    @par Object names are a flat key space
+
+    A Google Cloud Storage object name is a single opaque key in a flat name
+    space; \c "/" is an ordinary character in it and **not** a path separator.
+    An object may legitimately be named \c "a//b", \c "dir/" or \c "/leading".
+    Names must therefore reach the service verbatim — never split, normalized,
+    or collapsed.  Two helpers do the encoding without ever interpreting the
+    value:
+    - @ref GoogleCloudStorageRestClient::gcsEncodeObject() "gcsEncodeObject()"
+      encodes a name as a **single** JSON-API path segment (\c "/" becomes
+      \c "%2F")
+    - @ref GoogleCloudStorageRestClient::gcsEncodeObjectPath() "gcsEncodeObjectPath()"
+      encodes a name for the \c "/BUCKET/OBJECT" URL form used by signed URLs,
+      where \c "/" stays a literal separator
+
+    @par Scopes
+
+    The default scope is \c devstorage.read_write, which covers the whole object
+    surface.  \c read_only and \c full_control are also selectable through the
+    \c gcp_storage_access connection option; \c full_control is only needed to
+    change bucket or object ACLs.  Nothing here requests
+    \c cloud-platform for storage access.
+
+    @par Example: list the objects in a bucket
+
+    @code{.py}
+%modern
+%requires GoogleCloudStorageRestClient
+%requires GcpAuth
+
+string token = GcpAuth::getAccessToken("/etc/gcp/sa.json", gcsScopes("read_only"));
+GoogleCloudStorageRestClient::GoogleCloudStorageRestClient rest();
+hash<auto> resp = rest.get("/storage/v1/b/my-bucket/o", NOTHING,
+    {"Authorization": "Bearer " + token});
+printf("%d object(s)\n", resp.body.items.size());
+    @endcode
+
+    @section GoogleCloudStorageRestClientRelnotes Release Notes
+
+    @subsection GoogleCloudStorageRestClientv1_0 GoogleCloudStorageRestClient v1.0
+    - the initial version of the %GoogleCloudStorageRestClient module
+*/
+
+#! contains all public symbols of the GoogleCloudStorageRestClient module
+public namespace GoogleCloudStorageRestClient {
+#! The single Google Cloud Storage API host
+public const GcsApiUrl = "https://storage.googleapis.com";
+
+#! The JSON API path prefix for metadata operations
+public const GcsApiPrefix = "/storage/v1";
+
+#! The path prefix for media (upload) operations
+/** Uploads are served under a separate path prefix on the same host; see
+    <a href="https://cloud.google.com/storage/docs/uploading-objects">Uploading objects</a>
+*/
+public const GcsUploadPrefix = "/upload/storage/v1";
+
+#! OAuth2 scope allowing objects to be read but not written
+public const ScopeReadOnly = "https://www.googleapis.com/auth/devstorage.read_only";
+
+#! OAuth2 scope allowing objects to be read and written
+public const ScopeReadWrite = "https://www.googleapis.com/auth/devstorage.read_write";
+
+#! OAuth2 scope allowing bucket and object ACLs to be changed as well
+public const ScopeFullControl = "https://www.googleapis.com/auth/devstorage.full_control";
+
+#! OAuth2 scope required to sign a blob through the IAM Credentials API
+/** Used only by signed-URL generation; see
+    @ref GoogleCloudStorageRestClient::IamCredentialsUrl "IamCredentialsUrl"
+*/
+public const ScopeCloudPlatform = "https://www.googleapis.com/auth/cloud-platform";
+
+#! The IAM Credentials API host, used to sign signed-URL payloads
+/** Qore has no general-purpose RSA signing primitive at the language level, and a V4 signed URL
+    requires an RSA-SHA256 signature over an arbitrary string.  The
+    <a href="https://cloud.google.com/iam/docs/reference/credentials/rest/v1/projects.serviceAccounts/signBlob">signBlob</a>
+    method signs that string with the service account's own key, which additionally means signed URLs
+    work under Application Default Credentials and workload identity, where no private key exists
+    locally at all.
+*/
+public const IamCredentialsUrl = "https://iamcredentials.googleapis.com";
+
+#! Maps a \c gcp_storage_access value onto its OAuth2 scope
+public const StorageAccessScopeMap = {
+    "read_only": ScopeReadOnly,
+    "read_write": ScopeReadWrite,
+    "full_control": ScopeFullControl,
+};
+
+#! The default \c gcp_storage_access value
+public const DefaultStorageAccess = "read_write";
+
+#! Returns the OAuth2 scope list for a \c gcp_storage_access value
+/** @param access one of \c "read_only", \c "read_write" (the default) or \c "full_control"
+
+    @return a single-element scope list
+
+    @throw GCS-CONFIG-ERROR \a access is not a known access level
+*/
+public list<string> sub gcsScopes(*string access) {
+    string key = access ?? DefaultStorageAccess;
+    *string scope = StorageAccessScopeMap{key};
+    if (!scope.val()) {
+        throw "GCS-CONFIG-ERROR", sprintf("storage access level %y is unknown; expecting one of: %y", key,
+            keys StorageAccessScopeMap);
+    }
+    return (scope,);
+}
+
+#! Builds Google Cloud Storage request headers: the bearer token plus an optional quota project
+/** @param token the OAuth2 access token (without the \c "Bearer " prefix)
+    @param quota_project_id optional GCP billing/quota project sent as the \c x-goog-user-project
+    header so quota and billing are attributed to that project; this matches the behavior of the
+    official Google client libraries when a credential carries a \c quota_project_id
+
+    @return the request header hash
+*/
+public hash<auto> sub gcsAuthHeaders(string token, *string quota_project_id) {
+    hash<auto> hdr = {"Authorization": "Bearer " + token};
+    if (quota_project_id.val()) {
+        hdr."x-goog-user-project" = quota_project_id;
+    }
+    return hdr;
+}
+
+#! Encodes an object name as a single JSON-API path segment
+/** Every character that is not unreserved is percent-encoded, \c "/" included, because the JSON API
+    addresses an object as one path segment: \c "/storage/v1/b/BUCKET/o/NAME".  A name containing
+    \c "/" that is *not* encoded here addresses a different resource and the request fails or, worse,
+    succeeds against the wrong object.
+
+    @param name the object name, used verbatim
+
+    @return the name encoded as one path segment
+
+    @note the name is never split or normalized; \c "a//b" encodes to \c "a%2F%2Fb" and decodes back
+    to \c "a//b" exactly
+*/
+public string sub gcsEncodeObject(string name) {
+    return encode_url(name, True);
+}
+
+#! Encodes an object name for the \c "/BUCKET/OBJECT" URL form, keeping \c "/" as a literal separator
+/** Signed URLs and the XML API address an object as \c "/BUCKET/OBJECT" with \c "/" left literal and
+    every other reserved character percent-encoded.
+
+    The implementation encodes the whole name strictly and then restores the separators, in a single
+    pass and with no intermediate list.  \c "%2F" is produced only by a \c "/" in the input, since a
+    literal \c "%" encodes to \c "%25", so restoring it is exact.
+
+    Note that the obvious alternative — splitting on \c "/", encoding each segment and rejoining —
+    is only correct when @ref Qore::split() "split()" is passed
+    \c keep_trailing_empty: by default it discards a trailing empty field, so
+    \c split("/", "dir/") yields \c ("dir") and the rejoin silently drops the trailing slash,
+    addressing a *different* object.  \c "dir/" is a perfectly valid Google Cloud Storage object name
+    — it is how folder placeholders are written — so that would be a silent data error rather than a
+    failure.  See @ref split_trailing_empty_fields.
+
+    @param name the object name, used verbatim
+
+    @return the name encoded with \c "/" preserved
+
+    @note the name is never split or normalized; \c "dir/" encodes to \c "dir/" and \c "a//b" to
+    \c "a//b", both of which decode back to the original exactly
+*/
+public string sub gcsEncodeObjectPath(string name) {
+    string rv = encode_url(name, True);
+    rv =~ s/%2F/\//g;
+    return rv;
+}
+
+#! Common base class for GoogleCloudStorageRestClient functionality
+public class GoogleCloudStorageRestClientBase {
+    public {
+        #! Default options for the REST client constructors
+        /** @par \c allow_any_response
+
+            An object download returns the object's *own* content type, which can be anything at
+            all — including \c application/json for a stored JSON document, or a text type on
+            content that is not valid in that type.  Without this option the response-side codec
+            raises \c DESERIALIZATION-ERROR and the bytes are lost; with it the raw body survives in
+            the response's \c response_body_raw field, which is what a download must read.
+
+            This is a construction-time setting rather than mutable client state on purpose: the
+            client is shared between provider objects and threads, so a \c set...() call around a
+            request would silently change the behavior of a concurrent request on another thread.
+        */
+        const DefaultOptions = {
+            "data": "json",
+            "allow_any_response": True,
+        };
+    }
+
+    #! Returns options for the REST client constructors
+    static hash<auto> getOptions(*hash<auto> opts) {
+        hash<auto> rv = {};
+        rv += DefaultOptions + (opts ?? {});
+        if (!rv.url.val()) {
+            rv.url = GcsApiUrl;
+        }
+        # GcpAuth-managed auth -- no inline apikey / token mapping; callers inject
+        # "Authorization: Bearer <gcp_access_token>" per request, because a GcpAuth token expires and
+        # is reissued from the credential rather than held as static client configuration
+        return rv;
+    }
+}
+
+#! Sync REST client for Google Cloud Storage
+public class GoogleCloudStorageRestClient inherits RestClient::RestClient,
+        GoogleCloudStorageRestClientBase {
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(GoogleCloudStorageRestClientBase::getOptions(opts), True) {
+    }
+}
+
+#! Async REST client for Google Cloud Storage
+public class GoogleCloudStorageRestClientIo inherits RestClientIo::RestClientIo,
+        GoogleCloudStorageRestClientBase {
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(GoogleCloudStorageRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Connection class for Google Cloud Storage
+public class GoogleCloudStorageRestConnection inherits RestClient::RestConnection {
+    public {
+        #! The default connection URL
+        const DefaultUrl = "gcs://storage.googleapis.com";
+
+        #! The default connection URL, read by reflection when a connection URL is generated
+        /** Identical to @ref DefaultUrl here.  It is declared because Qorus's
+            \c DataProviderAppRestClass::getAutoConnectionUrl() reads it by reflection and prefers it
+            over \c DefaultUrl: a Qore constant reference resolves *lexically*, so a subclass that
+            shadowed \c DefaultUrl would not change what inherited code sees, and this constant is
+            how such a subclass disambiguates itself.  Google Cloud Storage has exactly one host and
+            no such subclass, so no URL normalization is performed at all and no
+            \c setUpdateOptionsCode() override exists to persist one.
+        */
+        const DefaultConnectionUrl = DefaultUrl;
+
+        #! The connection scheme information
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Google Cloud Storage Connection",
+            "short_desc": "A connection to Google Cloud Storage",
+            "desc": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — "
+                "Google's object storage service.  Authentication is via "
+                "@ref gcpauthintro \"GcpAuth\" using an explicit service-account JSON key or "
+                "Application Default Credentials.",
+            "cls": Class::forName("GoogleCloudStorageRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "gcs": True,
+            },
+            "base_scheme_map": {
+                "https": "gcs",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "gcp_project_id": <ConnectionOptionInfo>{
+                    "display_name": "GCP Project ID",
+                    "short_desc": "GCP project that owns the buckets",
+                    "type": "string",
+                    "desc": "GCP project ID; required to list or create buckets, and used as the "
+                        "default billing project for requester-pays buckets.",
+                },
+                "gcp_sa_json_path": <ConnectionOptionInfo>{
+                    "display_name": "Service-Account JSON Location",
+                    "short_desc": "Location of a service-account JSON key file",
+                    "type": "file-as-string",
+                    "desc": "Location of a GCP service-account JSON file for JWT-bearer auth; "
+                        "processed with `FileLocationHandler::getTextFileFromLocation()`, so it may "
+                        "be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, "
+                        "`http(s)://`, `sftp://`).  When omitted, Application Default Credentials "
+                        "are used.",
+                    "freeform": True,
+                },
+                "gcp_storage_access": <ConnectionOptionInfo>{
+                    "display_name": "Storage Access Level",
+                    "short_desc": "The OAuth2 scope requested for storage access",
+                    "type": "string",
+                    "desc": "The access level to request; only the scope this level names is "
+                        "requested, so a read-only connection cannot write even if the service "
+                        "account is otherwise permitted to.",
+                    "default_value": DefaultStorageAccess,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "read_only",
+                            "display_name": "Read Only",
+                            "desc": "Read buckets and objects; no writes (`devstorage.read_only`)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "read_write",
+                            "display_name": "Read/Write",
+                            "desc": "Read and write buckets and objects (`devstorage.read_write`); "
+                                "this covers the entire object surface of this application",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "full_control",
+                            "display_name": "Full Control",
+                            "desc": "Read and write buckets and objects and change their ACLs "
+                                "(`devstorage.full_control`)",
+                        },
+                    ),
+                },
+                "gcp_quota_project_id": <ConnectionOptionInfo>{
+                    "display_name": "GCP Quota Project ID",
+                    "short_desc": "Billing/quota project for the x-goog-user-project header",
+                    "type": "string",
+                    "desc": "Optional GCP billing/quota project; when set it is sent as the "
+                        "`x-goog-user-project` header so quota and billing are attributed to that "
+                        "project.  Required to read a requester-pays bucket owned by another "
+                        "project.",
+                },
+                "gcp_access_token": <ConnectionOptionInfo>{
+                    "display_name": "Bearer Access Token",
+                    "short_desc": "An externally-minted bearer token to use directly",
+                    "type": "string",
+                    "desc": "A GCP bearer access token to use verbatim instead of obtaining one from "
+                        "a credential, for callers that mint tokens themselves (workload identity "
+                        "federation, service-account impersonation, or a platform that already holds "
+                        "a token).  It is **not** refreshed, so it stops working when it expires; "
+                        "leave it unset to let GcpAuth obtain and refresh tokens.  It must carry the "
+                        "scopes for everything it is used for, including `cloud-platform` if signed "
+                        "URLs are generated.",
+                    "sensitive": True,
+                },
+                "gcp_ping_bucket": <ConnectionOptionInfo>{
+                    "display_name": "Ping Bucket",
+                    "short_desc": "A bucket to read metadata from when pinging",
+                    "type": "string",
+                    "desc": "The bucket whose metadata is fetched to verify the connection.  When "
+                        "unset the project's bucket list is requested instead, which needs the "
+                        "`storage.buckets.list` permission at project level; set this to a single "
+                        "bucket for a service account granted access to that bucket only.",
+                },
+            },
+            "required_options": "gcp_project_id",
+        };
+    }
+
+    #! creates the GoogleCloudStorageRestConnection object
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the GoogleCloudStorageRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    #! returns \c "gcs"
+    string getType() {
+        return "gcs";
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "GoogleCloudStorage";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns a data provider object for this connection
+    /** The connection options are passed rather than the client object: a GcpAuth credential mints a
+        fresh bearer token per request, so the provider needs the credential itself and not only a
+        client
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("GoogleCloudStorageDataProvider");
+        return create_object("GoogleCloudStorageDataProvider",
+            (constructor_options ?? {}) + getConnectionOptions());
+    }
+
+    #! Returns a GCP access token for this connection's credential and access level
+    /** An externally-minted \c gcp_access_token, when set, is used verbatim and no credential
+        exchange happens.
+    */
+    string getAccessToken() {
+        if (opts.gcp_access_token.val()) {
+            return opts.gcp_access_token;
+        }
+        return GcpAuth::getAccessToken(opts.gcp_sa_json_path, gcsScopes(opts.gcp_storage_access));
+    }
+
+    #! Verifies the connection with an authenticated Google Cloud Storage metadata request
+    /** A bare connect proves only that \c storage.googleapis.com is reachable, which it is from
+        essentially everywhere; this instead reads bucket metadata, so a ping failure means the
+        credential, scope or bucket is actually wrong.
+
+        The request cannot be expressed with the \c ping_method / \c ping_path / \c ping_headers
+        options, because those are static configuration and a GcpAuth bearer token expires.  The
+        \c ping_method option is deliberately left unset so that the *polling* ping
+        (@ref RestClient::RestConnection::startPollConnect() "startPollConnect()") falls back to a
+        connect-level check rather than issuing an unauthenticated HTTP request that would always
+        fail with HTTP 401.
+    */
+    private pingImpl() {
+        AbstractRestClient client;
+        try {
+            client = getAsync();
+        } catch (hash<ExceptionInfo> ex) {
+            # only "async I/O is not available here" falls back, exactly as RestConnection::pingImpl()
+            # does; any other error is a real failure of this ping
+            if (ex.err != "CONNECTION-ASYNC-UNSUPPORTED" && ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+            client = get();
+        }
+
+        string path = opts.gcp_ping_bucket.val()
+            ? sprintf("%s/b/%s", GcsApiPrefix, encode_url(opts.gcp_ping_bucket, True))
+            : sprintf("%s/b?project=%s&maxResults=1", GcsApiPrefix, encode_url(opts.gcp_project_id, True));
+
+        hash<RestClient::RestResponseInfo> h;
+        try {
+            h = client.restDoRequest("GET", path, NOTHING,
+                gcsAuthHeaders(getAccessToken(), opts.gcp_quota_project_id));
+        } catch (hash<ExceptionInfo> ex) {
+            authFailure();
+            rethrow;
+        }
+        if ((h.status_code / 100) != 2) {
+            authFailure();
+            throw "REST-PING-ERROR", sprintf("HTTP %d returned from ping GET %s", h.status_code, path);
+        }
+        authSuccess();
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private GoogleCloudStorageRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GoogleCloudStorageRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GoogleCloudStorageRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

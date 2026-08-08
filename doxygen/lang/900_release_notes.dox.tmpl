@@ -1991,6 +1991,19 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - new module providing a data provider API for generating configurable test record streams for data
         pipeline testing with no external dependencies
 
+    - @ref googlecloudstoragedataproviderintro "GoogleCloudStorageDataProvider" module
+      - new module providing a data provider API for <a href="https://cloud.google.com/storage">Google Cloud Storage</a>
+        object storage: buckets, objects, resumable uploads, byte-exact downloads, server-side copy and
+        compose, and V4 signed URLs; also a \c "conn://" file-location target, and the provider that can
+        finally populate the \c "gs://" inputs and outputs that
+        @ref vertexaidataproviderintro "VertexAiDataProvider" and
+        @ref googledocumentaidataproviderintro "GoogleDocumentAiDataProvider" already accept
+
+    - @ref googlecloudstoragerestclientintro "GoogleCloudStorageRestClient" module
+      - new module providing a REST client for <a href="https://cloud.google.com/storage">Google Cloud Storage</a>
+        with @ref gcpauthintro "GcpAuth"-managed service-account and Application Default Credentials
+        authentication
+
     - @ref gohighleveldataproviderintro "GoHighLevelDataProvider" module
       - new module providing a data provider API for <a href="https://www.gohighlevel.com/">GoHighLevel</a> CRM
 

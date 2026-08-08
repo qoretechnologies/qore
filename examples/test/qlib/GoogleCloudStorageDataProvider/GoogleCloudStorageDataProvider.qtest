@@ -1,0 +1,1539 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** GoogleCloudStorageDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires FsUtil
+%requires Mime
+%requires RestClient
+%requires RestClientIo
+%requires GcpAuth
+%requires GoogleCloudStorageRestClient
+%requires GoogleCloudStorageDataProvider
+
+%requires reflection
+%requires json
+
+%exec-class GoogleCloudStorageDataProviderTest
+
+#! One recorded request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+    #! True if the request went out on the raw (no-codec) path
+    bool raw;
+}
+
+#! A REST client that records requests instead of making them
+/** Responses are taken from a queue so that a multi-step flow -- a resumable upload, a rewrite
+    continuation -- can be driven exactly as the service would drive it.  When the queue is empty
+    \c default_response is used.
+*/
+class FakeGcsRestClientIo inherits GoogleCloudStorageRestClient::GoogleCloudStorageRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : GoogleCloudStorageRestClientIo({"url": GoogleCloudStorageRestClient::GcsApiUrl}) {
+    }
+
+    #! Returns the most recent request
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Queues a response
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr, bool raw) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+            "raw": raw,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        # a queued response may ask for an error, which is how HTTP 308 and API error envelopes are
+        # driven through the real error handling
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+            "response_body_raw": resp.response_body_raw,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr, False);
+    }
+
+    #! Records that the caller used the raw path, where no codec touches the body
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr, True);
+    }
+}
+
+public class GoogleCloudStorageDataProviderTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+            "bucket": "b,bucket=s",
+        };
+
+        const OptionColumn = 22;
+
+        const TestProject = "test-project-123";
+        const TestBucket = "test-bucket";
+
+        #! A token supplied directly, so no credential exchange is attempted offline
+        const TestToken = "ya29.test-token";
+
+        #! The signing service account
+        const TestSigner = "svc@test-project-123.iam.gserviceaccount.com";
+
+        #! Object names that exercise the flat key space: every one of these is a single valid key
+        const TrickyNames = (
+            "plain.txt",
+            "reports/2026/q1.csv",
+            "dir/",
+            "a//b",
+            "/leading",
+            "with space.txt",
+            "with+plus.txt",
+            "with%pct.txt",
+            "with&amp=sign.txt",
+            "with#hash.txt",
+            "with?query.txt",
+            "üñïçødé.txt",
+        );
+    }
+
+    private {
+        #! Objects created by the live tests, removed on the way out
+        list<string> live_cleanup = ();
+        *string live_bucket;
+    }
+
+    constructor() : Test("GoogleCloudStorageDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("file API registration", \fileApiTest());
+        addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("object name encoding", \objectNameEncodingTest());
+        addTestCase("object paths are verbatim", \objectPathTest());
+        addTestCase("query encoding", \queryEncodingTest());
+        addTestCase("auth headers", \authHeaderTest());
+        addTestCase("bucket normalization", \bucketNormalizationTest());
+        addTestCase("object normalization", \objectNormalizationTest());
+        addTestCase("list objects", \listObjectsTest());
+        addTestCase("list buckets", \listBucketsTest());
+        addTestCase("upload bypasses the codec", \uploadRawTest());
+        addTestCase("upload resumable", \uploadResumableTest());
+        addTestCase("upload name precedence", \uploadNamePrecedenceTest());
+        addTestCase("upload content type", \uploadContentTypeTest());
+        addTestCase("download is byte exact", \downloadRawTest());
+        addTestCase("download hash header", \downloadHashHeaderTest());
+        addTestCase("delete object", \deleteObjectTest());
+        addTestCase("metadata update", \metadataUpdateTest());
+        addTestCase("copy object rewrite", \copyObjectTest());
+        addTestCase("compose", \composeTest());
+        addTestCase("signed url canonical form", \signedUrlTest());
+        addTestCase("api error envelope", \apiErrorTest());
+        addTestCase("live connection ping", \liveConnectionPingTest());
+        addTestCase("live bucket and object lifecycle", \liveLifecycleTest());
+        addTestCase("live byte exact round trip", \liveRoundTripTest());
+        addTestCase("live verbatim object names", \liveVerbatimNamesTest());
+        addTestCase("live resumable upload", \liveResumableTest());
+        addTestCase("live signed url", \liveSignedUrlTest());
+        addTestCase("live conn:// file location", \liveFileLocationTest());
+        set_return_value(main());
+    }
+
+    #! Returns the credential context the offline tests use
+    /** \a overrides is merged before the cast rather than added to the hashdecl afterwards: adding a
+        plain hash to a \c hash<GcsAuthContext> widens the result to \c hash<auto>, which no longer
+        matches the provider constructor.
+    */
+    private hash<GoogleCloudStorageDataProvider::GcsAuthContext> getAuth(*hash<auto> overrides) {
+        return cast<hash<GoogleCloudStorageDataProvider::GcsAuthContext>>({
+            "project_id": TestProject,
+            "access_token": TestToken,
+            "signer_email": TestSigner,
+        } + (overrides ?? {}));
+    }
+
+    private GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider getProvider(
+            reference<FakeGcsRestClientIo> rest) {
+        rest = new FakeGcsRestClientIo();
+        return new GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider(rest, getAuth());
+    }
+
+    sanityTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+        assertEq("gcs", prov.getName());
+        assertEq("GoogleCloudStorage", GoogleCloudStorageDataProvider::AppName);
+
+        *list<string> children = prov.getChildProviderNames();
+        foreach string name in (("list-buckets", "get-bucket", "list-objects", "get-object-metadata",
+                "update-object-metadata", "upload-object", "download-object", "delete-object",
+                "copy-object", "compose", "create-signed-url")) {
+            assertTrue(inlist(name, children), sprintf("has child %y", name));
+        }
+        # the 12th child is the framework's auto-injected generic-call provider; its presence proves
+        # the module's getRestClientForGenericCallImpl() override supplied an authenticating client
+        assertTrue(inlist(AbstractDataProvider::GenericApiCallChildName, children),
+            "the generic API call child is injected");
+        assertEq(12, children.size(),
+            "the documented action surface plus the injected generic-call child");
+
+        # every declared child must be reachable and must carry the credential, not just the client
+        foreach string name in (children - AbstractDataProvider::GenericApiCallChildName) {
+            AbstractDataProvider child = prov.getChildProviderEx(name);
+            assertEq(name, child.getName(), sprintf("child %y names itself", name));
+        }
+    }
+
+    actionCatalogTest() {
+        hash<DataProviderAppInfo> app =
+            DataProviderActionCatalog::getAppEx(GoogleCloudStorageDataProvider::AppName);
+        assertEq("Google Cloud Storage", app.display_name);
+        assertEq("gcs", app.scheme);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        assertEq("google-cloud-storage-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.size() > 100, "the logo is loaded from its file");
+        assertTrue(app.logo =~ /<svg/, "the logo is SVG");
+        assertTrue(inlist(DataProvider::AppGroup::CloudStorage, app.groups));
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActionsEx(GoogleCloudStorageDataProvider::AppName);
+        hash<string, hash<DataProviderActionInfo>> by_action = map {$1.action: $1}, actions;
+        foreach string name in (("list-buckets", "get-bucket", "list-objects", "get-object-metadata",
+                "update-object-metadata", "upload-object", "download-object", "delete-object",
+                "copy-object", "compose", "create-signed-url")) {
+            assertTrue(exists by_action{name}, sprintf("action %y is registered", name));
+            assertEq(DPAT_API, by_action{name}.action_code, sprintf("action %y is an API action", name));
+            assertTrue(by_action{name}.short_desc.val(), sprintf("action %y has a short_desc", name));
+            assertTrue(by_action{name}.desc.val(), sprintf("action %y has a desc", name));
+            assertTrue(by_action{name}.display_name.val(), sprintf("action %y has a display_name", name));
+            assertTrue(exists by_action{name}.output_type, sprintf("action %y declares an output type", name));
+        }
+
+        # the framework's generic escape hatch is injected because the scheme is REST
+        assertTrue(exists by_action."make-api-call", "the generic API call action is auto-injected");
+
+        # required options are marked required on the actions that cannot work without them
+        assertEq(True, by_action."get-bucket".options.bucket.required);
+        assertEq(True, by_action."download-object".options.bucket.required);
+        assertEq(True, by_action."download-object".options.object.required);
+        assertEq(True, by_action."upload-object".options.file.required);
+        assertEq(True, by_action."compose".options.source_objects.required);
+
+        # the bucket options offer reference data so a UI can populate them
+        assertEq("buckets", by_action."list-objects".options.bucket.ref_data);
+    }
+
+    fileApiTest() {
+        *hash<DataProviderFileApiInfo> fapi =
+            DataProviderActionCatalog::getAppFileApi(GoogleCloudStorageDataProvider::AppName);
+        assertTrue(exists fapi, "the application registers a file API");
+
+        assertEq("download-object", fapi.read_action);
+        assertEq("object", fapi.read_path_option);
+        assertEq("bucket", fapi.read_container_option);
+        # Google Cloud Storage returns the bytes themselves, unlike OneDrive's pre-authenticated URL
+        assertEq(DPFR_DATA, fapi.read_mode);
+        assertEq("content", fapi.read_data_field);
+        assertEq("raw", fapi.read_data_encoding, "the content field holds bytes, not base64");
+        assertEq("content_type", fapi.read_mime_type_field);
+
+        assertEq("upload-object", fapi.write_action);
+        assertEq("object", fapi.write_path_option);
+        assertEq("bucket", fapi.write_container_option);
+        assertEq("file", fapi.write_data_option);
+        assertEq(DPFW_FILE, fapi.write_data_format);
+
+        # the whole location path is the object name; it is never split into parent plus name
+        assertEq(False, fapi.write_path_is_parent,
+            "an object name is one key, so the last segment is not a separate file name");
+        assertEq(True, fapi.path_is_id, "consumers must not split or normalize an object name");
+
+        # the declared read/write actions and their declared options must actually exist
+        hash<string, hash<DataProviderActionInfo>> by_action = map {$1.action: $1},
+            DataProviderActionCatalog::getActionsEx(GoogleCloudStorageDataProvider::AppName);
+        foreach hash<auto> i in (({"action": fapi.read_action, "opts": ("object", "bucket")},
+                {"action": fapi.write_action, "opts": ("object", "bucket", "file")})) {
+            assertTrue(exists by_action{i.action}, sprintf("file API action %y exists", i.action));
+            foreach string opt in (i.opts) {
+                assertTrue(exists by_action{i.action}.options{opt},
+                    sprintf("action %y declares option %y", i.action, opt));
+            }
+        }
+    }
+
+    connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getSchemeEx("gcs");
+        assertEq("Google Cloud Storage Connection", scheme.display_name);
+        assertEq(True, scheme.schemes.gcs);
+
+        GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection conn("gcs-test", "test",
+            "gcs://storage.googleapis.com", {}, {"gcp_project_id": TestProject});
+        assertEq("gcs", conn.getType());
+        assertEq("GoogleCloudStorage", conn.getAppName(), "the connection names the app it serves");
+        assertEq(True, conn.hasDataProvider());
+        assertEq("gcs://storage.googleapis.com",
+            GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection::DefaultUrl);
+        # Qorus reads this by reflection and prefers it over DefaultUrl
+        assertEq(GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection::DefaultUrl,
+            GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection::DefaultConnectionUrl,
+            "the reflected connection URL matches the default URL");
+
+        # the project is required: an object surface is usable without it, but listing buckets is not
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection("gcs-bad", "test",
+                "gcs://storage.googleapis.com");
+        });
+
+        # the access level maps to exactly one scope, and only that one is requested
+        assertEq((GoogleCloudStorageRestClient::ScopeReadWrite,), GoogleCloudStorageRestClient::gcsScopes());
+        assertEq((GoogleCloudStorageRestClient::ScopeReadWrite,),
+            GoogleCloudStorageRestClient::gcsScopes("read_write"));
+        assertEq((GoogleCloudStorageRestClient::ScopeReadOnly,),
+            GoogleCloudStorageRestClient::gcsScopes("read_only"));
+        assertEq((GoogleCloudStorageRestClient::ScopeFullControl,),
+            GoogleCloudStorageRestClient::gcsScopes("full_control"));
+        assertThrows("GCS-CONFIG-ERROR", sub () { GoogleCloudStorageRestClient::gcsScopes("wat"); });
+        # cloud-platform is never requested for storage access
+        assertFalse(inlist(GoogleCloudStorageRestClient::ScopeCloudPlatform,
+            GoogleCloudStorageRestClient::gcsScopes("full_control")),
+            "storage access never asks for cloud-platform");
+
+        # the externally-minted token is a supported credential path
+        assertEq(TestToken, new GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection("gcs-tok",
+            "test", "gcs://storage.googleapis.com", {}, {
+                "gcp_project_id": TestProject,
+                "gcp_access_token": TestToken,
+            }).getAccessToken());
+    }
+
+    objectNameEncodingTest() {
+        # a name encoded as one path segment: "/" must become "%2F" or a different resource is addressed
+        assertEq("plain.txt", GoogleCloudStorageRestClient::gcsEncodeObject("plain.txt"));
+        assertEq("reports%2F2026%2Fq1.csv",
+            GoogleCloudStorageRestClient::gcsEncodeObject("reports/2026/q1.csv"));
+        assertEq("dir%2F", GoogleCloudStorageRestClient::gcsEncodeObject("dir/"));
+        assertEq("a%2F%2Fb", GoogleCloudStorageRestClient::gcsEncodeObject("a//b"));
+        assertEq("with%20space.txt", GoogleCloudStorageRestClient::gcsEncodeObject("with space.txt"));
+        assertEq("with%2Bplus.txt", GoogleCloudStorageRestClient::gcsEncodeObject("with+plus.txt"));
+        assertEq("with%25pct.txt", GoogleCloudStorageRestClient::gcsEncodeObject("with%pct.txt"));
+
+        # a name encoded for the "/BUCKET/OBJECT" form: "/" stays a literal separator
+        assertEq("reports/2026/q1.csv",
+            GoogleCloudStorageRestClient::gcsEncodeObjectPath("reports/2026/q1.csv"));
+        assertEq("dir/", GoogleCloudStorageRestClient::gcsEncodeObjectPath("dir/"),
+            "a trailing slash survives -- it is part of the name");
+        assertEq("a//b", GoogleCloudStorageRestClient::gcsEncodeObjectPath("a//b"),
+            "a doubled slash is not collapsed");
+        assertEq("/leading", GoogleCloudStorageRestClient::gcsEncodeObjectPath("/leading"));
+        assertEq("with%20space.txt",
+            GoogleCloudStorageRestClient::gcsEncodeObjectPath("with space.txt"));
+        assertEq("with%2Bplus.txt", GoogleCloudStorageRestClient::gcsEncodeObjectPath("with+plus.txt"));
+
+        # both encodings must round-trip every name exactly; anything less silently addresses the
+        # wrong object
+        foreach string name in (TrickyNames) {
+            assertEq(name, decode_url(GoogleCloudStorageRestClient::gcsEncodeObject(name)),
+                sprintf("single-segment encoding round-trips %y", name));
+            assertEq(name, decode_url(GoogleCloudStorageRestClient::gcsEncodeObjectPath(name)),
+                sprintf("path encoding round-trips %y", name));
+        }
+    }
+
+    objectPathTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # every tricky name must arrive at the service as the same key it went in as
+        foreach string name in (TrickyNames) {
+            rest.reset();
+            rest.push_response({"body": {"name": name, "bucket": TestBucket, "size": "0"}});
+            hash<auto> rv = prov.getChildProvider("get-object-metadata").doRequest({
+                "bucket": TestBucket,
+                "object": name,
+            });
+            assertEq("GET", rest.last().method);
+            string expected = "/storage/v1/b/" + TestBucket + "/o="
+                + GoogleCloudStorageRestClient::gcsEncodeObject(name);
+            # the path is built with "/o/<encoded>"; compare the decoded key rather than the literal
+            *string encoded = (rest.last().path =~ x/\/o\/([^?]+)/)[0];
+            assertTrue(exists encoded, sprintf("the path addresses an object for %y", name));
+            assertEq(name, decode_url(encoded),
+                sprintf("the key %y reaches the service verbatim", name));
+            assertEq(name, rv.name, "the response reports the name that was requested");
+        }
+
+        # the bucket is encoded too
+        rest.reset();
+        rest.push_response({"body": {}});
+        prov.getChildProvider("get-object-metadata").doRequest({
+            "bucket": "bucket.with.dots",
+            "object": "x",
+        });
+        assertEq("/storage/v1/b/bucket.with.dots/o/x?projection=noAcl", rest.last().path);
+    }
+
+    queryEncodingTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        rest.push_response({"body": {"items": ()}});
+        prov.getChildProvider("list-objects").doRequest({
+            "bucket": TestBucket,
+            "prefix": "a b/c&d",
+            "delimiter": "/",
+            "max_results": 7,
+        });
+        string path = rest.last().path;
+        assertTrue(path =~ /prefix=a%20b%2Fc%26d/, sprintf("the prefix is strictly encoded: %y", path));
+        assertTrue(path =~ /delimiter=%2F/, sprintf("the delimiter is encoded: %y", path));
+        assertTrue(path =~ /maxResults=7/, sprintf("maxResults is passed: %y", path));
+        assertFalse(path =~ /pageToken/, "an unset option contributes no query parameter");
+
+        # booleans go out as the literals the API expects, and only when supplied
+        rest.reset();
+        rest.push_response({"body": {"items": ()}});
+        prov.getChildProvider("list-objects").doRequest({
+            "bucket": TestBucket,
+            "versions": True,
+            "include_trailing_delimiter": False,
+        });
+        assertTrue(rest.last().path =~ /versions=true/, "True becomes \"true\"");
+        assertTrue(rest.last().path =~ /includeTrailingDelimiter=false/, "False becomes \"false\"");
+    }
+
+    authHeaderTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        rest.push_response({"body": {}});
+        prov.getChildProvider("get-bucket").doRequest({"bucket": TestBucket});
+        assertEq("Bearer " + TestToken, rest.last().headers."Authorization",
+            "every request carries a freshly resolved bearer token");
+        assertFalse(rest.last().headers.hasKey("x-goog-user-project"),
+            "no quota project header when none is configured");
+
+        # the quota project is sent when configured, which is what a requester-pays bucket needs
+        FakeGcsRestClientIo rest2();
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov2(rest2,
+            getAuth({"quota_project_id": "billing-project"}));
+        rest2.push_response({"body": {}});
+        prov2.getChildProvider("get-bucket").doRequest({"bucket": TestBucket});
+        assertEq("billing-project", rest2.last().headers."x-goog-user-project");
+    }
+
+    bucketNormalizationTest() {
+        hash<auto> raw = {
+            "name": "my-bucket",
+            "id": "my-bucket",
+            "projectNumber": "1234567890123",
+            "location": "US",
+            "locationType": "multi-region",
+            "storageClass": "STANDARD",
+            "versioning": {"enabled": True},
+            "iamConfiguration": {"uniformBucketLevelAccess": {"enabled": True}},
+            "billing": {"requesterPays": False},
+            "labels": {"env": "test"},
+            "timeCreated": "2026-03-01T12:00:00.000Z",
+            "updated": "2026-04-02T13:14:15.678Z",
+            "etag": "CAE=",
+            "selfLink": "https://www.googleapis.com/storage/v1/b/my-bucket",
+        };
+        hash<auto> b =
+            GoogleCloudStorageDataProvider::GoogleCloudStorageBucketDataProviderUtil::normalizeBucket(raw);
+
+        assertEq("my-bucket", b.name);
+        # a 64-bit value arrives as a string and must become an integer
+        assertEq(1234567890123, b.project_number);
+        assertEq(NT_INT, b.project_number.typeCode());
+        assertEq("US", b.location);
+        assertEq("multi-region", b.location_type);
+        assertEq("STANDARD", b.storage_class);
+        # the nested single-value objects are flattened
+        assertEq(True, b.versioning_enabled);
+        assertEq(True, b.uniform_bucket_level_access);
+        assertEq(False, b.requester_pays);
+        assertEq({"env": "test"}, b.labels);
+        assertEq(2026-03-01T12:00:00.000Z, b.time_created);
+        assertEq(2026-04-02T13:14:15.678Z, b.updated);
+        assertEq(NT_DATE, b.time_created.typeCode());
+        assertEq("CAE=", b.etag);
+
+        # absent nested values must not become False, which would misreport the bucket's configuration
+        hash<auto> sparse =
+            GoogleCloudStorageDataProvider::GoogleCloudStorageBucketDataProviderUtil::normalizeBucket({
+                "name": "b2",
+            });
+        assertEq("b2", sparse.name);
+        assertNothing(sparse.versioning_enabled);
+        assertNothing(sparse.uniform_bucket_level_access);
+        assertNothing(sparse.requester_pays);
+        assertNothing(sparse.project_number);
+        assertNothing(sparse.time_created);
+    }
+
+    objectNormalizationTest() {
+        hash<auto> raw = {
+            "name": "reports/2026/q1.csv",
+            "bucket": "my-bucket",
+            "id": "my-bucket/reports/2026/q1.csv/1712345678901234",
+            "generation": "1712345678901234",
+            "metageneration": "3",
+            "contentType": "text/csv",
+            "size": "9007199254740993",
+            "storageClass": "NEARLINE",
+            "md5Hash": "Ojk9c3dhfxgoKVVHYwFbHQ==",
+            "crc32c": "n03xxA==",
+            "etag": "CJi1n5T7-4kDEAM=",
+            "cacheControl": "public, max-age=60",
+            "contentDisposition": "attachment",
+            "contentEncoding": "gzip",
+            "contentLanguage": "en",
+            "metadata": {"owner": "qa"},
+            "customTime": "2026-05-06T07:08:09.000Z",
+            "kmsKeyName": "projects/p/locations/l/keyRings/r/cryptoKeys/k",
+            "timeCreated": "2026-03-01T12:00:00.000Z",
+            "updated": "2026-04-02T13:14:15.678Z",
+            "timeDeleted": "2026-06-07T08:09:10.000Z",
+            "mediaLink": "https://storage.googleapis.com/download/storage/v1/b/my-bucket/o/x?alt=media",
+            "selfLink": "https://www.googleapis.com/storage/v1/b/my-bucket/o/x",
+        };
+        hash<auto> o = GoogleCloudStorageDataProvider::GoogleCloudStorageObjectUtil::normalizeObject(raw);
+
+        assertEq("reports/2026/q1.csv", o.name, "the name is reported exactly as stored");
+        assertEq("my-bucket", o.bucket);
+        # the three 64-bit string fields become integers, and a value above 2^53 must survive exactly
+        assertEq(1712345678901234, o.generation);
+        assertEq(3, o.metageneration);
+        assertEq(9007199254740993, o.size);
+        assertEq(NT_INT, o.size.typeCode());
+        assertEq("text/csv", o.content_type);
+        assertEq("NEARLINE", o.storage_class);
+        # the checksums stay base64, which is how Google publishes them and how they go back
+        assertEq("Ojk9c3dhfxgoKVVHYwFbHQ==", o.md5_hash);
+        assertEq("n03xxA==", o.crc32c);
+        assertEq("CJi1n5T7-4kDEAM=", o.etag);
+        assertEq("public, max-age=60", o.cache_control);
+        assertEq("attachment", o.content_disposition);
+        assertEq("gzip", o.content_encoding);
+        assertEq("en", o.content_language);
+        assertEq({"owner": "qa"}, o.metadata);
+        assertEq("projects/p/locations/l/keyRings/r/cryptoKeys/k", o.kms_key_name);
+        assertEq(2026-03-01T12:00:00.000Z, o.time_created);
+        assertEq(2026-04-02T13:14:15.678Z, o.updated);
+        assertEq(2026-06-07T08:09:10.000Z, o.time_deleted);
+        assertEq(2026-05-06T07:08:09.000Z, o.custom_time);
+
+        # a composed object has no MD5; the field must be absent rather than empty
+        hash<auto> composed =
+            GoogleCloudStorageDataProvider::GoogleCloudStorageObjectUtil::normalizeObject({
+                "name": "all.csv", "crc32c": "n03xxA==", "size": "10",
+            });
+        assertNothing(composed.md5_hash);
+        assertEq("n03xxA==", composed.crc32c);
+        assertEq(10, composed.size);
+    }
+
+    listObjectsTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        rest.push_response({"body": {
+            "items": (
+                {"name": "reports/2026/q1.csv", "size": "10", "bucket": TestBucket},
+                {"name": "reports/2026/q2.csv", "size": "20", "bucket": TestBucket},
+            ),
+            "prefixes": ("reports/2027/",),
+            "nextPageToken": "TOKEN2",
+        }});
+        hash<auto> rv = prov.getChildProvider("list-objects").doRequest({
+            "bucket": TestBucket,
+            "prefix": "reports/",
+            "delimiter": "/",
+        });
+        assertEq(2, rv.objects.size());
+        assertEq("reports/2026/q1.csv", rv.objects[0].name);
+        assertEq(10, rv.objects[0].size, "each object is normalized, not passed through raw");
+        assertEq(20, rv.objects[1].size);
+        assertEq(("reports/2027/",), rv.prefixes, "rolled-up prefixes are reported separately");
+        assertEq("TOKEN2", rv.next_page_token);
+
+        # an empty bucket yields an empty list and no token, not NOTHING
+        rest.reset();
+        rest.push_response({"body": {}});
+        hash<auto> empty = prov.getChildProvider("list-objects").doRequest({"bucket": TestBucket});
+        assertEq((), empty.objects);
+        assertNothing(empty.next_page_token);
+    }
+
+    listBucketsTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        rest.push_response({"body": {
+            "items": ({"name": "b1", "location": "US"}, {"name": "b2", "location": "EU"}),
+        }});
+        hash<auto> rv = prov.getChildProvider("list-buckets").doRequest({});
+        assertEq(2, rv.buckets.size());
+        assertEq("b1", rv.buckets[0].name);
+        assertEq("EU", rv.buckets[1].location);
+        # the project is taken from the credential context, not from the request
+        assertTrue(rest.last().path =~ /project=test-project-123/,
+            sprintf("the configured project scopes the listing: %y", rest.last().path));
+    }
+
+    uploadRawTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # content with a NUL and high bytes: base64-through-JSON would change every one of them
+        binary content = binary("\x00\x01\xff\xfe\x7f\x80hello");
+        rest.push_response({"body": {"name": "a.bin", "bucket": TestBucket, "size": content.size()}});
+
+        hash<auto> rv = prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket,
+            "object": "a.bin",
+            "file": {
+                "name": "ignored.bin",
+                "content": make_base64_string(content),
+                "mime_type": "application/octet-stream",
+            },
+        });
+
+        assertEq("POST", rest.last().method);
+        assertTrue(rest.last().raw, "the content request bypasses the data serialization codec");
+        assertEq(NT_BINARY, rest.last().body.typeCode(), "the body reaches the client as binary");
+        assertEq(content, rest.last().body, "the exact bytes given are the bytes sent");
+        assertEq(content.size(), rest.last().body.size());
+        assertEq("application/octet-stream", rest.last().headers."Content-Type");
+        assertTrue(rest.last().path =~ /uploadType=media/, "a small upload is a single request");
+        assertTrue(rest.last().path =~ /^\/upload\/storage\/v1\/b\/test-bucket\/o\?/,
+            sprintf("the media upload path is used: %y", rest.last().path));
+        assertEq("a.bin", rv.name);
+
+        # the object name in the query is strictly encoded, so a key with "/" is written verbatim
+        rest.reset();
+        rest.push_response({"body": {}});
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket,
+            "object": "reports/2026/q1.csv",
+            "file": {"name": "q1.csv", "content": make_base64_string(binary("x")), "mime_type": "text/csv"},
+        });
+        assertTrue(rest.last().path =~ /name=reports%2F2026%2Fq1.csv/,
+            sprintf("the key is encoded in the query: %y", rest.last().path));
+    }
+
+    uploadResumableTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # metadata beyond the content type forces the resumable path even for small content, because a
+        # single-request media upload cannot carry metadata
+        binary content = binary("\x00\xffdata");
+        rest.push_response({"headers": {
+            "location": "https://storage.googleapis.com/upload/storage/v1/b/test-bucket/o"
+                "?uploadType=resumable&upload_id=SESSION123",
+        }});
+        rest.push_response({"body": {"name": "a.bin", "bucket": TestBucket, "size": content.size()}});
+
+        hash<auto> rv = prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket,
+            "object": "a.bin",
+            "file": {"name": "a.bin", "content": make_base64_string(content), "mime_type": "text/plain"},
+            "cache_control": "no-store",
+            "metadata": {"owner": "qa"},
+        });
+
+        assertEq(2, rest.requests.size(), "a resumable upload is an initiate plus one chunk");
+
+        # the initiating request carries the metadata as JSON, not the content
+        hash<RecordedRequest> init = rest.requests[0];
+        assertEq("POST", init.method);
+        assertFalse(init.raw, "the metadata body goes through the JSON codec");
+        assertTrue(init.path =~ /uploadType=resumable/, sprintf("resumable is requested: %y", init.path));
+        assertEq("a.bin", init.body.name, "the object name travels in the metadata body");
+        assertEq("no-store", init.body.cacheControl);
+        assertEq("text/plain", init.body.contentType);
+        assertEq({"owner": "qa"}, init.body.metadata);
+        assertEq("text/plain", init.headers."X-Upload-Content-Type");
+        assertEq(content.size(), init.headers."X-Upload-Content-Length");
+
+        # the content follows on the raw path, addressed at the session and with a byte range
+        hash<RecordedRequest> chunk = rest.requests[1];
+        assertEq("PUT", chunk.method);
+        assertTrue(chunk.raw, "the content chunk bypasses the codec");
+        assertEq(content, chunk.body, "the exact bytes are sent");
+        assertEq(sprintf("bytes 0-%d/%d", content.size() - 1, content.size()),
+            chunk.headers."Content-Range");
+        assertEq("/upload/storage/v1/b/test-bucket/o?uploadType=resumable&upload_id=SESSION123",
+            chunk.path, "the session URI's path and query are used verbatim");
+        assertEq("a.bin", rv.name);
+
+        # a session on another host cannot be reached through this client and must be rejected rather
+        # than silently sent to the wrong endpoint
+        rest.reset();
+        rest.push_response({"headers": {"location": "https://elsewhere.example.com/upload?x=1"}});
+        assertThrows("GCS-UPLOAD-ERROR", "elsewhere.example.com", sub () {
+            prov.getChildProvider("upload-object").doRequest({
+                "bucket": TestBucket,
+                "object": "a.bin",
+                "file": {"name": "a.bin", "content": make_base64_string(content)},
+                "metadata": {"a": "b"},
+            });
+        });
+
+        # a missing Location header is an error, not a silent no-op
+        rest.reset();
+        rest.push_response({"headers": {}});
+        assertThrows("GCS-UPLOAD-ERROR", "no Location header", sub () {
+            prov.getChildProvider("upload-object").doRequest({
+                "bucket": TestBucket,
+                "object": "a.bin",
+                "file": {"name": "a.bin", "content": make_base64_string(content)},
+                "metadata": {"a": "b"},
+            });
+        });
+    }
+
+    uploadNamePrecedenceTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # the file API passes the whole path in "object" and only the last segment in the file's
+        # "name"; preferring the file name would write the wrong key
+        rest.push_response({"body": {}});
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket,
+            "object": "reports/2026/q1.csv",
+            "file": {"name": "q1.csv", "content": make_base64_string(binary("x"))},
+        });
+        assertTrue(rest.last().path =~ /name=reports%2F2026%2Fq1.csv/,
+            sprintf("\"object\" wins over the file name: %y", rest.last().path));
+
+        # with no "object" the file's name is used
+        rest.reset();
+        rest.push_response({"body": {}});
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket,
+            "file": {"name": "fallback.txt", "content": make_base64_string(binary("x"))},
+        });
+        assertTrue(rest.last().path =~ /name=fallback.txt/,
+            sprintf("the file name is the fallback: %y", rest.last().path));
+
+        # with neither, the call must fail rather than write to an empty key.  FileDataType requires
+        # a "name", and the request type is validated before doRequestImpl() runs, so the only way to
+        # reach this is an empty name -- which is exactly what a caller that has no name produces
+        rest.reset();
+        assertThrows("GCS-UPLOAD-ERROR", "cannot be determined", sub () {
+            prov.getChildProvider("upload-object").doRequest({
+                "bucket": TestBucket,
+                "file": {"name": "", "content": make_base64_string(binary("x"))},
+            });
+        });
+        assertEq(0, rest.requests.size(), "nothing is sent when the key cannot be determined");
+    }
+
+    uploadContentTypeTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # an explicit content type wins
+        rest.push_response({"body": {}});
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket, "object": "a.txt", "content_type": "application/x-custom",
+            "file": {"name": "a.txt", "content": make_base64_string(binary("x")), "mime_type": "text/plain"},
+        });
+        assertEq("application/x-custom", rest.last().headers."Content-Type");
+
+        # then the file's own type
+        rest.reset();
+        rest.push_response({"body": {}});
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket, "object": "a.bin",
+            "file": {"name": "a.bin", "content": make_base64_string(binary("x")), "mime_type": "text/plain"},
+        });
+        assertEq("text/plain", rest.last().headers."Content-Type");
+
+        # "auto" is a FileDataType placeholder and must never be sent as a MIME type
+        rest.reset();
+        rest.push_response({"body": {}});
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket, "object": "a.csv",
+            "file": {"name": "a.csv", "content": make_base64_string(binary("x")), "mime_type": "auto"},
+        });
+        assertNeq("auto", rest.last().headers."Content-Type", "\"auto\" is resolved, not sent");
+        assertEq("text/csv", rest.last().headers."Content-Type", "the type comes from the key's suffix");
+
+        # an unknown suffix falls back to octet-stream rather than being omitted
+        rest.reset();
+        rest.push_response({"body": {}});
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": TestBucket, "object": "a.unknown-suffix",
+            "file": {"name": "a.unknown-suffix", "content": make_base64_string(binary("x"))},
+        });
+        assertEq(MimeTypeOctetStream, rest.last().headers."Content-Type");
+    }
+
+    downloadRawTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        binary content = binary("\x00\x01\xff\xfe\x7f\x80hello");
+
+        # the pre-codec body is what a download must read: "body" here holds what a codec would have
+        # produced, and must be ignored
+        rest.push_response({
+            "response_body_raw": content,
+            "body": "CODEC-MANGLED",
+            "headers": {
+                "content-type": "application/octet-stream",
+                "etag": "CJi1n5T7-4kDEAM=",
+                "x-goog-generation": "1712345678901234",
+                "x-goog-hash": "crc32c=n03xxA==,md5=Ojk9c3dhfxgoKVVHYwFbHQ==",
+            },
+        });
+        hash<auto> rv = prov.getChildProvider("download-object").doRequest({
+            "bucket": TestBucket,
+            "object": "reports/2026/q1.csv",
+        });
+
+        assertEq(content, rv.content, "the bytes come back exactly as stored");
+        assertEq(NT_BINARY, rv.content.typeCode(), "the content is binary, not base64");
+        assertEq(content.size(), rv.size);
+        assertEq("application/octet-stream", rv.content_type);
+        assertEq("reports/2026/q1.csv", rv.name, "the requested key is reported verbatim");
+        assertEq(TestBucket, rv.bucket);
+        assertEq(1712345678901234, rv.generation);
+        assertEq("Ojk9c3dhfxgoKVVHYwFbHQ==", rv.md5_hash);
+        assertEq("n03xxA==", rv.crc32c);
+        assertEq("CJi1n5T7-4kDEAM=", rv.etag);
+
+        assertTrue(rest.last().path =~ /alt=media/, "the media form is requested");
+        assertEq("identity", rest.last().headers."Accept-Encoding",
+            "the stored bytes are requested rather than a transfer-encoded form");
+
+        # a JSON object would be parsed into a hash by the codec; the raw body must still win
+        rest.reset();
+        binary json_content = binary("{\"a\":1}");
+        rest.push_response({
+            "response_body_raw": json_content,
+            "body": {"a": 1},
+            "headers": {"content-type": "application/json"},
+        });
+        hash<auto> jrv = prov.getChildProvider("download-object").doRequest({
+            "bucket": TestBucket, "object": "a.json",
+        });
+        assertEq(json_content, jrv.content, "a stored JSON document comes back as its bytes");
+
+        # a string body with high bytes must not lose them
+        rest.reset();
+        rest.push_response({
+            "response_body_raw": "caf\xc3\xa9",
+            "headers": {"content-type": "text/plain; charset=UTF-8"},
+        });
+        hash<auto> srv = prov.getChildProvider("download-object").doRequest({
+            "bucket": TestBucket, "object": "a.txt",
+        });
+        assertEq(binary("caf\xc3\xa9"), srv.content, "a string body converts to the same bytes");
+
+        # a zero-length object is legal and must not be reported as an error
+        rest.reset();
+        rest.push_response({"headers": {"content-type": "application/octet-stream"}});
+        hash<auto> zrv = prov.getChildProvider("download-object").doRequest({
+            "bucket": TestBucket, "object": "empty",
+        });
+        assertEq(binary(), zrv.content);
+        assertEq(0, zrv.size);
+    }
+
+    downloadHashHeaderTest() {
+        # the header is a comma-separated list of base64 values in either order
+        assertEq({"crc32c": "n03xxA==", "md5_hash": "Ojk9c3dhfxgoKVVHYwFbHQ=="},
+            GoogleCloudStorageDataProvider::GoogleCloudStorageDownloadObjectDataProvider::parseGoogHash(
+                "crc32c=n03xxA==,md5=Ojk9c3dhfxgoKVVHYwFbHQ=="));
+        assertEq({"md5_hash": "Ojk9c3dhfxgoKVVHYwFbHQ==", "crc32c": "n03xxA=="},
+            GoogleCloudStorageDataProvider::GoogleCloudStorageDownloadObjectDataProvider::parseGoogHash(
+                "md5=Ojk9c3dhfxgoKVVHYwFbHQ==, crc32c=n03xxA=="));
+        # a composed object reports only crc32c
+        assertEq({"crc32c": "n03xxA=="},
+            GoogleCloudStorageDataProvider::GoogleCloudStorageDownloadObjectDataProvider::parseGoogHash(
+                "crc32c=n03xxA=="));
+        assertEq({},
+            GoogleCloudStorageDataProvider::GoogleCloudStorageDownloadObjectDataProvider::parseGoogHash());
+        assertEq({},
+            GoogleCloudStorageDataProvider::GoogleCloudStorageDownloadObjectDataProvider::parseGoogHash(
+                "garbage"));
+    }
+
+    deleteObjectTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        rest.push_response({"status_code": 204});
+        hash<auto> rv = prov.getChildProvider("delete-object").doRequest({
+            "bucket": TestBucket,
+            "object": "dir/",
+        });
+        assertEq("DELETE", rest.last().method);
+        assertEq("/storage/v1/b/test-bucket/o/dir%2F", rest.last().path,
+            "a folder-marker key keeps its trailing slash");
+        assertEq(TestBucket, rv.bucket);
+        assertEq("dir/", rv.object);
+        assertEq(True, rv.deleted);
+        assertNothing(rv.generation, "no generation is reported when none was addressed");
+
+        rest.reset();
+        rest.push_response({"status_code": 204});
+        hash<auto> grv = prov.getChildProvider("delete-object").doRequest({
+            "bucket": TestBucket, "object": "x", "generation": 1712345678901234,
+        });
+        assertTrue(rest.last().path =~ /generation=1712345678901234/);
+        assertEq(1712345678901234, grv.generation);
+    }
+
+    metadataUpdateTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        rest.push_response({"body": {"name": "x", "contentType": "text/csv"}});
+        prov.getChildProvider("update-object-metadata").doRequest({
+            "bucket": TestBucket,
+            "object": "x",
+            "content_type": "text/csv",
+            "cache_control": "no-store",
+            "metadata": {"owner": "qa"},
+            "custom_time": 2026-05-06T07:08:09Z,
+        });
+        assertEq("PATCH", rest.last().method, "a merge, so the fields not supplied are untouched");
+        hash<auto> body = rest.last().body;
+        assertEq("text/csv", body.contentType);
+        assertEq("no-store", body.cacheControl);
+        assertEq({"owner": "qa"}, body.metadata);
+        # a date must go back as RFC 3339, not as a Qore date
+        assertEq(NT_STRING, body.customTime.typeCode());
+        assertEq("2026-05-06T07:08:09Z", body.customTime);
+
+        # a date in a non-UTC zone must be converted, not relabelled: writing "Z" onto local
+        # wall-clock time would shift the timestamp by exactly the zone offset and be accepted
+        assertEq("2026-05-06T07:08:09Z",
+            GoogleCloudStorageDataProvider::GoogleCloudStorageObjectUtil::formatRfc3339(
+                2026-05-06T09:08:09+02:00),
+            "a positive-offset date is converted to UTC");
+        assertEq("2026-05-06T12:08:09Z",
+            GoogleCloudStorageDataProvider::GoogleCloudStorageObjectUtil::formatRfc3339(
+                2026-05-06T07:08:09-05:00),
+            "a negative-offset date is converted to UTC");
+        assertEq("2026-05-06T07:08:09Z",
+            GoogleCloudStorageDataProvider::GoogleCloudStorageObjectUtil::formatRfc3339(
+                2026-05-06T07:08:09Z),
+            "a UTC date is unchanged");
+        # only the fields supplied appear
+        assertFalse(body.hasKey("contentDisposition"));
+        assertFalse(body.hasKey("contentEncoding"));
+
+        # an update with nothing to change is an error rather than a pointless request
+        rest.reset();
+        assertThrows("GCS-UPDATE-ERROR", "no metadata fields", sub () {
+            prov.getChildProvider("update-object-metadata").doRequest({
+                "bucket": TestBucket, "object": "x",
+            });
+        });
+        assertEq(0, rest.requests.size(), "no request is made when there is nothing to update");
+    }
+
+    copyObjectTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # a rewrite that finishes in one call
+        rest.push_response({"body": {
+            "done": True,
+            "resource": {"name": "archive/2026/q1.csv", "bucket": "dst", "size": "10"},
+        }});
+        hash<auto> rv = prov.getChildProvider("copy-object").doRequest({
+            "source_bucket": "src",
+            "source_object": "reports/2026/q1.csv",
+            "destination_bucket": "dst",
+            "destination_object": "archive/2026/q1.csv",
+        });
+        assertEq("POST", rest.last().method);
+        assertEq("/storage/v1/b/src/o/reports%2F2026%2Fq1.csv/rewriteTo/b/dst/o/archive%2F2026%2Fq1.csv",
+            rest.last().path, "both keys are encoded as single segments");
+        assertEq("archive/2026/q1.csv", rv.name);
+        assertEq(10, rv.size);
+
+        # a rewrite that needs continuations: the token is passed back until it reports done
+        rest.reset();
+        rest.push_response({"body": {"done": False, "rewriteToken": "T1", "objectSize": "30",
+            "totalBytesRewritten": "10"}});
+        rest.push_response({"body": {"done": False, "rewriteToken": "T2", "objectSize": "30",
+            "totalBytesRewritten": "20"}});
+        rest.push_response({"body": {"done": True, "resource": {"name": "d", "bucket": "dst",
+            "size": "30"}}});
+        hash<auto> rv2 = prov.getChildProvider("copy-object").doRequest({
+            "source_bucket": "src", "source_object": "s",
+            "destination_bucket": "dst", "destination_object": "d",
+            "destination_storage_class": "COLDLINE",
+        });
+        assertEq(3, rest.requests.size());
+        assertFalse(rest.requests[0].path =~ /rewriteToken/, "the first call carries no token");
+        assertTrue(rest.requests[1].path =~ /rewriteToken=T1/, "the token from call 1 is passed back");
+        assertTrue(rest.requests[2].path =~ /rewriteToken=T2/, "the token from call 2 is passed back");
+        assertEq("COLDLINE", rest.requests[0].body.storageClass);
+        assertEq("d", rv2.name);
+        assertEq(30, rv2.size);
+
+        # not done and no token is a broken response and must fail loudly rather than loop
+        rest.reset();
+        rest.push_response({"body": {"done": False, "objectSize": "30", "totalBytesRewritten": "10"}});
+        assertThrows("GCS-COPY-ERROR", "no rewriteToken", sub () {
+            prov.getChildProvider("copy-object").doRequest({
+                "source_bucket": "src", "source_object": "s",
+                "destination_bucket": "dst", "destination_object": "d",
+            });
+        });
+    }
+
+    composeTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        rest.push_response({"body": {"name": "all.csv", "bucket": TestBucket, "size": "30",
+            "crc32c": "n03xxA=="}});
+        hash<auto> rv = prov.getChildProvider("compose").doRequest({
+            "bucket": TestBucket,
+            "destination_object": "reports/2026/all.csv",
+            "source_objects": ("reports/2026/q1.csv", "reports/2026/q2.csv"),
+            "content_type": "text/csv",
+        });
+        assertEq("POST", rest.last().method);
+        assertEq("/storage/v1/b/test-bucket/o/reports%2F2026%2Fall.csv/compose", rest.last().path);
+        # the source names are JSON string values and go out unencoded
+        assertEq(({"name": "reports/2026/q1.csv"}, {"name": "reports/2026/q2.csv"}),
+            rest.last().body.sourceObjects);
+        assertEq("text/csv", rest.last().body.destination.contentType);
+        assertEq("all.csv", rv.name);
+        assertEq(30, rv.size);
+
+        # no sources is an error
+        rest.reset();
+        assertThrows("GCS-COMPOSE-ERROR", "no source objects", sub () {
+            prov.getChildProvider("compose").doRequest({
+                "bucket": TestBucket, "destination_object": "d", "source_objects": (),
+            });
+        });
+
+        # more than the service's limit is rejected here, with the limit named, rather than by a
+        # remote error
+        rest.reset();
+        list<string> too_many = ();
+        while (too_many.size() <= GoogleCloudStorageDataProvider::MaxComposeSources) {
+            push too_many, sprintf("src-%d", too_many.size());
+        }
+        assertEq(GoogleCloudStorageDataProvider::MaxComposeSources + 1, too_many.size());
+        assertThrows("GCS-COMPOSE-ERROR", "composes at most", sub () {
+            prov.getChildProvider("compose").doRequest({
+                "bucket": TestBucket, "destination_object": "d", "source_objects": too_many,
+            });
+        });
+        assertEq(0, rest.requests.size(), "the over-limit call is not sent");
+    }
+
+    signedUrlTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # the signBlob call goes to the IAM Credentials host on a separate client, so it is not
+        # recorded here; a fake signature is returned by intercepting the IAM client is not possible
+        # offline, so this asserts the request validation and canonical-form helpers instead
+        assertThrows("GCS-SIGNED-URL-ERROR", "between 1 and", sub () {
+            prov.getChildProvider("create-signed-url").doRequest({
+                "bucket": TestBucket, "object": "x", "expires_in_seconds": 0,
+            });
+        });
+        assertThrows("GCS-SIGNED-URL-ERROR", "between 1 and", sub () {
+            prov.getChildProvider("create-signed-url").doRequest({
+                "bucket": TestBucket, "object": "x",
+                "expires_in_seconds": GoogleCloudStorageDataProvider::MaxSignedUrlExpirySeconds + 1,
+            });
+        });
+
+        # the canonical query string must be sorted by encoded name and strictly encoded, or the
+        # signature will not match what Google computes
+        string q =
+            GoogleCloudStorageDataProvider::GoogleCloudStorageCreateSignedUrlDataProvider::canonicalQueryString({
+                "X-Goog-SignedHeaders": "host",
+                "X-Goog-Algorithm": "GOOG4-RSA-SHA256",
+                "X-Goog-Expires": "3600",
+                "X-Goog-Credential": "svc@p.iam.gserviceaccount.com/20260808/auto/storage/goog4_request",
+                "X-Goog-Date": "20260808T000000Z",
+            });
+        assertEq("X-Goog-Algorithm=GOOG4-RSA-SHA256"
+            "&X-Goog-Credential=svc%40p.iam.gserviceaccount.com%2F20260808%2Fauto%2Fstorage%2Fgoog4_request"
+            "&X-Goog-Date=20260808T000000Z"
+            "&X-Goog-Expires=3600"
+            "&X-Goog-SignedHeaders=host", q);
+        # the "/" separators in the credential must be encoded, or the signature is computed over a
+        # different string than the one in the URL
+        assertTrue(q =~ /%2Fauto%2Fstorage%2Fgoog4_request/);
+
+        # with no signer configured and no key file to read one from, the error must say so rather
+        # than sign with the wrong identity
+        FakeGcsRestClientIo rest2();
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov2(rest2,
+            <GoogleCloudStorageDataProvider::GcsAuthContext>{
+                "project_id": TestProject,
+                "access_token": TestToken,
+            });
+        assertThrows("GCS-SIGNED-URL-ERROR", "no signing service account", sub () {
+            prov2.getChildProvider("create-signed-url").doRequest({
+                "bucket": TestBucket, "object": "x",
+            });
+        });
+    }
+
+    apiErrorTest() {
+        FakeGcsRestClientIo rest;
+        GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider prov = getProvider(\rest);
+
+        # the Google error envelope must be surfaced, not just the bare HTTP status
+        rest.push_response({
+            "throw_status": 404,
+            "body": {"error": {
+                "code": 404,
+                "message": "No such object: test-bucket/missing",
+                "errors": ({"domain": "global", "reason": "notFound",
+                    "message": "No such object: test-bucket/missing"},),
+                "status": "NOT_FOUND",
+            }},
+        });
+        assertThrows("REST-RESPONSE-ERROR", "No such object: test-bucket/missing", sub () {
+            prov.getChildProvider("get-object-metadata").doRequest({
+                "bucket": TestBucket, "object": "missing",
+            });
+        });
+
+        rest.reset();
+        rest.push_response({
+            "throw_status": 403,
+            "body": {"error": {"code": 403, "message": "Permission denied",
+                "errors": ({"reason": "forbidden"},), "status": "PERMISSION_DENIED"}},
+        });
+        assertThrows("REST-RESPONSE-ERROR", "forbidden", sub () {
+            prov.getChildProvider("list-objects").doRequest({"bucket": TestBucket});
+        });
+
+        # a media-download error arrives as bytes rather than a parsed hash, and must still be read
+        rest.reset();
+        rest.push_response({
+            "throw_status": 404,
+            "body": binary("{\"error\":{\"code\":404,\"message\":\"Not Found\","
+                "\"errors\":[{\"reason\":\"notFound\"}]}}"),
+        });
+        assertThrows("REST-RESPONSE-ERROR", "Not Found", sub () {
+            prov.getChildProvider("download-object").doRequest({
+                "bucket": TestBucket, "object": "missing",
+            });
+        });
+
+        # a 4xx that is not a rate limit must not be retried
+        rest.reset();
+        rest.push_response({"throw_status": 400, "body": {"error": {"message": "Bad Request"}}});
+        assertThrows("REST-RESPONSE-ERROR", sub () {
+            prov.getChildProvider("get-bucket").doRequest({"bucket": TestBucket});
+        });
+        assertEq(1, rest.requests.size(), "a 400 is final; it is not retried");
+    }
+
+    # --- Live tests (require -c <connection> and -b <bucket>) ---
+
+    private *AbstractDataProvider getLiveProvider() {
+        *string conn_name = m_options.conn;
+        if (!conn_name) {
+            testSkip("no connection specified; use -c <connection_name> -b <bucket>");
+            return;
+        }
+        if (!m_options.bucket) {
+            testSkip("no bucket specified; use -b <bucket>");
+            return;
+        }
+        live_bucket = m_options.bucket;
+        return get_connection(conn_name).getDataProvider();
+    }
+
+    private removeLiveObject(AbstractDataProvider prov, string name) {
+        try {
+            prov.getChildProvider("delete-object").doRequest({
+                "bucket": live_bucket,
+                "object": name,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            printf("WARNING: could not remove test object %y: %s: %s\n", name, ex.err, ex.desc);
+        }
+    }
+
+    liveConnectionPingTest() {
+        *string conn_name = m_options.conn;
+        if (!conn_name) {
+            testSkip("no connection specified; use -c <connection_name>");
+            return;
+        }
+        hash<PingInfo> info = get_connection(conn_name).ping(True);
+        assertEq(True, info.ok, "ping succeeded");
+        assertTrue(info.time > 0s, "the ping reports how long it took");
+    }
+
+    liveLifecycleTest() {
+        *AbstractDataProvider prov = getLiveProvider();
+        if (!prov) return;
+
+        # the bucket the tests use must exist and be readable
+        hash<auto> bucket = prov.getChildProvider("get-bucket").doRequest({"bucket": live_bucket});
+        assertEq(live_bucket, bucket.name);
+        assertTrue(bucket.location.val(), "the bucket reports its location");
+        assertTrue(bucket.storage_class.val(), "the bucket reports its storage class");
+
+        # it must appear in the project's bucket list
+        hash<auto> buckets = prov.getChildProvider("list-buckets").doRequest({});
+        assertTrue(inlist(live_bucket, (map $1.name, buckets.buckets)),
+            sprintf("bucket %y is listed in the project", live_bucket));
+
+        string name = sprintf("qore-test/%s/lifecycle.txt", get_random_string(8));
+        on_exit removeLiveObject(prov, name);
+
+        hash<auto> up = prov.getChildProvider("upload-object").doRequest({
+            "bucket": live_bucket,
+            "object": name,
+            "file": {"name": "lifecycle.txt", "content": make_base64_string(binary("hello")),
+                "mime_type": "text/plain"},
+            "metadata": {"test": "lifecycle"},
+        });
+        assertEq(name, up.name, "the object is stored under the key that was given");
+        assertEq(5, up.size);
+        assertEq("text/plain", up.content_type);
+        assertEq({"test": "lifecycle"}, up.metadata);
+
+        hash<auto> meta = prov.getChildProvider("get-object-metadata").doRequest({
+            "bucket": live_bucket, "object": name,
+        });
+        assertEq(name, meta.name);
+        assertEq(5, meta.size);
+        assertEq(up.generation, meta.generation);
+
+        # a metadata update must change only what was asked for
+        hash<auto> patched = prov.getChildProvider("update-object-metadata").doRequest({
+            "bucket": live_bucket, "object": name, "cache_control": "no-store",
+        });
+        assertEq("no-store", patched.cache_control);
+        assertEq("text/plain", patched.content_type, "the content type is untouched");
+        assertEq({"test": "lifecycle"}, patched.metadata, "the metadata is untouched");
+        assertEq(up.generation, patched.generation, "a metadata change is not a new generation");
+
+        # a prefix listing must find it
+        hash<auto> listed = prov.getChildProvider("list-objects").doRequest({
+            "bucket": live_bucket, "prefix": name,
+        });
+        assertEq(1, listed.objects.size());
+        assertEq(name, listed.objects[0].name);
+
+        # a server-side copy, then compose the two into a third
+        string copy_name = name + ".copy";
+        string all_name = name + ".all";
+        on_exit {
+            removeLiveObject(prov, copy_name);
+            removeLiveObject(prov, all_name);
+        }
+        hash<auto> copied = prov.getChildProvider("copy-object").doRequest({
+            "source_bucket": live_bucket, "source_object": name,
+            "destination_bucket": live_bucket, "destination_object": copy_name,
+        });
+        assertEq(copy_name, copied.name);
+        assertEq(5, copied.size);
+
+        hash<auto> composed = prov.getChildProvider("compose").doRequest({
+            "bucket": live_bucket,
+            "destination_object": all_name,
+            "source_objects": (name, copy_name),
+            "content_type": "text/plain",
+        });
+        assertEq(all_name, composed.name);
+        assertEq(10, composed.size, "the composition is the concatenation of both sources");
+        hash<auto> composed_down = prov.getChildProvider("download-object").doRequest({
+            "bucket": live_bucket, "object": all_name,
+        });
+        assertEq(binary("hellohello"), composed_down.content);
+
+        # deleting must actually remove it
+        prov.getChildProvider("delete-object").doRequest({"bucket": live_bucket, "object": copy_name});
+        assertThrows("REST-RESPONSE-ERROR", sub () {
+            prov.getChildProvider("get-object-metadata").doRequest({
+                "bucket": live_bucket, "object": copy_name,
+            });
+        });
+    }
+
+    liveRoundTripTest() {
+        *AbstractDataProvider prov = getLiveProvider();
+        if (!prov) return;
+
+        # every byte value, so a codec that mangles NUL, high bytes, or invalid UTF-8 is caught
+        binary content = binary();
+        for (int i = 0; i < 256; ++i) {
+            content += chr(i).toBinary();
+        }
+        content += binary("\x00\x00\xff\xfe");
+        assertEq(260, content.size());
+
+        # a content type that would tempt a response codec into parsing the body
+        foreach string ct in (("application/octet-stream", "application/json", "text/plain")) {
+            string name = sprintf("qore-test/%s/bytes.bin", get_random_string(8));
+            on_exit removeLiveObject(prov, name);
+
+            hash<auto> up = prov.getChildProvider("upload-object").doRequest({
+                "bucket": live_bucket,
+                "object": name,
+                "file": {"name": "bytes.bin", "content": make_base64_string(content), "mime_type": ct},
+            });
+            assertEq(content.size(), up.size, sprintf("%s: the stored size is the size sent", ct));
+
+            hash<auto> down = prov.getChildProvider("download-object").doRequest({
+                "bucket": live_bucket, "object": name,
+            });
+            assertEq(content.size(), down.size, sprintf("%s: the size round-trips", ct));
+            assertEq(content, down.content, sprintf("%s: every byte round-trips exactly", ct));
+            # the service's own MD5 must match the bytes we sent, which proves nothing was rewritten
+            assertEq(make_base64_string(MD5_bin(content)), down.md5_hash,
+                sprintf("%s: the service's MD5 matches the bytes sent", ct));
+        }
+    }
+
+    liveVerbatimNamesTest() {
+        *AbstractDataProvider prov = getLiveProvider();
+        if (!prov) return;
+
+        string run = get_random_string(8);
+        # every one of these is a single valid object key; the service must see exactly what was given
+        list<string> names = ();
+        foreach string suffix in (("a/b/c.txt", "a//b.txt", "dir/", "with space.txt",
+                "with+plus.txt", "with%pct.txt", "with&amp=sign.txt", "üñïçødé.txt")) {
+            push names, sprintf("qore-test/%s/%s", run, suffix);
+        }
+
+        on_exit map removeLiveObject(prov, $1), names;
+
+        foreach string name in (names) {
+            hash<auto> up = prov.getChildProvider("upload-object").doRequest({
+                "bucket": live_bucket,
+                "object": name,
+                "file": {"name": "x", "content": make_base64_string(binary(name)),
+                    "mime_type": "application/octet-stream"},
+            });
+            assertEq(name, up.name, sprintf("the key %y is stored verbatim", name));
+
+            # and it must be addressable by the same string
+            hash<auto> down = prov.getChildProvider("download-object").doRequest({
+                "bucket": live_bucket, "object": name,
+            });
+            assertEq(binary(name), down.content,
+                sprintf("the key %y addresses the object that was written", name));
+        }
+
+        # a listing of the run's prefix must report every key exactly, including the trailing-slash one
+        hash<auto> listed = prov.getChildProvider("list-objects").doRequest({
+            "bucket": live_bucket,
+            "prefix": sprintf("qore-test/%s/", run),
+        });
+        list<string> found = sort(map $1.name, listed.objects);
+        assertEq(sort(names), found, "the listing reports every key exactly as written");
+    }
+
+    liveResumableTest() {
+        *AbstractDataProvider prov = getLiveProvider();
+        if (!prov) return;
+
+        # above the single-request threshold, so the resumable path with more than one chunk runs
+        int size = GoogleCloudStorageDataProvider::ResumableUploadThreshold
+            + GoogleCloudStorageDataProvider::ResumableChunkMultiple;
+        binary content = binary();
+        # a repeating but non-uniform pattern, so a chunk sent out of order or twice is detectable
+        string block = "";
+        for (int i = 0; i < 256; ++i) {
+            block += chr(i);
+        }
+        binary bblock = block.toBinary();
+        while (content.size() < size) {
+            content += bblock;
+        }
+        content = content.substr(0, size);
+        assertEq(size, content.size());
+
+        string name = sprintf("qore-test/%s/large.bin", get_random_string(8));
+        on_exit removeLiveObject(prov, name);
+
+        hash<auto> up = prov.getChildProvider("upload-object").doRequest({
+            "bucket": live_bucket,
+            "object": name,
+            "file": {"name": "large.bin", "content": make_base64_string(content),
+                "mime_type": "application/octet-stream"},
+        });
+        assertEq(size, up.size, "the whole object was stored");
+        assertEq(make_base64_string(MD5_bin(content)), up.md5_hash,
+            "the service's MD5 matches the bytes sent, so every chunk arrived in order");
+
+        hash<auto> down = prov.getChildProvider("download-object").doRequest({
+            "bucket": live_bucket, "object": name,
+        });
+        assertEq(size, down.size);
+        assertEq(content, down.content, "a multi-chunk upload round-trips byte for byte");
+    }
+
+    liveSignedUrlTest() {
+        *AbstractDataProvider prov = getLiveProvider();
+        if (!prov) return;
+
+        binary content = binary("signed-url-payload\x00\xff");
+        string name = sprintf("qore-test/%s/signed url +test.bin", get_random_string(8));
+        on_exit removeLiveObject(prov, name);
+
+        prov.getChildProvider("upload-object").doRequest({
+            "bucket": live_bucket,
+            "object": name,
+            "file": {"name": "x", "content": make_base64_string(content),
+                "mime_type": "application/octet-stream"},
+        });
+
+        hash<auto> signed;
+        try {
+            signed = prov.getChildProvider("create-signed-url").doRequest({
+                "bucket": live_bucket,
+                "object": name,
+                "expires_in_seconds": 300,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("cannot sign URLs with this credential: %s: %s", ex.err, ex.desc));
+            return;
+        }
+        assertEq("GET", signed.method);
+        assertEq(300, signed.expires_in_seconds);
+        assertEq(name, signed.object);
+        assertTrue(signed.url =~ /^https:\/\/storage.googleapis.com\//);
+        assertTrue(signed.url =~ /X-Goog-Signature=/, "the URL carries a signature");
+        assertTrue(signed.url =~ /X-Goog-Algorithm=GOOG4-RSA-SHA256/);
+        assertTrue(signed.expires > now_utc(), "the URL has not already expired");
+
+        # the point of a signed URL: it works with no credentials at all
+        binary fetched = FileLocationHandler::getBinaryFileFromLocation(signed.url);
+        assertEq(content, fetched, "the signed URL returns the object's exact bytes");
+    }
+
+    liveFileLocationTest() {
+        *AbstractDataProvider prov = getLiveProvider();
+        if (!prov) return;
+        *string conn_name = m_options.conn;
+
+        # a key with "/" in it, which the file API must pass through whole rather than treating the
+        # last segment as a file name
+        string name = sprintf("qore-test/%s/conn/location.bin", get_random_string(8));
+        on_exit removeLiveObject(prov, name);
+
+        binary content = binary("conn-location\x00\xff\xfe");
+        string location = sprintf("conn://%s/%s{container=%s}", conn_name, name, live_bucket);
+
+        FileLocationHandler::writeFileToLocation(location, content);
+        assertEq(content, FileLocationHandler::getBinaryFileFromLocation(location),
+            "a conn:// location round-trips bytes exactly");
+
+        # and the object really is under the whole key, not just its last segment
+        hash<auto> meta = prov.getChildProvider("get-object-metadata").doRequest({
+            "bucket": live_bucket, "object": name,
+        });
+        assertEq(name, meta.name, "the whole location path became the object key");
+        assertEq(content.size(), meta.size);
+    }
+}

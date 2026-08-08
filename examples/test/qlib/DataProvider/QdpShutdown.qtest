@@ -5,6 +5,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
+# normalize_dir() lives in Util; neither FsUtil nor QUnit reexports it, so it has to be required here
+%requires Util
 %requires QUnit
 
 %exec-class QdpShutdownTest

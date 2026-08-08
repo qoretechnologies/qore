@@ -160,6 +160,7 @@ public class DataProvider {
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
             "gdrive": "GoogleDriveDataProvider",
+            "gcs": "GoogleCloudStorageDataProvider",
             "google-documentai": "GoogleDocumentAiDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
             "generator": "GeneratorDataProvider",

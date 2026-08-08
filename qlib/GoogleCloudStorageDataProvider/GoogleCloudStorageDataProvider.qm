@@ -1,0 +1,475 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GoogleCloudStorageDataProvider.qm Qore user module providing a data provider API for Google Cloud Storage
+
+/*  GoogleCloudStorageDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires GoogleCloudStorageRestClient
+%requires GcpAuth
+%requires RestClientIo
+%requires FileLocationHandler
+
+%requires json
+
+module GoogleCloudStorageDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Google Cloud Storage";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new GoogleCloudStorageDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GoogleCloudStorageDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Google Cloud Storage",
+            "short_desc": "Google Cloud Storage object storage",
+            "desc": "Provides access to [Google Cloud Storage](https://cloud.google.com/storage) — "
+                "Google's object storage service — through its "
+                "[JSON API](https://cloud.google.com/storage/docs/json_api).\n\n"
+                "**Common use cases**:\n"
+                "- **Object storage**: upload, download, copy, and delete objects, with resumable "
+                "uploads for large content\n"
+                "- **Bucket browsing**: list buckets and list objects by prefix, optionally rolled up "
+                "into synthetic folders with a delimiter\n"
+                "- **Metadata management**: read and update content type, cache headers, and "
+                "user-defined metadata\n"
+                "- **Sharing**: generate time-limited signed URLs that grant access to a single "
+                "object with no credentials\n"
+                "- **Concatenation**: compose up to 32 objects into one without downloading them\n\n"
+                "This application is also a file-location target, so a `conn://` location can read "
+                "and write objects through a Google Cloud Storage connection, and it can supply the "
+                "`gs://` inputs and outputs that the Vertex AI and Google Document AI applications "
+                "take.\n\n"
+                "**Object names are a flat key space**: `/` is an ordinary character in an object "
+                "name and not a path separator, so names are used verbatim and are never split or "
+                "normalized. `dir/`, `a//b` and `/leading` are all valid, distinct object names.\n\n"
+                "Authentication uses a GCP service account or Application Default Credentials.\n\n"
+                "Google Cloud and Google Cloud Storage are trademarks of Google LLC",
+            "scheme": "gcs",
+            "logo": GoogleCloudStorageLogo,
+            "logo_file_name": "google-cloud-storage-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CloudStorage,),
+        });
+
+        # declare how this application's actions map onto single-file read and write operations, so
+        # that "conn://" file locations can read and write objects through a Google Cloud Storage
+        # connection.  Unlike OneDrive and SharePoint, Google Cloud Storage returns the object's bytes
+        # directly from "?alt=media" rather than a pre-authenticated URL, so the read is a single
+        # operation returning data (DPFR_DATA) rather than a URL to follow (DPFR_URL), and the bytes
+        # are raw rather than base64-encoded.
+        #
+        # "path_is_id" is set because an object name must reach the service verbatim: it is a single
+        # key in a flat name space, so a consumer must not split it on "/", normalize it, or collapse
+        # "//".  The flag carries exactly that guarantee ("consumers must not attempt to interpret,
+        # split, or normalize the value") and suppresses no behaviour the file API needs -- notably
+        # "write_path_is_parent" stays unset, so the whole location path is passed through as the
+        # object name and the file value's own name is ignored.
+        DataProviderActionCatalog::registerAppFileApi(GoogleCloudStorageDataProvider::AppName,
+            <DataProviderFileApiInfo>{
+                "read_action": "download-object",
+                "read_path_option": "object",
+                "read_container_option": "bucket",
+                "read_mode": DPFR_DATA,
+                "read_data_field": "content",
+                "read_data_encoding": "raw",
+                "read_mime_type_field": "content_type",
+                "write_action": "upload-object",
+                "write_path_option": "object",
+                "write_container_option": "bucket",
+                "write_data_option": "file",
+                "write_data_format": DPFW_FILE,
+                "path_is_id": True,
+            });
+
+        # --- Bucket Actions ---
+
+        # list-buckets
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/list-buckets",
+            "action": "list-buckets",
+            "display_name": "List Buckets",
+            "short_desc": "List the buckets in the project",
+            "desc": "Lists the buckets in the connection's GCP project.\n\n"
+                "A listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it "
+                "back in `page_token` to retrieve the following page.",
+            "action_code": DPAT_API,
+            "groups": ("Buckets",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageListBucketsRequestDataType::Fields{"prefix",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageListBucketsRequestDataType::Fields{"max_results", "page_token"}
+            ),
+            "output_type": GoogleCloudStorageListBucketsDataProvider::ResponseType,
+        });
+
+        # get-bucket
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/get-bucket",
+            "action": "get-bucket",
+            "display_name": "Get Bucket",
+            "short_desc": "Get a bucket's metadata",
+            "desc": "Retrieves a bucket's metadata: its location, storage class, versioning and "
+                "uniform bucket-level access settings, labels, and timestamps.",
+            "action_code": DPAT_API,
+            "groups": ("Buckets",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageGetBucketRequestDataType::Fields{"bucket",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ),
+            "output_type": GoogleCloudStorageGetBucketDataProvider::ResponseType,
+        });
+
+        # --- Object Actions ---
+
+        # list-objects
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/list-objects",
+            "action": "list-objects",
+            "display_name": "List Objects",
+            "short_desc": "List the objects in a bucket",
+            "desc": "Lists the objects in a bucket.\n\n"
+                "Object names are a flat key space, so `prefix` is how a subset is selected; it is "
+                "matched literally. Set `delimiter` to `/` as well to list one level at a time, which "
+                "makes a bucket browsable as though it had folders — the rolled-up names are returned "
+                "in `prefixes` and are not objects.\n\n"
+                "A listing is capped at `1000` objects; when a `next_page_token` is returned, pass it "
+                "back in `page_token` to retrieve the following page.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageListObjectsRequestDataType::Fields{"bucket",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageListObjectsRequestDataType::Fields{"prefix", "delimiter"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageListObjectsRequestDataType::Fields{"include_trailing_delimiter",
+                    "start_offset", "end_offset", "versions", "max_results", "page_token"}
+            ),
+            "output_type": GoogleCloudStorageListObjectsDataProvider::ResponseType,
+        });
+
+        # get-object-metadata
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/get-object-metadata",
+            "action": "get-object-metadata",
+            "display_name": "Get Object Metadata",
+            "short_desc": "Get an object's metadata without its content",
+            "desc": "Retrieves an object's metadata — size, content type, checksums, storage class, "
+                "generation, and user-defined metadata — without transferring its content.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageGetObjectMetadataRequestDataType::Fields{"bucket", "object"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageGetObjectMetadataRequestDataType::Fields{"generation",}
+            ),
+            "output_type": GoogleCloudStorageGetObjectMetadataDataProvider::ResponseType,
+        });
+
+        # update-object-metadata
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/update-object-metadata",
+            "action": "update-object-metadata",
+            "display_name": "Update Object Metadata",
+            "short_desc": "Update an object's metadata without rewriting it",
+            "desc": "Updates an object's metadata in place, without re-uploading its content: the "
+                "content type, the cache and content headers served with it, a custom timestamp, and "
+                "user-defined metadata.\n\n"
+                "The update is a merge, so only the fields supplied are changed; set a `metadata` key "
+                "to `null` to remove that key.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageUpdateObjectMetadataRequestDataType::Fields{"bucket", "object"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageUpdateObjectMetadataRequestDataType::Fields{"content_type",
+                    "metadata"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageUpdateObjectMetadataRequestDataType::Fields{"cache_control",
+                    "content_disposition", "content_encoding", "content_language", "custom_time",
+                    "generation"}
+            ),
+            "output_type": GoogleCloudStorageUpdateObjectMetadataDataProvider::ResponseType,
+        });
+
+        # upload-object
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/upload-object",
+            "action": "upload-object",
+            "display_name": "Upload Object",
+            "short_desc": "Upload content to a bucket",
+            "desc": "Uploads content to a bucket as an object of any size.\n\n"
+                "Large content, and any upload that also sets metadata, is sent as a resumable upload "
+                "in chunks that Google Cloud Storage commits as they arrive, so a large transfer does "
+                "not have to restart from the beginning if a chunk fails. Small content is sent in a "
+                "single request.\n\n"
+                "`object` is used verbatim, so `reports/2026/q1.csv` is one key rather than a path. "
+                "Set `if_generation_match` to `0` to create the object only if it does not already "
+                "exist, rather than overwriting it.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageUploadObjectRequestDataType::Fields{"bucket", "file"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageUploadObjectRequestDataType::Fields{"object", "content_type"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageUploadObjectRequestDataType::Fields{"cache_control",
+                    "content_disposition", "content_encoding", "content_language", "storage_class",
+                    "metadata", "custom_time", "if_generation_match"}
+            ),
+            "output_type": GoogleCloudStorageUploadObjectDataProvider::ResponseType,
+        });
+
+        # download-object
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/download-object",
+            "action": "download-object",
+            "display_name": "Download Object",
+            "short_desc": "Download an object's content",
+            "desc": "Downloads an object's content and returns it as raw bytes in `content`, together "
+                "with the content type, size, and the checksums Google Cloud Storage reports.\n\n"
+                "`object` is used verbatim. Set `generation` to download a specific version of an "
+                "object in a bucket with versioning enabled.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageDownloadObjectRequestDataType::Fields{"bucket", "object"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageDownloadObjectRequestDataType::Fields{"generation",}
+            ),
+            "output_type": GoogleCloudStorageDownloadObjectDataProvider::ResponseType,
+        });
+
+        # delete-object
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/delete-object",
+            "action": "delete-object",
+            "display_name": "Delete Object",
+            "short_desc": "Delete an object",
+            "desc": "Deletes an object.\n\n"
+                "In a bucket with versioning enabled, deleting without a `generation` removes the live "
+                "version and retains the earlier generations; naming a `generation` removes that "
+                "version permanently.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageDeleteObjectRequestDataType::Fields{"bucket", "object"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageDeleteObjectRequestDataType::Fields{"generation",}
+            ),
+            "output_type": GoogleCloudStorageDeleteObjectDataProvider::ResponseType,
+        });
+
+        # copy-object
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/copy-object",
+            "action": "copy-object",
+            "display_name": "Copy Object",
+            "short_desc": "Copy an object without downloading it",
+            "desc": "Copies an object to another name or bucket entirely within Google Cloud Storage, "
+                "without transferring the content through the caller.\n\n"
+                "Handles an object of any size and a copy between different locations, storage classes, "
+                "or encryption keys. Copying an object onto itself with a new "
+                "`destination_storage_class` is how an object's storage class is changed.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageCopyObjectRequestDataType::Fields{"source_bucket", "source_object",
+                    "destination_bucket", "destination_object"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageCopyObjectRequestDataType::Fields{"source_generation",
+                    "destination_storage_class", "content_type", "metadata"}
+            ),
+            "output_type": GoogleCloudStorageCopyObjectDataProvider::ResponseType,
+        });
+
+        # compose
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/compose",
+            "action": "compose",
+            "display_name": "Compose Objects",
+            "short_desc": "Concatenate objects into one object",
+            "desc": "Concatenates up to 32 objects into a single new object, entirely within Google "
+                "Cloud Storage and without transferring any content through the caller.\n\n"
+                "Every source and the destination must be in the same bucket. The destination may be "
+                "one of the sources, which is how content is appended to an existing object. Set "
+                "`content_type` explicitly: Google Cloud Storage does not infer it from the sources.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageComposeRequestDataType::Fields{"bucket", "destination_object",
+                    "source_objects"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageComposeRequestDataType::Fields{"content_type", "metadata"}
+            ),
+            "output_type": GoogleCloudStorageComposeDataProvider::ResponseType,
+        });
+
+        # --- Sharing Actions ---
+
+        # create-signed-url
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleCloudStorageDataProvider::AppName,
+            "path": "/create-signed-url",
+            "action": "create-signed-url",
+            "display_name": "Create Signed URL",
+            "short_desc": "Create a time-limited URL granting access to one object",
+            "desc": "Creates a V4 signed URL granting access to a single object for a single HTTP "
+                "method until it expires. Anyone holding the URL can use it with no credentials, "
+                "which is how content is handed to a browser or to a third party with no Google "
+                "account.\n\n"
+                "Signing is performed by the IAM Service Account Credentials API, so it also works "
+                "when the credential is Application Default Credentials or a workload identity and "
+                "there is no private key on the host. The caller needs the "
+                "`iam.serviceAccounts.signBlob` permission on the signing service account (the "
+                "`roles/iam.serviceAccountTokenCreator` role) and that API must be enabled on the "
+                "project.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageCreateSignedUrlRequestDataType::Fields{"bucket", "object"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageCreateSignedUrlRequestDataType::Fields{"method",
+                    "expires_in_seconds"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleCloudStorageCreateSignedUrlRequestDataType::Fields{"signer_email",}
+            ),
+            "output_type": GoogleCloudStorageCreateSignedUrlDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage GoogleCloudStorageDataProvider Module
+
+    @tableofcontents
+
+    @section googlecloudstoragedataproviderintro GoogleCloudStorageDataProvider Introduction
+
+    The %GoogleCloudStorageDataProvider module provides a data provider API for
+    [Google Cloud Storage](https://cloud.google.com/storage) through its
+    [JSON API](https://cloud.google.com/storage/docs/json_api).
+
+    The following classes are provided:
+    - @ref GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider
+      "GoogleCloudStorageDataProvider": the main data provider class
+
+    @section googlecloudstoragedataprovider_flat_keys Object Names Are a Flat Key Space
+
+    A Google Cloud Storage object name is a single opaque key.  \c "/" is an ordinary character in it
+    and **not** a path separator, so \c "dir/", \c "a//b" and \c "/leading" are all valid and distinct
+    object names.  Every action in this module therefore uses the name **verbatim**: it is never
+    split, normalized, resolved, or collapsed, and it is percent-encoded for transport in a way that
+    round-trips exactly.
+
+    This is why the application declares \c path_is_id in its file API — the flag means precisely
+    "consumers must not attempt to interpret, split, or normalize the value".
+
+    @section googlecloudstoragedataprovider_files File Locations
+
+    The application registers a file API, so a \c "conn://" location can read and write objects
+    through a Google Cloud Storage connection:
+
+    @code{.py}
+# read an object
+string text = FileLocationHandler::getTextFileFromLocation("conn://gcs/reports/2026/q1.csv"
+    "{container=my-bucket}");
+
+# write one
+FileLocationHandler::writeFileToLocation("conn://gcs/reports/2026/q2.csv{container=my-bucket}", data);
+    @endcode
+
+    Google Cloud Storage is the sixth such target, alongside the \c AwsS3DataProvider,
+    \c GoogleDriveDataProvider, \c DropboxDataProvider, \c OneDriveDataProvider and
+    \c SharePointDataProvider modules.
+
+    It also closes a gap inside the product: the \c VertexAiDataProvider and
+    \c GoogleDocumentAiDataProvider modules already take \c "gs://" locations as inputs and outputs,
+    and until now nothing could put a file in a bucket or read one back.
+
+    @section googlecloudstoragedataproviderrelnotes Release Notes
+
+    @subsection googlecloudstoragedataproviderv1_0 GoogleCloudStorageDataProvider v1.0
+    - the initial version of the %GoogleCloudStorageDataProvider module
+*/
+
+public namespace GoogleCloudStorageDataProvider {
+}

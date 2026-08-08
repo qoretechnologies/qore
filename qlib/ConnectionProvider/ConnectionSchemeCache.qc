@@ -184,6 +184,8 @@ public class ConnectionSchemeCache {
             "gmail": "GoogleRestClient",
             "grests": "GoogleRestClient",
 
+            "gcs": "GoogleCloudStorageRestClient",
+
             "google-documentai": "GoogleDocumentAiRestClient",
 
             "hue": "HueRestClient",
