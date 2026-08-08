@@ -519,8 +519,12 @@ public class LinkedInReactionListDataType inherits HashDataType {
         const Fields = {
             "reactions": {
                 "display_name": "Reactions",
-                "short_desc": "The reactions, newest first",
-                "desc": "The reactions, newest first",
+                "short_desc": "The reactions LinkedIn will identify, newest first",
+                "desc": "The reactions LinkedIn will identify, newest first.\n\n"
+                    "**Not every reaction on the content appears here**: LinkedIn returns one only "
+                    "when the reactor is the organization itself or a member who has consented to "
+                    "sharing their data through the Data Portability APIs. For a total, read "
+                    "`reaction_count` from the **Get Engagement Summary** action instead.",
                 "type": new ListDataType("LinkedInReactions", LinkedInReactionDataType, True),
             },
             "cursor": {

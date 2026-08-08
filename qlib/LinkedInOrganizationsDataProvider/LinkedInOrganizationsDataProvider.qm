@@ -227,8 +227,14 @@ module LinkedInOrganizationsDataProvider {
             "short_desc": "List the reactions on a post or comment",
             "desc": "Lists the individual reactions on a post, activity or comment, newest first, "
                 "with which reaction was given and when.\n\n"
-                "To get counts rather than individual reactions, use **Get Engagement Summary**, "
-                "which answers in one request.",
+                "**This list is normally shorter than the true reaction count**, and often much "
+                "shorter. LinkedIn returns an individual reaction only when the reactor is the "
+                "organization itself, or a member who has explicitly consented to sharing their "
+                "data through the Data Portability APIs — and that consent is off by default. A "
+                "post with eight reactions can therefore yield a single entry here.\n\n"
+                "**Use Get Engagement Summary for counts.** Its `reaction_count` is the "
+                "authoritative total and is not reduced by consent; this action is for identifying "
+                "*who* reacted, as far as LinkedIn will say.",
             "action_code": DPAT_API,
             "groups": ("Engagement",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
