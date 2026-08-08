@@ -433,8 +433,19 @@ public class MutationObserverTest inherits QUnit::Test {
         assertEq(SQL_MUTATION_OUTCOME_OK, obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC)[0].outcome);
         ds.rollback();
 
+        # an arming for another boundary of the same operation is not consumed by this one
+        obs.reset();
+        armAbort(ds, OpInfo.op_id, FaultOnCommit);
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            assertEq(1, ds.exec("insert into t values (1)"));
+            # the after-exec boundary left the commit arming alone, so the commit still aborts
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.commit());
+        }
+
         # arming with an empty op_id disarms
         obs.reset();
+        ds.open();
         armAbort(ds, OpInfo.op_id, FaultAfterExec);
         armAbort(ds, "", FaultNone);
         {
@@ -492,8 +503,11 @@ public class MutationObserverTest inherits QUnit::Test {
         Datasource ds = getDs();
         {
             SqlMutationDeclaration decl(ds, OpInfo);
-            ds.exec("insert into t values (1)");
+            # armed before any statement is executed, so the arming has to survive the after-exec
+            # boundary of the same operation: an arming is consumed only by the boundary it names
             armAbort(ds, OpInfo.op_id, FaultOnCommit);
+            ds.exec("insert into t values (1)");
+            ds.exec("insert into t values (2)");
             assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.commit());
         }
 

@@ -351,7 +351,7 @@ struct qore_ds_private {
             return false;
         }
         QoreStringNodeValueHelper op_id(decl->getKeyValue("op_id"));
-        if (ctx->dbgTakeArmedFault(op_id->c_str()) != when) {
+        if (!ctx->dbgTakeArmedFault(op_id->c_str(), when)) {
             return false;
         }
         xsink->raiseException(SQL_MUTATION_DEBUG_ABORT_ERR, "debug connection abort armed for op_id %s "

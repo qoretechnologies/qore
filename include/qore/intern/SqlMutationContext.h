@@ -297,11 +297,16 @@ public:
     */
     DLLLOCAL void dbgArmFault(const char* op_id, int when);
 
-    //! returns the armed boundary if \a op_id matches the arming, disarming it; 0 otherwise
-    /** the arming is one-shot: a match consumes it, so a test can never see a second abort it did
-        not ask for
+    //! returns true if the arming matches \a op_id and \a when, consuming it
+    /** The arming is one-shot, so a test can never see a second abort it did not ask for, and it is
+        consumed only by the exact boundary it names: an operation passes several boundaries, so
+        matching on the operation alone would let an earlier boundary swallow an arming meant for a
+        later one.
+
+        @param op_id the declared operation identity at the boundary being passed
+        @param when the boundary being passed; see @ref sql_mutation_debug_fault_codes
     */
-    DLLLOCAL int dbgTakeArmedFault(const char* op_id);
+    DLLLOCAL bool dbgTakeArmedFault(const char* op_id, int when);
 
     //! returns true if any fault is armed
     DLLLOCAL bool dbgFaultArmed() const {

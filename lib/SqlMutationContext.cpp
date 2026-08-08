@@ -301,21 +301,23 @@ void SqlMutationContext::dbgArmFault(const char* op_id, int when) {
     dbg_fault_armed.store(true, std::memory_order_relaxed);
 }
 
-int SqlMutationContext::dbgTakeArmedFault(const char* op_id) {
-    if (!op_id || !*op_id || !dbg_fault_armed.load(std::memory_order_relaxed)) {
-        return SQL_MUTATION_FAULT_NONE;
+bool SqlMutationContext::dbgTakeArmedFault(const char* op_id, int when) {
+    if (!op_id || !*op_id || when == SQL_MUTATION_FAULT_NONE
+        || !dbg_fault_armed.load(std::memory_order_relaxed)) {
+        return false;
     }
     AutoLocker al(m);
-    if (dbg_fault_op_id != op_id) {
-        // an operation the test did not arm must never be disturbed
-        return SQL_MUTATION_FAULT_NONE;
+    // the arming is consumed only when the operation and the boundary both match: an operation
+    // passes several boundaries, so consuming it on the operation alone would let an earlier
+    // boundary silently swallow an arming meant for a later one
+    if (dbg_fault_op_id != op_id || dbg_fault_when != when) {
+        return false;
     }
-    const int when = dbg_fault_when;
-    // one-shot: the arming is consumed by the operation it matched
+    // one-shot: the arming is consumed by the boundary it matched
     dbg_fault_op_id.clear();
     dbg_fault_when = SQL_MUTATION_FAULT_NONE;
     dbg_fault_armed.store(false, std::memory_order_relaxed);
-    return when;
+    return true;
 }
 #endif
 
