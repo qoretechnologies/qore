@@ -2725,8 +2725,12 @@ public class DataProviderActionCatalog {
         on_exit if (needs_lock) {
             lck.unlock();
         }
+        # A dynamically registered app has no module owner.  Qore lvalues are
+        # NOTHING until assigned, so normalize that valid state to an empty
+        # typed hash before assigning it to the non-null action-owner map.
+        hash<string, bool> owners = appmodmap{app} ?? {};
         actionmodmap{app}{AbstractDataProvider::GenericApiCallActionName}
-            = appmodmap{app};
+            = owners;
     }
 
     #! Runs initialization and catches exceptions
