@@ -847,6 +847,24 @@ Add a `firebase` profile and a `FirebaseRestConnection` pinning it, scheme
 `firebase` — the same mechanical extension that `drive` was for phase C of the
 previous plan. This reuses Google's OAuth2 refresh handling wholesale.
 
+> **Correction (2026-08-08): this applies to Firebase, and must not be carried over
+> to the Google Cloud Storage provider recommended in [§Deferred](#deferred-why-supabase-and-firebase-are-below-the-line).**
+>
+> `GoogleRestClient` only supports the `authorization_code` grant — interactive
+> user consent, which is what the TypeScript Firebase app uses and therefore the
+> right base for a Firebase-shaped module. Real GCP usage is **service-account**
+> based, and that path already exists separately: `qlib/GcpAuth.qm` provides
+> service-account JWT-bearer
+> (`urn:ietf:params:oauth:grant-type:jwt-bearer`) and Application Default
+> Credentials with token caching, and is already used by `VertexAiRestClient`,
+> `GoogleDocumentAiRestClient` and both their data providers.
+>
+> A `GoogleCloudStorage` module should therefore follow the **VertexAI /
+> DocumentAI** precedent — `GcpAuth` plus a dedicated client — not
+> `GoogleRestClient`'s `api_profile`. Interactive OAuth2 can be added as a
+> secondary grant later; the reverse is far harder. See
+> `gcs-linkedin-stripe-migration-plan.md` phase G.
+
 Narrow the scopes while porting: `devstorage.full_control` *and*
 `read_write` *and* `cloud-platform` is broader than any action needs.
 Requesting less is a UX and security improvement and is exactly the kind of
