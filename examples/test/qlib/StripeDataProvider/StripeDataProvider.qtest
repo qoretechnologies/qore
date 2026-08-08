@@ -264,6 +264,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         addTestCase("request reconstruction", \requestReconstructionTest());
         addTestCase("response contract", \responseContractTest());
         addTestCase("connection", \connectionTest());
+        addTestCase("authentication styles", \authenticationTest());
         addTestCase("webhook events", \webhookEventTest());
         addTestCase("webhook delivery verification", \webhookVerificationTest());
         # live tests; each skips unless a connection is named
@@ -863,6 +864,85 @@ public class StripeDataProviderTest inherits QUnit::Test {
             }
         }
         assertEq(13, events);
+    }
+
+
+    authenticationTest() {
+        # Stripe authenticates either with a key or through its OAuth2 flow, and both have to work
+        # without the user configuring anything: Qorus supplies the client ID and secret from its API
+        # servers, so what this module must get right is the rest of the OAuth2 configuration
+
+        # a key: sent as a bearer token, with no OAuth2 configuration left to demand a client ID
+        hash<auto> key = StripeRestClientBase::getOptions({"api_key": "rk_test_x"});
+        assertEq("rk_test_x", key.token);
+        assertEq(NOTHING, key.oauth2_grant_type);
+        assertEq(NOTHING, key.oauth2_client_id);
+
+        # OAuth2, not yet authorized: the flow has to be able to run, which needs a grant type.  Without
+        # one nothing happens at all and every request goes out unauthenticated, which is a silent
+        # failure that only shows up as an HTTP 401 from the ping
+        hash<auto> oauth = StripeRestClientBase::getOptions({
+            "oauth2_client_id": "ca_x",
+            "oauth2_client_secret": "cloud",
+        });
+        assertEq("authorization_code", oauth.oauth2_grant_type);
+        assertEq(("read_write",), oauth.oauth2_scopes);
+        # the marketplace endpoints: a platform registered as a Stripe App is not served by the legacy
+        # Connect flow at connect.stripe.com, and pointing it there yields no token
+        assertEq("https://marketplace.stripe.com/oauth/v2/authorize", oauth.oauth2_auth_url);
+        assertEq("https://api.stripe.com/v1/oauth/token", oauth.oauth2_token_url);
+        assertEq(NOTHING, oauth.token);
+
+        # OAuth2, authorized: an access token is present AND the OAuth2 configuration must survive, or
+        # the token could never be refreshed once it expires
+        hash<auto> authorized = StripeRestClientBase::getOptions({
+            "oauth2_client_id": "ca_x",
+            "oauth2_client_secret": "cloud",
+            "oauth2_auto_refresh": True,
+            "token": "sk_from_oauth2",
+        });
+        assertEq("sk_from_oauth2", authorized.token);
+        assertEq("authorization_code", authorized.oauth2_grant_type);
+        assertEq("ca_x", authorized.oauth2_client_id);
+        assertTrue(authorized.oauth2_auto_refresh);
+
+        # the same defaults have to reach a connection created from the scheme, or a user would have to
+        # know all of the above to configure one
+        StripeRestConnection conn("stripe-oauth-test", "test", "stripe://api.stripe.com", {}, {
+            "oauth2_client_id": "ca_x",
+            "oauth2_client_secret": "cloud",
+        });
+        hash<auto> copts = conn.getConnectionOptions();
+        assertEq("authorization_code", copts.oauth2_grant_type);
+        assertEq("https://marketplace.stripe.com/oauth/v2/authorize", copts.oauth2_auth_url);
+        assertEq("https://api.stripe.com/v1/oauth/token", copts.oauth2_token_url);
+
+        # the scheme must declare that OAuth2 is one way to configure this connection: that declaration
+        # is what makes Qorus offer the flow and supply the client ID and secret from its API servers,
+        # so that the secret is never exposed to the instance
+        hash<ConnectionSchemeInfo> scheme = StripeRestConnection::ConnectionScheme;
+        assertTrue(scheme.required_options.val());
+        list<string> alternatives = scheme.required_options.split("|");
+        # a key, a bearer token supplied directly, or the OAuth2 option set
+        assertEq(3, alternatives.size());
+        assertEq("api_key", alternatives[0]);
+        assertEq("token", alternatives[1]);
+        map assertTrue(alternatives[2].find($1) >= 0, "OAuth2 alternative names " + $1),
+            ("oauth2_client_id", "oauth2_client_secret", "oauth2_grant_type", "oauth2_auth_url",
+                "oauth2_token_url");
+        # every name has to be a real option, or the scheme is malformed
+        foreach string alt in (alternatives) {
+            map assertTrue(exists scheme.options{trim($1)}, sprintf("required option %y exists", trim($1))),
+                alt.split(",");
+        }
+
+        # ... and a key-based connection must still produce a usable authenticated client
+        StripeRestConnection keyconn("stripe-key-test", "test", "stripe://api.stripe.com", {}, {
+            "api_key": "rk_test_x",
+        });
+        object cl = keyconn.getAsync(False);
+        assertEq("StripeRestClientIo", cl.className());
+        assertTrue(exists cl.getDefaultHeaders(){StripeRestClientBase::ApiVersionHeader});
     }
 
 }

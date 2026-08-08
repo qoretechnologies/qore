@@ -140,11 +140,20 @@ public class StripeRestClientBase {
         #! The HTTP header naming the connected account to act on behalf of
         const AccountHeader = "Stripe-Account";
 
-        #! Default OAuth2 authorization URL for Stripe Connect
-        const DefaultAuthUrl = "https://connect.stripe.com/oauth/authorize";
+        #! Default OAuth2 authorization URL
+        /** Stripe has two OAuth flows.  The legacy Connect flow is served from \c connect.stripe.com;
+            current Stripe Apps, which is what a platform registered in Stripe's marketplace uses, are
+            served from \c marketplace.stripe.com with a \c /v2 authorize endpoint.  Pointing a
+            marketplace application at the legacy endpoint yields no token and every request then fails
+            with HTTP 401.
+        */
+        const DefaultAuthUrl = "https://marketplace.stripe.com/oauth/v2/authorize";
 
-        #! Default OAuth2 token URL for Stripe Connect
-        const DefaultTokenUrl = "https://connect.stripe.com/oauth/token";
+        #! Default OAuth2 token URL
+        /** The marketplace flow exchanges the authorization code against the main API host, not against
+            \c connect.stripe.com.
+        */
+        const DefaultTokenUrl = "https://api.stripe.com/v1/oauth/token";
 
         #! Default OAuth2 grant type
         const DefaultGrantType = "authorization_code";
@@ -170,21 +179,29 @@ public class StripeRestClientBase {
         };
 
         #! Default constructor options
-        /** @note The OAuth2 grant type is deliberately **not** defaulted.  Stripe authenticates either
-            with an API key or through Stripe Connect's OAuth2 flow, and setting a grant type makes the
-            client demand the rest of the OAuth2 options — so defaulting one would break every API-key
-            connection.  The Connect authorization and token URLs are defaulted, because they are inert
-            until a grant type selects the OAuth2 flow and are then already correct.
+        /** @note The OAuth2 options are defaulted so that a connection configured for Stripe's OAuth2
+            flow obtains a token without further configuration; without a grant type the flow never runs
+            and every request goes out unauthenticated.  They are removed again by @ref getOptions() when
+            a key is supplied instead, because a client that has a bearer token has no use for them and
+            setting a grant type would otherwise make it demand the whole OAuth2 option set.
         */
         const DefaultOptions = {
             "data": DefaultData,
             "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_scopes": DefaultOAuth2Scopes,
             "oauth2_token_url": DefaultTokenUrl,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
             "url": DefaultUrl,
         };
+
+        #! Options that only apply to the OAuth2 flow
+        /** Removed when a key is supplied directly; see @ref getOptions()
+        */
+        const OAuth2Options = ("oauth2_auth_url", "oauth2_grant_type", "oauth2_token_url",
+            "oauth2_scopes", "oauth2_client_id", "oauth2_client_secret", "oauth2_redirect_url");
     }
 
     #! Returns options for the StripeRestClient constructors
@@ -204,9 +221,11 @@ public class StripeRestClientBase {
 
         # a secret or restricted key is sent as a bearer token, which is also how an OAuth2 access
         # token is sent, so the two authentication styles converge here
+        bool key_auth = False;
         if (*string api_key = remove opts.api_key) {
             if (!opts.token.val()) {
                 opts.token = api_key;
+                key_auth = True;
             }
         }
 
@@ -222,6 +241,17 @@ public class StripeRestClientBase {
 
         # set defaults for options not already set
         map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+
+        # a client authenticating with a key does not use the OAuth2 flow, and leaving a grant type set
+        # would make it demand a client ID and secret it has no reason to have.  This runs after the
+        # defaults are applied, or the default grant type would simply be added back.
+        #
+        # NOTE: the test is whether a *key* was supplied, not whether a token is set.  An authorized
+        # OAuth2 connection also has a token -- the access token the flow returned -- and it still needs
+        # the OAuth2 options, or the token could never be refreshed when it expires.
+        if (key_auth) {
+            opts -= OAuth2Options;
+        }
         return opts;
     }
 
@@ -296,6 +326,12 @@ public class StripeRestConnection inherits RestClient::RestConnection {
                 "each in test mode; Stripe returns HTTP 429 when they are exceeded.\n\n"
                 "Stripe is a trademark of Stripe, Inc.",
             "cls": Class::forName("StripeRestConnection"),
+            # a connection is valid three ways: a key, a bearer token supplied directly, or the OAuth2
+            # flow.  Declaring the OAuth2 alternative is what tells Qorus this connection supports
+            # OAuth2, so that the client ID and secret are supplied from the API servers rather than
+            # having to be configured - and, since those are supplied, never exposed to this instance
+            "required_options": "api_key|token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
+                "oauth2_client_id,oauth2_client_secret",
             "auto_url": True,
             "schemes": {
                 "stripe": True,
@@ -328,6 +364,14 @@ public class StripeRestConnection inherits RestClient::RestConnection {
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
                     "default_value": StripeRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": StripeRestClientBase::DefaultOAuth2Scopes,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
