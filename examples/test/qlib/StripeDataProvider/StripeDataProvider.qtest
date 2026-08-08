@@ -258,6 +258,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         addTestCase("exported operations", \exportedOperationsTest());
         addTestCase("action presentation", \actionPresentationTest());
         addTestCase("action paths resolve", \actionPathTest());
+        addTestCase("registered action compliance", \registeredActionTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("timestamp conversion", \timestampTest());
         addTestCase("request reconstruction", \requestReconstructionTest());
@@ -807,6 +808,61 @@ public class StripeDataProviderTest inherits QUnit::Test {
             assertEq(-1, sprintf("%y", ex).find("rk_"), "no restricted key anywhere in the exception");
             assertEq(-1, sprintf("%y", ex).find("sk_"), "no secret key anywhere in the exception");
         }
+    }
+
+
+    registeredActionTest() {
+        # actionPresentationTest() walks the action set, which is only the schema-derived actions; the
+        # event actions are registered separately, so the catalogue is what has to be audited to cover
+        # every action this application publishes
+        *hash<string, hash<DataProviderActionInfo>> registered =
+            DataProviderActionCatalog::getActionHash(StripeDataProvider::AppName);
+        # 38 schema actions + 13 events + the generic API call the framework injects
+        assertEq(52, registered.size());
+
+        FakeStripeRestClient rest();
+        StripeDataProvider root(rest);
+
+        int events = 0;
+        foreach hash<auto> i in (registered.pairIterator()) {
+            hash<DataProviderActionInfo> a = i.value;
+            string ctx = a.action;
+            assertTrue(a.display_name.val(), ctx + ": display name");
+            assertTrue(a.short_desc.val(), ctx + ": short description");
+            assertLt(80, a.short_desc.size(), ctx + ": short description length");
+            assertEq(-1, a.short_desc.find("\n"), ctx + ": short description is one line");
+            assertTrue(a.desc.val(), ctx + ": description");
+            assertTrue(a.groups.val(), ctx + ": groups");
+            assertTrue(exists a.output_type || exists a.get_output_type, ctx + ": output type");
+
+            if (a.action_code == DPAT_EVENT) {
+                ++events;
+                # an event action reaches its provider through the events container, and is addressed by
+                # action_val rather than by an event type field
+                assertTrue(a.action_val.val(), ctx + ": action_val");
+                assertRegex("^/events/", a.path, ctx + ": event path");
+            }
+
+            # every action path has to resolve, or the action is in the catalogue but cannot be executed
+            AbstractDataProvider cur = root;
+            foreach string part in (a.path.split("/")) {
+                if (!part.val()) {
+                    continue;
+                }
+                *AbstractDataProvider child = cur.getChildProvider(part);
+                assertTrue(exists child, sprintf("%s: path component %y resolves", ctx, part));
+                if (!child) {
+                    break;
+                }
+                cur = child;
+            }
+            if (a.action_code == DPAT_API) {
+                assertTrue(cur.getInfo().supports_request, ctx + ": provider supports requests");
+            } else if (a.action_code == DPAT_EVENT) {
+                assertTrue(cur.getInfo().supports_observable, ctx + ": provider supports observers");
+            }
+        }
+        assertEq(13, events);
     }
 
 }

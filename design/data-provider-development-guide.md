@@ -200,6 +200,62 @@ DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
 });
 ```
 
+### Making the App Visible: the Provider Index
+
+Registering the factory and the app is not enough for the app to appear in tooling. Data provider
+metadata is served from a **provider index**, and an app that is not in the index does not exist as
+far as anything reading it is concerned:
+
+```bash
+qdp @MyService
+# qdp: ERROR: Application "MyService" is unknown; known applications: ["Qore", "Db", ...]
+```
+
+`QORE_PROVIDER_INDEX_DIR` decides which path is taken:
+
+- **set** (the normal Qorus configuration): tools read the index and do **not** scan modules. A newly
+  installed app is invisible until the index is rebuilt.
+- **unset**: tools call `DataProvider::registerKnownFactories()`, which loads every module named in
+  `DataProvider::FactoryMap`, so a correctly registered app is found immediately.
+
+That difference is why an app can work perfectly when loaded directly and still be missing from the
+catalogue. Confirm which case you are in before concluding that registration is broken:
+
+```qore
+# loads the module explicitly - proves registration, not visibility
+load_module("MyServiceDataProvider");
+printf("%y\n", DataProviderActionCatalog::getApp("MyService").display_name);
+```
+
+**Rebuild the index after installing**, in this order — each step feeds the next:
+
+```bash
+sudo make install                 # in the qore repo: modules into the system qlib
+copy-qore-modules                 # into the Qorus qlib; qmods are no longer live from the build tree
+qctl update-index                 # rebuild the index
+# restart Qorus to pick up the new modules
+```
+
+Running `qctl update-index` before the modules are in place produces an index without the app and no
+error, so the ordering matters more than it appears.
+
+To verify, either ask for the app directly, or look for its index chunk, which is named for the
+SHA-256 of the **app name**:
+
+```bash
+qdp @MyService
+ls "${QORE_PROVIDER_INDEX_DIR}/qore-data-index-$(printf 'MyService' | sha256sum | cut -d' ' -f1).msgpack"
+```
+
+**Two conditions make the index build skip an app**, each logged as an error rather than failing the
+build, so read the output rather than trusting the exit status:
+
+- `Data provider app "X" has no module path` — the app registered without a resolvable module,
+  usually because it was registered from a script rather than from a module on the module path.
+- `Data provider app "X" has unregistered scheme "y"` — `app.scheme` names a scheme missing from
+  `SchemeMap`, so registering the app but forgetting the scheme drops the app from the index
+  entirely, not just its connections.
+
 ### Description Formatting
 
 - **`short_desc`**: Plain text, under 80 characters, single sentence — no markdown

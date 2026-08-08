@@ -45,6 +45,12 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] `groups` uses only `AppGroup` enum values from `qlib/DataProvider/AppGroup.qc` (not raw strings)
 - [ ] `groups` assigned appropriately (see [AppGroup Reference](#appgroup-reference) below)
 
+### Visibility (the app does not appear until the index is rebuilt)
+- [ ] After installing, the index was rebuilt: `sudo make install` -> `copy-qore-modules` -> `qctl update-index` -> restart Qorus, **in that order**
+- [ ] `qdp @<AppName>` lists the app and its actions
+- [ ] The index build logged no `has no module path` or `unregistered scheme` error for the app — both skip it silently and leave the exit status 0
+- [ ] If the app is missing, checked whether `QORE_PROVIDER_INDEX_DIR` is set: when it is, tooling reads the index and never scans modules, so a working `load_module()` proves registration but not visibility
+
 ### App Info
 - [ ] `display_name` is user-friendly ("Zoho Books" not "zohobooks")
 - [ ] `short_desc` under 80 chars, **plain text** (no markdown formatting)
