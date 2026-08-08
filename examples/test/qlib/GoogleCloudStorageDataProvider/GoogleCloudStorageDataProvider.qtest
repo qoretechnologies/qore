@@ -1264,9 +1264,22 @@ public class GoogleCloudStorageDataProviderTest inherits QUnit::Test {
             testSkip("no connection specified; use -c <connection_name>");
             return;
         }
-        hash<PingInfo> info = get_connection(conn_name).ping(True);
+        AbstractConnection conn = get_connection(conn_name);
+        hash<PingInfo> info = conn.ping(True);
         assertEq(True, info.ok, "ping succeeded");
         assertTrue(info.time > 0s, "the ping reports how long it took");
+
+        # getDataProvider() is how Qorus reaches this app, and a connection carries the whole REST
+        # option set (url, timeouts, oauth2_*, logger, ...) while the provider declares only its own;
+        # passing them all made this fail outright with an "invalid options" constructor error
+        AbstractDataProvider dp = conn.getDataProvider();
+        assertEq("gcs", dp.getName());
+        assertTrue(dp.getChildProviderNames().size() > 1, "the provider exposes its actions");
+
+        # ... and the credential reaches the provider, so a request actually authenticates
+        auto resp = dp.getChildProviderEx("list-buckets").doRequest();
+        assertEq(NT_HASH, resp.typeCode());
+        assertTrue(resp.hasKey("buckets"), "the listing returns a buckets key");
     }
 
     liveLifecycleTest() {

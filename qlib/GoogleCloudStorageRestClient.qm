@@ -439,8 +439,14 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         load_module("GoogleCloudStorageDataProvider");
+        # only the options the provider declares may be passed: a connection carries the whole REST
+        # option set (url, timeouts, oauth2_*, logger, ...) and the provider rejects everything it does
+        # not declare, so passing them all made getDataProvider() fail outright.  The supported set is
+        # read from the provider rather than listed here, so an option added there keeps working
+        hash<auto> supported = Class::forName("GoogleCloudStorageDataProvider::GoogleCloudStorageDataProviderBase")
+            .getConstant("ConstructorOptions").getValue();
         return create_object("GoogleCloudStorageDataProvider",
-            (constructor_options ?? {}) + getConnectionOptions());
+            (constructor_options ?? {}) + getConnectionOptions(){keys supported});
     }
 
     #! Returns a GCP access token for this connection's credential and access level
