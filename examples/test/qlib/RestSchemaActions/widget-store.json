@@ -1,0 +1,384 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Widget Store",
+        "description": "A fixture API exercising every request shape the generic schema-action layer has to handle",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://widget.example.com/api"
+        }
+    ],
+    "paths": {
+        "/status": {
+            "get": {
+                "operationId": "getStatus",
+                "summary": "Returns service status",
+                "description": "A parameterless GET: the action must have no options at all.",
+                "responses": {
+                    "200": {
+                        "description": "the service status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["status"],
+                                    "properties": {
+                                        "status": {"type": "string", "description": "service status"},
+                                        "version": {"type": "string", "description": "service version"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/categories": {
+            "get": {
+                "operationId": "listCategories",
+                "summary": "Lists widget categories",
+                "responses": {
+                    "200": {
+                        "description": "the categories",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {"$ref": "#/components/schemas/category"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/widgets": {
+            "get": {
+                "operationId": "listWidgets",
+                "summary": "Lists widgets",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "description": "the maximum number of widgets to return",
+                        "schema": {"type": "integer"}
+                    },
+                    {
+                        "name": "category",
+                        "in": "query",
+                        "required": false,
+                        "description": "restrict the listing to one category",
+                        "schema": {"type": "string"}
+                    },
+                    {
+                        "name": "created_after",
+                        "in": "query",
+                        "required": false,
+                        "description": "only return widgets created after this time",
+                        "schema": {"type": "integer"}
+                    },
+                    {
+                        "name": "X-Request-Id",
+                        "in": "header",
+                        "required": false,
+                        "description": "an opaque request identifier echoed in the response",
+                        "schema": {"type": "string"}
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "the widgets",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["data"],
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {"$ref": "#/components/schemas/widget"}
+                                        },
+                                        "has_more": {"type": "boolean", "description": "more widgets follow"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "createWidget",
+                "summary": "Creates a widget",
+                "description": "A form-encoded POST with a nested object and an array in the request body.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {"$ref": "#/components/schemas/widget_create"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "the widget that was created",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/widget"}
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "the request was invalid",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/error"}
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "an unexpected error",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/error"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/widgets/{widget_id}": {
+            "parameters": [
+                {
+                    "name": "widget_id",
+                    "in": "path",
+                    "required": true,
+                    "description": "the ID of the widget",
+                    "schema": {"type": "string"}
+                }
+            ],
+            "get": {
+                "operationId": "getWidget",
+                "summary": "Retrieves a widget",
+                "parameters": [
+                    {
+                        "name": "expand",
+                        "in": "query",
+                        "required": false,
+                        "description": "properties to expand in the response",
+                        "schema": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "the widget",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/widget"}
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "no such widget",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/error"}
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "operationId": "putWidget",
+                "summary": "Creates or replaces a widget",
+                "description": "Declares two success responses with a body, so the output contract is ambiguous without an explicit selection.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/widget_create"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "the widget was replaced",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/widget"}
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "the widget was created",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/widget"}
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "deleteWidget",
+                "summary": "Deletes a widget",
+                "responses": {
+                    "204": {
+                        "description": "the widget was deleted"
+                    }
+                }
+            }
+        },
+        "/widgets/{widget_id}/archive": {
+            "parameters": [
+                {
+                    "name": "widget_id",
+                    "in": "path",
+                    "required": true,
+                    "description": "the ID of the widget to archive",
+                    "schema": {"type": "string"}
+                }
+            ],
+            "post": {
+                "operationId": "archiveWidget",
+                "summary": "Archives a widget",
+                "description": "The request body declares a property with the same name as the path variable, which collides when flattened.",
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "widget_id": {
+                                        "type": "string",
+                                        "description": "the ID to record the widget under in the archive"
+                                    },
+                                    "reason": {"type": "string", "description": "why the widget was archived"}
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "the archived widget",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/widget"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/widgets/bulk": {
+            "post": {
+                "operationId": "createWidgetsBulk",
+                "summary": "Creates several widgets at once",
+                "description": "The request body is an array, so there are no properties to lift.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {"$ref": "#/components/schemas/widget_create"}
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "the widgets that were created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/components/schemas/widget"}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "category": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                    "id": {"type": "string", "description": "the category ID"},
+                    "label": {"type": "string", "description": "the human-readable category name"}
+                }
+            },
+            "dimensions": {
+                "type": "object",
+                "description": "the physical dimensions of a widget",
+                "properties": {
+                    "width": {"type": "number", "description": "width in mm"},
+                    "height": {"type": "number", "description": "height in mm"},
+                    "measured": {"type": "integer", "description": "when the widget was measured"}
+                }
+            },
+            "widget": {
+                "type": "object",
+                "required": ["id", "name"],
+                "properties": {
+                    "id": {"type": "string", "description": "the widget ID"},
+                    "name": {"type": "string", "description": "the widget name"},
+                    "category": {"type": "string", "description": "the category the widget belongs to"},
+                    "created": {"type": "integer", "description": "when the widget was created"},
+                    "homepage": {"type": "string", "description": "the widget's home page"},
+                    "dimensions": {"$ref": "#/components/schemas/dimensions"},
+                    "tags": {
+                        "type": "array",
+                        "description": "free-form tags",
+                        "items": {"type": "string"}
+                    }
+                }
+            },
+            "widget_create": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string", "description": "the widget name"},
+                    "category": {"type": "string", "description": "the category to file the widget under"},
+                    "status": {
+                        "type": "string",
+                        "description": "the initial widget status",
+                        "enum": ["draft", "active", "retired"]
+                    },
+                    "created": {"type": "integer", "description": "when the widget was created"},
+                    "homepage": {"type": "string", "description": "the widget's home page"},
+                    "dimensions": {"$ref": "#/components/schemas/dimensions"},
+                    "tags": {
+                        "type": "array",
+                        "description": "free-form tags",
+                        "items": {"type": "string"}
+                    }
+                }
+            },
+            "error": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                    "message": {"type": "string", "description": "the error message"},
+                    "code": {"type": "string", "description": "the machine-readable error code"}
+                }
+            }
+        }
+    }
+}

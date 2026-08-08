@@ -1,0 +1,706 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** RestSchemaActionSet.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+%requires RestClientIo
+
+%requires json
+
+%exec-class RestSchemaActionSetTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A REST client that records requests instead of making them
+/** Responses come from a queue so that a flow needing more than one call -- populating a dropdown and
+    then making the call that uses it -- can be driven exactly as the service would drive it.
+*/
+class FakeRestClient inherits RestClientIo::RestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : RestClientIo({"url": "http://widget.example.com/api"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+public class RestSchemaActionSetTest inherits QUnit::Test {
+    public {
+        #! The fixture schema
+        const SchemaFile = get_script_dir() + DirSep + "widget-store.json";
+
+        #! Reference data: widget categories, listed by the "list-categories" action
+        const RefData = {
+            "category": <RestSchemaReferenceDataInfo>{
+                "name": "category",
+                "action": "list-categories",
+                "records_path": "data",
+                "value_field": "id",
+                "display_field": "label",
+                "desc": "widget categories",
+            },
+        };
+    }
+
+    private {
+        OpenApi3Schema schema;
+    }
+
+    constructor() : Test("RestSchemaActionSetTest", "1.0") {
+        schema = OpenApi3::OpenApi3Loader::fromFile(SchemaFile);
+
+        addTestCase("parameterless operation", \parameterlessTest());
+        addTestCase("path and query flattening", \pathQueryTest());
+        addTestCase("body flattening", \bodyFlatteningTest());
+        addTestCase("body root", \bodyRootTest());
+        addTestCase("optional body relaxes requiredness", \optionalBodyTest());
+        addTestCase("no output type", \noOutputTypeTest());
+        addTestCase("ambiguous output contract", \ambiguousResponseTest());
+        addTestCase("response unwrapping", \responseUnwrapTest());
+        addTestCase("collision detection", \collisionTest());
+        addTestCase("round trip", \roundTripTest());
+        addTestCase("wire codecs", \codecTest());
+        addTestCase("overlay presentation", \overlayTest());
+        addTestCase("overlay errors", \overlayErrorTest());
+        addTestCase("manifest errors", \manifestErrorTest());
+        addTestCase("operation id drift", \driftTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("action registration", \actionRegistrationTest());
+        addTestCase("provider execution", \providerExecutionTest());
+        addTestCase("provider paths", \providerPathTest());
+
+        set_return_value(main());
+    }
+
+    #! Returns a manifest entry with the required descriptive fields filled in
+    private hash<RestSchemaActionInfo> entry(string action, string method, string path, *hash<auto> extra) {
+        hash<auto> h = {
+            "action": action,
+            "method": method,
+            "path": path,
+            "display_name": action,
+            "short_desc": action + " short",
+            "desc": action + " description",
+        } + extra;
+        return cast<hash<RestSchemaActionInfo>>(h);
+    }
+
+    #! Returns an action set built from the given manifest entries
+    private RestSchemaActionSet makeSet(list<hash<RestSchemaActionInfo>> manifest,
+            *hash<string, hash<RestSchemaReferenceDataInfo>> refdata) {
+        return new RestSchemaActionSet(schema, manifest, refdata);
+    }
+
+    #! Returns a single operation built from one manifest entry
+    private RestSchemaActionOperation makeOp(hash<RestSchemaActionInfo> info) {
+        return new RestSchemaActionOperation(schema, info);
+    }
+
+    parameterlessTest() {
+        RestSchemaActionOperation op = makeOp(entry("get-status", "GET", "/status"));
+        # an operation with no parameters and no body must produce an action with no options at all,
+        # rather than an empty transport envelope
+        assertNothing(op.getRequestType());
+        assertNothing(op.getRequestFields());
+        assertEq({}, op.getFlatMap());
+        assertEq("200", op.getResponseCode());
+        assertEq(("status", "version"), keys op.getResponseType().getFields());
+        # unflattening nothing must still produce a usable (empty) request
+        hash<auto> wire = op.unflatten();
+        assertEq({}, wire.req);
+        assertEq({}, wire.path_vars);
+    }
+
+    pathQueryTest() {
+        RestSchemaActionOperation op = makeOp(entry("get-widget", "GET", "/widgets/{widget_id}"));
+        *hash<string, AbstractDataField> fields = op.getRequestFields();
+        # path variables come first: they identify the object the action acts on
+        assertEq(("widget_id", "expand"), keys fields);
+
+        # a path variable is part of the URI, so it is always required and always visible
+        assertTrue(fields.widget_id.getType().isMandatory());
+        assertTrue(fields.widget_id.getAttributes().required);
+        assertTrue(fields.widget_id.getAttributes().preselected);
+        assertEq("the ID of the widget", fields.widget_id.getShortDescription());
+
+        assertFalse(fields.expand.getType().isMandatory());
+        assertEq(NOTHING, fields.expand.getAttributes().required);
+
+        hash<string, hash<RestSchemaFlatFieldInfo>> flat = op.getFlatMap();
+        assertEq(RSAL_PATH, flat.widget_id.loc);
+        assertEq("widget_id", flat.widget_id.wire_name);
+        assertEq(RSAL_QUERY, flat.expand.loc);
+
+        hash<auto> wire = op.unflatten({"widget_id": "w_1", "expand": ("dimensions",)});
+        assertEq({"widget_id": "w_1"}, wire.path_vars);
+        assertEq({"query": {"expand": ("dimensions",)}}, wire.req);
+
+        # a missing path variable would produce a request against a URI still containing "{widget_id}"
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "missing a value for URI path variable",
+            \op.unflatten(), {"expand": ("dimensions",)});
+        # an option the action does not declare must be reported, not silently dropped
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "has no option", \op.unflatten(),
+            {"widget_id": "w_1", "bogus": 1});
+    }
+
+    bodyFlatteningTest() {
+        RestSchemaActionOperation op = makeOp(entry("create-widget", "POST", "/widgets"));
+        *hash<string, AbstractDataField> fields = op.getRequestFields();
+        assertEq(("name", "category", "status", "created", "homepage", "dimensions", "tags"), keys fields);
+
+        # the transport envelope must be gone
+        assertEq(NOTHING, fields.body);
+        # the body is required, so its required property stays required
+        assertTrue(fields.name.getType().isMandatory());
+        assertTrue(fields.name.getAttributes().required);
+        assertFalse(fields.category.getType().isMandatory());
+
+        # a meaningful nested domain object is preserved, not flattened away
+        assertEq(NT_HASH, fields.dimensions.getType().getBaseTypeCode());
+        assertEq(("width", "height", "measured"), keys fields.dimensions.getType().getFields());
+        # enums survive flattening
+        assertEq(("draft", "active", "retired"), (map $1.value, fields.status.getAllowedValues()));
+
+        map assertEq(RSAL_BODY, $1.loc), op.getFlatMap().values();
+
+        hash<auto> wire = op.unflatten({"name": "gizmo", "tags": ("a",)});
+        assertEq({"body": {"name": "gizmo", "tags": ("a",)}}, wire.req);
+        assertEq({}, wire.path_vars);
+    }
+
+    bodyRootTest() {
+        # an array body has no properties to lift, so the whole body is presented as one option
+        RestSchemaActionOperation op = makeOp(entry("create-widgets", "POST", "/widgets/bulk"));
+        *hash<string, AbstractDataField> fields = op.getRequestFields();
+        assertEq(("body",), keys fields);
+        assertEq(RSAL_BODY_ROOT, op.getFlatMap().body.loc);
+        assertEq(NT_LIST, fields.body.getType().getBaseTypeCode());
+
+        list<auto> payload = ({"name": "a"}, {"name": "b"});
+        hash<auto> wire = op.unflatten({"body": payload});
+        assertEq({"body": payload}, wire.req);
+        assertEq({"body": payload}, op.flatten(wire));
+    }
+
+    optionalBodyTest() {
+        # /widgets/{widget_id}/archive has an optional body; its properties therefore cannot be required
+        # at the action level, because omitting the body entirely is a valid request
+        RestSchemaActionOperation op = makeOp(entry("archive-widget", "POST", "/widgets/{widget_id}/archive", {
+            "fields": {"body.widget_id": <RestSchemaFieldOverlayInfo>{"name": "archive_id"}},
+        }));
+        *hash<string, AbstractDataField> fields = op.getRequestFields();
+        assertFalse(fields.reason.getType().isMandatory());
+        # no body option supplied => no body is sent at all
+        hash<auto> wire = op.unflatten({"widget_id": "w_1"});
+        assertEq(NOTHING, wire.req.body);
+        assertEq({"widget_id": "w_1"}, wire.path_vars);
+    }
+
+    noOutputTypeTest() {
+        # a 204 declares no body, so the action has no output type rather than an empty one
+        RestSchemaActionOperation op = makeOp(entry("delete-widget", "DELETE", "/widgets/{widget_id}"));
+        assertNothing(op.getResponseType());
+        assertNothing(op.getResponseCode());
+        assertEq(("widget_id",), keys op.getRequestFields());
+    }
+
+    ambiguousResponseTest() {
+        # PUT declares both 200 and 201 with a body: registration must refuse to guess
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "declares 2 success responses with a body",
+            \makeOp(), entry("put-widget", "PUT", "/widgets/{widget_id}"));
+
+        # ... and accept an explicit selection
+        RestSchemaActionOperation op = makeOp(entry("put-widget", "PUT", "/widgets/{widget_id}", {
+            "response_code": "201",
+        }));
+        assertEq("201", op.getResponseCode());
+        assertEq("widget", op.getResponseType().getName());
+
+        # a selection that names a response the operation does not declare is an error
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which the operation does not declare", \makeOp(),
+            entry("put-widget", "PUT", "/widgets/{widget_id}", {"response_code": "203"}));
+        # ... as is one that declares no body
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "declares no response body", \makeOp(),
+            entry("delete-widget", "DELETE", "/widgets/{widget_id}", {"response_code": "204"}));
+    }
+
+    responseUnwrapTest() {
+        RestSchemaActionOperation op = makeOp(entry("list-widgets", "GET", "/widgets", {
+            "response_unwrap": ("data",),
+        }));
+        # the output type is the list of widgets, not the envelope carrying it
+        assertEq(NT_LIST, op.getResponseType().getBaseTypeCode());
+        assertEq(("id", "name", "category", "created", "homepage", "dimensions", "tags"),
+            keys op.getResponseType().getElementType().getFields());
+        assertEq(({"id": "w_1"},), op.processResponse({"data": ({"id": "w_1"},), "has_more": False}));
+
+        # unwrapping a field the response does not have must fail at registration, not at runtime
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "the response type", \makeOp(),
+            entry("list-widgets", "GET", "/widgets", {"response_unwrap": ("nope",)}));
+    }
+
+    collisionTest() {
+        # the archive operation declares a body property with the same name as the path variable
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "is produced by both the path and the body value",
+            \makeOp(), entry("archive-widget", "POST", "/widgets/{widget_id}/archive"));
+
+        # a location-qualified overlay key resolves it without touching the wire contract
+        RestSchemaActionOperation op = makeOp(entry("archive-widget", "POST", "/widgets/{widget_id}/archive", {
+            "fields": {
+                "body.widget_id": <RestSchemaFieldOverlayInfo>{
+                    "name": "archive_id",
+                    "display_name": "Archive ID",
+                },
+            },
+        }));
+        assertEq(("widget_id", "archive_id", "reason"), keys op.getRequestFields());
+        assertEq("Archive ID", op.getRequestFields().archive_id.getDisplayName());
+        # the renamed option still travels under its original wire name
+        hash<string, hash<RestSchemaFlatFieldInfo>> flat = op.getFlatMap();
+        assertEq(RSAL_BODY, flat.archive_id.loc);
+        assertEq("widget_id", flat.archive_id.wire_name);
+        assertEq(RSAL_PATH, flat.widget_id.loc);
+
+        hash<auto> wire = op.unflatten({"widget_id": "w_1", "archive_id": "arch_9", "reason": "old"});
+        assertEq({"widget_id": "w_1"}, wire.path_vars);
+        assertEq({"widget_id": "arch_9", "reason": "old"}, wire.req.body);
+    }
+
+    roundTripTest() {
+        RestSchemaActionOperation op = makeOp(entry("create-widget", "POST", "/widgets", {
+            "fields": {
+                "created": <RestSchemaFieldOverlayInfo>{"codec": RestSchemaActionCodecs::UnixSeconds},
+                "dimensions": <RestSchemaFieldOverlayInfo>{
+                    "fields": {
+                        "measured": <RestSchemaFieldOverlayInfo>{"codec": RestSchemaActionCodecs::UnixSeconds},
+                    },
+                },
+            },
+        }));
+        hash<auto> options = {
+            "name": "gizmo",
+            "category": "tools",
+            "status": "active",
+            "created": 2024-03-01T12:00:00Z,
+            "dimensions": {"width": 10.5, "height": 2.25, "measured": 2024-02-01T00:00:00Z},
+            "tags": ("a", "b"),
+        };
+        hash<auto> wire = op.unflatten(options);
+        # every value has to survive the trip out and back, at every depth
+        assertEq(options, op.flatten(wire));
+
+        # the same has to hold for an operation whose values are spread over three locations
+        RestSchemaActionOperation gw = makeOp(entry("get-widget", "GET", "/widgets/{widget_id}"));
+        hash<auto> gopts = {"widget_id": "w_1", "expand": ("dimensions", "tags")};
+        assertEq(gopts, gw.flatten(gw.unflatten(gopts)));
+
+        RestSchemaActionOperation lw = makeOp(entry("list-widgets", "GET", "/widgets"));
+        hash<auto> lopts = {"limit": 10, "category": "tools", "X-Request-Id": "req-1"};
+        hash<auto> lwire = lw.unflatten(lopts);
+        # the header must travel as a header and the query arguments as query arguments
+        assertEq({"X-Request-Id": "req-1"}, lwire.req.header);
+        assertEq({"limit": 10, "category": "tools"}, lwire.req.query);
+        assertEq(lopts, lw.flatten(lwire));
+
+        # a value the action does not declare must be reported when rebuilding options
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "does not declare a query value named", \lw.flatten(),
+            {"req": {"query": {"nope": 1}}});
+    }
+
+    codecTest() {
+        # Stripe-style Unix seconds: the defect this codec exists to prevent is presenting a seconds
+        # value as milliseconds, which is off by a factor of 1000
+        hash<RestSchemaWireCodecInfo> secs = RestSchemaActionCodecs::getCodecEx(RestSchemaActionCodecs::UnixSeconds);
+        assertEq(1709294400, secs.to_wire(2024-03-01T12:00:00Z));
+        assertEq(2024-03-01T12:00:00Z, secs.from_wire(1709294400));
+        assertNothing(secs.to_wire(NOTHING));
+        assertNothing(secs.from_wire(NOTHING));
+
+        hash<RestSchemaWireCodecInfo> ms = RestSchemaActionCodecs::getCodecEx(RestSchemaActionCodecs::UnixMilliseconds);
+        assertEq(1709294400500, ms.to_wire(2024-03-01T12:00:00.500Z));
+        assertEq(2024-03-01T12:00:00.500Z, ms.from_wire(1709294400500));
+        # a negative millisecond value must floor towards -infinity so the remainder stays non-negative
+        assertEq(1969-12-31T23:59:58.500Z, ms.from_wire(-1500));
+        assertEq(-1500, ms.to_wire(1969-12-31T23:59:58.500Z));
+
+        hash<RestSchemaWireCodecInfo> iso = RestSchemaActionCodecs::getCodecEx(RestSchemaActionCodecs::Iso8601Utc);
+        # a "Z" in a date format string writes the UTC offset, so the designator has to be literal
+        assertEq("2024-03-01T12:00:00Z", iso.to_wire(2024-03-01T13:00:00+01:00));
+        assertEq(2024-03-01T12:00:00Z, iso.from_wire("2024-03-01T12:00:00Z"));
+
+        assertThrows("REST-SCHEMA-CODEC-ERROR", "is unknown", \RestSchemaActionCodecs::getCodecEx(), "nope");
+        assertThrows("REST-SCHEMA-CODEC-ERROR", "empty name", \RestSchemaActionCodecs::registerCodec(),
+            <RestSchemaWireCodecInfo>{
+                "name": "",
+                "type": AbstractDataProviderTypeMap."*string",
+                "to_wire": auto sub (auto v) { return v; },
+                "from_wire": auto sub (auto v) { return v; },
+            });
+
+        # a codec replaces the presented type and documents the conversion where it will be read
+        RestSchemaActionOperation op = makeOp(entry("create-widget", "POST", "/widgets", {
+            "fields": {"created": <RestSchemaFieldOverlayInfo>{"codec": RestSchemaActionCodecs::UnixSeconds}},
+        }));
+        AbstractDataField f = op.getRequestFields().created;
+        assertEq(NT_DATE, f.getType().getBaseTypeCode());
+        assertRegex("seconds since 1970-01-01Z", f.getDescription());
+        assertEq(RestSchemaActionCodecs::UnixSeconds, op.getFlatMap().created.codec);
+        assertEq({"body": {"created": 1709294400}}, op.unflatten({"created": 2024-03-01T12:00:00Z}).req);
+
+        # a codec applies to response values too
+        RestSchemaActionOperation gw = makeOp(entry("get-widget", "GET", "/widgets/{widget_id}", {
+            "response_fields": {"created": <RestSchemaFieldOverlayInfo>{
+                "codec": RestSchemaActionCodecs::UnixSeconds,
+            }},
+        }));
+        assertEq(NT_DATE, gw.getResponseType().getFields().created.getType().getBaseTypeCode());
+        assertEq({"id": "w_1", "created": 2024-03-01T12:00:00Z},
+            gw.processResponse({"id": "w_1", "created": 1709294400}));
+    }
+
+    overlayTest() {
+        RestSchemaActionOperation op = makeOp(entry("create-widget", "POST", "/widgets", {
+            "field_order": ("name", "category", "tags"),
+            "fields": {
+                "category": <RestSchemaFieldOverlayInfo>{
+                    "display_name": "Widget Category",
+                    "short_desc": "The category to file the widget under",
+                    "desc": "Pick a **category**",
+                    "preselected": True,
+                    "ref_data": "category",
+                    "example_value": "tools",
+                },
+                "homepage": <RestSchemaFieldOverlayInfo>{
+                    "type": AbstractDataProviderTypeMap."*uri",
+                },
+                "status": <RestSchemaFieldOverlayInfo>{
+                    "required": True,
+                    "default_value": "draft",
+                },
+                "tags": <RestSchemaFieldOverlayInfo>{
+                    "required_groups": ("identity",),
+                    "depends_on": ("name",),
+                },
+                "dimensions": <RestSchemaFieldOverlayInfo>{"ignore": True},
+            },
+        }), );
+
+        *hash<string, AbstractDataField> fields = op.getRequestFields();
+        # ordering: named fields first in the order given, then the rest in derived order
+        assertEq(("name", "category", "tags", "status", "created", "homepage"), keys fields);
+        # an ignored field is gone from both the form and the reverse map
+        assertEq(NOTHING, fields.dimensions);
+        assertEq(NOTHING, op.getFlatMap().dimensions);
+
+        assertEq("Widget Category", fields.category.getDisplayName());
+        assertEq("The category to file the widget under", fields.category.getShortDescription());
+        assertEq("Pick a **category**", fields.category.getDescription());
+        assertEq("category", fields.category.getAttributes().ref_data);
+        assertTrue(fields.category.getAttributes().preselected);
+
+        # requiredness may be narrowed, and narrowing must reach both the type and the attributes
+        assertTrue(fields.status.getType().isMandatory());
+        assertTrue(fields.status.getAttributes().required);
+        assertTrue(fields.status.getAttributes().preselected);
+        assertEq("draft", fields.status.getDefaultValue());
+
+        assertEq("*uri", fields.homepage.getType().getName());
+        assertEq(("identity",), fields.tags.getAttributes().required_groups);
+        assertEq(("name",), fields.tags.getAttributes().depends_on);
+
+        # renaming a field must not disturb the others, and the original schema field must be untouched
+        AbstractDataField orig = schema.getFieldFromSchema("category", NOTHING,
+            cast<OpenApi3Schema>(schema).components.schemas.widget_create.properties.category, False);
+        assertEq("category", orig.getDisplayName() == "Widget Category" ? "mutated" : "category");
+    }
+
+    overlayErrorTest() {
+        # an overlay entry that no longer names anything must fail, so an upstream rename cannot silently
+        # drop a deliberate presentation choice
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "does not name any value the operation declares",
+            \makeOp(), entry("create-widget", "POST", "/widgets", {
+                "fields": {"gone": <RestSchemaFieldOverlayInfo>{"display_name": "Gone"}},
+            }));
+
+        # an action may present a narrower contract than the API, never a wider one
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "never a wider one", \makeOp(),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"name": <RestSchemaFieldOverlayInfo>{"required": False}},
+            }));
+
+        # field_order must name real options
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which the action does not have", \makeOp(),
+            entry("create-widget", "POST", "/widgets", {"field_order": ("nope",)}));
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "more than once", \makeOp(),
+            entry("create-widget", "POST", "/widgets", {"field_order": ("name", "name")}));
+
+        # nested overlays must name real fields
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "does not name a field of", \makeOp(),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"dimensions": <RestSchemaFieldOverlayInfo>{
+                    "fields": {"depth": <RestSchemaFieldOverlayInfo>{"display_name": "Depth"}},
+                }},
+            }));
+
+        # a nested rename would lose the wire name, so it is refused rather than silently ignored
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "nested fields cannot be renamed", \makeOp(),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"dimensions": <RestSchemaFieldOverlayInfo>{
+                    "fields": {"width": <RestSchemaFieldOverlayInfo>{"name": "w"}},
+                }},
+            }));
+
+        # overriding fields of a type that has none is a mistake worth reporting
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "has no fields", \makeOp(),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"name": <RestSchemaFieldOverlayInfo>{
+                    "fields": {"x": <RestSchemaFieldOverlayInfo>{"display_name": "X"}},
+                }},
+            }));
+
+        # an unknown codec must fail at registration
+        assertThrows("REST-SCHEMA-CODEC-ERROR", "is unknown", \makeOp(),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"created": <RestSchemaFieldOverlayInfo>{"codec": "no-such-codec"}},
+            }));
+    }
+
+    manifestErrorTest() {
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "is not declared in the schema", \makeOp(),
+            entry("nope", "GET", "/nope"));
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "declares no \"PATCH\" operation", \makeOp(),
+            entry("patch-widget", "PATCH", "/widgets/{widget_id}"));
+
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "declared more than once in the manifest", \makeSet(), (
+            (entry("get-status", "GET", "/status"), entry("get-status", "GET", "/categories")),
+        ));
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "is exported twice", \makeSet(), (
+            (entry("a", "GET", "/status"), entry("b", "GET", "/status")),
+        ));
+    }
+
+    driftTest() {
+        # the operationId locates an operation, but it is never action identity: a rename upstream has to
+        # surface as drift rather than silently renaming an action existing workflows call
+        RestSchemaActionOperation op = makeOp(entry("get-status", "GET", "/status", {
+            "operation_id": "getStatus",
+        }));
+        assertEq("get-status", op.getAction());
+
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "this is upstream schema drift", \makeOp(),
+            entry("get-status", "GET", "/status", {"operation_id": "getServiceStatus"}));
+    }
+
+    referenceDataTest() {
+        list<hash<RestSchemaActionInfo>> manifest = (
+            entry("list-categories", "GET", "/categories"),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"category": <RestSchemaFieldOverlayInfo>{"ref_data": "category"}},
+            }),
+        );
+        RestSchemaActionSet aset = makeSet(manifest, RefData);
+        assertEq(("list-categories", "create-widget"), aset.getActionNames());
+
+        # an overlay naming reference data the set does not declare would leave a dropdown silently empty
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "not declared in the reference data", \makeSet(),
+            (manifest,));
+
+        # reference data produced by an action the manifest does not export cannot work
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which the manifest does not export", \makeSet(),
+            (manifest, {"category": cast<hash<RestSchemaReferenceDataInfo>>(RefData.category + {"action": "list-things"})}));
+
+        # a fixed option the listing action does not accept would fail only when a user opened the
+        # dropdown, so it is checked when the set is built
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which does not declare it", \makeSet(),
+            (manifest, {"category": cast<hash<RestSchemaReferenceDataInfo>>(RefData.category + {"options": {"page_size": 5}})}));
+
+        # ... and the declaration has to agree with the key it is registered under
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "names itself", \makeSet(),
+            (manifest, {"cat": RefData.category}));
+    }
+
+    actionRegistrationTest() {
+        RestSchemaActionSet aset = makeSet((
+            entry("get-status", "GET", "/status"),
+            entry("get-widget", "GET", "/widgets/{widget_id}", {"groups": ("Widgets",)}),
+        ));
+        list<hash<DataProviderActionInfo>> actions = aset.getActionInfoList("WidgetStore");
+        assertEq(2, actions.size());
+
+        hash<DataProviderActionInfo> status = actions[0];
+        assertEq("WidgetStore", status.app);
+        assertEq("get-status", status.action);
+        assertEq("/get-status", status.path);
+        assertEq(DPAT_API, status.action_code);
+        # an action with no options must publish none, rather than an empty transport envelope
+        assertEq(NOTHING, status.options);
+        assertEq(("status", "version"), keys status.output_type.getFields());
+
+        hash<DataProviderActionInfo> widget = actions[1];
+        assertEq(("Widgets",), widget.groups);
+        # options are generated after the overlay is applied, so requiredness reaches the option
+        assertEq(("widget_id", "expand"), keys widget.options);
+        assertTrue(widget.options.widget_id.required);
+        assertTrue(widget.options.widget_id.preselected);
+        assertFalse(widget.options.expand.required);
+        assertEq("Widget Id", widget.options.widget_id.display_name);
+
+        # values merged into every action definition
+        list<hash<DataProviderActionInfo>> with_common = aset.getActionInfoList("WidgetStore", {
+            "subtype": "widgets",
+        });
+        map assertEq("widgets", $1.subtype), with_common;
+    }
+
+    providerExecutionTest() {
+        RestSchemaActionSet aset = makeSet((
+            entry("get-widget", "GET", "/widgets/{widget_id}"),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"created": <RestSchemaFieldOverlayInfo>{"codec": RestSchemaActionCodecs::UnixSeconds}},
+            }),
+            entry("list-widgets", "GET", "/widgets", {"response_unwrap": ("data",)}),
+        ));
+        FakeRestClient rest();
+        RestSchemaActionSetDataProvider root(aset, rest);
+
+        # a path variable must be substituted into the URI, and a query argument appended to it
+        rest.push_response({"body": {"id": "w_1", "name": "gizmo"}});
+        AbstractDataProvider get = root.getChildProviderEx("get-widget");
+        auto resp = get.doRequest({"widget_id": "w_1", "expand": ("dimensions",)});
+        # the action publishes the response body, not the HTTP envelope carrying it
+        assertEq({"id": "w_1", "name": "gizmo"}, resp);
+        assertEq("GET", rest.last().method);
+        assertEq("/api/widgets/w_1?expand=dimensions", rest.last().path);
+
+        # a form-encoded body must be serialized as the schema declares, with the codec applied
+        rest.reset();
+        rest.push_response({"body": {"id": "w_2", "name": "gadget"}});
+        AbstractDataProvider create = root.getChildProviderEx("create-widget");
+        create.doRequest({"name": "gadget", "created": 2024-03-01T12:00:00Z});
+        assertEq("POST", rest.last().method);
+        assertEq("/api/widgets", rest.last().path);
+        assertEq(MimeTypeFormUrlEncoded, rest.last().headers."Content-Type");
+        assertRegex("name=gadget", rest.last().body);
+        assertRegex("created=1709294400", rest.last().body);
+
+        # response unwrapping reaches the value the caller receives
+        rest.reset();
+        rest.push_response({"body": {"data": ({"id": "w_1"}, {"id": "w_2"}), "has_more": False}});
+        assertEq(({"id": "w_1"}, {"id": "w_2"}), root.getChildProviderEx("list-widgets").doRequest());
+
+        # an error response must reach the caller with its context intact
+        rest.reset();
+        rest.push_response({"throw_status": 404, "body": {"message": "no such widget"}});
+        assertThrows("REST-RESPONSE-ERROR", "HTTP 404", \get.doRequest(), {"widget_id": "gone"});
+    }
+
+    providerPathTest() {
+        RestSchemaActionSet aset = makeSet((
+            entry("list-categories", "GET", "/categories"),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"category": <RestSchemaFieldOverlayInfo>{"ref_data": "category"}},
+            }),
+        ), RefData);
+
+        FakeRestClient rest();
+        RestSchemaActionSetDataProvider root(aset, rest);
+        assertEq(("list-categories", "create-widget"), root.getChildProviderNames());
+        # every registered action path has to resolve to a provider that can execute it
+        aset.validateActionPaths(root);
+        assertNothing(root.getChildProvider("nope"));
+
+        # the dropdown is populated by executing the listing action and mapping its records
+        AbstractDataProvider create = root.getChildProviderEx("create-widget");
+        assertEq({"category": True}, create.getSupportedReferenceData());
+        rest.push_response({"body": {"data": ({"id": "tools", "label": "Tools"}, {"id": "toys"})}});
+        *list<hash<AllowedValueInfo>> values = create.getReferenceData("category");
+        assertEq(2, values.size());
+        assertEq("tools", values[0].value);
+        assertEq("Tools", values[0].display_name);
+        # a record with no human-readable name shows its ID rather than an empty row
+        assertEq("toys", values[1].value);
+        assertEq("toys", values[1].display_name);
+        assertEq("GET", rest.last().method);
+        assertEq("/api/categories", rest.last().path);
+    }
+}

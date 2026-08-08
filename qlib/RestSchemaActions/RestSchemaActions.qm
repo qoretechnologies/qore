@@ -29,6 +29,7 @@
 %modern
 
 %requires(reexport) DataProvider
+%requires(reexport) RestSchemaDataProvider
 
 module RestSchemaActions {
     version = "1.0";
@@ -74,6 +75,92 @@ module RestSchemaActions {
     defect or a construct %Qore does not yet support.  An invalid document belongs in a
     normalization step of its own, and a valid construct that fails to parse belongs in
     @ref openapi3intro "OpenApi3".
+
+    @section restschemaactions_manifest The Operation Manifest
+
+    An application declares what it exports as a list of
+    @ref RestSchemaActions::RestSchemaActionInfo "RestSchemaActionInfo" entries, and hands them to
+    @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" together with the schema.
+
+    Each entry carries a **stable action ID**.  An OpenAPI \c operationId may be recorded, and is
+    checked, but it is never the source of action identity: an upstream rename has to be reported as
+    drift rather than silently rename an action that existing workflows call.  The manifest also makes
+    additions deliberate — an endpoint appearing in an updated schema does not become a public action
+    until somebody adds it.
+
+    Everything is validated when the set is constructed, so a manifest that has drifted from its
+    schema fails when the module loads rather than when a user opens the action.
+
+    @section restschemaactions_flattening Request Flattening
+
+    A schema-derived REST request groups values by where they travel, and path variables do not appear
+    in the request type at all.  None of that means anything to somebody filling in a form, so
+    @ref RestSchemaActions::RestSchemaActionOperation "RestSchemaActionOperation" lifts every value to
+    one flat level and keeps a reverse map, so the exact transport request can be rebuilt:
+
+    |!Location|!Where the value travels
+    |@ref RestSchemaActions::RSAL_PATH "path"|substituted into the URI path template
+    |@ref RestSchemaActions::RSAL_QUERY "query"|a URI query argument
+    |@ref RestSchemaActions::RSAL_HEADER "header"|an HTTP header
+    |@ref RestSchemaActions::RSAL_BODY "body"|a property of an object-valued request body
+    |@ref RestSchemaActions::RSAL_BODY_ROOT "body-root"|the whole request body, when it is not an object
+
+    Flattening removes transport groupings and nothing else: a body property that is itself an object
+    stays an object.  When two locations produce the same name the collision is **reported**, not
+    resolved by picking one; the manifest renames either side with a location-qualified overlay key.
+
+    The reverse mapping is part of the contract, so
+    @ref RestSchemaActions::RestSchemaActionOperation::flatten() "flatten()" is provided as the exact
+    inverse of @ref RestSchemaActions::RestSchemaActionOperation::unflatten() "unflatten()" and is
+    round-trip tested.
+
+    @section restschemaactions_overlay The UX Overlay
+
+    @ref RestSchemaActions::RestSchemaFieldOverlayInfo "RestSchemaFieldOverlayInfo" declares
+    presentation: display names and descriptions, field order and preselection, static allowed values,
+    \c required_groups, dependencies, semantic types, and fields to ignore because the connection owns
+    them.  It is applied before action options are generated, so every override reaches
+    @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()".
+
+    Requiredness may only be **narrowed**.  An action may present a stricter contract than the API;
+    declaring a schema-required value optional would produce requests the server rejects, so it is an
+    error.
+
+    An overlay must never be used for structural repair.  A nicer label belongs here; a malformed
+    reference belongs in normalization; a valid construct %Qore cannot parse belongs in
+    @ref openapi3intro "OpenApi3".
+
+    @section restschemaactions_codecs Wire Codecs
+
+    A schema can say that a value is an integer; it cannot say the integer is a point in time, still
+    less whether the unit is seconds or milliseconds.  A field overlay names a codec from
+    @ref RestSchemaActions::RestSchemaActionCodecs "RestSchemaActionCodecs", and the field is then
+    published with the codec's type and converted in both directions — so the manifest stays
+    declarative and the unit is decided once, in one place, instead of by every caller.
+
+    @section restschemaactions_refdata Reference Data
+
+    An identifier presented as a free-text field is one of the clearest signs of an action generated
+    straight from a schema.  @ref RestSchemaActions::RestSchemaReferenceDataInfo "RestSchemaReferenceDataInfo"
+    turns one into a dropdown by naming another action in the same set and the record fields supplying
+    the value and the label; no application code is involved.  Dropdowns are then served through
+    @ref DataProvider::AbstractDataProvider::getSupportedReferenceData() "getSupportedReferenceData()"
+    and @ref DataProvider::AbstractDataProvider::getReferenceData() "getReferenceData()".
+
+    @section restschemaactions_execution Execution
+
+    @ref RestSchemaActions::RestSchemaActionSetDataProvider "RestSchemaActionSetDataProvider" resolves
+    each action ID to a @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider",
+    which rebuilds the transport request and executes it through
+    @ref restschemadataproviderintro "RestSchemaDataProvider".
+
+    The action publishes the **success response body** as its output type, not the HTTP envelope, so
+    downstream users are not made to navigate a wrapper merely because execution also has a status and
+    headers.  When an operation declares more than one success response with a body, no output
+    contract is guessed: registration fails until the manifest selects one.
+
+    @note Actions can currently only be generated from OpenAPI 3 schemas; a Swagger 2.0 schema is
+    rejected with a clear error rather than handled by untested code paths.
 
     @section restschemaactionsrelnotes Release Notes
 

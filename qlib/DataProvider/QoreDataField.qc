@@ -215,6 +215,30 @@ public class QoreDataField inherits AbstractDataField {
         return getNewFieldType(type.getMandatoryType());
     }
 
+    #! Returns a copy of this field published under a different name
+    /** @param new_name the name for the returned field
+        @param new_display_name the display name for the returned field; if not present, the display name is
+        re-derived from \a new_name when the current display name was itself derived from the current name,
+        and is otherwise preserved
+
+        @return a copy of this field with the new name
+
+        @since DataProvider 3.8
+    */
+    AbstractDataField getRenamedField(string new_name, *string new_display_name) {
+        QoreDataField rv = copy();
+        if (!new_display_name.val() && display_name == AbstractDataField::getDisplayName(name)) {
+            # the display name was derived from the old name, so re-derive it from the new one; an explicitly
+            # assigned display name is preserved instead, because it was a deliberate choice
+            new_display_name = AbstractDataField::getDisplayName(new_name);
+        }
+        rv.name = new_name;
+        if (new_display_name.val()) {
+            rv.display_name = new_display_name;
+        }
+        return rv;
+    }
+
     #! Updates the field type
     AbstractDataField updateFieldType(AbstractDataProviderType type) {
         self.type = type;

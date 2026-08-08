@@ -440,6 +440,29 @@ public class AbstractDataField inherits Qore::Serializable {
         return self;
     }
 
+    #! Returns a copy of this field published under a different name
+    /** The base class method throws an exception; it must be overridden in child classes that can carry a
+        name independent of their source.
+
+        A field is often shared — schema-derived fields in particular are cached and handed out to every
+        caller — so renaming returns a copy and never modifies the field it was called on.
+
+        @param new_name the name for the returned field
+        @param new_display_name the display name for the returned field; if not present, the display name is
+        re-derived from \a new_name when the current display name was itself derived from the current name,
+        and is otherwise preserved
+
+        @return a copy of this field with the new name
+
+        @throw FIELD-RENAME-ERROR this field type does not support renaming
+
+        @since DataProvider 3.8
+    */
+    AbstractDataField getRenamedField(string new_name, *string new_display_name) {
+        throw "FIELD-RENAME-ERROR", sprintf("field %y of class %y cannot be renamed to %y; class %y does not "
+            "implement getRenamedField()", getName(), self.className(), new_name, self.className());
+    }
+
     #! Returns the display name of the field
     string getDisplayName() {
         return AbstractDataField::getDisplayName(getName());
