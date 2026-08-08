@@ -51153,10 +51153,10 @@
         "summary": "Create a login link"
       }
     },
-    "/v1/accounts/{account}/people": {
+    "/v1/accounts/{account}/persons": {
       "get": {
         "description": "<p>Returns a list of people associated with the account’s legal entity. The people are returned sorted by creation date, with the most recent people appearing first.</p>",
-        "operationId": "GetAccountsAccountPeople",
+        "operationId": "GetAccountsAccountPersons",
         "parameters": [
           {
             "in": "path",
@@ -51322,7 +51322,7 @@
       },
       "post": {
         "description": "<p>Creates a new person.</p>",
-        "operationId": "PostAccountsAccountPeople",
+        "operationId": "PostAccountsAccountPersons",
         "parameters": [
           {
             "in": "path",

@@ -201,6 +201,13 @@ public hashdecl RestSchemaFieldOverlayInfo {
     #! An explicit UI type hint
     *string ui_type;
 
+    #! Allow a value to be entered by hand as well as chosen from @ref ref_data
+    /** A dropdown is an aid, not a constraint: a workflow usually chains an identifier out of a previous
+        step's output, and a credential scoped narrowly enough may not be able to list the values at all.
+        Set this so that such a field is still usable.
+    */
+    *bool supports_custom_values;
+
     #! The name of a registered wire codec to apply to this field
     /** Replaces the schema-derived type with the codec's action-facing type and converts values in both
         directions.

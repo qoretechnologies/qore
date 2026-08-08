@@ -168,13 +168,15 @@ public class StripeManifest {
 
         #! Overlay for a customer ID used as a filter or a reference
         const CustomerOverlay = <RestSchemaFieldOverlayInfo>{
-            "ref_data": RefCustomer,
+            "supports_custom_values": True,
+                        "ref_data": RefCustomer,
             "preselected": True,
         };
 
         #! Overlay for a customer ID that is a secondary reference rather than the action's subject
         const CustomerRefOverlay = <RestSchemaFieldOverlayInfo>{
-            "ref_data": RefCustomer,
+            "supports_custom_values": True,
+                        "ref_data": RefCustomer,
         };
 
         #! Overlay for a timestamp Stripe carries as a count of seconds since the epoch
@@ -258,6 +260,7 @@ public class StripeManifest {
                     "id": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Balance Transaction",
                         "short_desc": "The balance transaction to retrieve",
+                        "supports_custom_values": True,
                         "ref_data": RefBalanceTransaction,
                     },
                 },
@@ -296,6 +299,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                 },
@@ -316,6 +320,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                     "email": <RestSchemaFieldOverlayInfo>{
@@ -338,6 +343,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                 },
@@ -360,6 +366,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                         "preselected": True,
                     },
@@ -390,6 +397,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                 },
@@ -408,6 +416,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                     "limit": LimitOverlay,
@@ -430,6 +439,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                     "external_account": <RestSchemaFieldOverlayInfo>{
@@ -440,8 +450,8 @@ public class StripeManifest {
             <RestSchemaActionInfo>{
                 "action": "list-account-people",
                 "method": "GET",
-                "path": "/v1/accounts/{account}/people",
-                "operation_id": "GetAccountsAccountPeople",
+                "path": "/v1/accounts/{account}/persons",
+                "operation_id": "GetAccountsAccountPersons",
                 "display_name": "List Account People",
                 "short_desc": "List the people associated with a connected account",
                 "desc": "Lists the people Stripe holds on a connected account's legal entity — its "
@@ -453,6 +463,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                     "limit": LimitOverlay,
@@ -461,8 +472,8 @@ public class StripeManifest {
             <RestSchemaActionInfo>{
                 "action": "create-account-person",
                 "method": "POST",
-                "path": "/v1/accounts/{account}/people",
-                "operation_id": "PostAccountsAccountPeople",
+                "path": "/v1/accounts/{account}/persons",
+                "operation_id": "PostAccountsAccountPersons",
                 "display_name": "Create Account Person",
                 "short_desc": "Add a person to a connected account",
                 "desc": "Adds a person to a connected account's legal entity and records their "
@@ -474,6 +485,7 @@ public class StripeManifest {
                 "fields": {
                     "account": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connected Account",
+                        "supports_custom_values": True,
                         "ref_data": RefAccount,
                     },
                     "first_name": <RestSchemaFieldOverlayInfo>{"preselected": True},
@@ -500,6 +512,7 @@ public class StripeManifest {
                     "limit": LimitOverlay,
                     "customer": CustomerOverlay,
                     "payment_intent": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefPaymentIntent,
                     },
                 },
@@ -516,6 +529,7 @@ public class StripeManifest {
                 "groups": (GroupCharges,),
                 "fields": {
                     "charge": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCharge,
                     },
                 },
@@ -564,6 +578,7 @@ public class StripeManifest {
                 "field_order": ("charge", "description", "metadata"),
                 "fields": {
                     "charge": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCharge,
                     },
                     "description": <RestSchemaFieldOverlayInfo>{"preselected": True},
@@ -606,6 +621,7 @@ public class StripeManifest {
                 "groups": (GroupCustomers,),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                 },
@@ -652,6 +668,7 @@ public class StripeManifest {
                 "field_order": ("customer", "email", "name", "description", "metadata"),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                     "email": <RestSchemaFieldOverlayInfo>{
@@ -674,6 +691,7 @@ public class StripeManifest {
                 "groups": (GroupCustomers,),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                 },
@@ -693,11 +711,13 @@ public class StripeManifest {
                 "field_order": ("customer", "limit", "invoice"),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                     "limit": LimitOverlay,
                     "invoice": <RestSchemaFieldOverlayInfo>{
                         "short_desc": "Return only the entries applied to this invoice",
+                        "supports_custom_values": True,
                         "ref_data": RefInvoice,
                     },
                 },
@@ -717,6 +737,7 @@ public class StripeManifest {
                 "field_order": ("customer", "amount", "currency", "description"),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                     "amount": <RestSchemaFieldOverlayInfo>{
@@ -741,6 +762,7 @@ public class StripeManifest {
                 "field_order": ("customer", "object", "limit"),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                     "limit": LimitOverlay,
@@ -760,6 +782,7 @@ public class StripeManifest {
                 "field_order": ("customer", "source", "metadata"),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                     "source": <RestSchemaFieldOverlayInfo>{"preselected": True},
@@ -778,6 +801,7 @@ public class StripeManifest {
                 "field_order": ("customer", "limit"),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                     "limit": LimitOverlay,
@@ -799,6 +823,7 @@ public class StripeManifest {
                 "field_order": ("customer", "items", "trial_end", "billing_cycle_anchor", "cancel_at"),
                 "fields": {
                     "customer": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCustomer,
                     },
                     "items": <RestSchemaFieldOverlayInfo>{
@@ -844,6 +869,7 @@ public class StripeManifest {
                 "groups": (GroupInvoices,),
                 "fields": {
                     "invoice": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefInvoice,
                     },
                 },
@@ -886,6 +912,7 @@ public class StripeManifest {
                 "field_order": ("invoice", "description", "due_date", "metadata"),
                 "fields": {
                     "invoice": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefInvoice,
                     },
                     "description": <RestSchemaFieldOverlayInfo>{"preselected": True},
@@ -907,6 +934,7 @@ public class StripeManifest {
                 "groups": (GroupInvoices,),
                 "fields": {
                     "invoice": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefInvoice,
                     },
                 },
@@ -976,10 +1004,12 @@ public class StripeManifest {
                 "fields": {
                     "limit": LimitOverlay,
                     "charge": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCharge,
                         "preselected": True,
                     },
                     "payment_intent": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefPaymentIntent,
                     },
                 },
@@ -1000,11 +1030,13 @@ public class StripeManifest {
                 "field_order": ("charge", "payment_intent", "amount", "reason", "metadata"),
                 "fields": {
                     "charge": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefCharge,
                         "preselected": True,
                         "required_groups": ("payment",),
                     },
                     "payment_intent": <RestSchemaFieldOverlayInfo>{
+                        "supports_custom_values": True,
                         "ref_data": RefPaymentIntent,
                         "preselected": True,
                         "required_groups": ("payment",),

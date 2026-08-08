@@ -616,7 +616,7 @@ public class RestSchemaActionOperation {
         }
         map attr{$1.key} = $1.value, ov{"sensitive", "required_groups", "exclusive_with", "ref_data",
             "element_ref_data", "depends_on", "has_dependents", "on_change", "validation_regex",
-            "ui_type"}.pairIterator(), exists $1.value;
+            "ui_type", "supports_custom_values"}.pairIterator(), exists $1.value;
         if (ov.attr) {
             attr += ov.attr;
         }
