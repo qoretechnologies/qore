@@ -72,6 +72,39 @@ class EventCollector {
     }
 }
 
+#! a user subclass of AbstractDatasource that is neither a Datasource nor a DatasourcePool
+class StubDatasource inherits Qore::SQL::AbstractDatasource {
+    nothing commit() {}
+    nothing rollback() {}
+    auto exec(string sql, ...) {}
+    auto vexec(string sql, *softlist<auto> vargs) {}
+    auto execRaw(string sql) {}
+    auto select(string sql, ...) {}
+    auto selectTyped(string sql, ...) {}
+    auto selectRow(string sql, ...) {}
+    auto selectRows(string sql, ...) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> vargs) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto vselectRow(string sql, *softlist<auto> vargs) {}
+    auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+    nothing beginTransaction() {}
+    *string getUserName() {}
+    *string getPassword() {}
+    *string getDBName() {}
+    *string getDBEncoding() {}
+    *string getOSEncoding() {}
+    *string getHostName() {}
+    *int getPort() {}
+    string getDriverName() { return "stub"; }
+    auto getServerVersion() { return "1.0"; }
+    auto getClientVersion() { return "1.0"; }
+    bool inTransaction() { return False; }
+    hash<auto> getConfigHash() { return {}; }
+    string getConfigString() { return "stub:@stub"; }
+}
+
 public class MutationObserverTest inherits QUnit::Test {
     public {
         const OpInfo = <SqlMutationInfo>{
@@ -108,6 +141,8 @@ public class MutationObserverTest inherits QUnit::Test {
         addTestCase("armed abort identity", \armedAbortIdentityTest());
         addTestCase("armed abort is replay safe", \armedAbortReplaySafeTest());
         addTestCase("armed abort on commit is ambiguous", \armedAbortCommitAmbiguousTest());
+        addTestCase("armed abort on a pool", \armedAbortPoolTest());
+        addTestCase("armed abort argument checking", \armedAbortArgumentTest());
         addTestCase("armed abort on a prepared statement", \armedAbortStatementTest());
         addTestCase("admission rejection", \admissionRejectionTest());
         addTestCase("admission rejection in a transaction", \admissionRejectionInTransactionTest());
@@ -468,6 +503,58 @@ public class MutationObserverTest inherits QUnit::Test {
         assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
         assertFalse(out.replay_safe);
         assertEq(SQL_STMT_CLASS_COMMIT, out.stmt_class);
+    }
+
+    #! a DatasourcePool can be armed, and the abort reaches its allocated connection
+    armedAbortPoolTest() {
+        DatasourcePool dsp;
+        try {
+            dsp = new DatasourcePool("dbitest:u/p@db{min=1,max=2}");
+            dsp.getServerVersion();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+        obs.reset();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+
+        {
+            SqlMutationDeclaration decl(dsp, OpInfo);
+            # the pool shares one mutation context with every connection it pools, so arming the
+            # pool covers whichever connection this thread is allocated
+            try {
+                call_function("dbg_ds_arm_connection_abort", dsp, OpInfo.op_id, FaultAfterExec);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                    testSkip("debug build required for dbg_ds_arm_connection_abort()");
+                }
+                rethrow;
+            }
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \dsp.exec(), "insert into t values (1)");
+        }
+
+        hash<SqlMutationEventInfo> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC).last();
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, post.outcome);
+        assertTrue(post.replay_safe);
+        assertEq(OpInfo.op_id, post.info.op_id);
+    }
+
+    #! an AbstractDatasource that is neither a Datasource nor a pool is a clean argument error
+    /** this is the only way to reach the argument check: the builtin's signature already rejects
+        anything that is not an AbstractDatasource
+    */
+    armedAbortArgumentTest() {
+        try {
+            call_function("dbg_ds_arm_connection_abort", new StubDatasource(), OpInfo.op_id, FaultAfterExec);
+            fail("arming an unsupported AbstractDatasource must not succeed");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_ds_arm_connection_abort()");
+            }
+            # probing for a Datasource must not raise a class-compatibility error before the
+            # DatasourcePool case has been considered; the function reports its own error instead
+            assertEq("DBG-ARGUMENT-ERROR", ex.err);
+            assertRegex("StubDatasource", ex.desc);
+        }
     }
 
     #! a prepared statement reaches the same armed boundary

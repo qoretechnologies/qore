@@ -3002,33 +3002,33 @@ static QoreValue f_dbg_ds_arm_connection_abort(const QoreListNode* params, Runti
     const int when = (int)get_param_value(params, 2).getAsBigInt();
 
     QoreObject* o = const_cast<QoreObject*>(obj);
-    SqlMutationContext* ctx = nullptr;
 
-    ReferenceHolder<ManagedDatasource> mds(
-        reinterpret_cast<ManagedDatasource*>(o->getReferencedPrivateData(CID_DATASOURCE, xsink)), xsink);
+    // probe for each supported class with tryGetReferencedPrivateData(), which returns nullptr on a
+    // class mismatch instead of raising; getReferencedPrivateData() would raise OBJECT-INCOMPATIBLE
+    // on the first probe and make the second unreachable
+    ReferenceHolder<ManagedDatasource> mds(o->tryGetReferencedPrivateData<ManagedDatasource>(CID_DATASOURCE, xsink),
+        xsink);
     if (*xsink) {
         return QoreValue();
     }
     if (mds) {
-        ctx = mds->getOrCreateMutationContext();
-    } else {
-        ReferenceHolder<DatasourcePool> dsp(
-            reinterpret_cast<DatasourcePool*>(o->getReferencedPrivateData(CID_DATASOURCEPOOL, xsink)), xsink);
-        if (*xsink) {
-            return QoreValue();
-        }
-        if (!dsp) {
-            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ds_arm_connection_abort() requires a Datasource "
-                "or DatasourcePool argument; got an object of class '%s'", o->getClassName());
-            return QoreValue();
-        }
+        mds->getOrCreateMutationContext()->dbgArmFault(op_id ? op_id->c_str() : nullptr, when);
+        return QoreValue();
+    }
+
+    ReferenceHolder<DatasourcePool> dsp(o->tryGetReferencedPrivateData<DatasourcePool>(CID_DATASOURCEPOOL, xsink),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (dsp) {
         // the pool owns the context under its own lock, so it does the arming itself
         dsp->dbgArmConnectionAbort(op_id ? op_id->c_str() : nullptr, when);
         return QoreValue();
     }
 
-    assert(ctx);
-    ctx->dbgArmFault(op_id ? op_id->c_str() : nullptr, when);
+    xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ds_arm_connection_abort() requires a Datasource or "
+        "DatasourcePool argument; got an object of class '%s'", o->getClassName());
     return QoreValue();
 }
 #endif
