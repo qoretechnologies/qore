@@ -1,0 +1,305 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** RestSchemaPruner.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+
+%requires json
+
+%exec-class RestSchemaPrunerTest
+
+public class RestSchemaPrunerTest inherits QUnit::Test {
+    public {
+        #! A schema exercising path-level parameters, sharing, recursion and unreachable members
+        const Schema = {
+            "openapi": "3.0.0",
+            "info": {"title": "test", "version": "1.0"},
+            "servers": ({"url": "https://api.example.com"},),
+            "security": ({"basic": ()},),
+            "paths": {
+                "/a": {
+                    "summary": "the a path",
+                    "parameters": (
+                        {"name": "p", "in": "query", "schema": {"$ref": "#/components/schemas/P"}},
+                    ),
+                    "get": {"operationId": "getA", "responses": {"200": {"content":
+                        {"application/json": {"schema": {"$ref": "#/components/schemas/A"}}}}}},
+                    "post": {"operationId": "postA", "responses": {"200": {"content":
+                        {"application/json": {"schema": {"$ref": "#/components/schemas/OnlyPost"}}}}}},
+                    "x-vendor": {"note": "vendor data on the path item"},
+                },
+                "/b": {
+                    "get": {"operationId": "getB", "responses": {"200": {"content":
+                        {"application/json": {"schema": {"$ref": "#/components/schemas/Shared"}}}}}},
+                },
+                "/c": {
+                    "delete": {"operationId": "deleteC", "responses": {"204":
+                        {"description": "gone"}}},
+                },
+            },
+            "components": {
+                "schemas": {
+                    # A -> B -> {B (recursive), C, Shared}
+                    "A": {"properties": {"b": {"$ref": "#/components/schemas/B"}}},
+                    "B": {"properties": {
+                        "self": {"$ref": "#/components/schemas/B"},
+                        "c": {"$ref": "#/components/schemas/C"},
+                        "shared": {"$ref": "#/components/schemas/Shared"},
+                    }},
+                    "C": {"type": "string"},
+                    "Shared": {"type": "integer"},
+                    "P": {"type": "string"},
+                    "OnlyPost": {"type": "string"},
+                    "Orphan": {"type": "string"},
+                },
+                "parameters": {
+                    "Unused": {"name": "u", "in": "query", "schema": {"type": "string"}},
+                },
+                "securitySchemes": {
+                    "basic": {"type": "http", "scheme": "basic"},
+                },
+            },
+            "x-webhooks": {
+                "evt": {"$ref": "#/components/schemas/Orphan"},
+            },
+        };
+
+        const GetA = <SchemaOperationInfo>{"method": "GET", "path": "/a"};
+        const GetB = <SchemaOperationInfo>{"method": "GET", "path": "/b"};
+        const DeleteC = <SchemaOperationInfo>{"method": "DELETE", "path": "/c"};
+    }
+
+    constructor() : Test("RestSchemaPrunerTest", "1.0") {
+        addTestCase("method and path filtering", \filteringTest());
+        addTestCase("transitive and recursive refs", \transitiveTest());
+        addTestCase("shared refs", \sharedTest());
+        addTestCase("path-level parameters", \pathParametersTest());
+        addTestCase("metadata and security", \metadataTest());
+        addTestCase("vendor containers", \vendorTest());
+        addTestCase("source is not modified", \immutableTest());
+        addTestCase("deterministic output", \deterministicTest());
+        addTestCase("json pointer resolution", \pointerTest());
+        addTestCase("negative cases", \negativeTest());
+        set_return_value(main());
+    }
+
+    #! Only the selected method/path operations survive
+    filteringTest() {
+        hash<PruneResultInfo> r = RestSchemaPruner::prune(Schema, (GetA,));
+        assertEq(1, r.paths_kept);
+        assertEq(3, r.paths_total);
+        assertEq(1, r.operations_kept);
+        assertEq(("/a",), keys r.schema.paths);
+        # the other method on the SAME path must be dropped, not kept alongside it
+        assertFalse(r.schema.paths."/a".hasKey("post"));
+        assertTrue(r.schema.paths."/a".hasKey("get"));
+        assertEq("getA", r.schema.paths."/a".get.operationId);
+
+        # the method is matched case-insensitively
+        hash<PruneResultInfo> lower = RestSchemaPruner::prune(Schema,
+            (<SchemaOperationInfo>{"method": "get", "path": "/a"},));
+        assertEq(r.schema, lower.schema);
+
+        # selecting several operations on one path keeps exactly those
+        hash<PruneResultInfo> both = RestSchemaPruner::prune(Schema, (GetA,
+            <SchemaOperationInfo>{"method": "POST", "path": "/a"}));
+        assertEq(1, both.paths_kept);
+        assertEq(2, both.operations_kept);
+        # every non-operation member of the path item survives alongside the kept operations
+        assertEq(("summary", "parameters", "get", "post", "x-vendor"),
+            keys both.schema.paths."/a");
+
+        hash<PruneResultInfo> three = RestSchemaPruner::prune(Schema, (GetA, GetB, DeleteC));
+        assertEq(3, three.paths_kept);
+        assertEq(3, three.operations_kept);
+    }
+
+    #! The closure follows chains to any depth and terminates on a recursive schema
+    transitiveTest() {
+        hash<PruneResultInfo> r = RestSchemaPruner::prune(Schema, (GetA,));
+        # A -> B -> {B, C, Shared}, plus P from the path-level parameter
+        assertEq(("A", "B", "C", "Shared", "P"), keys r.schema.components.schemas);
+        assertEq(5, r.refs_kept);
+        # B references itself; reaching it must not loop forever, and it must be kept once
+        assertEq("#/components/schemas/B", r.schema.components.schemas.B.properties.self."$ref");
+
+        # a component reachable ONLY from the operation that was dropped must go with it
+        assertFalse(r.schema.components.schemas.hasKey("OnlyPost"));
+        assertFalse(r.schema.components.schemas.hasKey("Orphan"));
+        # ...and selecting that operation brings it back
+        hash<PruneResultInfo> p = RestSchemaPruner::prune(Schema,
+            (<SchemaOperationInfo>{"method": "POST", "path": "/a"},));
+        assertTrue(p.schema.components.schemas.hasKey("OnlyPost"));
+
+        # an unreferenced container is dropped entirely rather than kept empty
+        assertFalse(r.schema.components.hasKey("parameters"));
+    }
+
+    #! A component reached from two operations is kept once, and survives either alone
+    sharedTest() {
+        hash<PruneResultInfo> a = RestSchemaPruner::prune(Schema, (GetA,));
+        hash<PruneResultInfo> b = RestSchemaPruner::prune(Schema, (GetB,));
+        hash<PruneResultInfo> ab = RestSchemaPruner::prune(Schema, (GetA, GetB));
+
+        # "Shared" is reached indirectly by /a (through B) and directly by /b
+        assertTrue(a.schema.components.schemas.hasKey("Shared"));
+        assertTrue(b.schema.components.schemas.hasKey("Shared"));
+        assertTrue(ab.schema.components.schemas.hasKey("Shared"));
+        # /b alone reaches nothing else
+        assertEq(("Shared",), keys b.schema.components.schemas);
+        # keeping both operations is the union, with Shared present once
+        assertEq(("A", "B", "C", "Shared", "P"), keys ab.schema.components.schemas);
+    }
+
+    #! Path-level parameters apply to every operation and must not be lost
+    pathParametersTest() {
+        hash<PruneResultInfo> r = RestSchemaPruner::prune(Schema, (GetA,));
+        assertEq(1, r.schema.paths."/a".parameters.size());
+        assertEq("p", r.schema.paths."/a".parameters[0].name);
+        # documentation and vendor members of the path item survive too
+        assertEq("the a path", r.schema.paths."/a".summary);
+        assertEq({"note": "vendor data on the path item"}, r.schema.paths."/a"."x-vendor");
+        # the schema that parameter references must be kept too -- dropping it would leave a
+        # required input pointing at nothing
+        assertTrue(r.schema.components.schemas.hasKey("P"));
+
+        # a path with no path-level parameters must not gain an empty member
+        hash<PruneResultInfo> c = RestSchemaPruner::prune(Schema, (DeleteC,));
+        assertFalse(c.schema.paths."/c".hasKey("parameters"));
+    }
+
+    #! Document metadata and security schemes are kept wholesale
+    metadataTest() {
+        hash<PruneResultInfo> r = RestSchemaPruner::prune(Schema, (DeleteC,));
+        assertEq("3.0.0", r.schema.openapi);
+        assertEq(Schema.info, r.schema.info);
+        assertEq(Schema.servers, r.schema.servers);
+        assertEq(Schema.security, r.schema.security);
+        # a security scheme is referenced BY NAME from "security", never by $ref, so reachability
+        # analysis would wrongly discard it
+        assertEq(Schema.components.securitySchemes, r.schema.components.securitySchemes);
+        # ...even though this selection reaches no schemas at all
+        assertFalse(r.schema.components.hasKey("schemas"));
+    }
+
+    #! A vendor container is pruned like any other, and dropped when nothing in it is reachable
+    vendorTest() {
+        hash<PruneResultInfo> r = RestSchemaPruner::prune(Schema, (GetA,));
+        # "x-webhooks" only references Orphan, which the selection does not reach
+        assertFalse(r.schema.hasKey("x-webhooks"));
+        # an "x-" member of a path item is not a method and must not be selectable as one
+        assertThrows("REST-SCHEMA-PRUNE-ERROR", \RestSchemaPruner::prune(),
+            (Schema, (<SchemaOperationInfo>{"method": "x-vendor", "path": "/a"},)));
+    }
+
+    #! Pruning never modifies the document it was given
+    immutableTest() {
+        hash<auto> before = Schema;
+        RestSchemaPruner::prune(Schema, (GetA,));
+        assertEq(before, Schema, "the source schema must not be modified");
+        assertEq(7, (keys Schema.components.schemas).size());
+        assertEq(3, (keys Schema.paths).size());
+        assertTrue(Schema.hasKey("x-webhooks"));
+    }
+
+    #! The same input and selection always produce the same output
+    deterministicTest() {
+        hash<PruneResultInfo> a = RestSchemaPruner::prune(Schema, (GetA, GetB));
+        # the selection order must not change the result: a build that reorders its manifest must
+        # not produce a different artifact
+        hash<PruneResultInfo> b = RestSchemaPruner::prune(Schema, (GetB, GetA));
+        assertEq(a.schema, b.schema);
+        assertEq(make_json(a.schema), make_json(b.schema), "output must be byte-identical");
+
+        # members come out in the SOURCE document's order, not the selection's
+        assertEq(("/a", "/b"), keys b.schema.paths);
+        assertEq(("openapi", "info", "servers", "security", "paths", "components"),
+            keys a.schema);
+    }
+
+    #! JSON pointers resolve, including escaped member names
+    pointerTest() {
+        hash<auto> doc = {
+            "components": {"schemas": {
+                "plain": {"type": "string"},
+                "a/b": {"type": "integer"},
+                "a~b": {"type": "boolean"},
+            }},
+            "list": ({"first": True}, {"second": True}),
+        };
+        assertEq({"type": "string"},
+            RestSchemaPruner::resolveRef(doc, "#/components/schemas/plain"));
+        # "~1" is a literal "/" in a member name and "~0" a literal "~"
+        assertEq({"type": "integer"},
+            RestSchemaPruner::resolveRef(doc, "#/components/schemas/a~1b"));
+        assertEq({"type": "boolean"},
+            RestSchemaPruner::resolveRef(doc, "#/components/schemas/a~0b"));
+        # a pointer may index into a list
+        assertEq({"second": True}, RestSchemaPruner::resolveRef(doc, "#/list/1"));
+        # unresolvable pointers return nothing rather than throwing
+        assertEq(NOTHING, RestSchemaPruner::resolveRef(doc, "#/components/schemas/missing"));
+        assertEq(NOTHING, RestSchemaPruner::resolveRef(doc, "#/list/9"));
+        assertEq(NOTHING, RestSchemaPruner::resolveRef(doc, "#/list/notanindex"));
+        assertEq(NOTHING, RestSchemaPruner::resolveRef(doc, "#/components/schemas/plain/type/x"));
+        # an external reference names another document and is not resolved here
+        assertEq(NOTHING, RestSchemaPruner::resolveRef(doc, "other.json#/components/schemas/x"));
+
+        # only local references are collected
+        hash<string, bool> refs = {};
+        RestSchemaPruner::collectRefs({
+            "a": {"$ref": "#/components/schemas/Local"},
+            "b": {"$ref": "https://example.com/other.json#/X"},
+            "c": ({"$ref": "#/components/schemas/InList"},),
+        }, \refs);
+        assertEq(("#/components/schemas/Local", "#/components/schemas/InList"), keys refs);
+    }
+
+    negativeTest() {
+        # pruning to nothing is never intended
+        assertThrows("REST-SCHEMA-PRUNE-ERROR", \RestSchemaPruner::prune(), (Schema, ()));
+
+        # a selection naming an operation the schema does not have must fail loudly: silently
+        # skipping it would ship an application missing an action nobody noticed was gone
+        assertThrows("REST-SCHEMA-PRUNE-ERROR", "no such path", \RestSchemaPruner::prune(),
+            (Schema, (<SchemaOperationInfo>{"method": "GET", "path": "/nope"},)));
+        assertThrows("REST-SCHEMA-PRUNE-ERROR", "only", \RestSchemaPruner::prune(),
+            (Schema, (<SchemaOperationInfo>{"method": "PUT", "path": "/a"},)));
+
+        # a document whose selected operation references a component that does not exist is broken
+        # upstream, and pruning must report that rather than emit an invalid schema
+        hash<auto> broken = {
+            "openapi": "3.0.0",
+            "paths": {"/x": {"get": {"responses": {"200": {"content": {"application/json":
+                {"schema": {"$ref": "#/components/schemas/Missing"}}}}}}}},
+            "components": {"schemas": {"Other": {"type": "string"}}},
+        };
+        assertThrows("REST-SCHEMA-PRUNE-ERROR", "dangling", \RestSchemaPruner::prune(),
+            (broken, (<SchemaOperationInfo>{"method": "GET", "path": "/x"},)));
+    }
+}
