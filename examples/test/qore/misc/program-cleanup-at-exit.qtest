@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# Programs are torn down from static destructors and atexit handlers while exit() runs, so the
+# list of registered program-cleanup callbacks has to stay usable for the entire life of the
+# process.  Objects with static storage duration are destroyed in reverse order of construction,
+# and a module registers its callback from its module init function - which runs after that
+# module's own static objects were already registered for destruction.  A destructible container
+# for the callback list is therefore destroyed *first* and then read by the very teardown it
+# exists to serve: the read sees a freed buffer, the size still looks non-empty because the
+# container's own members are untouched, and the call jumps to whatever now occupies that heap
+# memory.  That crashed oload in CI as soon as a second module needed the notification.
+#
+# Reproducing this needs a module that both registers a cleanup callback and owns a Program from
+# an object with static storage duration.  The jni module is the one that does, and it lives in a
+# different repo, so this degrades to a skip wherever it is not installed.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class ProgramCleanupAtExitTest
+
+class ProgramCleanupAtExitTest inherits QUnit::Test {
+    private {
+        #! the interpreter running this test, used to launch the children
+        string qore_exe;
+        #! environment the children need to pick up the same build as the parent
+        string env_prefix = "";
+    }
+
+    constructor() : Test("ProgramCleanupAtExitTest", "1.0") {
+        qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        if (ENV.LD_LIBRARY_PATH) {
+            env_prefix += sprintf("LD_LIBRARY_PATH=%s ", ENV.LD_LIBRARY_PATH);
+        }
+        if (ENV.QORE_MODULE_DIR) {
+            env_prefix += sprintf("QORE_MODULE_DIR=%s ", ENV.QORE_MODULE_DIR);
+        }
+
+        addTestCase("a clean run is reported as such", \controlTest());
+        addTestCase("exit() with a cleanup callback registered does not crash", \exitTest());
+        addTestCase("exit() preserves the status set by the script", \exitStatusTest());
+        set_return_value(main());
+    }
+
+    #! runs "<qore> -l jni -e '<statement>'" in a child and returns its exit status
+    /** a child killed by a signal is reported by the shell as 128 + the signal number, so the
+        crash this guards against shows up here as 134 (SIGABRT, the JVM's crash handler) rather
+        than as any status the script could have set itself
+    */
+    private int runChild(string statement, int expected) {
+        # the statement is embedded in single quotes below, so it must not contain any;
+        # String::find() returns -1 when the substring is absent
+        @assert(statement.find("'") == -1);
+        # keep the child's output when the status is not the expected one: a crash here is
+        # reported by the shell only as "Abort trap: 6" or "Aborted", and the reason - a JVM fatal
+        # error report, an assertion, a Qore exception - is only in the child's own output.
+        # Discarding it left a CI failure with nothing to act on.
+        string out_file = sprintf("%s/qore-cleanup-child-%d.log", tmp_location(), gettid());
+        on_exit unlink(out_file);
+        int rc = system(sprintf("%s%s -l jni -e '%s' >%s 2>&1", env_prefix, qore_exe, statement,
+            out_file));
+        if (rc != expected) {
+            printf("--- child (%s) exited with status %d, expected %d; output follows ---\n",
+                statement, rc, expected);
+            try {
+                printf("%s", File::readTextFile(out_file));
+            } catch (hash<ExceptionInfo> ex) {
+                printf("(could not read the child's output: %s: %s)\n", ex.err, ex.desc);
+            }
+            printf("--- end child output ---\n");
+        }
+        return rc;
+    }
+
+    #! a child that returns normally, to show the harness reports a clean run as 0
+    /** without this, an "exit(0) gives 0" assertion could pass for the wrong reason
+    */
+    private controlTest() {
+%ifdef NoJni
+        testSkip("the jni module is not available");
+%else
+        assertEq(0, runChild("int i = 1; ++i;", 0), "a child that returns normally exits with 0");
+%endif
+    }
+
+    private exitTest() {
+%ifdef NoJni
+        testSkip("the jni module is not available");
+%else
+        # before the fix this aborted in qore_call_program_cleanup_callback(), calling through a
+        # pointer read out of the already-destroyed callback list
+        assertEq(0, runChild("exit(0);", 0), "exit(0) tears the process down without crashing");
+%endif
+    }
+
+    private exitStatusTest() {
+%ifdef NoJni
+        testSkip("the jni module is not available");
+%else
+        # a status that is neither 0 nor any signal-derived value, so only the script could have
+        # produced it; this is what distinguishes a real teardown from a crash that happens to
+        # leave a zero status behind
+        assertEq(7, runChild("exit(7);", 7), "the exit status set by the script survives teardown");
+%endif
+    }
+}

@@ -583,8 +583,15 @@ public:
             if (tid != initial_thread) {
                 size_t real_base = 0;
                 size_t real_size = 0;
-                if (!QorePThreadAttr::getCurrentThreadStackBounds(real_base, real_size) && real_base && real_size
-                        && real_size > stack_guard) {
+                int stack_bounds_rc = QorePThreadAttr::getCurrentThreadStackBounds(real_base, real_size);
+                // the guard is only as large as QORE_STACK_GUARD if the limit is anchored to the true
+                // stack bottom; when the bounds cannot be determined the guard silently shrinks by
+                // however much native stack was consumed before this ThreadData was constructed, which
+                // can exceed QORE_STACK_GUARD entirely (large static TLS, cross-Program execution) and
+                // leave the guard inert.  Assert here so a missing platform check cannot turn the
+                // re-anchoring below into dead code unnoticed.
+                assert(!stack_bounds_rc);
+                if (!stack_bounds_rc && real_base && real_size && real_size > stack_guard) {
                     stack_size = real_size;
 #ifdef STACK_DIRECTION_DOWN
                     stack_limit = real_base + stack_guard;

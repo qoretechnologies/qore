@@ -2549,6 +2549,13 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         remain compatible with MySQL 5.7 and current MariaDB releases
 
     - Core language
+      - fixed the thread stack guard being silently reduced or disabled, so that runaway recursion could crash the
+        process instead of throwing a \c STACK-LIMIT-EXCEEDED exception.  The guard limit for each thread was
+        derived from the stack position captured when the thread was registered with Qore rather than from the
+        thread's real stack bottom, so any stack consumed before that point was subtracted from the guard margin.
+        In processes with a large static thread-local storage area -- for example a process embedding a JVM and
+        many binary modules -- that offset could consume the entire margin and place the limit below the real
+        stack bottom, leaving the guard permanently inactive
       - fixed builtin class methods running in the wrong @ref Qore::Program "Program" context: a builtin class
         captured whichever \c Program happened to be current when the module defining it was first initialized in
         the process, and every later method call on that class -- from any \c Program -- switched the runtime

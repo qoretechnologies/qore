@@ -1160,7 +1160,7 @@ public:
         }
         base = reinterpret_cast<size_t>(top) - size;
         return 0;
-#elif defined(HAVE_PTHREAD_ATTR_GETSTACK)
+#elif defined(HAVE_PTHREAD_ATTR_GETSTACK) && defined(QORE_HAVE_PTHREAD_GETATTR_NP)
         pthread_attr_t attr;
         if (pthread_getattr_np(pthread_self(), &attr)) {
             return -1;
