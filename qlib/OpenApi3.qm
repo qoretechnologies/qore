@@ -740,6 +740,13 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         */
         *string host;
 
+        #! The URI scheme the API is served over, taken from the first entry in \c servers
+        /** Defaults to \c "http" only when no server URL declares one; a schema that says it is served over
+            \c https must not have its target URL downgraded, or a client built from the schema would send
+            credentials in the clear.
+        */
+        string scheme = "http";
+
         #! The base path on which the API is served, which is relative to the @ref OpenApi3Schema::host "host".
         /**
             If it is not included, the API is served directly under the \c host.
@@ -1056,6 +1063,9 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 hash<auto> firstServer = serversObj[0];
                 if (firstServer.url.typeCode() == NT_STRING) {
                     hash<UrlInfo> urlInfo = parse_url(firstServer.url);
+                    if (urlInfo.protocol.val()) {
+                        scheme = urlInfo.protocol;
+                    }
                     if (!host && urlInfo.host) {
                         host = urlInfo.host;
                         if (urlInfo.port) {
@@ -1262,7 +1272,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         @throws MISSING-TARGET-URL no target URL provided for the schema
     */
     private string getTargetUrlImpl() {
-        return sprintf("%s://%s%s", "http", host, basePath);
+        return sprintf("%s://%s%s", scheme, host, basePath);
     }
 
     #! processes a client-side REST request and returns a hash that can be used to make the outgoing client-side HTTP request
@@ -2623,6 +2633,14 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         #! The body parameter, if defined
         ParameterObject body;
 
+        #! Request body Encoding Objects, keyed by media type and then by request body property name
+        /** Declares how each property of an object-valued request body is serialized; without it a property
+            that is not a scalar cannot be serialized into a form-encoded body at all.
+
+            @since OpenApi3 2.4
+        */
+        *hash<string, hash<string, hash<auto>>> content_encoding;
+
         #! Required. The list of possible responses as they are returned from executing this operation.
         ResponsesObject responses;
 
@@ -2758,6 +2776,11 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                                 consumes = {};
                             }
                             consumes{item.key} = True;
+                            # the Encoding Object says how each property is serialized; it is the only thing
+                            # that makes a non-scalar property serializable into a form-encoded body
+                            if (item.value.encoding.typeCode() == NT_HASH) {
+                                content_encoding{item.key} = item.value.encoding;
+                            }
                         }
                     }
                 }
@@ -2842,6 +2865,11 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
             return mh.body;
         }
 
+        if (ct == MimeTypeFormUrlEncoded && body.typeCode() == NT_HASH) {
+            headers."Content-Type" = ct;
+            return getFormUrlEncodedBody(body, content_encoding{ct});
+        }
+
         if (MimeDataTypes{ct}) {
             headers."Content-Type" = ct;
             return MimeDataTypes{ct}.serialize(body);
@@ -2849,6 +2877,149 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
 
         throw "SERIALIZATION-ERROR", sprintf("%s %s: message body cannot be serialized; available MIME type(s): %y; "
             "available serialization modules: %y", method.upr(), path, keys consumes, SerializationModules);
+    }
+
+    #! Serializes an object-valued request body as \c application/x-www-form-urlencoded
+    /** Honors the Encoding Object declared for the media type.  Without it, only a body all of whose
+        properties are scalars can be serialized, because a form-encoded body is a flat list of key/value
+        pairs and nothing else says how a nested object or an array should be flattened into one.
+
+        The supported styles are those OpenAPI 3 permits for a form-encoded request body:
+
+        |!Style|!Explode|!\c {"a": {"x": 1}}|!\c {"a": [1, 2]}
+        |\c form|\c true|\c x=1|\c a=1&a=2
+        |\c form|\c false|\c a=x,1|\c a=1,2
+        |\c spaceDelimited|\c false|n/a|\c a=1%202
+        |\c pipeDelimited|\c false|n/a|\c a=1\|2
+        |\c deepObject|\c true|\c a[x]=1|\c a[0]=1&a[1]=2
+
+        \c deepObject nests to any depth, which is what APIs taking structured form bodies — Stripe's among
+        them — require.  Although OpenAPI 3.0 defines \c deepObject for objects only, it is applied to arrays
+        here as well, using the indexed form those same APIs document and their own client libraries send.
+
+        @param body the request body
+        @param encoding the Encoding Object for the media type, keyed by property name
+
+        @return the serialized body
+
+        @throw SERIALIZATION-ERROR a property cannot be serialized in the style declared for it
+
+        @since OpenApi3 2.4
+    */
+    private string getFormUrlEncodedBody(hash<auto> body, *hash<string, hash<auto>> encoding) {
+        list<string> pairs = ();
+        foreach hash<auto> i in (body.pairIterator()) {
+            if (!exists i.value) {
+                continue;
+            }
+            *hash<auto> enc = encoding{i.key};
+            # OpenAPI 3 defaults for a form-encoded request body property
+            string style = enc.style ?? "form";
+            bool explode = exists enc.explode ? enc.explode : (style == "form" || style == "deepObject");
+            on_error rethrow $1.err, sprintf("%s (while serializing request body property %y with style %y, "
+                "explode %y, for \"%s %s\")", $1.desc, i.key, style, explode, method.upr(), path);
+            OperationObject::addFormProperty(\pairs, i.key, i.value, style, explode);
+        }
+        return pairs ? (foldl $1 + "&" + $2, pairs) : "";
+    }
+
+    #! Adds the encoded key/value pairs for one request body property
+    private static addFormProperty(reference<list<string>> pairs, string name, auto value, string style,
+            bool explode) {
+        int tc = value.typeCode();
+        switch (style) {
+            case "deepObject":
+                OperationObject::addDeepObject(\pairs, name, value);
+                return;
+
+            case "form": {
+                if (tc == NT_HASH) {
+                    if (explode) {
+                        # each property becomes a top-level pair; the property name itself disappears
+                        map pairs += OperationObject::formPair($1.key, $1.value), value.pairIterator();
+                    } else {
+                        # the object is flattened to an alternating key,value,... comma-separated list
+                        list<string> parts = ();
+                        foreach hash<auto> p in (value.pairIterator()) {
+                            parts += p.key;
+                            parts += OperationObject::formScalar(p.value);
+                        }
+                        pairs += OperationObject::formPair(name, (foldl $1 + "," + $2, parts) ?? "");
+                    }
+                    return;
+                }
+                if (tc == NT_LIST) {
+                    if (explode) {
+                        map pairs += OperationObject::formPair(name, $1), value;
+                    } else {
+                        pairs += OperationObject::formPair(name, (foldl $1 + "," + $2,
+                            (map OperationObject::formScalar($1), value)) ?? "");
+                    }
+                    return;
+                }
+                pairs += OperationObject::formPair(name, value);
+                return;
+            }
+
+            case "spaceDelimited":
+            case "pipeDelimited": {
+                string sep = style == "spaceDelimited" ? " " : "|";
+                if (tc == NT_HASH) {
+                    throw "SERIALIZATION-ERROR", sprintf("style %y cannot serialize an object value", style);
+                }
+                if (tc == NT_LIST) {
+                    pairs += OperationObject::formPair(name, (foldl $1 + sep + $2,
+                        (map OperationObject::formScalar($1), value)) ?? "");
+                    return;
+                }
+                pairs += OperationObject::formPair(name, value);
+                return;
+            }
+        }
+        throw "SERIALIZATION-ERROR", sprintf("style %y is not valid for a form-encoded request body; valid "
+            "styles: \"form\", \"spaceDelimited\", \"pipeDelimited\", \"deepObject\"", style);
+    }
+
+    #! Adds the encoded key/value pairs for a value serialized in \c deepObject style
+    private static addDeepObject(reference<list<string>> pairs, string prefix, auto value) {
+        if (!exists value) {
+            return;
+        }
+        switch (value.typeCode()) {
+            case NT_HASH:
+                map OperationObject::addDeepObject(\pairs, sprintf("%s[%s]", prefix, $1.key), $1.value),
+                    value.pairIterator();
+                return;
+            case NT_LIST:
+                foreach auto element in (value) {
+                    OperationObject::addDeepObject(\pairs, sprintf("%s[%d]", prefix, $#), element);
+                }
+                return;
+        }
+        pairs += OperationObject::formPair(prefix, value);
+    }
+
+    #! Returns one percent-encoded \c "key=value" pair
+    private static string formPair(string key, auto value) {
+        return mime_get_urlencoded_string(key) + "=" + mime_get_urlencoded_string(OperationObject::formScalar(value));
+    }
+
+    #! Returns the wire representation of a scalar value in a form-encoded body
+    /** @note A boolean is written as \c "true" or \c "false" rather than as \c "1" or \c "0", which is what
+        converting it to a string would give, because that is what APIs taking form-encoded bodies document
+        and accept.  A date with no explicit conversion is written in ISO-8601 in UTC.
+    */
+    private static string formScalar(auto value) {
+        switch (value.typeCode()) {
+            case NT_BOOLEAN:
+                return value ? "true" : "false";
+            case NT_DATE: {
+                # NOTE: a "Z" in a date format string writes the UTC offset, not a literal "Z"
+                TimeZone utc(0);
+                return utc.date(value).format("YYYY-MM-DDTHH:mm:SS") + "Z";
+            }
+        }
+        return value.toString();
     }
 
     #! processes a REST API client-side request to the operation

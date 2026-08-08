@@ -407,6 +407,8 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test generator union type schemas", \testGeneratorUnionTypeSchemas());
         addTestCase("Test getTypeForReference/replaceTypeForReference", \testTypeForReference());
         addTestCase("Test multiple object-valued query parameters", \testMultipleObjectQueryParams());
+        addTestCase("Test server URL scheme", \testServerUrlScheme());
+        addTestCase("Test form-encoded request body encoding", \testFormUrlEncodedBody());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -460,6 +462,138 @@ public class OpenApi3Test inherits QUnit::Test {
         # and none at all is still fine
         assertTrue(exists loadWithQueryParams((plain,)),
             "an operation with no object-valued query parameter loads");
+    }
+
+    testServerUrlScheme() {
+        checkModules();
+
+        # the scheme declared in "servers" has to survive into the target URL: downgrading a schema that
+        # says it is served over TLS would have a client built from it send credentials in the clear
+        OpenApi3Schema https = loadWithServers(({"url": "https://api.example.com/v1"},));
+        assertEq("https://api.example.com/v1", https.getTargetUrl());
+
+        OpenApi3Schema http = loadWithServers(({"url": "http://api.example.com/v1"},));
+        assertEq("http://api.example.com/v1", http.getTargetUrl());
+
+        # a schema declaring no servers at all keeps the historical default
+        hash<auto> soh = ValidOpenApi3Schema + {
+            "paths": {"/preview": {"get": {"operationId": "preview", "responses": {"200": {"description": "ok"}}}}},
+            "host": "api.example.com",
+        };
+        remove soh.servers;
+        assertEq("http://api.example.com",
+            OpenApi3::OpenApi3Loader::fromString(my_make_json(soh), True).getTargetUrl());
+    }
+
+    testFormUrlEncodedBody() {
+        checkModules();
+
+        # "deepObject" is what an API taking structured form bodies declares, and without honoring the
+        # Encoding Object a property that is not a scalar cannot be serialized at all
+        OpenApi3Schema schema = loadWithFormBody({
+            "metadata": {"style": "deepObject", "explode": True},
+            "expand": {"style": "deepObject", "explode": True},
+            "nested": {"style": "deepObject", "explode": True},
+        });
+        assertEq("email=a%40b.com&metadata%5Border%5D=123&expand%5B0%5D=src&expand%5B1%5D=inv",
+            serializeBody(schema, {
+                "email": "a@b.com",
+                "metadata": {"order": "123"},
+                "expand": ("src", "inv"),
+            }));
+
+        # deepObject nests to any depth
+        assertEq("nested%5Ba%5D%5B0%5D%5Bb%5D=1",
+            serializeBody(schema, {"nested": {"a": ({"b": 1},)}}));
+
+        # a boolean is written as "true"/"false", not as the "1"/"0" a string conversion would give
+        assertEq("nested%5Bflag%5D=true", serializeBody(schema, {"nested": {"flag": True}}));
+
+        # "form" with explode, the OpenAPI default: an object's properties become top-level pairs and an
+        # array repeats its key
+        OpenApi3Schema form = loadWithFormBody({});
+        assertEq("email=a%40b.com&order=123", serializeBody(form, {
+            "email": "a@b.com",
+            "metadata": {"order": "123"},
+        }));
+        assertEq("expand=src&expand=inv", serializeBody(form, {"expand": ("src", "inv")}));
+
+        # "form" without explode joins with commas
+        OpenApi3Schema noexp = loadWithFormBody({
+            "expand": {"style": "form", "explode": False},
+            "metadata": {"style": "form", "explode": False},
+        });
+        assertEq("expand=src,inv", serializeBody(noexp, {"expand": ("src", "inv")}));
+        assertEq("metadata=order,123", serializeBody(noexp, {"metadata": {"order": "123"}}));
+
+        # the delimited styles
+        OpenApi3Schema delim = loadWithFormBody({
+            "expand": {"style": "spaceDelimited", "explode": False},
+            "codes": {"style": "pipeDelimited", "explode": False},
+        });
+        assertEq("expand=src%20inv", serializeBody(delim, {"expand": ("src", "inv")}));
+        assertEq("codes=1%7C2", serializeBody(delim, {"codes": (1, 2)}));
+
+        # a style that cannot express the value has to say so rather than serialize something wrong
+        OpenApi3Schema bad = loadWithFormBody({"metadata": {"style": "spaceDelimited", "explode": False}});
+        assertThrows("SERIALIZATION-ERROR", "cannot serialize an object value", \serializeBody(),
+            (bad, {"metadata": {"order": "123"}}));
+        OpenApi3Schema unknown = loadWithFormBody({"metadata": {"style": "matrix", "explode": True}});
+        assertThrows("SERIALIZATION-ERROR", "is not valid for a form-encoded request body", \serializeBody(),
+            (unknown, {"metadata": {"order": "123"}}));
+    }
+
+    #! Serializes a request body for the fixture operation and returns the wire form
+    private string serializeBody(OpenApi3Schema schema, hash<auto> body) {
+        OpenApi3::PathItemObject pio = schema.paths.tryMatch("/things");
+        OpenApi3::OperationObject op = pio.getOperation("post", "/things");
+        hash<auto> hdr = {};
+        *data rv = op.getRequestBody(pio, body, \hdr, True);
+        assertEq(MimeTypeFormUrlEncoded, hdr."Content-Type");
+        return rv.toString();
+    }
+
+    #! Builds a one-operation schema with a form-encoded request body using the given Encoding Object
+    private OpenApi3Schema loadWithFormBody(hash<auto> encoding) {
+        hash<auto> content = {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "email": {"type": "string"},
+                    "metadata": {"type": "object", "additionalProperties": {"type": "string"}},
+                    "expand": {"type": "array", "items": {"type": "string"}},
+                    "nested": {"type": "object"},
+                    "codes": {"type": "array", "items": {"type": "integer"}},
+                },
+            },
+        };
+        if (encoding) {
+            content.encoding = encoding;
+        }
+        hash<auto> soh = ValidOpenApi3Schema + {
+            "paths": {
+                "/things": {
+                    "post": {
+                        "operationId": "createThing",
+                        "requestBody": {
+                            "required": True,
+                            "content": {MimeTypeFormUrlEncoded: content},
+                        },
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        return OpenApi3::OpenApi3Loader::fromString(my_make_json(soh), True);
+    }
+
+    #! Builds a one-operation schema with the given "servers" list
+    private OpenApi3Schema loadWithServers(list<auto> servers) {
+        hash<auto> soh = ValidOpenApi3Schema + {
+            "paths": {"/preview": {"get": {"operationId": "preview", "responses": {"200": {"description": "ok"}}}}},
+            "servers": servers,
+        };
+        return OpenApi3::OpenApi3Loader::fromString(my_make_json(soh), True);
     }
 
     #! Builds a one-operation schema whose query parameters are the ones given
