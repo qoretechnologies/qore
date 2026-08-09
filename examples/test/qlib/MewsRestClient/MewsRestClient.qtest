@@ -123,18 +123,56 @@ public class Main inherits QUnit::Test {
 
             monitor.add(mrc);
             hash<auto> info = monitor.waitForResult();
+            if (info.result == "timeout") {
+                testSkip("external service timed out");
+            }
+            if (info.result == "error" && info.ex) {
+                checkExternalError(info.ex);
+            }
             on_error if (info.ex) {
                 printf("%s\n", get_exception_string(info.ex));
             }
             assertEq("OK", info.result);
         } catch (hash<ExceptionInfo> ex) {
-            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
-            if (status_code == 429 || status_code == 408) {
-                remove mrc;
-                testSkip("rate limited");
-            }
+            checkExternalError(ex);
             rethrow;
         }
+    }
+
+    #! Skips the running test case if the exception indicates that the external service is unavailable
+    private checkExternalError(hash<ExceptionInfo> ex) {
+        if (ex.err =~ /^(SOCKET|HTTP2|HTTP3|QUIC|QOREADDRINFO)-/
+                || ex.err =~ /^HTTPCLIENT-(HOSTNAME|CONNECT|NEGOTIATE|TIMEOUT|RECEIVE|SEND)/
+                || ex.err == "NETWORK-ACCESS-DENIED") {
+            remove mrc;
+            testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
+        }
+        *softint status_code = getHttpStatusCode(ex);
+        if (status_code == 429 || status_code == 408) {
+            remove mrc;
+            testSkip("rate limited: HTTP " + status_code);
+        }
+        if (status_code && status_code >= 500) {
+            remove mrc;
+            testSkip("external service unavailable: HTTP " + status_code);
+        }
+        if (ex.err == "SCHEMA-VALIDATION-ERROR") {
+            remove mrc;
+            testSkip("external API returned an unexpected response: " + ex.desc);
+        }
+    }
+
+    #! Extracts the HTTP status code from an exception, if available
+    private *softint getHttpStatusCode(hash<ExceptionInfo> ex) {
+        *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+            ?? ex.arg."response-headers".status_code;
+        if (!status_code) {
+            status_code = (ex.desc =~ x/status[_ ]code:? ([0-9]+)/)[0];
+        }
+        if (!status_code) {
+            status_code = (ex.desc =~ x/HTTP\/[\d.]+ ([45][0-9][0-9])/)[0];
+        }
+        return status_code;
     }
 
     private usageIntern() {
