@@ -426,6 +426,7 @@ class RestClientIoTest inherits QUnit::Test {
         #! `http_version: "auto"` exercise the real H3+H2 happy-eyeballs race
         int port;
         int h1_port;
+        int noh3_port;
         #! HTTPS listener that requires a client certificate (SSL_VERIFY_PEER
         #! with SSL_VERIFY_FAIL_IF_NO_PEER_CERT) — used by the Phase 2 mTLS
         #! integration tests to prove the server actually sees and enforces
@@ -626,6 +627,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll abort cancels request", \testPingPollAbortCancelsRequest());
         addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
         addTestCase("ping poll happy-eyeballs H3", \testPingPollHappyEyeballsH3());
+        addTestCase("ping poll happy-eyeballs falls back to H2",
+            \testPingPollHappyEyeballsNoH3());
 
         # Cookie option tests
         addTestCase("cookie option", \testCookieOption());
@@ -727,6 +730,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        # HTTPS listener with NO QUIC listener paired with it ("enable_h3": False), which is what a
+        # host that does not serve HTTP/3 looks like -- the H3 leg of a happy-eyeballs race cannot
+        # connect there and the race has to be won by H2
+        noh3_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": False,
         }).port;
         # Plain HTTP listener for HTTP/1.1 tests
         h1_port = server.addListener(<HttpListenerOptionInfo>{
@@ -3536,6 +3548,36 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertFalse(exists ex,
             "auto/happy-eyeballs ping must complete without hanging or idle/peer-close");
         assertTrue(op.goalReached(), "auto/happy-eyeballs ping must reach its goal");
+    }
+
+    testPingPollHappyEyeballsNoH3() {
+        # A host that serves HTTPS but no HTTP/3 is the common case -- Paddle, for one, advertises no
+        # alt-svc at all.  The H3 leg of the race cannot connect there, and the ping must still be won by
+        # H2.  Here nothing answers on the UDP port, so the H3 leg times out rather than being rejected;
+        # the rule that a REJECTED leg is not a failed attempt is covered by
+        # HttpClientIoTest::testUnresolvedRaceLeg().
+        RestConnection rc("ping-he-noh3", "ping-he-noh3",
+            sprintf("https://127.0.0.1:%d", noh3_port), {}, {
+            "ping_method": "GET",
+            "ping_path": "/api/test",
+            "http_version": "auto",
+            "ssl_verify_cert": False,
+        });
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("happy-eyeballs no-H3 ping error: %y\n", ex);
+        assertFalse(exists ex, "an auto ping to a host without HTTP/3 must fall back to HTTP/2");
+        assertTrue(op.goalReached(), "the happy-eyeballs race must be won by H2");
+
+        # and the connection is usable over H2 afterwards, not left in a failed state
+        RestClientIo::RestClientIo client({
+            "url": sprintf("https://127.0.0.1:%d", noh3_port),
+            "http_version": "auto",
+            "ssl_verify_cert": False,
+        });
+        hash<auto> resp = client.restGet("/api/test");
+        assertEq(200, resp.status_code);
     }
 
     # ---- Cookie option tests ----

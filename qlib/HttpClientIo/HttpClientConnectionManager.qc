@@ -3006,6 +3006,36 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
     }
 
+    #! Returns @ref True if the given connection is a leg of an unresolved happy-eyeballs race
+    /** A happy-eyeballs race connects over HTTP/3 and HTTP/2 in parallel and keeps whichever settles
+        first.  While the race is unresolved either candidate may close without that saying anything about
+        the endpoint: an HTTP/3 leg failing against a host that simply does not serve HTTP/3 is the
+        expected outcome, and the race goes on to win over HTTP/2.
+
+        A caller that tracks connect failures — the connection-monitor ping operation, for one — must not
+        count such a leg as a failed connection attempt, or an \c "auto" connection to any host without
+        HTTP/3 fails its ping instead of falling back.  Re-driving the acquisition instead lets
+        @ref advanceAsyncHE() start the other protocol.
+
+        @param candidate the connection to test, if any
+
+        @return @ref True if a race is still in flight and \a candidate is one of its two candidates
+
+        @since HttpClientIo 1.1
+    */
+    bool isUnresolvedRaceLeg(*HttpClientConnection candidate) {
+        if (!candidate) {
+            return False;
+        }
+        AutoLock al(async_race_lock);
+        foreach AsyncRace race in (async_races.iterator()) {
+            if (race.h3conn === candidate || (race.h2conn && race.h2conn === candidate)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
     #! Internal: submits a connection poll operation to the controller
     /** @param key the pool key "host:port"
         @param conn the connection to submit

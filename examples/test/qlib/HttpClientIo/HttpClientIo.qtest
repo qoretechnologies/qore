@@ -325,6 +325,29 @@ class FullDuplexEchoRawServer {
     }
 }
 
+#! Exposes the manager's in-flight happy-eyeballs races so the race-leg rule can be tested directly
+class RaceLegTestConnMgr inherits HttpClientIo::HttpClientConnectionManager {
+    constructor(*hash<auto> opts) : HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the two candidates of the single in-flight race, or nothing if there is none
+    *list<HttpClientIo::HttpClientConnection> getRaceLegs() {
+        AutoLock al(async_race_lock);
+        foreach auto race in (async_races.iterator()) {
+            list<HttpClientIo::HttpClientConnection> rv = (race.h3conn,);
+            if (race.h2conn) {
+                rv += race.h2conn;
+            }
+            return rv;
+        }
+    }
+
+    int getRaceCount() {
+        AutoLock al(async_race_lock);
+        return async_races.size();
+    }
+}
+
 class HttpClientIoTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -396,6 +419,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
         # Module and definition tests
         addTestCase("module load test", \testModuleLoad());
+        addTestCase("unresolved happy-eyeballs race leg", \testUnresolvedRaceLeg());
         addTestCase("unified hashdecl and enum definitions", \testUnifiedDefinitions());
         addTestCase("unified connection manager creation", \testUnifiedConnectionManagerCreation());
 
@@ -629,6 +653,49 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     # ---- Module and Type Tests ----
+
+    testUnresolvedRaceLeg() {
+        # While a happy-eyeballs race is unresolved, either candidate may close without that saying
+        # anything about the endpoint: an HTTP/3 leg failing against a host that does not serve HTTP/3
+        # is the expected outcome and the race is still won by HTTP/2.  A caller that tracks connect
+        # failures -- the connection-monitor ping op -- must be able to tell a losing leg from a failed
+        # connection, or an "auto" ping to any such host fails instead of falling back.
+        RaceLegTestConnMgr mgr();
+        on_exit mgr.closeAll();
+
+        # nothing is a race leg when there is no race
+        assertFalse(mgr.isUnresolvedRaceLeg(NOTHING));
+        assertEq(0, mgr.getRaceCount());
+
+        # TEST-NET-1 is reserved and unrouted, so neither candidate can settle and the race stays in
+        # flight for as long as this test needs it
+        # drive the non-blocking acquisition just enough to start the race
+        date start = now_us();
+        while (!mgr.getRaceCount() && (now_us() - start) < 10s) {
+            try {
+                *HttpClientIo::HttpClientConnection conn_out;
+                mgr.acquireConnectionAsync("https://192.0.2.1:443", \conn_out);
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            usleep(10ms);
+        }
+        *list<HttpClientIo::HttpClientConnection> legs = mgr.getRaceLegs();
+        if (!legs) {
+            testSkip("no happy-eyeballs race could be started against the blackhole address");
+            return;
+        }
+        # every candidate of an in-flight race is a race leg
+        foreach HttpClientIo::HttpClientConnection leg in (legs) {
+            assertTrue(mgr.isUnresolvedRaceLeg(leg), "an in-flight race candidate is a race leg");
+        }
+
+        # a connection that belongs to no race is not a race leg, even on the same manager
+        RaceLegTestConnMgr other();
+        on_exit other.closeAll();
+        assertFalse(other.isUnresolvedRaceLeg(legs[0]),
+            "a candidate of another manager's race is not this manager's race leg");
+    }
 
     testModuleLoad() {
         assertEq("HttpClientConnectionManager",

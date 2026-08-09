@@ -5752,6 +5752,14 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         if (!tracked_conn || !tracked_conn.isClosed()) {
             return False;
         }
+        # A happy-eyeballs race connects over HTTP/3 and HTTP/2 in parallel; while it is unresolved, a
+        # candidate closing says nothing about the endpoint.  An HTTP/3 leg failing against a host that
+        # does not serve HTTP/3 is the expected outcome and the race still wins over HTTP/2, so counting
+        # it as a failed connection attempt would fail the ping of every "auto" connection to such a host.
+        # Re-driving the acquisition lets the race start the other protocol.
+        if (rcio.getConnectionManager().isUnresolvedRaceLeg(tracked_conn)) {
+            return False;
+        }
         *hash<auto> err = tracked_conn.getPollOperation().getError();
         hash<ExceptionInfo> ex = err
             ? <ExceptionInfo>{
