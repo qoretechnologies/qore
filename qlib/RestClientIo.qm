@@ -2819,20 +2819,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             return rv;
         }
 
-        #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
-        /** @param raw the raw HTTP response hash (status_code, headers, body)
-            @param req_error_passthru if False, throw on HTTP error responses
-            @param req_allow_any_response if True, allow response deserialization
-                errors to pass through in the returned response hash
-            @param method HTTP method (for validator)
-            @param path request path (for validator)
-            @param request_headers request headers to include in error response metadata
-            @param request_body request body to include in error response metadata
-
-            @return the deserialized RestResponseInfo hash
-
-            @throw REST-RESPONSE-ERROR if \a req_error_passthru is False and status >= 300
-        */
         #! Returns the given request headers with credential values removed
         /** @param hdr the headers that were sent
 
@@ -2853,6 +2839,20 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             return rv;
         }
 
+        #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
+        /** @param raw the raw HTTP response hash (status_code, headers, body)
+            @param req_error_passthru if False, throw on HTTP error responses
+            @param req_allow_any_response if True, allow response deserialization
+                errors to pass through in the returned response hash
+            @param method HTTP method (for validator)
+            @param path request path (for validator)
+            @param request_headers request headers to include in error response metadata
+            @param request_body request body to include in error response metadata
+
+            @return the deserialized RestResponseInfo hash
+
+            @throw REST-RESPONSE-ERROR if \a req_error_passthru is False and status >= 300
+        */
         private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw,
                 bool req_error_passthru, bool req_allow_any_response, string method,
                 string path, *hash<auto> request_headers, *data request_body) {
