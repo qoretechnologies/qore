@@ -4779,6 +4779,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
         }
 
+        # a composition that is only a wrapper around one schema describes whatever that schema describes
+        if (!desc.val()) {
+            inheritDescriptionFromWrapper();
+        }
+
         *hash xmlObj;
         if (optional_field(obj_type, oh, "xml", NT_HASH, \xmlObj))
             xml = new XmlObject(xmlObj);
@@ -4954,6 +4959,36 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return orNothingDataType;
         }
         return RestSchemaValidator::AbstractRestSchemaObject::getDataType(required, rest);
+    }
+
+    #! Adopts the wrapped schema's description when the composition carries none of its own
+    /** A property declared as \c {allOf: [{$ref: X}]} or \c {anyOf: [{$ref: X}, {type: "null"}]} says nothing
+        about itself: it is X, or X-or-null.  X's own \c description is therefore the description of the
+        property, and dropping it leaves an option with no explanation for a user to read — which is
+        precisely the case in which the schema author expected the reusable type to supply one.
+
+        Only an unambiguous wrapper is followed: a single \c allOf member, or a composition with exactly one
+        member that is not the \c "null" type.
+    */
+    private inheritDescriptionFromWrapper() {
+        *SchemaObject source;
+        if (allOf.size() == 1 && !oneOf && !anyOf) {
+            source = allOf[0];
+        } else if (!allOf) {
+            list<SchemaObject> members = oneOf ? oneOf : anyOf;
+            list<SchemaObject> real();
+            foreach SchemaObject member in (members) {
+                if (!member.nullType) {
+                    real += member;
+                }
+            }
+            if (real.size() == 1) {
+                source = real[0];
+            }
+        }
+        if (source && source.desc.val()) {
+            desc = source.desc;
+        }
     }
 
     #! Resolves a schema to the constrained scalar it wraps, if it is only a wrapper around one

@@ -922,6 +922,15 @@ public class PaddleManifest {
                         "short_desc": "What is being billed: a price and a quantity per line",
                         "preselected": True,
                     },
+                    # the only option whose schema chain carries no description of its own
+                    "origin": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Origin",
+                        "short_desc": "How the transaction came about",
+                        "desc": "How the transaction came about — `api` for one created through the API, "
+                            "`web` for a Paddle.js checkout, or one of the `subscription_…` values for one "
+                            "Paddle raised itself for a renewal, charge or update.\n\n"
+                            "Leave this unset when creating a transaction: Paddle sets it.",
+                    },
                     "status": <RestSchemaFieldOverlayInfo>{
                         "short_desc": "Leave unset for a draft; \"billed\" issues it to the customer",
                         "preselected": True,
