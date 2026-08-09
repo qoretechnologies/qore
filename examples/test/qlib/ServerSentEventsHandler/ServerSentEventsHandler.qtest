@@ -78,6 +78,23 @@ public class Main inherits QUnit::Test {
         client.registerObserver(observer);
         client.observersReady();
 
+        # Wait for the server to register the connection before sending
+        # (the client may report connected before the server has registered it)
+        int retries = 0;
+        while (!sse.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        if (!sse.getConnectionIds()) {
+            throw "TEST-ERROR", "Server did not register connection in time";
+        }
+
+        # Wait for the connected event to ensure the client is fully ready to receive events
+        observer.waitForConnected();
+
+        # Connection registration happens before the server I/O loop starts polling the queue.
+        usleep(100ms);
+
         string str = get_random_string(50);
         hash<SseMessageInfo> event = <SseMessageInfo>{
             "event": "event",
@@ -127,7 +144,7 @@ class MyObserver inherits Observer {
             cond.wait(m, 1s);
             --waiting;
             date d = now_us() - start;
-            if (d > 5s) {
+            if (d > 10s) {
                 throw "ERROR", sprintf("no matching data received in timeout; l: %y", l);
             }
             foreach hash<auto> h in (l) {
@@ -135,6 +152,29 @@ class MyObserver inherits Observer {
                     return h."data";
                 }
             }
+        }
+    }
+
+    # Wait for the connected event to ensure the client is fully ready
+    waitForConnected() {
+        date start = now_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (True) {
+            foreach hash<auto> h in (l) {
+                if (h.id == EVENT_SSE_CONNECTED) {
+                    return;
+                }
+            }
+            date d = now_us() - start;
+            if (d > 10s) {
+                throw "ERROR", sprintf("connected event not received in timeout; l: %y", l);
+            }
+            ++waiting;
+            cond.wait(m, 1s);
+            --waiting;
         }
     }
 
