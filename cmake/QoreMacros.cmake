@@ -2501,7 +2501,11 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 # qlib/<Module>.i18n directory so adding catalogs cannot change the module's
 # source layout classification.  An optional second argument supplies an
 # explicit catalog source directory for projects whose modules do not live
-# below qlib/.  An optional third argument overrides the install component.
+# below qlib/.  An optional third argument overrides the install component,
+# and an optional fourth argument overrides the catalog install root.  The
+# latter can be relative to the consuming project's CMAKE_INSTALL_PREFIX;
+# downstream projects must not be forced to write to Qore's own installation
+# prefix.
 # Each source locale is installed as
 # <domain>/<locale>/<Module>.json.  The owner-qualified fragment layout lets
 # multiple modules contribute disjoint messages to one catalog domain without
@@ -2509,9 +2513,9 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 # deterministic filename order.
 FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
     unset(_qore_module_catalog_dir)
-    if (ARGC GREATER 3)
+    if (ARGC GREATER 4)
         message(FATAL_ERROR
-            "QORE_INSTALL_USER_MODULE_CATALOGS accepts at most a module name, catalog source directory, and install component")
+            "QORE_INSTALL_USER_MODULE_CATALOGS accepts at most a module name, catalog source directory, install component, and catalog install root")
     endif()
     if (ARGC GREATER 1)
         get_filename_component(_qore_module_catalog_dir "${ARGV1}"
@@ -2532,10 +2536,14 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
     if (ARGC GREATER 2)
         set(_qore_catalog_install_component "${ARGV2}")
     endif()
+    set(_qore_catalog_install_dir "${QORE_CATALOG_DIR}")
+    if (ARGC GREATER 3)
+        set(_qore_catalog_install_dir "${ARGV3}")
+    endif()
     if (_qore_module_catalog_dir)
-        if (NOT QORE_CATALOG_DIR)
+        if (NOT _qore_catalog_install_dir)
             message(FATAL_ERROR
-                "QORE_CATALOG_DIR is required to install i18n catalogs for ${_module_name}")
+                "a catalog install root is required to install i18n catalogs for ${_module_name}")
         endif()
         file(GLOB _qore_catalog_domain_paths CONFIGURE_DEPENDS
             LIST_DIRECTORIES true
@@ -2554,7 +2562,7 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
                     "${_qore_catalog_locale_file}" NAME_WE)
                 install(FILES "${_qore_catalog_locale_file}"
                     DESTINATION
-                        "${QORE_CATALOG_DIR}/${_qore_catalog_domain}/${_qore_catalog_locale}"
+                        "${_qore_catalog_install_dir}/${_qore_catalog_domain}/${_qore_catalog_locale}"
                     RENAME "${_module_name}.json"
                     COMPONENT ${_qore_catalog_install_component})
             endforeach()
@@ -2576,7 +2584,7 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
             set(_qore_catalog_locale "${CMAKE_MATCH_2}")
             install(FILES "${_qore_flat_catalog_file}"
                 DESTINATION
-                    "${QORE_CATALOG_DIR}/${_qore_catalog_domain}/${_qore_catalog_locale}"
+                    "${_qore_catalog_install_dir}/${_qore_catalog_domain}/${_qore_catalog_locale}"
                 RENAME "${_module_name}.json"
                 COMPONENT ${_qore_catalog_install_component})
         endforeach()

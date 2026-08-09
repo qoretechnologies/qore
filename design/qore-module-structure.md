@@ -79,8 +79,11 @@ another.
 
 Projects that consume Qore's CMake API but keep modules outside `qlib/` call
 `QORE_INSTALL_USER_MODULE_CATALOGS(<ModuleName> <catalog-source-dir>
-<install-component>)` explicitly. The source directory and component arguments
-are optional; omitting them preserves the standard Qore layout and component.
+<install-component> <catalog-install-root>)` explicitly. The source directory,
+component, and install-root arguments are optional; omitting them preserves the
+standard Qore layout and component. A downstream project installed under its
+own prefix passes a relative install root so CMake resolves the catalogs below
+that project's `CMAKE_INSTALL_PREFIX` rather than Qore's installation prefix.
 Do not install the source `i18n/` directory inside the runtime module directory:
 the native i18n search path resolves the owner-qualified installed fragments.
 

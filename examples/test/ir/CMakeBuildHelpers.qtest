@@ -31,6 +31,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         }
 
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
+        addTestCase("downstream catalog install root",
+            \testDownstreamCatalogInstallRoot());
         addTestCase("generic qcc object helper builds standalone .qo files",
             \testGenericQccObjectHelpers());
         addTestCase("managed qcc outputs prune stale artifacts safely",
@@ -59,6 +61,46 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
     private date mtime(string path) {
         hash<auto> info = hstat(path);
         return info.mtime;
+    }
+
+    testDownstreamCatalogInstallRoot() {
+        TmpDir tmp("qore-cmake-downstream-catalog-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string install_dir = tmp.path + "/install";
+        string catalog_dir = src_dir + "/catalogs/provider.example";
+        mkdir(src_dir);
+        mkdir(src_dir + "/catalogs");
+        mkdir(catalog_dir);
+        write(catalog_dir + "/root.json",
+            "{\"schema_version\":1,\"locales\":{\"root\":{\"messages\":{}}}}\n");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreDownstreamCatalogInstall NONE)
+find_package(Qore REQUIRED)
+QORE_INSTALL_USER_MODULE_CATALOGS(OutsideModule
+    \"${CMAKE_SOURCE_DIR}/catalogs\" DownstreamCatalogs
+    \"share/downstream/i18n\")
+");
+
+        string configure = run(sprintf(
+            "cmake -S %s -B %s -DCMAKE_INSTALL_PREFIX=%s%s",
+            src_dir, build_dir, install_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/cmake_install.cmake"),
+            "downstream catalog project configures: " + configure);
+        string install = run(sprintf(
+            "cmake --install %s --component DownstreamCatalogs", build_dir));
+        string installed = install_dir
+            + "/share/downstream/i18n/provider.example/root/OutsideModule.json";
+        assertTrue(is_file(installed),
+            "catalog installs below the downstream prefix: " + install);
+        assertEq(read(catalog_dir + "/root.json"), read(installed),
+            "installed downstream catalog preserves its content");
+
+        string install_script = read(build_dir + "/cmake_install.cmake");
+        assertTrue(install_script.find("share/downstream/i18n") != -1,
+            "the generated install rule retains the downstream catalog root");
     }
 
     #! The generation lock of the component that publishes \a object.
