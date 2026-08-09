@@ -165,6 +165,7 @@ mkdir -p $RPM_BUILD_ROOT%{module_dir}
 rm -f $RPM_BUILD_ROOT%{_libdir}/libqore.la
 
 %check
+export LD_LIBRARY_PATH=$PWD
 export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{version}
 ./qore examples/test/qore/threads/background.qtest
 ./qore examples/test/qore/threads/deadlock.qtest
