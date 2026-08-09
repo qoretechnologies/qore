@@ -67,9 +67,11 @@ Recursively discover catalogs in canonical
 .I Module/i18n
 and
 .I Module.i18n
-source layouts, load every technical owner module, and compare each root and
-translation with current provider metadata.  Owner modules are inferred from
-the source layout without provider, application, or locale lists.  Use
+source layouts, discover Qore modules containing exact data-provider
+registration calls even before their first catalog exists, load every
+technical owner module, and compare each root and translation with current
+provider metadata.  Owner modules are inferred from the source layout and
+technical registration APIs without provider, application, or locale lists.  Use
 .B \-\-owner
 to identify the owner of a noncanonical source tree; exactly one owner is
 required when it cannot be inferred.  Use

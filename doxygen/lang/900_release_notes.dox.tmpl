@@ -1395,7 +1395,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         catalogs and identical brand names or cognates; it can also recursively validate catalog trees from Qore,
         external modules, and downstream platforms without hardcoded provider or locale lists; owner-scoped extraction makes source
         checks independent of ambient modules, rejects orphaned catalog domains, and correctly separates action
-        contributions when multiple modules share an application catalog domain
+        contributions when multiple modules share an application catalog domain; source-tree verification also
+        discovers new provider owner modules before their first catalog exists and preserves the actual owner of
+        registrations performed by a module loaded from a deferred provider initializer
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration

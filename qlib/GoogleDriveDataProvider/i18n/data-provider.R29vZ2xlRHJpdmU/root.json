@@ -1,0 +1,1773 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.R29vZ2xlRHJpdmU.display_name": {
+          "source": "Google Drive",
+          "message": "Google Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.short_desc": {
+          "source": "Google Drive cloud file storage",
+          "message": "Google Drive cloud file storage"
+        },
+        "app.R29vZ2xlRHJpdmU.desc": {
+          "source": "Provides access to [Google Drive](https://www.google.com/drive/) for cloud file storage and sharing.\n\nDrive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name and renaming a file does not change how it is addressed.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Document automation**: create, replace, and share reports and records\n- **Content extraction**: export Google Docs, Sheets, and Slides to PDF or Office formats for downstream processing\n- **Organization**: create folders, and copy, move, and remove files\n\nGoogle and Google Drive are trademarks of Google LLC",
+          "message": "Provides access to [Google Drive](https://www.google.com/drive/) for cloud file storage and sharing.\n\nDrive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name and renaming a file does not change how it is addressed.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Document automation**: create, replace, and share reports and records\n- **Content extraction**: export Google Docs, Sheets, and Slides to PDF or Office formats for downstream processing\n- **Organization**: create folders, and copy, move, and remove files\n\nGoogle and Google Drive are trademarks of Google LLC"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Drive",
+          "message": "Make a custom API call to Google Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Drive** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Google Drive** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "List Files"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List or search files and folders",
+          "message": "List or search files and folders"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.desc": {
+          "source": "Lists or searches files and folders.\n\nSet `folder_id` to list one folder, `name` to match on name, or `custom_query` to use a raw Drive query expression when the other options are not enough.\n\nResults are paginated; when `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Lists or searches files and folders.\n\nSet `folder_id` to list one folder, `name` to match on name, or `custom_query` to use a raw Drive query expression when the other options are not enough.\n\nResults are paginated; when `next_page_token` is returned, pass it back in `page_token` to retrieve the following page."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Folder ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "List only files in this folder",
+          "message": "List only files in this folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.desc": {
+          "source": "List only files held in this folder; if not set, files anywhere in the Drive are listed",
+          "message": "List only files held in this folder; if not set, files anywhere in the Drive are listed"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.short_desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Match files whose name contains this text"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Match files whose name contains this text"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME Type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.short_desc": {
+          "source": "Match files of this MIME type",
+          "message": "Match files of this MIME type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.desc": {
+          "source": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to list folders",
+          "message": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to list folders"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.display_name": {
+          "source": "Include Trashed",
+          "message": "Include Trashed"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.short_desc": {
+          "source": "Include files in the trash",
+          "message": "Include files in the trash"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.desc": {
+          "source": "Include files that are in the trash; excluded by default",
+          "message": "Include files that are in the trash; excluded by default"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.display_name": {
+          "source": "Custom Query",
+          "message": "Custom Query"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.short_desc": {
+          "source": "A raw Drive query expression",
+          "message": "A raw Drive query expression"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.desc": {
+          "source": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax",
+          "message": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Order By"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "The sort order for results"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results, as a Drive `orderBy` expression",
+          "message": "The sort order for results, as a Drive `orderBy` expression"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "Shared Drive ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "List only files held on this shared drive",
+          "message": "List only files held on this shared drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.desc": {
+          "source": "List only files held on this shared drive (formerly a \"Team Drive\").\n\nSetting this selects the `drive` collection unless `corpora` says otherwise, so the listing covers that shared drive rather than the user's own `My Drive`",
+          "message": "List only files held on this shared drive (formerly a \"Team Drive\").\n\nSetting this selects the `drive` collection unless `corpora` says otherwise, so the listing covers that shared drive rather than the user's own `My Drive`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.short_desc": {
+          "source": "The collection of files to search",
+          "message": "The collection of files to search"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.desc": {
+          "source": "The collection of files to search.\n\nIf not set, `drive` is used when `drive_id` is set, and otherwise the collection Drive selects by default for the request",
+          "message": "The collection of files to search.\n\nIf not set, `drive` is used when `drive_id` is set, and otherwise the collection Drive selects by default for the request"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "My Drive",
+          "message": "My Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Files in the user's own My Drive",
+          "message": "Files in the user's own My Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "Files the user owns or that have been shared with them directly, in their own `My Drive`",
+          "message": "Files the user owns or that have been shared with them directly, in their own `My Drive`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "One Shared Drive",
+          "message": "One Shared Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Files on the shared drive named in drive_id",
+          "message": "Files on the shared drive named in drive_id"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Files held on the shared drive named in `drive_id`, which must be set",
+          "message": "Files held on the shared drive named in `drive_id`, which must be set"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.display_name": {
+          "source": "My Drive and All Shared Drives",
+          "message": "My Drive and All Shared Drives"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
+          "source": "Files in My Drive and on every shared drive the user can reach",
+          "message": "Files in My Drive and on every shared drive the user can reach"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.desc": {
+          "source": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known",
+          "message": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Files shared with the user's whole domain",
+          "message": "Files shared with the user's whole domain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Files shared with the user's whole domain; requires a Google Workspace account",
+          "message": "Files shared with the user's whole domain; requires a Google Workspace account"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.display_name": {
+          "source": "Include Shared Drives",
+          "message": "Include Shared Drives"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.short_desc": {
+          "source": "Include files held on shared drives in the results",
+          "message": "Include files held on shared drives in the results"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.desc": {
+          "source": "Include files held on shared drives (formerly \"Team Drives\") in the results.\n\nWithout this a listing covers only the user's own `My Drive`, so shared-drive content is invisible even to an account that has access to it",
+          "message": "Include files held on shared drives (formerly \"Team Drives\") in the results.\n\nWithout this a listing covers only the user's own `My Drive`, so shared-drive content is invisible even to an account that has access to it"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Page Size"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "The maximum number of files to return per page",
+          "message": "The maximum number of files to return per page"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of files to return per page; the Drive API caps this at `1000`",
+          "message": "The maximum number of files to return per page; the Drive API caps this at `1000`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Page Token"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "The token returned by a previous truncated listing"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` value returned by a previous listing, used to retrieve the following page",
+          "message": "The `next_page_token` value returned by a previous listing, used to retrieve the following page"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get File Info",
+          "message": "Get File Info"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get a file's metadata",
+          "message": "Get a file's metadata"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieves a file's metadata: its name, type, size, timestamps, parents, and links.\n\nUse `download-file` to retrieve the content itself.",
+          "message": "Retrieves a file's metadata: its name, type, size, timestamps, parents, and links.\n\nUse `download-file` to retrieve the content itself."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name",
+          "message": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Download File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file's content",
+          "message": "Download a file's content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads a file's content.\n\nGoogle-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be downloaded; use `export-file` to convert one to a concrete format instead.",
+          "message": "Downloads a file's content.\n\nGoogle-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be downloaded; use `export-file` to convert one to a concrete format instead."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name",
+          "message": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
+          "source": "Export Document",
+          "message": "Export Document"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
+          "source": "Export a Google-native document to a concrete format",
+          "message": "Export a Google-native document to a concrete format"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.desc": {
+          "source": "Exports a Google-native document (Docs, Sheets, Slides) to a concrete format such as PDF or a Microsoft Office format.\n\nThe formats available depend on the document type; exporting a Sheet to `text/csv` returns the first sheet only.",
+          "message": "Exports a Google-native document (Docs, Sheets, Slides) to a concrete format such as PDF or a Microsoft Office format.\n\nThe formats available depend on the document type; exporting a Sheet to `text/csv` returns the first sheet only."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the Google-native document to export",
+          "message": "The Drive identifier of the Google-native document to export"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.display_name": {
+          "source": "Export Format",
+          "message": "Export Format"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.short_desc": {
+          "source": "The format to export the document to",
+          "message": "The format to export the document to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.desc": {
+          "source": "The format to export the document to; the formats available depend on the document type",
+          "message": "The format to export the document to; the formats available depend on the document type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "Portable Document Format",
+          "message": "Portable Document Format"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "Portable Document Format; available for Docs, Sheets, and Slides",
+          "message": "Portable Document Format; available for Docs, Sheets, and Slides"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "Word Document (docx)",
+          "message": "Word Document (docx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "Microsoft Word document",
+          "message": "Microsoft Word document"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "Microsoft Word `docx` document; available for Docs",
+          "message": "Microsoft Word `docx` document; available for Docs"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "Excel Workbook (xlsx)",
+          "message": "Excel Workbook (xlsx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "Microsoft Excel workbook",
+          "message": "Microsoft Excel workbook"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "Microsoft Excel `xlsx` workbook; available for Sheets",
+          "message": "Microsoft Excel `xlsx` workbook; available for Sheets"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "PowerPoint Presentation (pptx)",
+          "message": "PowerPoint Presentation (pptx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "Microsoft PowerPoint presentation",
+          "message": "Microsoft PowerPoint presentation"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "Microsoft PowerPoint `pptx` presentation; available for Slides",
+          "message": "Microsoft PowerPoint `pptx` presentation; available for Slides"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.short_desc": {
+          "source": "Comma-separated values",
+          "message": "Comma-separated values"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.desc": {
+          "source": "Comma-separated values; available for Sheets, and exports the first sheet only",
+          "message": "Comma-separated values; available for Sheets, and exports the first sheet only"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Plain text"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text; available for Docs",
+          "message": "Plain text; available for Docs"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Upload File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to Drive",
+          "message": "Upload a file to Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to Drive.\n\nIf `name` is not set, the file's own name is used.  Drive does not require names to be unique, so uploading twice creates two files; use `replace-file` to update an existing one instead.",
+          "message": "Uploads a file to Drive.\n\nIf `name` is not set, the file's own name is used.  Drive does not require names to be unique, so uploading twice creates two files; use `replace-file` to update an existing one instead."
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "The file to upload"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name, content, and MIME type",
+          "message": "The file to upload, including its name, content, and MIME type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Folder ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to upload the file into",
+          "message": "The folder to upload the file into"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to upload the file into; if not set, the user's `My Drive` root is used",
+          "message": "The folder to upload the file into; if not set, the user's `My Drive` root is used"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.short_desc": {
+          "source": "The name to store the file under",
+          "message": "The name to store the file under"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.desc": {
+          "source": "The name to store the file under; if not set, the file's own name is used",
+          "message": "The name to store the file under; if not set, the file's own name is used"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A description to store with the file",
+          "message": "A description to store with the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description to store with the file",
+          "message": "A description to store with the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text File",
+          "message": "Create Text File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create a file from text content",
+          "message": "Create a file from text content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates a file directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and notes.",
+          "message": "Creates a file directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and notes."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.short_desc": {
+          "source": "The name for the new file",
+          "message": "The name for the new file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.desc": {
+          "source": "The name for the new file",
+          "message": "The name for the new file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content for the new file",
+          "message": "The text content for the new file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content for the new file",
+          "message": "The text content for the new file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Folder ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to create the file in",
+          "message": "The folder to create the file in"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.desc": {
+          "source": "The Drive identifier of the folder; if not set, the user's `My Drive` root is used",
+          "message": "The Drive identifier of the folder; if not set, the user's `My Drive` root is used"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME Type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type for the new file",
+          "message": "The MIME type for the new file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.desc": {
+          "source": "The MIME type to store with the new file",
+          "message": "The MIME type to store with the new file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
+          "source": "Replace File Content",
+          "message": "Replace File Content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
+          "source": "Replace an existing file's content",
+          "message": "Replace an existing file's content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.desc": {
+          "source": "Replaces an existing file's content while keeping its ID, name, and sharing settings.\n\nUse this rather than uploading again when consumers hold a link to the file, since a new upload creates a new file with a new ID.",
+          "message": "Replaces an existing file's content while keeping its ID, name, and sharing settings.\n\nUse this rather than uploading again when consumers hold a link to the file, since a new upload creates a new file with a new ID."
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose content is to be replaced; the file keeps its ID, name, and sharing settings",
+          "message": "The Drive identifier of the file whose content is to be replaced; the file keeps its ID, name, and sharing settings"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.short_desc": {
+          "source": "The replacement content",
+          "message": "The replacement content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.desc": {
+          "source": "The replacement content",
+          "message": "The replacement content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Create Folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a folder",
+          "message": "Create a folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Creates a folder, optionally inside another folder.",
+          "message": "Creates a folder, optionally inside another folder."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name for the new folder",
+          "message": "The name for the new folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name for the new folder",
+          "message": "The name for the new folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.display_name": {
+          "source": "Parent Folder ID",
+          "message": "Parent Folder ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.short_desc": {
+          "source": "The folder to create the new folder in",
+          "message": "The folder to create the new folder in"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.desc": {
+          "source": "The folder to create the new folder in; if not set, the user's `My Drive` root is used",
+          "message": "The folder to create the new folder in; if not set, the user's `My Drive` root is used"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
+          "source": "Copy File",
+          "message": "Copy File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
+          "source": "Copy a file",
+          "message": "Copy a file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.desc": {
+          "source": "Copies a file, optionally renaming it or placing the copy in a different folder.",
+          "message": "Copies a file, optionally renaming it or placing the copy in a different folder."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to copy",
+          "message": "The Drive identifier of the file to copy"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "New Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.short_desc": {
+          "source": "The name for the copy",
+          "message": "The name for the copy"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.desc": {
+          "source": "The name for the copy; if not set, Drive names it `Copy of <name>`",
+          "message": "The name for the copy; if not set, Drive names it `Copy of <name>`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Folder ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to place the copy in",
+          "message": "The folder to place the copy in"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to place the copy in; if not set, the copy is placed beside the original",
+          "message": "The folder to place the copy in; if not set, the copy is placed beside the original"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
+          "source": "Move File",
+          "message": "Move File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
+          "source": "Move a file to a different folder",
+          "message": "Move a file to a different folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.desc": {
+          "source": "Moves a file to a different folder, removing it from the folders it is currently in.",
+          "message": "Moves a file to a different folder, removing it from the folders it is currently in."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to move",
+          "message": "The Drive identifier of the file to move"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Folder ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to move the file into",
+          "message": "The folder to move the file into"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to move the file into",
+          "message": "The folder to move the file into"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
+          "source": "Rename File",
+          "message": "Rename File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
+          "source": "Change a file's name",
+          "message": "Change a file's name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.desc": {
+          "source": "Changes a file's name, keeping its ID, its location, and its sharing settings.\n\nDrive addresses files by an immutable ID rather than by path, so renaming a file leaves every link to it working.  Drive does not require names to be unique either, so a name already used in the same folder is accepted.",
+          "message": "Changes a file's name, keeping its ID, its location, and its sharing settings.\n\nDrive addresses files by an immutable ID rather than by path, so renaming a file leaves every link to it working.  Drive does not require names to be unique either, so a name already used in the same folder is accepted."
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to rename; the file keeps its ID, its location, and its sharing settings",
+          "message": "The Drive identifier of the file to rename; the file keeps its ID, its location, and its sharing settings"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "New Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.short_desc": {
+          "source": "The new name for the file",
+          "message": "The new name for the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.desc": {
+          "source": "The new name for the file.\n\nDrive does not require names to be unique, so renaming a file to a name already used in the same folder succeeds and leaves two files sharing a name",
+          "message": "The new name for the file.\n\nDrive does not require names to be unique, so renaming a file to a name already used in the same folder succeeds and leaves two files sharing a name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A new description to store with the file",
+          "message": "A new description to store with the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A new description to store with the file; the existing description is left unchanged when this is not set",
+          "message": "A new description to store with the file; the existing description is left unchanged when this is not set"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "Delete File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file or move it to the trash",
+          "message": "Delete a file or move it to the trash"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Moves a file to the trash, where it can still be recovered.\n\nSet `permanently_delete` to remove it outright instead; **that cannot be undone**.",
+          "message": "Moves a file to the trash, where it can still be recovered.\n\nSet `permanently_delete` to remove it outright instead; **that cannot be undone**."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to delete",
+          "message": "The Drive identifier of the file to delete"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.display_name": {
+          "source": "Permanently Delete",
+          "message": "Permanently Delete"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.short_desc": {
+          "source": "Delete the file outright rather than moving it to the trash",
+          "message": "Delete the file outright rather than moving it to the trash"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.desc": {
+          "source": "Delete the file outright rather than moving it to the trash. **This cannot be undone**; leave it cleared to move the file to the trash, where it can still be recovered",
+          "message": "Delete the file outright rather than moving it to the trash. **This cannot be undone**; leave it cleared to move the file to the trash, where it can still be recovered"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
+          "source": "Share File",
+          "message": "Share File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
+          "source": "Grant access to a file",
+          "message": "Grant access to a file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.desc": {
+          "source": "Grants access to a file, to a user, a group, everyone in a domain, or anyone with the link.\n\n**Granting access to `anyone` makes the file reachable without signing in**; use the narrowest grantee type that serves the purpose.",
+          "message": "Grants access to a file, to a user, a group, everyone in a domain, or anyone with the link.\n\n**Granting access to `anyone` makes the file reachable without signing in**; use the narrowest grantee type that serves the purpose."
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to grant access to",
+          "message": "The Drive identifier of the file to grant access to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Role"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.short_desc": {
+          "source": "The level of access to grant",
+          "message": "The level of access to grant"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.desc": {
+          "source": "The level of access to grant",
+          "message": "The level of access to grant"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.display_name": {
+          "source": "Reader",
+          "message": "Reader"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.short_desc": {
+          "source": "Can view the file",
+          "message": "Can view the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.desc": {
+          "source": "Can view the file but not change it",
+          "message": "Can view the file but not change it"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.display_name": {
+          "source": "Commenter",
+          "message": "Commenter"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.short_desc": {
+          "source": "Can view and comment on the file",
+          "message": "Can view and comment on the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.desc": {
+          "source": "Can view and comment on the file but not change its content",
+          "message": "Can view and comment on the file but not change its content"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.display_name": {
+          "source": "Writer",
+          "message": "Writer"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.short_desc": {
+          "source": "Can view and change the file",
+          "message": "Can view and change the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.desc": {
+          "source": "Can view and change the file",
+          "message": "Can view and change the file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.display_name": {
+          "source": "Grantee Type",
+          "message": "Grantee Type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.short_desc": {
+          "source": "Who the access is granted to",
+          "message": "Who the access is granted to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.desc": {
+          "source": "Who the access is granted to",
+          "message": "Who the access is granted to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "User"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "A single user, identified by email address",
+          "message": "A single user, identified by email address"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "A single user, identified by email address in `email_address`",
+          "message": "A single user, identified by email address in `email_address`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.display_name": {
+          "source": "Group",
+          "message": "Group"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.short_desc": {
+          "source": "A group, identified by email address",
+          "message": "A group, identified by email address"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.desc": {
+          "source": "A Google group, identified by email address in `email_address`",
+          "message": "A Google group, identified by email address in `email_address`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Everyone in a domain",
+          "message": "Everyone in a domain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Everyone in the domain named in `domain`",
+          "message": "Everyone in the domain named in `domain`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.display_name": {
+          "source": "Anyone",
+          "message": "Anyone"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.short_desc": {
+          "source": "Anyone with the link",
+          "message": "Anyone with the link"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.desc": {
+          "source": "Anyone with the link, without signing in; **this makes the file publicly reachable**",
+          "message": "Anyone with the link, without signing in; **this makes the file publicly reachable**"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Email Address"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The email address of the user or group",
+          "message": "The email address of the user or group"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the user or group; required when `type` is `user` or `group`",
+          "message": "The email address of the user or group; required when `type` is `user` or `group`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Domain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.short_desc": {
+          "source": "The domain to grant access to",
+          "message": "The domain to grant access to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.desc": {
+          "source": "The domain to grant access to; required when `type` is `domain`",
+          "message": "The domain to grant access to; required when `type` is `domain`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.display_name": {
+          "source": "Send Notification",
+          "message": "Send Notification"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.short_desc": {
+          "source": "Send a notification email to the grantee",
+          "message": "Send a notification email to the grantee"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.desc": {
+          "source": "Send a notification email to the grantee",
+          "message": "Send a notification email to the grantee"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
+          "source": "Restore from Trash",
+          "message": "Restore from Trash"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
+          "source": "Restore a file from the trash",
+          "message": "Restore a file from the trash"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.desc": {
+          "source": "Restores a file from the trash, putting it back where it was.\n\n`delete-file` moves a file to the trash by default precisely so that it can be recovered; this is what recovers it.  A file removed with `permanently_delete` cannot be restored.",
+          "message": "Restores a file from the trash, putting it back where it was.\n\n`delete-file` moves a file to the trash by default precisely so that it can be recovered; this is what recovers it.  A file removed with `permanently_delete` cannot be restored."
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to restore from the trash",
+          "message": "The Drive identifier of the file to restore from the trash"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
+          "source": "Create Shortcut",
+          "message": "Create Shortcut"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
+          "source": "Create a shortcut pointing at a file or folder",
+          "message": "Create a shortcut pointing at a file or folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.desc": {
+          "source": "Creates a shortcut pointing at a file or folder.\n\nA shortcut lets one file appear in several places without being copied, so the content stays in one place and every route to it stays current.  Deleting a shortcut does not affect the file it points at.",
+          "message": "Creates a shortcut pointing at a file or folder.\n\nA shortcut lets one file appear in several places without being copied, so the content stays in one place and every route to it stays current.  Deleting a shortcut does not affect the file it points at."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.short_desc": {
+          "source": "The name for the shortcut",
+          "message": "The name for the shortcut"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.desc": {
+          "source": "The name for the shortcut; it need not match the name of the file it points at",
+          "message": "The name for the shortcut; it need not match the name of the file it points at"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.display_name": {
+          "source": "Target File ID",
+          "message": "Target File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.short_desc": {
+          "source": "The file or folder the shortcut points at",
+          "message": "The file or folder the shortcut points at"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.desc": {
+          "source": "The Drive identifier of the file or folder the shortcut points at",
+          "message": "The Drive identifier of the file or folder the shortcut points at"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Folder ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to create the shortcut in",
+          "message": "The folder to create the shortcut in"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to create the shortcut in; if not set, the user's `My Drive` root is used",
+          "message": "The folder to create the shortcut in; if not set, the user's `My Drive` root is used"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
+          "source": "List Shared Drives",
+          "message": "List Shared Drives"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
+          "source": "List the shared drives the account can reach",
+          "message": "List the shared drives the account can reach"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.desc": {
+          "source": "Lists the shared drives (formerly \"Team Drives\") the account is a member of.\n\nA business account keeps most of its content on shared drives rather than in any one person's `My Drive`, so this is how the drive to work in is discovered.  Pass a drive's `id` as `drive_id` to `list-files` to work within it.",
+          "message": "Lists the shared drives (formerly \"Team Drives\") the account is a member of.\n\nA business account keeps most of its content on shared drives rather than in any one person's `My Drive`, so this is how the drive to work in is discovered.  Pass a drive's `id` as `drive_id` to `list-files` to work within it."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Page Size"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.short_desc": {
+          "source": "The maximum number of shared drives to return per page",
+          "message": "The maximum number of shared drives to return per page"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of shared drives to return per page; the Drive API caps this at `100`",
+          "message": "The maximum number of shared drives to return per page; the Drive API caps this at `100`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Page Token"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "The token returned by a previous truncated listing"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` value returned by a previous listing",
+          "message": "The `next_page_token` value returned by a previous listing"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
+          "source": "Get Storage Quota",
+          "message": "Get Storage Quota"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
+          "source": "Get how much of the account's storage is in use",
+          "message": "Get how much of the account's storage is in use"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.desc": {
+          "source": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Drive rejects one that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.  Files in the trash still count against the quota, so `usage_in_drive_trash` is what emptying it would recover.",
+          "message": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Drive rejects one that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.  Files in the trash still count against the quota, so `usage_in_drive_trash` is what emptying it would recover."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
+          "source": "List Permissions",
+          "message": "List Permissions"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
+          "source": "List who has access to a file",
+          "message": "List who has access to a file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.desc": {
+          "source": "Lists the permissions granted on a file: who has access, and at what level.\n\nEach permission carries the `id` needed to withdraw it with `remove-permission`.",
+          "message": "Lists the permissions granted on a file: who has access, and at what level.\n\nEach permission carries the `id` needed to withdraw it with `remove-permission`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose permissions are to be listed",
+          "message": "The Drive identifier of the file whose permissions are to be listed"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
+          "source": "Remove Permission",
+          "message": "Remove Permission"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
+          "source": "Withdraw someone's access to a file",
+          "message": "Withdraw someone's access to a file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.desc": {
+          "source": "Withdraws a permission, so that whoever held it can no longer reach the file.\n\nUse `list-permissions` to find the `permission_id`.  Withdrawing the `anyone` permission is how a file that was made public is made private again.",
+          "message": "Withdraws a permission, so that whoever held it can no longer reach the file.\n\nUse `list-permissions` to find the `permission_id`.  Withdrawing the `anyone` permission is how a file that was made public is made private again."
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to withdraw access to",
+          "message": "The Drive identifier of the file to withdraw access to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.display_name": {
+          "source": "Permission ID",
+          "message": "Permission ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.short_desc": {
+          "source": "The permission to withdraw",
+          "message": "The permission to withdraw"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.desc": {
+          "source": "The identifier of the permission to withdraw, as returned by `list-permissions` or `share-file`",
+          "message": "The identifier of the permission to withdraw, as returned by `list-permissions` or `share-file`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
+          "source": "List File Revisions",
+          "message": "List File Revisions"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
+          "source": "List the earlier versions Drive holds for a file",
+          "message": "List the earlier versions Drive holds for a file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.desc": {
+          "source": "Lists the revisions Drive holds for a file.\n\nDrive keeps earlier versions, so a document replaced by `replace-file` is recoverable.  **Drive removes older revisions on its own** unless they are marked `keep_forever`, so a revision listed here is not guaranteed to remain indefinitely.",
+          "message": "Lists the revisions Drive holds for a file.\n\nDrive keeps earlier versions, so a document replaced by `replace-file` is recoverable.  **Drive removes older revisions on its own** unless they are marked `keep_forever`, so a revision listed here is not guaranteed to remain indefinitely."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose revisions are to be listed",
+          "message": "The Drive identifier of the file whose revisions are to be listed"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
+          "source": "Get File Revision",
+          "message": "Get File Revision"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
+          "source": "Get the details of one revision of a file",
+          "message": "Get the details of one revision of a file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.desc": {
+          "source": "Returns the details of one revision of a file: when it was made, how large it is, and whether Drive will keep it indefinitely.",
+          "message": "Returns the details of one revision of a file: when it was made, how large it is, and whether Drive will keep it indefinitely."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file the revision belongs to",
+          "message": "The Drive identifier of the file the revision belongs to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.display_name": {
+          "source": "Revision ID",
+          "message": "Revision ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.short_desc": {
+          "source": "The revision to address",
+          "message": "The revision to address"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.desc": {
+          "source": "The identifier of the revision, as returned by `list-revisions`",
+          "message": "The identifier of the revision, as returned by `list-revisions`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
+          "source": "Delete File Revision",
+          "message": "Delete File Revision"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
+          "source": "Remove one earlier version of a file",
+          "message": "Remove one earlier version of a file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.desc": {
+          "source": "Removes one revision of a file, freeing the storage it occupied.\n\n**This cannot be undone**, and the file's current content is unaffected.  Drive refuses to remove the only remaining revision.",
+          "message": "Removes one revision of a file, freeing the storage it occupied.\n\n**This cannot be undone**, and the file's current content is unaffected.  Drive refuses to remove the only remaining revision."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "File ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "The Drive file ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file the revision belongs to",
+          "message": "The Drive identifier of the file the revision belongs to"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.display_name": {
+          "source": "Revision ID",
+          "message": "Revision ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.short_desc": {
+          "source": "The revision to address",
+          "message": "The revision to address"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.desc": {
+          "source": "The identifier of the revision, as returned by `list-revisions`",
+          "message": "The identifier of the revision, as returned by `list-revisions`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
+          "source": "Find Files",
+          "message": "Find Files"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
+          "source": "Search Drive and read the results as records",
+          "message": "Search Drive and read the results as records"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.desc": {
+          "source": "Searches Drive and reads the results as a stream of records.\n\nUnlike `list-files`, which answers one page and leaves the page token to the caller, this walks the whole result: pages are fetched as they are reached, so a drive holding more files than fit in one page is read without the caller knowing how Drive paginates.\n\nNarrow the search with `folder_id`, `name`, or `mime_type`; Drive applies these itself, so they reduce what is transferred rather than only what is examined.  Use `custom_query` for anything the other options cannot express.",
+          "message": "Searches Drive and reads the results as a stream of records.\n\nUnlike `list-files`, which answers one page and leaves the page token to the caller, this walks the whole result: pages are fetched as they are reached, so a drive holding more files than fit in one page is read without the caller knowing how Drive paginates.\n\nNarrow the search with `folder_id`, `name`, or `mime_type`; Drive applies these itself, so they reduce what is transferred rather than only what is examined.  Use `custom_query` for anything the other options cannot express."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "Folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Read only files held in this folder",
+          "message": "Read only files held in this folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.desc": {
+          "source": "Read only files held directly in this folder; if not set, files anywhere the connection can see are read",
+          "message": "Read only files held directly in this folder; if not set, files anywhere the connection can see are read"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.short_desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Match files whose name contains this text"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Match files whose name contains this text"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME Type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.short_desc": {
+          "source": "Match only files of this MIME type",
+          "message": "Match only files of this MIME type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.desc": {
+          "source": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to read folders",
+          "message": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to read folders"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.display_name": {
+          "source": "Include Trashed",
+          "message": "Include Trashed"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.short_desc": {
+          "source": "Include files that are in the trash",
+          "message": "Include files that are in the trash"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.desc": {
+          "source": "Include files that are in the trash; excluded by default",
+          "message": "Include files that are in the trash; excluded by default"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.display_name": {
+          "source": "Custom Query",
+          "message": "Custom Query"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.short_desc": {
+          "source": "A raw Drive query expression",
+          "message": "A raw Drive query expression"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.desc": {
+          "source": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax",
+          "message": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Order By"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "The sort order for results"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results, as a Drive `orderBy` expression",
+          "message": "The sort order for results, as a Drive `orderBy` expression"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive",
+          "message": "Shared Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Read this shared drive rather than My Drive",
+          "message": "Read this shared drive rather than My Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.desc": {
+          "source": "Read this shared drive (formerly a \"Team Drive\") rather than the user's own `My Drive`",
+          "message": "Read this shared drive (formerly a \"Team Drive\") rather than the user's own `My Drive`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.short_desc": {
+          "source": "The collection of files to search",
+          "message": "The collection of files to search"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.desc": {
+          "source": "The collection of files to search; if not set, `drive` is used when `drive_id` is set",
+          "message": "The collection of files to search; if not set, `drive` is used when `drive_id` is set"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "My Drive",
+          "message": "My Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Files in the user's own My Drive",
+          "message": "Files in the user's own My Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "Files the user owns or that have been shared with them directly, in their own `My Drive`",
+          "message": "Files the user owns or that have been shared with them directly, in their own `My Drive`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "One Shared Drive",
+          "message": "One Shared Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Files on the shared drive named in drive_id",
+          "message": "Files on the shared drive named in drive_id"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Files held on the shared drive named in `drive_id`, which must be set",
+          "message": "Files held on the shared drive named in `drive_id`, which must be set"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.display_name": {
+          "source": "My Drive and All Shared Drives",
+          "message": "My Drive and All Shared Drives"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
+          "source": "Files in My Drive and on every shared drive the user can reach",
+          "message": "Files in My Drive and on every shared drive the user can reach"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.desc": {
+          "source": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known",
+          "message": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Files shared with the user's whole domain",
+          "message": "Files shared with the user's whole domain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Files shared with the user's whole domain; requires a Google Workspace account",
+          "message": "Files shared with the user's whole domain; requires a Google Workspace account"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.display_name": {
+          "source": "Include Shared Drives",
+          "message": "Include Shared Drives"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.short_desc": {
+          "source": "Include files held on shared drives",
+          "message": "Include files held on shared drives"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.desc": {
+          "source": "Include files held on shared drives in the results",
+          "message": "Include files held on shared drives in the results"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Page Size"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many files to fetch per request",
+          "message": "How many files to fetch per request"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "How many files to fetch per request; Drive caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "How many files to fetch per request; Drive caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
+          "source": "New File",
+          "message": "New File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
+          "source": "React to a file being created in Drive",
+          "message": "React to a file being created in Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a file is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA file that already existed and has merely been edited is **not** reported, and neither is a folder; use `new-folder` for those.  Set `folder_id` to report only files created directly in one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+          "message": "Fires when a file is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA file that already existed and has merely been edited is **not** reported, and neither is a folder; use `new-folder` for those.  Set `folder_id` to report only files created directly in one folder, or `drive_id` to watch a shared drive instead of `My Drive`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "How often to check for changes, in seconds"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "How often to check for changes, in seconds (minimum `30`, default `60`)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "Folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Report only items in this folder",
+          "message": "Report only items in this folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.desc": {
+          "source": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see",
+          "message": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "Shared Drive ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Watch this shared drive instead of My Drive",
+          "message": "Watch this shared drive instead of My Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.desc": {
+          "source": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both",
+          "message": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "New Folder",
+          "message": "New Folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "React to a folder being created in Drive",
+          "message": "React to a folder being created in Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA folder that already existed and has merely been renamed or moved is **not** reported.  Set `folder_id` to report only folders created directly inside one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+          "message": "Fires when a folder is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA folder that already existed and has merely been renamed or moved is **not** reported.  Set `folder_id` to report only folders created directly inside one folder, or `drive_id` to watch a shared drive instead of `My Drive`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "How often to check for changes, in seconds"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "How often to check for changes, in seconds (minimum `30`, default `60`)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "Folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Report only items in this folder",
+          "message": "Report only items in this folder"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.desc": {
+          "source": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see",
+          "message": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "Shared Drive ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Watch this shared drive instead of My Drive",
+          "message": "Watch this shared drive instead of My Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.desc": {
+          "source": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both",
+          "message": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both"
+        }
+      }
+    }
+  }
+}

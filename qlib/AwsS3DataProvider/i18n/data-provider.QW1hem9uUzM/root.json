@@ -1,0 +1,2037 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.QW1hem9uUzM.display_name": {
+          "source": "Amazon S3",
+          "message": "Amazon S3"
+        },
+        "app.QW1hem9uUzM.short_desc": {
+          "source": "Amazon S3 object storage",
+          "message": "Amazon S3 object storage"
+        },
+        "app.QW1hem9uUzM.desc": {
+          "source": "Provides access to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\nS3 stores objects in buckets addressed by a flat key rather than by a directory tree; a `/` in a key is an ordinary character, though listing with a prefix and a delimiter makes a bucket browsable as though it had folders.\n\n**Common use cases**:\n- **File exchange**: publish files for partners to collect, or collect files partners deposit\n- **Archival**: retain documents and records at low cost using the archive storage classes\n- **Data staging**: land extracts for downstream processing, then remove them when consumed\n- **Backups**: store generated reports, exports, and backups durably off-host\n\nAlso works with S3-compatible services such as MinIO and Ceph; those generally require the `path_style` connection option.\n\nAmazon Web Services and Amazon S3 are trademarks of Amazon.com, Inc. or its affiliates",
+          "message": "Provides access to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\nS3 stores objects in buckets addressed by a flat key rather than by a directory tree; a `/` in a key is an ordinary character, though listing with a prefix and a delimiter makes a bucket browsable as though it had folders.\n\n**Common use cases**:\n- **File exchange**: publish files for partners to collect, or collect files partners deposit\n- **Archival**: retain documents and records at low cost using the archive storage classes\n- **Data staging**: land extracts for downstream processing, then remove them when consumed\n- **Backups**: store generated reports, exports, and backups durably off-host\n\nAlso works with S3-compatible services such as MinIO and Ceph; those generally require the `path_style` connection option.\n\nAmazon Web Services and Amazon S3 are trademarks of Amazon.com, Inc. or its affiliates"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Amazon S3",
+          "message": "Make a custom API call to Amazon S3"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Amazon S3** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Amazon S3** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
+          "source": "List Buckets",
+          "message": "List Buckets"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
+          "source": "List the buckets owned by the account",
+          "message": "List the buckets owned by the account"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.desc": {
+          "source": "Lists every bucket owned by the authenticated account, with the date each was created.",
+          "message": "Lists every bucket owned by the authenticated account, with the date each was created."
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
+          "source": "Create Bucket",
+          "message": "Create Bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
+          "source": "Create a new bucket",
+          "message": "Create a new bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.desc": {
+          "source": "Creates a new bucket in the connection's region.\n\nBucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case names, so a name already taken by another account is rejected.",
+          "message": "Creates a new bucket in the connection's region.\n\nBucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case names, so a name already taken by another account is rejected."
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to create; bucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case names",
+          "message": "The name of the bucket to create; bucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case names"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.display_name": {
+          "source": "Canned ACL",
+          "message": "Canned ACL"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.short_desc": {
+          "source": "The access control policy for the new bucket",
+          "message": "The access control policy for the new bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.desc": {
+          "source": "The access control policy applied to the new bucket",
+          "message": "The access control policy applied to the new bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "Private"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnByaXZhdGU.short_desc": {
+          "source": "Only the bucket owner has access",
+          "message": "Only the bucket owner has access"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnByaXZhdGU.desc": {
+          "source": "Only the bucket owner has access; the default and the recommended value",
+          "message": "Only the bucket owner has access; the default and the recommended value"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFk.display_name": {
+          "source": "Public Read",
+          "message": "Public Read"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFk.short_desc": {
+          "source": "Anyone can read the bucket contents",
+          "message": "Anyone can read the bucket contents"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFk.desc": {
+          "source": "Anyone on the internet can read the bucket contents; **use with care**, as this exposes every object in the bucket",
+          "message": "Anyone on the internet can read the bucket contents; **use with care**, as this exposes every object in the bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFkLXdyaXRl.display_name": {
+          "source": "Public Read/Write",
+          "message": "Public Read/Write"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFkLXdyaXRl.short_desc": {
+          "source": "Anyone can read and write the bucket contents",
+          "message": "Anyone can read and write the bucket contents"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFkLXdyaXRl.desc": {
+          "source": "Anyone on the internet can read and write the bucket contents; **strongly discouraged**, as it allows anyone to store objects at the account owner's expense",
+          "message": "Anyone on the internet can read and write the bucket contents; **strongly discouraged**, as it allows anyone to store objects at the account owner's expense"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOmF1dGhlbnRpY2F0ZWQtcmVhZA.display_name": {
+          "source": "Authenticated Read",
+          "message": "Authenticated Read"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOmF1dGhlbnRpY2F0ZWQtcmVhZA.short_desc": {
+          "source": "Any authenticated AWS user can read the bucket contents",
+          "message": "Any authenticated AWS user can read the bucket contents"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOmF1dGhlbnRpY2F0ZWQtcmVhZA.desc": {
+          "source": "Any authenticated AWS user can read the bucket contents, not only users in this account",
+          "message": "Any authenticated AWS user can read the bucket contents, not only users in this account"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.b2JqZWN0X2xvY2tfZW5hYmxlZA.display_name": {
+          "source": "Object Lock Enabled",
+          "message": "Object Lock Enabled"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.b2JqZWN0X2xvY2tfZW5hYmxlZA.short_desc": {
+          "source": "Enable object lock on the new bucket",
+          "message": "Enable object lock on the new bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.b2JqZWN0X2xvY2tfZW5hYmxlZA.desc": {
+          "source": "Enable object lock on the new bucket; object lock cannot be enabled after creation and requires versioning, which is enabled automatically when this is set",
+          "message": "Enable object lock on the new bucket; object lock cannot be enabled after creation and requires versioning, which is enabled automatically when this is set"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
+          "source": "List Objects",
+          "message": "List Objects"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
+          "source": "List the objects in a bucket",
+          "message": "List the objects in a bucket"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.desc": {
+          "source": "Lists the objects in a bucket.\n\nSet `prefix` to restrict the listing to keys beginning with a given string, and set `delimiter` to `/` as well to list one level of a key hierarchy rather than every key below it - together these make a bucket browsable as though it had folders.\n\nA listing is capped at `1000` keys; when the response is `truncated`, pass its `next_continuation_token` back in `continuation_token` to retrieve the following page.",
+          "message": "Lists the objects in a bucket.\n\nSet `prefix` to restrict the listing to keys beginning with a given string, and set `delimiter` to `/` as well to list one level of a key hierarchy rather than every key below it - together these make a bucket browsable as though it had folders.\n\nA listing is capped at `1000` keys; when the response is `truncated`, pass its `next_continuation_token` back in `continuation_token` to retrieve the following page."
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefix"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "Return only keys beginning with this prefix",
+          "message": "Return only keys beginning with this prefix"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "Return only keys beginning with this prefix; used with `delimiter` to emulate browsing a directory tree",
+          "message": "Return only keys beginning with this prefix; used with `delimiter` to emulate browsing a directory tree"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "Delimiter"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Group keys sharing a prefix up to this character",
+          "message": "Group keys sharing a prefix up to this character"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Group keys that share a prefix up to the first occurrence of this character; set to `/` together with `prefix` to list one level of a key hierarchy rather than every key below it",
+          "message": "Group keys that share a prefix up to the first occurrence of this character; set to `/` together with `prefix` to list one level of a key hierarchy rather than every key below it"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.bWF4X2tleXM.display_name": {
+          "source": "Maximum Keys",
+          "message": "Maximum Keys"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.bWF4X2tleXM.short_desc": {
+          "source": "The maximum number of keys to return per page",
+          "message": "The maximum number of keys to return per page"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.bWF4X2tleXM.desc": {
+          "source": "The maximum number of keys to return per page; Amazon S3 caps this at `1000`",
+          "message": "The maximum number of keys to return per page; Amazon S3 caps this at `1000`"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.display_name": {
+          "source": "Start After",
+          "message": "Start After"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.short_desc": {
+          "source": "Begin listing after this key",
+          "message": "Begin listing after this key"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.desc": {
+          "source": "Begin listing after this key; keys are returned in ascending order",
+          "message": "Begin listing after this key; keys are returned in ascending order"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.Y29udGludWF0aW9uX3Rva2Vu.display_name": {
+          "source": "Continuation Token",
+          "message": "Continuation Token"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.Y29udGludWF0aW9uX3Rva2Vu.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "The token returned by a previous truncated listing"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.Y29udGludWF0aW9uX3Rva2Vu.desc": {
+          "source": "The `next_continuation_token` value returned by a previous truncated listing; used to retrieve the following page",
+          "message": "The `next_continuation_token` value returned by a previous truncated listing; used to retrieve the following page"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
+          "source": "Get Object",
+          "message": "Get Object"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
+          "source": "Retrieve an object and its metadata",
+          "message": "Retrieve an object and its metadata"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.desc": {
+          "source": "Retrieves an object's metadata and, unless `include_content` is cleared, its content.\n\nClear `include_content` to check an object's size, type, or modification time without transferring it, which is much cheaper for large objects.",
+          "message": "Retrieves an object's metadata and, unless `include_content` is cleared, its content.\n\nClear `include_content` to check an object's size, type, or modification time without transferring it, which is much cheaper for large objects."
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.aW5jbHVkZV9jb250ZW50.display_name": {
+          "source": "Include Content",
+          "message": "Include Content"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.aW5jbHVkZV9jb250ZW50.short_desc": {
+          "source": "Return the object content as well as its metadata",
+          "message": "Return the object content as well as its metadata"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.aW5jbHVkZV9jb250ZW50.desc": {
+          "source": "Return the object content in the `content` field as well as its metadata; when `False` only the metadata is retrieved, which is much cheaper for large objects",
+          "message": "Return the object content in the `content` field as well as its metadata; when `False` only the metadata is retrieved, which is much cheaper for large objects"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Version ID"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "A specific object version to address"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Download File"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download an object's content",
+          "message": "Download an object's content"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads an object's content along with its metadata.\n\nUse `get-object` with `include_content` cleared instead when only the metadata is needed.",
+          "message": "Downloads an object's content along with its metadata.\n\nUse `get-object` with `include_content` cleared instead when only the metadata is needed."
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Version ID"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "A specific object version to address"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Upload File"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to a bucket",
+          "message": "Upload a file to a bucket"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to a bucket.\n\nIf `object_key` is not set, the file's own name is used as the key.  The MIME type stored with the object is taken from the file when it carries one, and otherwise inferred from the key.",
+          "message": "Uploads a file to a bucket.\n\nIf `object_key` is not set, the file's own name is used as the key.  The MIME type stored with the object is taken from the file when it carries one, and otherwise inferred from the key."
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "The file to upload"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name, content, and MIME type",
+          "message": "The file to upload, including its name, content, and MIME type"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The key to store the object under; if not set, the file name is used",
+          "message": "The key to store the object under; if not set, the file name is used"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Storage Class"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the new object",
+          "message": "The storage class for the new object"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object, which determines its cost and retrieval characteristics",
+          "message": "The storage class for the new object, which determines its cost and retrieval characteristics"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Standard"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Frequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Frequently accessed data; the default storage class"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Data with changing or unknown access patterns"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Long-lived, infrequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Long-lived but infrequently accessed data; a retrieval charge applies"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Infrequently accessed data in a single availability zone"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Archive data needing immediate access"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Archive data that still requires millisecond retrieval"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Archive data retrieved in minutes to hours"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Archive data retrieved in minutes to hours; objects must be restored before they can be read"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Long-term archive retrieved in hours"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Long-term archive data retrieved in hours; the lowest-cost storage class"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadata"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store with the object",
+          "message": "User-defined metadata to store with the object"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store with the object; each key is sent as an `x-amz-meta-<key>` header and is returned when the object is retrieved",
+          "message": "User-defined metadata to store with the object; each key is sent as an `x-amz-meta-<key>` header and is returned when the object is retrieved"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.display_name": {
+          "source": "Server-Side Encryption",
+          "message": "Server-Side Encryption"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.short_desc": {
+          "source": "Encrypt the object at rest",
+          "message": "Encrypt the object at rest"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.desc": {
+          "source": "Encrypt the object at rest with the chosen scheme.\n\nIf not set, whatever the bucket's default encryption configuration specifies applies; setting it here overrides that for this object",
+          "message": "Encrypt the object at rest with the chosen scheme.\n\nIf not set, whatever the bucket's default encryption configuration specifies applies; setting it here overrides that for this object"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.display_name": {
+          "source": "S3-Managed Keys (SSE-S3)",
+          "message": "S3-Managed Keys (SSE-S3)"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.short_desc": {
+          "source": "Encrypt with keys Amazon S3 manages",
+          "message": "Encrypt with keys Amazon S3 manages"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.desc": {
+          "source": "Encrypt the object with keys Amazon S3 manages entirely; nothing further is needed",
+          "message": "Encrypt the object with keys Amazon S3 manages entirely; nothing further is needed"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.display_name": {
+          "source": "KMS Keys (SSE-KMS)",
+          "message": "KMS Keys (SSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.short_desc": {
+          "source": "Encrypt with an AWS KMS key",
+          "message": "Encrypt with an AWS KMS key"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.desc": {
+          "source": "Encrypt the object with an AWS KMS key.\n\nName the key in `kms_key_id`; if it is left unset, the bucket's default KMS key is used.  The credentials must be allowed to use the key, or the upload fails even though they can write to the bucket",
+          "message": "Encrypt the object with an AWS KMS key.\n\nName the key in `kms_key_id`; if it is left unset, the bucket's default KMS key is used.  The credentials must be allowed to use the key, or the upload fails even though they can write to the bucket"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.display_name": {
+          "source": "Dual-Layer KMS (DSSE-KMS)",
+          "message": "Dual-Layer KMS (DSSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.short_desc": {
+          "source": "Encrypt twice with an AWS KMS key",
+          "message": "Encrypt twice with an AWS KMS key"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.desc": {
+          "source": "Apply two independent layers of encryption with an AWS KMS key, for data subject to a requirement for it",
+          "message": "Apply two independent layers of encryption with an AWS KMS key, for data subject to a requirement for it"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.a21zX2tleV9pZA.display_name": {
+          "source": "KMS Key ID",
+          "message": "KMS Key ID"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.a21zX2tleV9pZA.short_desc": {
+          "source": "The AWS KMS key to encrypt with",
+          "message": "The AWS KMS key to encrypt with"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.a21zX2tleV9pZA.desc": {
+          "source": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used",
+          "message": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text Object",
+          "message": "Create Text Object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create an object from text content",
+          "message": "Create an object from text content"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates an object directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and marker objects.",
+          "message": "Creates an object directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and marker objects."
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Content"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content to store",
+          "message": "The text content to store"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content to store in the object",
+          "message": "The text content to store in the object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Content Type"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to store with the object",
+          "message": "The MIME type to store with the object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type to store with the object",
+          "message": "The MIME type to store with the object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Storage Class"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the new object",
+          "message": "The storage class for the new object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object",
+          "message": "The storage class for the new object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Standard"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Frequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Frequently accessed data; the default storage class"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Data with changing or unknown access patterns"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Long-lived, infrequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Long-lived but infrequently accessed data; a retrieval charge applies"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Infrequently accessed data in a single availability zone"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Archive data needing immediate access"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Archive data that still requires millisecond retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Archive data retrieved in minutes to hours"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Archive data retrieved in minutes to hours; objects must be restored before they can be read"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Long-term archive retrieved in hours"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Long-term archive data retrieved in hours; the lowest-cost storage class"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadata"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store with the object",
+          "message": "User-defined metadata to store with the object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store with the object",
+          "message": "User-defined metadata to store with the object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.display_name": {
+          "source": "Server-Side Encryption",
+          "message": "Server-Side Encryption"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.short_desc": {
+          "source": "Encrypt the object at rest",
+          "message": "Encrypt the object at rest"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.desc": {
+          "source": "Encrypt the object at rest with the chosen scheme.\n\nIf not set, whatever the bucket's default encryption configuration specifies applies; setting it here overrides that for this object",
+          "message": "Encrypt the object at rest with the chosen scheme.\n\nIf not set, whatever the bucket's default encryption configuration specifies applies; setting it here overrides that for this object"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.display_name": {
+          "source": "S3-Managed Keys (SSE-S3)",
+          "message": "S3-Managed Keys (SSE-S3)"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.short_desc": {
+          "source": "Encrypt with keys Amazon S3 manages",
+          "message": "Encrypt with keys Amazon S3 manages"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.desc": {
+          "source": "Encrypt the object with keys Amazon S3 manages entirely; nothing further is needed",
+          "message": "Encrypt the object with keys Amazon S3 manages entirely; nothing further is needed"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.display_name": {
+          "source": "KMS Keys (SSE-KMS)",
+          "message": "KMS Keys (SSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.short_desc": {
+          "source": "Encrypt with an AWS KMS key",
+          "message": "Encrypt with an AWS KMS key"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.desc": {
+          "source": "Encrypt the object with an AWS KMS key.\n\nName the key in `kms_key_id`; if it is left unset, the bucket's default KMS key is used.  The credentials must be allowed to use the key, or the upload fails even though they can write to the bucket",
+          "message": "Encrypt the object with an AWS KMS key.\n\nName the key in `kms_key_id`; if it is left unset, the bucket's default KMS key is used.  The credentials must be allowed to use the key, or the upload fails even though they can write to the bucket"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.display_name": {
+          "source": "Dual-Layer KMS (DSSE-KMS)",
+          "message": "Dual-Layer KMS (DSSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.short_desc": {
+          "source": "Encrypt twice with an AWS KMS key",
+          "message": "Encrypt twice with an AWS KMS key"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.desc": {
+          "source": "Apply two independent layers of encryption with an AWS KMS key, for data subject to a requirement for it",
+          "message": "Apply two independent layers of encryption with an AWS KMS key, for data subject to a requirement for it"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.a21zX2tleV9pZA.display_name": {
+          "source": "KMS Key ID",
+          "message": "KMS Key ID"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.a21zX2tleV9pZA.short_desc": {
+          "source": "The AWS KMS key to encrypt with",
+          "message": "The AWS KMS key to encrypt with"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.a21zX2tleV9pZA.desc": {
+          "source": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used",
+          "message": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "Delete Object"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object from a bucket",
+          "message": "Delete an object from a bucket"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Deletes an object from a bucket.\n\nOn a version-enabled bucket this adds a delete marker rather than removing the data, unless a specific `version_id` is given.",
+          "message": "Deletes an object from a bucket.\n\nOn a version-enabled bucket this adds a delete marker rather than removing the data, unless a specific `version_id` is given."
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Version ID"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "A specific object version to address"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
+          "source": "Copy Object",
+          "message": "Copy Object"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
+          "source": "Copy an object within or between buckets",
+          "message": "Copy an object within or between buckets"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.desc": {
+          "source": "Copies an object within a bucket or between buckets, without transferring the content through the client.\n\nBoth buckets must be reachable with the connection's credentials.",
+          "message": "Copies an object within a bucket or between buckets, without transferring the content through the client.\n\nBoth buckets must be reachable with the connection's credentials."
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "Source Bucket"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the object to copy",
+          "message": "The bucket holding the object to copy"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The bucket holding the object to copy",
+          "message": "The bucket holding the object to copy"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2tleQ.display_name": {
+          "source": "Source Key",
+          "message": "Source Key"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2tleQ.short_desc": {
+          "source": "The key of the object to copy",
+          "message": "The key of the object to copy"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2tleQ.desc": {
+          "source": "The key of the object to copy",
+          "message": "The key of the object to copy"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.YnVja2V0.display_name": {
+          "source": "Target Bucket",
+          "message": "Target Bucket"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.YnVja2V0.short_desc": {
+          "source": "The bucket to copy the object into",
+          "message": "The bucket to copy the object into"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.YnVja2V0.desc": {
+          "source": "The bucket to copy the object into",
+          "message": "The bucket to copy the object into"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Target Key",
+          "message": "Target Key"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The key to copy the object to",
+          "message": "The key to copy the object to"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The key to copy the object to",
+          "message": "The key to copy the object to"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Storage Class"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the copy",
+          "message": "The storage class for the copy"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the copy; if not set, the source object's class is used",
+          "message": "The storage class for the copy; if not set, the source object's class is used"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Standard"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Frequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Frequently accessed data; the default storage class"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Data with changing or unknown access patterns"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Long-lived, infrequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Long-lived but infrequently accessed data; a retrieval charge applies"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Infrequently accessed data in a single availability zone"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Archive data needing immediate access"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Archive data that still requires millisecond retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Archive data retrieved in minutes to hours"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Archive data retrieved in minutes to hours; objects must be restored before they can be read"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Long-term archive retrieved in hours"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Long-term archive data retrieved in hours; the lowest-cost storage class"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
+          "source": "Create Presigned URL",
+          "message": "Create Presigned URL"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
+          "source": "Create a temporary URL granting access without AWS credentials",
+          "message": "Create a temporary URL granting access without AWS credentials"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.desc": {
+          "source": "Creates a URL carrying its own authorization, so that a system that cannot authenticate to AWS can still reach the object.\n\nThis is how a file is handed to an external party: a customer downloading an invoice, a partner collecting an export, or a browser uploading directly to the bucket without the content passing through this system at all.\n\n**The URL is the credential.**  Anyone holding it can perform the operation it was signed for until it expires, so give it the shortest useful lifetime and treat it as a secret.\n\nNo request is made to Amazon S3, so a URL can be created for an object that does not exist yet - which is exactly what an upload URL is for.",
+          "message": "Creates a URL carrying its own authorization, so that a system that cannot authenticate to AWS can still reach the object.\n\nThis is how a file is handed to an external party: a customer downloading an invoice, a partner collecting an export, or a browser uploading directly to the bucket without the content passing through this system at all.\n\n**The URL is the credential.**  Anyone holding it can perform the operation it was signed for until it expires, so give it the shortest useful lifetime and treat it as a secret.\n\nNo request is made to Amazon S3, so a URL can be created for an object that does not exist yet - which is exactly what an upload URL is for."
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.display_name": {
+          "source": "Operation",
+          "message": "Operation"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.short_desc": {
+          "source": "The operation the URL grants",
+          "message": "The operation the URL grants"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.desc": {
+          "source": "The operation the URL grants.\n\nA URL is signed for exactly one operation: one signed for a download cannot be used to upload",
+          "message": "The operation the URL grants.\n\nA URL is signed for exactly one operation: one signed for a download cannot be used to upload"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "Download (GET)",
+          "message": "Download (GET)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "The holder can download the object",
+          "message": "The holder can download the object"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "The holder can download the object",
+          "message": "The holder can download the object"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "Upload (PUT)",
+          "message": "Upload (PUT)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "The holder can upload to the key",
+          "message": "The holder can upload to the key"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "The holder can upload content to the key, **replacing whatever is there**",
+          "message": "The holder can upload content to the key, **replacing whatever is there**"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "Metadata Only (HEAD)",
+          "message": "Metadata Only (HEAD)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "The holder can read the object's metadata but not its content",
+          "message": "The holder can read the object's metadata but not its content"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "The holder can read the object's size, type, and modification time without downloading it",
+          "message": "The holder can read the object's size, type, and modification time without downloading it"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "Delete (DELETE)",
+          "message": "Delete (DELETE)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "The holder can delete the object",
+          "message": "The holder can delete the object"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "The holder can delete the object; **this cannot be undone on a bucket without versioning**",
+          "message": "The holder can delete the object; **this cannot be undone on a bucket without versioning**"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.ZXhwaXJhdGlvbl9zZWNvbmRz.display_name": {
+          "source": "Valid For (seconds)",
+          "message": "Valid For (seconds)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.ZXhwaXJhdGlvbl9zZWNvbmRz.short_desc": {
+          "source": "How long the URL remains usable, in seconds",
+          "message": "How long the URL remains usable, in seconds"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.ZXhwaXJhdGlvbl9zZWNvbmRz.desc": {
+          "source": "How long the URL remains usable, in seconds (default `3600`, maximum `604800`, which is 7 days).\n\n**The URL is the credential**: anyone holding it can perform the operation until it expires, so give it the shortest lifetime that serves the purpose",
+          "message": "How long the URL remains usable, in seconds (default `3600`, maximum `604800`, which is 7 days).\n\n**The URL is the credential**: anyone holding it can perform the operation until it expires, so give it the shortest lifetime that serves the purpose"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Version ID"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "A specific object version to address"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF90eXBl.display_name": {
+          "source": "Response Content Type",
+          "message": "Response Content Type"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF90eXBl.short_desc": {
+          "source": "The Content-Type the download should be served with",
+          "message": "The Content-Type the download should be served with"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF90eXBl.desc": {
+          "source": "The `Content-Type` Amazon S3 should serve the download with, overriding the type stored with the object",
+          "message": "The `Content-Type` Amazon S3 should serve the download with, overriding the type stored with the object"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Response Content Disposition",
+          "message": "Response Content Disposition"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition the download should be served with",
+          "message": "The Content-Disposition the download should be served with"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` Amazon S3 should serve the download with; use this to make a browser save the object under a chosen name rather than display it",
+          "message": "The `Content-Disposition` Amazon S3 should serve the download with; use this to make a browser save the object under a chosen name rather than display it"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
+          "source": "Delete Objects",
+          "message": "Delete Objects"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
+          "source": "Delete up to 1000 objects in a single call",
+          "message": "Delete up to 1000 objects in a single call"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.desc": {
+          "source": "Deletes up to `1000` objects in a single call.\n\nAmazon S3 charges per request, so clearing a large prefix this way costs a fraction of one delete per key.\n\n**A batch delete does not fail as a whole**: individual keys can be refused - by an object-lock retention, or by a policy that allows some prefixes and not others - while the request itself succeeds.  Check `errors` rather than assuming everything was removed.",
+          "message": "Deletes up to `1000` objects in a single call.\n\nAmazon S3 charges per request, so clearing a large prefix this way costs a fraction of one delete per key.\n\n**A batch delete does not fail as a whole**: individual keys can be refused - by an object-lock retention, or by a policy that allows some prefixes and not others - while the request itself succeeds.  Check `errors` rather than assuming everything was removed."
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.b2JqZWN0X2tleXM.display_name": {
+          "source": "Object Keys",
+          "message": "Object Keys"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.b2JqZWN0X2tleXM.short_desc": {
+          "source": "The keys to delete",
+          "message": "The keys to delete"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.b2JqZWN0X2tleXM.desc": {
+          "source": "The keys to delete; at most `1000` per call.\n\nAmazon S3 charges per request, so removing many objects this way costs a fraction of one delete per key",
+          "message": "The keys to delete; at most `1000` per call.\n\nAmazon S3 charges per request, so removing many objects this way costs a fraction of one delete per key"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.cXVpZXQ.display_name": {
+          "source": "Quiet",
+          "message": "Quiet"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.cXVpZXQ.short_desc": {
+          "source": "Report only the keys that failed",
+          "message": "Report only the keys that failed"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.cXVpZXQ.desc": {
+          "source": "Report only the keys that failed rather than every key processed; useful when deleting a large batch",
+          "message": "Report only the keys that failed rather than every key processed; useful when deleting a large batch"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnlwYXNzX2dvdmVybmFuY2VfcmV0ZW50aW9u.display_name": {
+          "source": "Bypass Governance Retention",
+          "message": "Bypass Governance Retention"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnlwYXNzX2dvdmVybmFuY2VfcmV0ZW50aW9u.short_desc": {
+          "source": "Remove objects under a governance-mode retention lock",
+          "message": "Remove objects under a governance-mode retention lock"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnlwYXNzX2dvdmVybmFuY2VfcmV0ZW50aW9u.desc": {
+          "source": "Remove objects that are under a governance-mode object-lock retention.\n\nThe credentials must be allowed `s3:BypassGovernanceRetention`; objects under a **compliance**-mode lock cannot be removed by anyone until the lock expires",
+          "message": "Remove objects that are under a governance-mode object-lock retention.\n\nThe credentials must be allowed `s3:BypassGovernanceRetention`; objects under a **compliance**-mode lock cannot be removed by anyone until the lock expires"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
+          "source": "Move Object",
+          "message": "Move Object"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
+          "source": "Move an object within or between buckets",
+          "message": "Move an object within or between buckets"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.desc": {
+          "source": "Moves an object to a different key, a different bucket, or both.\n\nAmazon S3 has no move operation, so this copies the object and then deletes the original.  The copy is performed by Amazon S3 itself, so the content is never transferred through this system, and **the original is removed only after the copy has been confirmed** - a failure part-way through leaves it in place rather than losing it.",
+          "message": "Moves an object to a different key, a different bucket, or both.\n\nAmazon S3 has no move operation, so this copies the object and then deletes the original.  The copy is performed by Amazon S3 itself, so the content is never transferred through this system, and **the original is removed only after the copy has been confirmed** - a failure part-way through leaves it in place rather than losing it."
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "Source Bucket"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the object to move",
+          "message": "The bucket holding the object to move"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The bucket holding the object to move",
+          "message": "The bucket holding the object to move"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2tleQ.display_name": {
+          "source": "Source Key",
+          "message": "Source Key"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2tleQ.short_desc": {
+          "source": "The key of the object to move",
+          "message": "The key of the object to move"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2tleQ.desc": {
+          "source": "The key of the object to move",
+          "message": "The key of the object to move"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.YnVja2V0.display_name": {
+          "source": "Target Bucket",
+          "message": "Target Bucket"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.YnVja2V0.short_desc": {
+          "source": "The bucket to move the object into",
+          "message": "The bucket to move the object into"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.YnVja2V0.desc": {
+          "source": "The bucket to move the object into; it may be the same as the source bucket",
+          "message": "The bucket to move the object into; it may be the same as the source bucket"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Target Key",
+          "message": "Target Key"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The key to move the object to",
+          "message": "The key to move the object to"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The key to move the object to",
+          "message": "The key to move the object to"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Storage Class"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the moved object",
+          "message": "The storage class for the moved object"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class to store the moved object under",
+          "message": "The storage class to store the moved object under"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Standard"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Frequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Frequently accessed data; the default storage class"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Data with changing or unknown access patterns"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Long-lived, infrequently accessed data"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Long-lived but infrequently accessed data; a retrieval charge applies"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Infrequently accessed data in a single availability zone"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Archive data needing immediate access"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Archive data that still requires millisecond retrieval"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Archive data retrieved in minutes to hours"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Archive data retrieved in minutes to hours; objects must be restored before they can be read"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Long-term archive retrieved in hours"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Long-term archive data retrieved in hours; the lowest-cost storage class"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
+          "source": "Get Object Tags",
+          "message": "Get Object Tags"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
+          "source": "Read the tags stored with an object",
+          "message": "Read the tags stored with an object"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.desc": {
+          "source": "Reads the tags stored with an object.\n\nObject tags drive lifecycle rules, access policies, and cost allocation, so they are how a bucket is organized without changing any key.",
+          "message": "Reads the tags stored with an object.\n\nObject tags drive lifecycle rules, access policies, and cost allocation, so they are how a bucket is organized without changing any key."
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Version ID"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "A specific object version to address"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
+          "source": "Set Object Tags",
+          "message": "Set Object Tags"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
+          "source": "Replace the tags stored with an object",
+          "message": "Replace the tags stored with an object"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.desc": {
+          "source": "Replaces the tags stored with an object.\n\n**This replaces the whole tag set** rather than adding to it: a tag not listed is removed.  Read the existing tags first if some are to be kept.  Amazon S3 allows at most `10` tags per object.",
+          "message": "Replaces the tags stored with an object.\n\n**This replaces the whole tag set** rather than adding to it: a tag not listed is removed.  Read the existing tags first if some are to be kept.  Amazon S3 allows at most `10` tags per object."
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Object Key"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "The S3 object key"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dGFncw.short_desc": {
+          "source": "The tags to store with the object",
+          "message": "The tags to store with the object"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dGFncw.desc": {
+          "source": "The tags to store with the object, as a hash of name to value.\n\n**This replaces the object's tags entirely** rather than adding to them: a tag not listed here is removed.  Amazon S3 allows at most `10` tags per object",
+          "message": "The tags to store with the object, as a hash of name to value.\n\n**This replaces the object's tags entirely** rather than adding to them: a tag not listed here is removed.  Amazon S3 allows at most `10` tags per object"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Version ID"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "A specific object version to address"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
+          "source": "List Object Versions",
+          "message": "List Object Versions"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
+          "source": "List every version of the objects in a bucket",
+          "message": "List every version of the objects in a bucket"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.desc": {
+          "source": "Lists every version of the objects in a bucket, along with the delete markers.\n\nOn a bucket with versioning enabled, deleting an object does not remove the data: it adds a marker that hides it.  This shows what is actually there, so an earlier version can be retrieved by passing its `version_id` to `get-object` or `download-file`, and a deletion can be undone by removing its marker with `delete-object`.\n\nA listing is paginated; when `truncated` is set, pass `next_key_marker` and `next_version_id_marker` back to retrieve the following page.",
+          "message": "Lists every version of the objects in a bucket, along with the delete markers.\n\nOn a bucket with versioning enabled, deleting an object does not remove the data: it adds a marker that hides it.  This shows what is actually there, so an earlier version can be retrieved by passing its `version_id` to `get-object` or `download-file`, and a deletion can be undone by removing its marker with `delete-object`.\n\nA listing is paginated; when `truncated` is set, pass `next_key_marker` and `next_version_id_marker` back to retrieve the following page."
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "The name of the S3 bucket holding the object"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefix"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.cHJlZml4.short_desc": {
+          "source": "List only keys beginning with this string",
+          "message": "List only keys beginning with this string"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.cHJlZml4.desc": {
+          "source": "List only keys beginning with this string",
+          "message": "List only keys beginning with this string"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.bWF4X2tleXM.display_name": {
+          "source": "Maximum Versions",
+          "message": "Maximum Versions"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.bWF4X2tleXM.short_desc": {
+          "source": "The maximum number of versions to return per page",
+          "message": "The maximum number of versions to return per page"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.bWF4X2tleXM.desc": {
+          "source": "The maximum number of versions to return per page; Amazon S3 caps this at `1000`",
+          "message": "The maximum number of versions to return per page; Amazon S3 caps this at `1000`"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.a2V5X21hcmtlcg.display_name": {
+          "source": "Key Marker",
+          "message": "Key Marker"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.a2V5X21hcmtlcg.short_desc": {
+          "source": "The key to continue a truncated listing from",
+          "message": "The key to continue a truncated listing from"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.a2V5X21hcmtlcg.desc": {
+          "source": "The `next_key_marker` value returned by a previous truncated listing",
+          "message": "The `next_key_marker` value returned by a previous truncated listing"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.dmVyc2lvbl9pZF9tYXJrZXI.display_name": {
+          "source": "Version ID Marker",
+          "message": "Version ID Marker"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.dmVyc2lvbl9pZF9tYXJrZXI.short_desc": {
+          "source": "The version to continue a truncated listing from",
+          "message": "The version to continue a truncated listing from"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.dmVyc2lvbl9pZF9tYXJrZXI.desc": {
+          "source": "The `next_version_id_marker` value returned by a previous truncated listing; it is used together with `key_marker`",
+          "message": "The `next_version_id_marker` value returned by a previous truncated listing; it is used together with `key_marker`"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
+          "source": "Delete Bucket",
+          "message": "Delete Bucket"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
+          "source": "Delete an empty bucket",
+          "message": "Delete an empty bucket"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.desc": {
+          "source": "Deletes a bucket.\n\n**The bucket must already be empty**, including every non-current version and delete marker if it has versioning enabled; Amazon S3 refuses to delete a bucket that still holds anything.  Use `delete-objects` to clear it first.",
+          "message": "Deletes a bucket.\n\n**The bucket must already be empty**, including every non-current version and delete marker if it has versioning enabled; Amazon S3 refuses to delete a bucket that still holds anything.  Use `delete-objects` to clear it first."
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "The S3 bucket name"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to delete; it must already be empty",
+          "message": "The name of the bucket to delete; it must already be empty"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
+          "source": "Find Objects",
+          "message": "Find Objects"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
+          "source": "Read the objects in a bucket as records",
+          "message": "Read the objects in a bucket as records"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.desc": {
+          "source": "Reads the objects in a bucket as a stream of records.\n\nUnlike `list-objects`, which answers one page and leaves the continuation token to the caller, this walks the whole listing: pages are fetched as they are reached, so a bucket holding more than `1000` keys is read without the caller knowing how Amazon paginates.\n\nNarrow the read with `prefix` wherever possible.  It is applied by Amazon S3 rather than after the listing arrives, so it reduces what is transferred and paid for.",
+          "message": "Reads the objects in a bucket as a stream of records.\n\nUnlike `list-objects`, which answers one page and leaves the continuation token to the caller, this walks the whole listing: pages are fetched as they are reached, so a bucket holding more than `1000` keys is read without the caller knowing how Amazon paginates.\n\nNarrow the read with `prefix` wherever possible.  It is applied by Amazon S3 rather than after the listing arrives, so it reduces what is transferred and paid for."
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The bucket to read",
+          "message": "The bucket to read"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The bucket to read objects from",
+          "message": "The bucket to read objects from"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefix"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "Read only keys beginning with this string",
+          "message": "Read only keys beginning with this string"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "Read only keys beginning with this string.\n\nThe prefix is applied by Amazon S3 rather than after the listing arrives, so it reduces what is transferred and paid for, not only what is examined",
+          "message": "Read only keys beginning with this string.\n\nThe prefix is applied by Amazon S3 rather than after the listing arrives, so it reduces what is transferred and paid for, not only what is examined"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "Delimiter"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Group keys sharing a prefix up to this character",
+          "message": "Group keys sharing a prefix up to this character"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Group keys that share a prefix up to the first occurrence of this character; set to `/` together with `prefix` to read one level of a key hierarchy rather than every key below it",
+          "message": "Group keys that share a prefix up to the first occurrence of this character; set to `/` together with `prefix` to read one level of a key hierarchy rather than every key below it"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.display_name": {
+          "source": "Start After",
+          "message": "Start After"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.short_desc": {
+          "source": "Begin reading after this key",
+          "message": "Begin reading after this key"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.desc": {
+          "source": "Begin reading after this key; Amazon S3 returns keys in lexical order, so this resumes a walk from where an earlier one stopped",
+          "message": "Begin reading after this key; Amazon S3 returns keys in lexical order, so this resumes a walk from where an earlier one stopped"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Page Size"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many keys to fetch per request",
+          "message": "How many keys to fetch per request"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cGFnZV9zaXpl.desc": {
+          "source": "How many keys to fetch per request; Amazon S3 caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "How many keys to fetch per request; Amazon S3 caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
+          "source": "New Bucket",
+          "message": "New Bucket"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
+          "source": "React to a bucket being created in the account",
+          "message": "React to a bucket being created in the account"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.desc": {
+          "source": "Fires when a bucket is created in the account.\n\nAmazon S3 offers no change feed, so this checks the account's bucket list at each poll interval; a bucket created and removed between two polls is not reported.\n\nOne request covers the whole account, so this costs the same whatever the account holds.",
+          "message": "Fires when a bucket is created in the account.\n\nAmazon S3 offers no change feed, so this checks the account's bucket list at each poll interval; a bucket created and removed between two polls is not reported.\n\nOne request covers the whole account, so this costs the same whatever the account holds."
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "How often to check for changes, in seconds"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`).\n\nAmazon S3 charges per request, so a short interval on a large bucket costs money as well as time",
+          "message": "How often to check for changes, in seconds (minimum `30`, default `60`).\n\nAmazon S3 charges per request, so a short interval on a large bucket costs money as well as time"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Do not report anything older than this",
+          "message": "Do not report anything older than this"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Do not report anything older than this date.\n\nIf not set, the watch reports only what appears after it starts, so an existing bucket does not produce a flood of events the first time it runs",
+          "message": "Do not report anything older than this date.\n\nIf not set, the watch reports only what appears after it starts, so an existing bucket does not produce a flood of events the first time it runs"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
+          "source": "New or Updated File",
+          "message": "New or Updated File"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {
+          "source": "React to an object being created or updated in a bucket",
+          "message": "React to an object being created or updated in a bucket"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.desc": {
+          "source": "Fires when an object is created or updated in the bucket being watched.\n\nAmazon S3 offers no change feed, so this lists the bucket's keys at each poll interval and compares their modification times.  Two consequences are worth knowing before pointing this at a production bucket:\n- **Set `prefix`** whenever the objects of interest share one.  It is applied by S3 rather than after the listing arrives, so it reduces what each poll transfers and costs.\n- **A poll examines at most `max_scan_keys` keys**, and logs a warning when it reaches that bound rather than stopping silently.\n\n**Deletions are not reported**: a listing shows what is present, so an object that has gone leaves nothing to report.",
+          "message": "Fires when an object is created or updated in the bucket being watched.\n\nAmazon S3 offers no change feed, so this lists the bucket's keys at each poll interval and compares their modification times.  Two consequences are worth knowing before pointing this at a production bucket:\n- **Set `prefix`** whenever the objects of interest share one.  It is applied by S3 rather than after the listing arrives, so it reduces what each poll transfers and costs.\n- **A poll examines at most `max_scan_keys` keys**, and logs a warning when it reaches that bound rather than stopping silently.\n\n**Deletions are not reported**: a listing shows what is present, so an object that has gone leaves nothing to report."
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket to watch",
+          "message": "The bucket to watch"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.YnVja2V0.desc": {
+          "source": "The bucket to watch for new and updated objects",
+          "message": "The bucket to watch for new and updated objects"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "How often to check for changes, in seconds"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`).\n\nAmazon S3 charges per request, so a short interval on a large bucket costs money as well as time",
+          "message": "How often to check for changes, in seconds (minimum `30`, default `60`).\n\nAmazon S3 charges per request, so a short interval on a large bucket costs money as well as time"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Do not report anything older than this",
+          "message": "Do not report anything older than this"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Do not report anything older than this date.\n\nIf not set, the watch reports only what appears after it starts, so an existing bucket does not produce a flood of events the first time it runs",
+          "message": "Do not report anything older than this date.\n\nIf not set, the watch reports only what appears after it starts, so an existing bucket does not produce a flood of events the first time it runs"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefix"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cHJlZml4.short_desc": {
+          "source": "Watch only keys beginning with this string",
+          "message": "Watch only keys beginning with this string"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cHJlZml4.desc": {
+          "source": "Watch only keys beginning with this string.\n\nThe prefix is applied by Amazon S3 rather than after the listing arrives, so narrowing a large bucket with it reduces what each poll transfers and costs, not only what it examines",
+          "message": "Watch only keys beginning with this string.\n\nThe prefix is applied by Amazon S3 rather than after the listing arrives, so narrowing a large bucket with it reduces what each poll transfers and costs, not only what it examines"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.bWF4X3NjYW5fa2V5cw.display_name": {
+          "source": "Maximum Keys Scanned",
+          "message": "Maximum Keys Scanned"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.bWF4X3NjYW5fa2V5cw.short_desc": {
+          "source": "The maximum number of keys examined in one poll",
+          "message": "The maximum number of keys examined in one poll"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.bWF4X3NjYW5fa2V5cw.desc": {
+          "source": "The maximum number of keys examined in one poll (default `10000`).\n\nS3 cannot filter a listing by modification time, so every poll examines the keys under `prefix` to find the changed ones.  This bounds that work; a poll that reaches the bound logs a warning, since a scan that stopped early would otherwise be indistinguishable from a bucket in which nothing had changed",
+          "message": "The maximum number of keys examined in one poll (default `10000`).\n\nS3 cannot filter a listing by modification time, so every poll examines the keys under `prefix` to find the changed ones.  This bounds that work; a poll that reaches the bound logs a warning, since a scan that stopped early would otherwise be indistinguishable from a bucket in which nothing had changed"
+        }
+      }
+    }
+  }
+}

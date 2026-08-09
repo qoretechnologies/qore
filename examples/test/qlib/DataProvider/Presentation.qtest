@@ -440,6 +440,17 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 "DataProvider", ("WebSocketClient",)),
             "owner-scoped verification ignores ambient modules");
 
+        string uncataloged_owner = "PresentationUncatalogedOwner";
+        string uncataloged_owner_dir = output + DirSep
+            + uncataloged_owner;
+        mkdir(uncataloged_owner_dir);
+        copy_file(get_script_dir() + DirSep + uncataloged_owner + ".qm",
+            uncataloged_owner_dir + DirSep + uncataloged_owner + ".qm");
+        assertEq(2, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",)),
+            "source-tree verification discovers an owner before its first catalog exists");
+        remove_tree(uncataloged_owner_dir);
+
         string orphan_domain =
             DataProviderPresentation::defaultCatalogDomain("RemovedApp");
         mkdir(output + DirSep + orphan_domain);
@@ -564,6 +575,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private int runSourceCatalogTreeCheck(string root, string qore_bin,
             string output, list<string> modules) {
         list<string> module_path = (
+            output,
             root + DirSep + "build/qlib-qmod",
             root + DirSep + "build/modules/i18n",
             root + DirSep + "build/modules/json",

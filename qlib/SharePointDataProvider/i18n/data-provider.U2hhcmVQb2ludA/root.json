@@ -1,0 +1,1893 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.U2hhcmVQb2ludA.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.short_desc": {
+          "source": "Microsoft SharePoint document libraries and lists",
+          "message": "Microsoft SharePoint document libraries and lists"
+        },
+        "app.U2hhcmVQb2ludA.desc": {
+          "source": "Provides access to [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) document libraries and lists via the Microsoft Graph API.\n\n**Common use cases**:\n- **Document management**: upload, download, copy, move, and delete documents in a document library, including resumable uploads for large files\n- **Sharing**: create sharing links for documents and folders\n- **Lists**: create and delete lists, and create, update, search, and delete list items\n- **Records**: read and write list items as records, typed from each list's own columns\n- **Change tracking**: react to new and modified documents and to new list items, using delta queries that resume exactly where they left off\n\nMicrosoft and SharePoint are trademarks of the Microsoft group of companies",
+          "message": "Provides access to [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) document libraries and lists via the Microsoft Graph API.\n\n**Common use cases**:\n- **Document management**: upload, download, copy, move, and delete documents in a document library, including resumable uploads for large files\n- **Sharing**: create sharing links for documents and folders\n- **Lists**: create and delete lists, and create, update, search, and delete list items\n- **Records**: read and write list items as records, typed from each list's own columns\n- **Change tracking**: react to new and modified documents and to new list items, using delta queries that resume exactly where they left off\n\nMicrosoft and SharePoint are trademarks of the Microsoft group of companies"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Microsoft SharePoint",
+          "message": "Make a custom API call to Microsoft SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Microsoft SharePoint** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Microsoft SharePoint** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
+          "source": "List Sites",
+          "message": "List Sites"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
+          "source": "List or search SharePoint sites",
+          "message": "List or search SharePoint sites"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.desc": {
+          "source": "List the sites available. With no search term the tenant's root site and its subsites are returned, which always works; a search term is answered from the SharePoint search index",
+          "message": "List the sites available. With no search term the tenant's root site and its subsites are returned, which always works; a search term is answered from the SharePoint search index"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Search"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.short_desc": {
+          "source": "Search term to match sites against",
+          "message": "Search term to match sites against"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.desc": {
+          "source": "A term to search site titles and URLs for. When omitted, the tenant's root site and its subsites are returned",
+          "message": "A term to search site titles and URLs for. When omitted, the tenant's root site and its subsites are returned"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
+          "source": "Get Site",
+          "message": "Get Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
+          "source": "Get site metadata",
+          "message": "Get site metadata"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.desc": {
+          "source": "Retrieve metadata for a SharePoint site",
+          "message": "Retrieve metadata for a SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
+          "source": "List Document Libraries",
+          "message": "List Document Libraries"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
+          "source": "List the document libraries in a site",
+          "message": "List the document libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.desc": {
+          "source": "List the document libraries (drives) in a SharePoint site. The `drive_id` of a library identifies it to every file action",
+          "message": "List the document libraries (drives) in a SharePoint site. The `drive_id` of a library identifies it to every file action"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
+          "source": "Get Document Library Info",
+          "message": "Get Document Library Info"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
+          "source": "Get document library metadata and quota",
+          "message": "Get document library metadata and quota"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.desc": {
+          "source": "Retrieve a document library's metadata, including its storage quota and owner",
+          "message": "Retrieve a document library's metadata, including its storage quota and owner"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Documents",
+          "message": "Search Documents"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "List or search documents and folders",
+          "message": "List or search documents and folders"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "List the items in a folder of a document library, or search the whole library. Supports pagination and sorting",
+          "message": "List the items in a folder of a document library, or search the whole library. Supports pagination and sorting"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to list items from",
+          "message": "The folder to list items from"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.desc": {
+          "source": "The ID of the folder to list items from. If omitted, lists items from the root of the library",
+          "message": "The ID of the folder to list items from. If omitted, lists items from the root of the library"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "Search Query"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Search query string",
+          "message": "Search query string"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "A search query string to filter items by name or content",
+          "message": "A search query string to filter items by name or content"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.display_name": {
+          "source": "Top",
+          "message": "Top"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.short_desc": {
+          "source": "Maximum items to return per page",
+          "message": "Maximum items to return per page"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.desc": {
+          "source": "Maximum number of items to return per page (default `200`, max `1000`)",
+          "message": "Maximum number of items to return per page (default `200`, max `1000`)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Order By"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "Sort field and direction"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results (e.g., `name asc`, `size desc`)",
+          "message": "Sort order for results (e.g., `name asc`, `size desc`)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Document",
+          "message": "Get Document"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get document or folder metadata",
+          "message": "Get document or folder metadata"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve metadata for a document or folder by ID or by path within the library",
+          "message": "Retrieve metadata for a document or folder by ID or by path within the library"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Item ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to retrieve",
+          "message": "The item ID to retrieve"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to retrieve. Provide either `id` or `path`",
+          "message": "The unique identifier of the item to retrieve. Provide either `id` or `path`"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.display_name": {
+          "source": "Item Path",
+          "message": "Item Path"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.short_desc": {
+          "source": "The item path to retrieve",
+          "message": "The item path to retrieve"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.desc": {
+          "source": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`",
+          "message": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Create Folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "Create a new folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in a document library, optionally within a parent folder",
+          "message": "Create a new folder in a document library, optionally within a parent folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "Folder Name"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name of the folder to create",
+          "message": "The name of the folder to create"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name of the new folder",
+          "message": "The name of the new folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Folder description",
+          "message": "Folder description"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional description of the folder",
+          "message": "An optional description of the folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "Parent Folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "The parent folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the folder is created in the drive root",
+          "message": "The ID of the parent folder. If omitted, the folder is created in the drive root"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Conflict Behavior"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "How to handle naming conflicts"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists:\n- `rename`: automatically rename the new folder\n- `replace`: replace the existing item\n- `fail`: fail the request with an error",
+          "message": "The conflict resolution behavior if an item with the same name exists:\n- `rename`: automatically rename the new folder\n- `replace`: replace the existing item\n- `fail`: fail the request with an error"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Rename"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new folder",
+          "message": "Automatically rename the new folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Replace"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing item",
+          "message": "Replace the existing item"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Fail"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Fail the request with an error"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload Document",
+          "message": "Upload Document"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a document (up to 4 MB)",
+          "message": "Upload a document (up to 4 MB)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a document to a library using a simple upload. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "Upload a document to a library using a simple upload. For files larger than 4 MB, use the `create-upload-session` action instead"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "The file to upload"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to OneDrive, including file name, content, and MIME type. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "The file to upload to OneDrive, including file name, content, and MIME type. For files larger than 4 MB, use the `create-upload-session` action instead"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "Parent Folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "The parent folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "The ID of the parent folder. If omitted, the file is uploaded to the drive root"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
+          "source": "Create Upload Session",
+          "message": "Create Upload Session"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
+          "source": "Create a resumable upload session",
+          "message": "Create a resumable upload session"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.desc": {
+          "source": "Create a resumable upload session for uploading a large document (>4 MB) in chunks. Returns an upload URL that accepts PUT requests with byte ranges",
+          "message": "Create a resumable upload session for uploading a large document (>4 MB) in chunks. Returns an upload URL that accepts PUT requests with byte ranges"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.display_name": {
+          "source": "File Name",
+          "message": "File Name"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.short_desc": {
+          "source": "The name of the file to upload",
+          "message": "The name of the file to upload"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.desc": {
+          "source": "The name of the file to upload (e.g., `large-file.zip`)",
+          "message": "The name of the file to upload (e.g., `large-file.zip`)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "Parent Folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "The parent folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "The ID of the parent folder. If omitted, the file is uploaded to the drive root"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Conflict Behavior"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "How to handle naming conflicts"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if a file with the same name exists:\n- `rename`: automatically rename the new file\n- `replace`: replace the existing file\n- `fail`: fail the request with an error",
+          "message": "The conflict resolution behavior if a file with the same name exists:\n- `rename`: automatically rename the new file\n- `replace`: replace the existing file\n- `fail`: fail the request with an error"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Rename"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new file",
+          "message": "Automatically rename the new file"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Replace"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "Replace the existing file"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Fail"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Fail the request with an error"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download Document",
+          "message": "Download Document"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a document",
+          "message": "Download a document"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Get the download URL and metadata for a document. Returns a pre-authenticated download URL that can be used to download the content directly",
+          "message": "Get the download URL and metadata for a document. Returns a pre-authenticated download URL that can be used to download the content directly"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Item ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.short_desc": {
+          "source": "The item ID to download",
+          "message": "The item ID to download"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the file to download",
+          "message": "The unique identifier of the file to download"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Document",
+          "message": "Delete Document"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete a document or folder",
+          "message": "Delete a document or folder"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete a document or folder from a library. The item is moved to the recycle bin",
+          "message": "Delete a document or folder from a library. The item is moved to the recycle bin"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Item ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to delete",
+          "message": "The item ID to delete"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to delete",
+          "message": "The unique identifier of the item to delete"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Document",
+          "message": "Update Document"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Rename, move, or update a document or folder",
+          "message": "Rename, move, or update a document or folder"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update the metadata of a document or folder. Can be used to rename an item, move it to a different folder, or update its description",
+          "message": "Update the metadata of a document or folder. Can be used to rename an item, move it to a different folder, or update its description"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Item ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to update",
+          "message": "The item ID to update"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to update",
+          "message": "The unique identifier of the item to update"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "New Name"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "The new name for the item",
+          "message": "The new name for the item"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The new name for the file or folder (including extension for files)",
+          "message": "The new name for the file or folder (including extension for files)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A user-visible description of the item",
+          "message": "A user-visible description of the item"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Provides a user-visible description of the item",
+          "message": "Provides a user-visible description of the item"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.display_name": {
+          "source": "New Parent Folder ID",
+          "message": "New Parent Folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.short_desc": {
+          "source": "The destination folder ID for moving",
+          "message": "The destination folder ID for moving"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder to move the item to. Set this to move an item to a different folder",
+          "message": "The ID of the destination folder to move the item to. Set this to move an item to a different folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
+          "source": "Copy Document",
+          "message": "Copy Document"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
+          "source": "Copy a document or folder",
+          "message": "Copy a document or folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.desc": {
+          "source": "Asynchronously copy a document or folder to a new location, optionally with a new name. Returns a monitor URL to track copy progress",
+          "message": "Asynchronously copy a document or folder to a new location, optionally with a new name. Returns a monitor URL to track copy progress"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Item ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.short_desc": {
+          "source": "The item ID to copy",
+          "message": "The item ID to copy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.desc": {
+          "source": "The unique identifier of the file or folder to copy",
+          "message": "The unique identifier of the file or folder to copy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "New Name"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.short_desc": {
+          "source": "New name for the copy",
+          "message": "New name for the copy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.desc": {
+          "source": "The new name for the copied item. If not provided, the same name as the original is used",
+          "message": "The new name for the copied item. If not provided, the same name as the original is used"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.display_name": {
+          "source": "Destination Folder ID",
+          "message": "Destination Folder ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.short_desc": {
+          "source": "Target folder ID for the copy",
+          "message": "Target folder ID for the copy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder. If omitted, the item is copied to the drive root",
+          "message": "The ID of the destination folder. If omitted, the item is copied to the drive root"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.display_name": {
+          "source": "Destination Drive ID",
+          "message": "Destination Drive ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.short_desc": {
+          "source": "Target drive ID for the copy",
+          "message": "Target drive ID for the copy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.desc": {
+          "source": "The unique identifier of the destination drive. Required when copying to a different drive",
+          "message": "The unique identifier of the destination drive. Required when copying to a different drive"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Conflict Behavior"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "How to handle naming conflicts"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists in the destination:\n- `rename`: automatically rename the new copy\n- `replace`: replace the existing file (only supported for files, not folders)\n- `fail`: fail the request with an error (default)",
+          "message": "The conflict resolution behavior if an item with the same name exists in the destination:\n- `rename`: automatically rename the new copy\n- `replace`: replace the existing file (only supported for files, not folders)\n- `fail`: fail the request with an error (default)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Rename"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new copy",
+          "message": "Automatically rename the new copy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Replace"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "Replace the existing file"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Fail"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Fail the request with an error"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
+          "source": "Create Sharing Link",
+          "message": "Create Sharing Link"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
+          "source": "Create a sharing link for a document",
+          "message": "Create a sharing link for a document"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.desc": {
+          "source": "Create a sharing link (view, edit, or embed) for a document or folder",
+          "message": "Create a sharing link (view, edit, or embed) for a document or folder"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "The document library (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Item ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.short_desc": {
+          "source": "The item ID to share",
+          "message": "The item ID to share"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.desc": {
+          "source": "The unique identifier of the item to create a sharing link for",
+          "message": "The unique identifier of the item to create a sharing link for"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.display_name": {
+          "source": "Link Type",
+          "message": "Link Type"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.short_desc": {
+          "source": "The type of sharing link",
+          "message": "The type of sharing link"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.desc": {
+          "source": "The type of sharing link to create:\n- `view`: read-only link\n- `edit`: read-write link\n- `embed`: embeddable link",
+          "message": "The type of sharing link to create:\n- `view`: read-only link\n- `edit`: read-write link\n- `embed`: embeddable link"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.display_name": {
+          "source": "View",
+          "message": "View"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.desc": {
+          "source": "Read-only access",
+          "message": "Read-only access"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.display_name": {
+          "source": "Edit",
+          "message": "Edit"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.desc": {
+          "source": "Read-write access",
+          "message": "Read-write access"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.display_name": {
+          "source": "Embed",
+          "message": "Embed"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.desc": {
+          "source": "Embeddable link",
+          "message": "Embeddable link"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.display_name": {
+          "source": "Link Scope",
+          "message": "Link Scope"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.short_desc": {
+          "source": "The scope of the sharing link",
+          "message": "The scope of the sharing link"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.desc": {
+          "source": "The scope of the link:\n- `anonymous`: anyone with the link can access\n- `organization`: only users in the same organization can access",
+          "message": "The scope of the link:\n- `anonymous`: anyone with the link can access\n- `organization`: only users in the same organization can access"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.display_name": {
+          "source": "Anonymous",
+          "message": "Anonymous"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.desc": {
+          "source": "Anyone with the link can access",
+          "message": "Anyone with the link can access"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Organization",
+          "message": "Organization"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.desc": {
+          "source": "Only users in the same organization",
+          "message": "Only users in the same organization"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Password for the sharing link",
+          "message": "Password for the sharing link"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the sharing link (optional)",
+          "message": "The password for the sharing link (optional)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date",
+          "message": "Expiration Date"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "When the link expires",
+          "message": "When the link expires"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "The date and time when the sharing link expires",
+          "message": "The date and time when the sharing link expires"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "List Lists"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
+          "source": "List the lists in a site",
+          "message": "List the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.desc": {
+          "source": "List the lists in a SharePoint site. SharePoint's own internal lists are excluded by default",
+          "message": "List the lists in a SharePoint site. SharePoint's own internal lists are excluded by default"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.display_name": {
+          "source": "Include System Lists",
+          "message": "Include System Lists"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.short_desc": {
+          "source": "Include SharePoint's own internal lists",
+          "message": "Include SharePoint's own internal lists"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.desc": {
+          "source": "Include the lists SharePoint maintains for its own bookkeeping",
+          "message": "Include the lists SharePoint maintains for its own bookkeeping"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.display_name": {
+          "source": "Include Document Libraries",
+          "message": "Include Document Libraries"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.short_desc": {
+          "source": "Include document libraries as well as record lists",
+          "message": "Include document libraries as well as record lists"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.desc": {
+          "source": "Include lists whose template is `documentLibrary`",
+          "message": "Include lists whose template is `documentLibrary`"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
+          "source": "Get List",
+          "message": "Get List"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
+          "source": "Get list metadata",
+          "message": "Get list metadata"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.desc": {
+          "source": "Retrieve metadata for a SharePoint list",
+          "message": "Retrieve metadata for a SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
+          "source": "Create List",
+          "message": "Create List"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
+          "source": "Create a new list",
+          "message": "Create a new list"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.desc": {
+          "source": "Create a new list in a SharePoint site, optionally with its columns",
+          "message": "Create a new list in a SharePoint site, optionally with its columns"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "List Name",
+          "message": "List Name"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.short_desc": {
+          "source": "The name of the new list",
+          "message": "The name of the new list"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.desc": {
+          "source": "The title of the list to create, as shown to users",
+          "message": "The title of the list to create, as shown to users"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the new list",
+          "message": "The description of the new list"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the list to create",
+          "message": "A description of the list to create"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "Template"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.short_desc": {
+          "source": "The kind of list to create",
+          "message": "The kind of list to create"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.desc": {
+          "source": "The SharePoint template the list is based on; `genericList` is an ordinary list of records and `documentLibrary` holds files",
+          "message": "The SharePoint template the list is based on; `genericList` is an ordinary list of records and `documentLibrary` holds files"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.display_name": {
+          "source": "Generic List",
+          "message": "Generic List"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.desc": {
+          "source": "An ordinary list of records",
+          "message": "An ordinary list of records"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.display_name": {
+          "source": "Document Library",
+          "message": "Document Library"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.desc": {
+          "source": "A library of files, reached with the file actions",
+          "message": "A library of files, reached with the file actions"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Calendar",
+          "message": "Calendar"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "A calendar of events",
+          "message": "A calendar of events"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.display_name": {
+          "source": "Tasks",
+          "message": "Tasks"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.desc": {
+          "source": "A task list",
+          "message": "A task list"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.display_name": {
+          "source": "Columns",
+          "message": "Columns"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.short_desc": {
+          "source": "The columns to create the list with",
+          "message": "The columns to create the list with"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.desc": {
+          "source": "The columns to create the list with, as a list of Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) objects, for example `{\"name\": \"Amount\", \"number\": {}}`. When omitted the list is created with only the default `Title` column",
+          "message": "The columns to create the list with, as a list of Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) objects, for example `{\"name\": \"Amount\", \"number\": {}}`. When omitted the list is created with only the default `Title` column"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "Delete List"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
+          "source": "Delete a list",
+          "message": "Delete a list"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.desc": {
+          "source": "Delete a SharePoint list and every item in it",
+          "message": "Delete a SharePoint list and every item in it"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
+          "source": "List Columns",
+          "message": "List Columns"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
+          "source": "List the columns of a list",
+          "message": "List the columns of a list"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.desc": {
+          "source": "List the columns of a SharePoint list, with their types and whether they can be written",
+          "message": "List the columns of a SharePoint list, with their types and whether they can be written"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.display_name": {
+          "source": "Writable Only",
+          "message": "Writable Only"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.short_desc": {
+          "source": "Return only columns that can be written",
+          "message": "Return only columns that can be written"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.desc": {
+          "source": "Return only the columns that can be written; SharePoint maintains many read-only columns that a create or update call would reject",
+          "message": "Return only the columns that can be written; SharePoint maintains many read-only columns that a create or update call would reject"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
+          "source": "Search List Items",
+          "message": "Search List Items"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
+          "source": "List or search the items in a list",
+          "message": "List or search the items in a list"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.desc": {
+          "source": "List the items in a SharePoint list, optionally filtered with an OData expression over the item's columns",
+          "message": "List the items in a SharePoint list, optionally filtered with an OData expression over the item's columns"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.short_desc": {
+          "source": "An OData filter expression",
+          "message": "An OData filter expression"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.desc": {
+          "source": "An OData `$filter` expression over the item's columns, for example `fields/Title eq 'Widget'`. Column names are prefixed with `fields/`",
+          "message": "An OData `$filter` expression over the item's columns, for example `fields/Title eq 'Widget'`. Column names are prefixed with `fields/`"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Order By"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "Sort field and direction"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results, for example `fields/Title asc`",
+          "message": "Sort order for results, for example `fields/Title asc`"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum items to return in total",
+          "message": "Maximum items to return in total"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.desc": {
+          "source": "Stop after this many items in total, across all pages",
+          "message": "Stop after this many items in total, across all pages"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
+          "source": "Get List Item",
+          "message": "Get List Item"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
+          "source": "Get a list item and its column values",
+          "message": "Get a list item and its column values"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.desc": {
+          "source": "Retrieve a list item with the values of all of its columns",
+          "message": "Retrieve a list item with the values of all of its columns"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Item"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "The list item"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "The list item to address"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Create List Item",
+          "message": "Create List Item"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Create an item in a list",
+          "message": "Create an item in a list"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Create an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "Create an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "Column Values"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "The values to set for the item's columns"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Update List Item",
+          "message": "Update List Item"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Update an item's column values",
+          "message": "Update an item's column values"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Update the column values of an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "Update the column values of an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Item"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "The list item"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "The list item to address"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "Column Values"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "The values to set for the item's columns"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Delete List Item",
+          "message": "Delete List Item"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Delete an item from a list",
+          "message": "Delete an item from a list"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Delete an item from a SharePoint list",
+          "message": "Delete an item from a SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "The SharePoint site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "List"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "The SharePoint list"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "The list to address. Use the `list-lists` action to list the lists in a site"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Item"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "The list item"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "The list item to address"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
+          "source": "Document Added",
+          "message": "Document Added"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
+          "source": "Trigger when a document is added to a library",
+          "message": "Trigger when a document is added to a library"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a document is added to a document library. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "Fires when a document is added to a document library. Uses delta queries, which resume exactly where they left off rather than re-reading the library"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
+          "source": "Document Modified",
+          "message": "Document Modified"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
+          "source": "Trigger when a document is modified",
+          "message": "Trigger when a document is modified"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.desc": {
+          "source": "Fires when a document already in a library is modified. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "Fires when a document already in a library is modified. Uses delta queries, which resume exactly where they left off rather than re-reading the library"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "Folder Added",
+          "message": "Folder Added"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "Trigger when a folder is added to a library",
+          "message": "Trigger when a folder is added to a library"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is added to a document library",
+          "message": "Fires when a folder is added to a document library"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
+          "source": "List Item Added",
+          "message": "List Item Added"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {
+          "source": "Trigger when an item is added to a list",
+          "message": "Trigger when an item is added to a list"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.desc": {
+          "source": "Fires when an item is added to a SharePoint list. Uses delta queries, which resume exactly where they left off rather than polling the head of the list",
+          "message": "Fires when an item is added to a SharePoint list. Uses delta queries, which resume exactly where they left off rather than polling the head of the list"
+        }
+      }
+    }
+  }
+}

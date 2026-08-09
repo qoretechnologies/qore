@@ -824,7 +824,7 @@ public class DataProviderActionCatalog {
 
         initactionmap{app}{action} = {
             "init": init,
-            "module_context": _mod_init_ctx ?? get_module_context_path(),
+            "module_context": DataProviderActionCatalog::registrationModulePath(),
         };
     }
 
@@ -852,7 +852,7 @@ public class DataProviderActionCatalog {
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
         }
-        *string module_path = _mod_init_ctx ?? get_module_context_path();
+        *string module_path = DataProviderActionCatalog::registrationModulePath();
 
         bool should_auto_register_generic_call = False;
         bool should_load_generic_api_call_builder = False;
@@ -1301,7 +1301,7 @@ public class DataProviderActionCatalog {
         DataProviderActionCatalog::getAllApps();
 
         AutoLock al(lck);
-        list<hash<auto>> rv;
+        list<hash<auto>> rv = ();
         foreach hash<DataProviderAppInfo> app in (appcache.values()) {
             bool include_app = DataProviderActionCatalog::modulePathsContain(
                 appmodmap{app.name}, module_name);
@@ -1351,7 +1351,7 @@ public class DataProviderActionCatalog {
         *hash<string, hash<DataProviderActionInfo>> dactions = remove app_actionmap{name};
         map remove top_actionmap{name + "/" + $1.action}, dactions.values();
         remove initactionmap{name};
-        if (exists (*string path = _mod_init_ctx ?? get_module_context_path())) {
+        if (exists (*string path = DataProviderActionCatalog::registrationModulePath())) {
             remove appmodmap{name}{path};
         }
         *hash<DataProviderAppInfo> app = appcache{name};
@@ -1373,7 +1373,7 @@ public class DataProviderActionCatalog {
         The \c app and \c action attributes must be unique for every action registered
     */
     static registerAction(hash<DataProviderActionInfo> action) {
-        *string module_path = _mod_init_ctx ?? get_module_context_path();
+        *string module_path = DataProviderActionCatalog::registrationModulePath();
 
         # check for required keys
         if (*hash<auto> missing = RequiredActionKeys - keys action) {
@@ -2714,6 +2714,21 @@ public class DataProviderActionCatalog {
             }
         }
         return False;
+    }
+
+    #! Returns the technical owner path for a provider registration
+    /** A deferred app initializer carries the path of the module that queued
+        it in \ref _mod_init_ctx.  The initializer can load another module,
+        however, and that nested module must own the apps and actions it
+        registers.  Qore exposes the actively loading module through
+        \ref get_module_context_path(); prefer that exact path and use the
+        deferred path only when no module load is active.
+
+        @return the active module path, the deferred initializer path, or
+        @ref NOTHING outside a module-owned registration
+    */
+    private static *string registrationModulePath() {
+        return get_module_context_path() ?? _mod_init_ctx;
     }
 
     #! Makes the framework-injected generic API action part of every app owner's presentation catalog

@@ -252,6 +252,11 @@ class QoreDataProviderI18nCmd {
         }
 
         hash<string, bool> owner_modules = map {$1: True}, explicit_owners;
+        # Catalog-derived discovery cannot see a newly added provider module
+        # until its first root catalog exists.  Discover exact source-level
+        # registration owners as well, so --check-source-tree reports that
+        # missing catalog instead of silently accepting an incomplete tree.
+        collectProviderSourceOwners(output, \owner_modules);
         list<hash<auto>> unresolved_roots = ();
         list<hash<auto>> owned_roots = ();
         foreach hash<auto> root in (roots) {
@@ -366,8 +371,59 @@ class QoreDataProviderI18nCmd {
             owner_modules.size(), roots.size(), translation_count);
     }
 
+    #! Finds provider owner modules before their first catalog exists
+    /** Module discovery is based only on exact DataProvider registration API
+        calls in Qore module source.  These are technical symbols rather than
+        presentation text, and therefore remain language-independent.  Roots
+        inferred from canonical catalog layouts are still authoritative for
+        modules whose registration is delegated to another source file.
+
+        @param path source-tree path to inspect recursively
+        @param owners output set of exact technical module names
+    */
+    private collectProviderSourceOwners(string path,
+            reference<hash<string, bool>> owners) {
+        foreach string file in (glob(path + DirSep + "*.qm")) {
+            if (!is_file(file)) {
+                continue;
+            }
+            string source = ReadOnlyFile::readTextFile(file);
+            bool owns_provider_presentation = False;
+            foreach string registration in ((
+                    "DataProviderActionCatalog::registerApp(",
+                    "DataProviderActionCatalog::registerPendingApp(",
+                    "DataProviderActionCatalog::registerAction(",
+                    "DataProviderActionCatalog::registerPendingAppAction(")) {
+                if (source.find(registration) >= 0) {
+                    owns_provider_presentation = True;
+                    break;
+                }
+            }
+            if (!owns_provider_presentation) {
+                continue;
+            }
+            string file_name = basename(file);
+            owners{file_name.substr(0, file_name.length() - 3)} = True;
+        }
+
+        Dir dir();
+        if (!dir.chdir(path)) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                sprintf("cannot read provider source tree directory %y",
+                    path);
+        }
+        foreach string child in (dir.listDirs()) {
+            if (child == "i18n" || child.endsWith(".i18n")
+                    || child.startsWith(
+                        DataProviderPresentation::CatalogDomainPrefix)) {
+                continue;
+            }
+            collectProviderSourceOwners(path + DirSep + child, \owners);
+        }
+    }
+
     private hash<string, hash<auto>> moduleCatalogs(string owner) {
-        hash<string, hash<auto>> catalogs;
+        hash<string, hash<auto>> catalogs = {};
         foreach hash<auto> contribution in (
                 DataProviderActionCatalog::getPresentationContributionsForModule(
                     owner)) {
