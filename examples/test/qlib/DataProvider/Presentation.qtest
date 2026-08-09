@@ -48,6 +48,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \localizedProjectionTest());
         addTestCase("catalog projection preserves literal braces",
             \literalPresentationTest());
+        addTestCase("owner fragments reject order-dependent conflicts",
+            \ownerFragmentConflictTest());
         addTestCase("source catalogs cover provider presentation metadata",
             \sourceCatalogTest());
         addTestCase("the checked-in Qore source catalog is synchronized",
@@ -293,6 +295,65 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "provider prose treats JSON and path braces as literal text");
         assertEq(Source, projected.producer_presentation.desc,
             "literal producer prose is retained without escaping");
+    }
+
+    ownerFragmentConflictTest() {
+        string root = make_tmp_dir("data-provider-presentation-fragments-");
+        on_exit remove_tree(root);
+        string root_dir = root + DirSep + Domain + DirSep + "root";
+        mkdir(root + DirSep + Domain);
+        mkdir(root_dir);
+        string id = DataProviderPresentation::actionMessageId(App, Action,
+            "display_name");
+        hash<auto> entry = {
+            "source": "Odeslat zprávu",
+            "message": "Odeslat zprávu",
+        };
+        writeJson(root_dir + DirSep + "OwnerOne.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {id: entry}}},
+        });
+        writeJson(root_dir + DirSep + "OwnerTwo.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {id: entry}}},
+        });
+
+        DataProviderPresentationCatalog identical(Domain, "root",
+            {"search_path": (root,)});
+        assertEq("Odeslat zprávu",
+            identical.projectAction(app(), action()).display_name,
+            "structurally identical shared-domain contributions remain composable");
+
+        writeJson(root_dir + DirSep + "OwnerTwo.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                id: {"source": "Jiný název", "message": "Jiný název"},
+            }}},
+        });
+        assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", sub () {
+            DataProviderPresentationCatalog conflicting(Domain, "root",
+                {"search_path": (root,)});
+        }, NOTHING, "conflicting root owner fragments cannot depend on load order");
+
+        unlink(root_dir + DirSep + "OwnerTwo.json");
+        string ja_dir = root + DirSep + Domain + DirSep + "ja";
+        mkdir(ja_dir);
+        writeJson(ja_dir + DirSep + "OwnerOne.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "メッセージを送信"},
+            }}},
+        });
+        writeJson(ja_dir + DirSep + "OwnerTwo.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "別の翻訳"},
+            }}},
+        });
+        assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", sub () {
+            DataProviderPresentationCatalog conflicting(Domain, "ja",
+                {"search_path": (root,)});
+        }, NOTHING, "conflicting translated owner fragments cannot depend on load order");
     }
 
     sourceCatalogTest() {

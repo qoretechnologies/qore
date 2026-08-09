@@ -614,6 +614,55 @@ public class DataProviderPresentationCatalog {
         I18n::MessageCatalog catalog;
     }
 
+    #! Rejects order-dependent message collisions across provider catalog files
+    /** Generic native catalogs intentionally use later-file precedence. Source-
+        owned provider fragments have a stricter contract: independently owned
+        contributions to one app domain must be disjoint or exactly identical.
+        This check keeps catalog search-path and filename order from selecting
+        user-facing provider presentation.
+
+        Malformed native catalogs are left to @ref I18n::MessageCatalog, which
+        remains the schema and placeholder-validation authority.
+    */
+    private static validateComposableCatalogFiles(list<string> files) {
+        hash<string, hash<auto>> messages_by_locale = {};
+        hash<string, hash<string, string>> paths_by_locale = {};
+        foreach string path in (files) {
+            hash<auto> native_catalog = I18n::load_native_catalog(path);
+            if (native_catalog.locales.typeCode() != NT_HASH) {
+                continue;
+            }
+            foreach hash<auto> locale_entry in (
+                    native_catalog.locales.pairIterator()) {
+                if (locale_entry.value.typeCode() != NT_HASH
+                        || locale_entry.value.messages.typeCode() != NT_HASH) {
+                    continue;
+                }
+                string catalog_locale = locale_entry.key;
+                if (!exists messages_by_locale{catalog_locale}) {
+                    messages_by_locale{catalog_locale} = {};
+                    paths_by_locale{catalog_locale} = {};
+                }
+                foreach hash<auto> message_entry in (
+                        locale_entry.value.messages.pairIterator()) {
+                    string message_id = message_entry.key;
+                    if (exists messages_by_locale{catalog_locale}{message_id}
+                            && messages_by_locale{catalog_locale}{message_id}
+                                != message_entry.value) {
+                        throw "DATA-PROVIDER-PRESENTATION-CATALOG-ERROR",
+                            sprintf("provider catalog files %y and %y conflict "
+                                "for locale %y message id %y",
+                                paths_by_locale{catalog_locale}{message_id},
+                                path, catalog_locale, message_id);
+                    }
+                    messages_by_locale{catalog_locale}{message_id} =
+                        message_entry.value;
+                    paths_by_locale{catalog_locale}{message_id} = path;
+                }
+            }
+        }
+    }
+
     #! Creates a projection catalog
     /** @param domain native i18n catalog domain
         @param requested_locale requested BCP 47 locale or \c root for producer-source presentation
@@ -636,6 +685,7 @@ public class DataProviderPresentationCatalog {
         list<string> files = I18n::discover_catalog_files(domain, locale,
             discovery_opts);
         if (files) {
+            validateComposableCatalogFiles(files);
             catalog = new I18n::MessageCatalog(files,
                 {"literal_messages": True});
         } else {

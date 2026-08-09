@@ -75,7 +75,9 @@ action contribution. Directory modules store them below
 registration macros install each locale as the owner-qualified fragment
 `<catalog-root>/<domain>/<locale>/<ModuleName>.json`, so several modules can
 contribute disjoint messages to the same app domain without overwriting one
-another.
+another. Contributions with the same locale and message identity must be
+structurally identical; provider presentation rejects conflicting owner fragments
+instead of selecting text by catalog search-path or filename order.
 
 Projects that consume Qore's CMake API but keep modules outside `qlib/` call
 `QORE_INSTALL_USER_MODULE_CATALOGS(<ModuleName> <catalog-source-dir>
