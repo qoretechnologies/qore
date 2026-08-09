@@ -30,8 +30,8 @@ Implemented; see issue #5364.
 Modules extend base modules today by pushing themselves into the base: the
 extender declares `%requires(reexport) Base`, and in its `init` closure calls
 `Base::registerChild(...)` and `DataProviderActionCatalog::registerAction()`
-with `"app": Base::AppName`.  `QorusOpenAiServices`, `QorusDiscordServices`,
-`QorusGoogleServices` and `QorusSlackServices` all work this way.
+with `"app": Base::AppName`.  The proprietary OpenAI, Discord, Google and Slack
+service modules of a consuming platform all work this way.
 
 The dependency direction is correct and must be preserved — it is what lets a
 proprietary module extend an open one.  The problem is **activation**: the
@@ -95,17 +95,63 @@ Filesystem paths are rejected exactly as they are for `%requires` (see
 |---|---|
 | child not installed | silent; status `absent`; the parent works exactly as before |
 | child installed and loads | status `attached`; the child's `init` has run before the parent's load returns |
-| child installed but broken (parse error, init error, version mismatch) | the child's own exception is raised, decorated with the parent and child names; the parent's load fails |
+| child installed but broken (parse error, init error, version mismatch) | status `failed`; the child is skipped and the parent loads without it; the child's own error is reported and recorded |
 | child load already in progress on this thread | no-op; status `attached`; the in-flight load completes normally |
 | parent module `Program` has `PO_NO_MODULES` | status `skipped`, `MODULE-CHILD-SKIPPED` warning; retried on a later load where modules are allowed |
 | module declares itself as a child | parse error |
 | same child declared twice by one module | parse error |
 
-Failures are **sticky**: once a declared child is found present-but-broken, the
-recorded error is re-raised on every subsequent load of the parent, so the
-parent never silently starts working after a failed extension load.  This keeps
-`%requires Parent` deterministic: it either always succeeds or always fails for
-a given installed file set.
+### A broken child never fails the parent
+
+A declared child is *optional*, exactly as with `%try-module`: the parent
+announces an extension that may exist, and carries on without it when it does
+not.  An extension that cannot be used must therefore never make the module
+that declares it unusable.
+
+An earlier version of this implementation raised the child's error and failed
+the parent's load on every subsequent load, on the argument that this keeps
+`%requires Parent` deterministic for a given set of installed files.  That
+reasoning is rejected.  Determinism was never in question — the outcome is
+already a pure function of what is installed — and it does not justify the
+blast radius: a single incompatible optional extension takes down every
+consumer of the base module, including all the consumers that never use the
+extension.  That is a strictly worse failure than the one the directive exists
+to avoid.  The failure mode is not hypothetical: a stale out-of-tree
+`SalesforcePubSubDataProvider` on one CI runner broke three unrelated
+`SalesforceRestDataProvider` test suites this way.  A broken child is an
+operational problem with the child, and must be reported as such rather than
+converted into a failure of the parent.
+
+So a `failed` child joins `absent` and `skipped`: it is reported, the child is
+skipped, and the parent is fully usable without it.  Nothing is added to the
+caller's exception sink and the parent's load return code is unaffected.
+
+**A broken child is always reported.**  Unlike a `skipped` child — which
+reflects a deliberate restriction in the container `Program` and is only worth
+a warning when warnings are enabled — a broken child is a deployment fault that
+must not become indistinguishable from an absent one.  The report goes to the
+warning sink as `MODULE-CHILD-FAILED` when the caller has one and warnings are
+enabled (`Program::loadModuleWarn()`, `Program::loadApplyToUserModuleWarn()`);
+otherwise it is written to `stderr`.  The `stderr` case covers the `%requires`
+path, where the scanner passes one sink for both errors and warnings
+(`lib/scanner.lpp`, `QMM.parseLoadModule(xsink, xsink, ...)`) — a warning
+raised there would become a parse error.  The message always names the parent,
+the child, and the child's own error code and description; losing the child's
+own diagnostic would leave no way to find the real fault.
+
+**The failure is remembered, not retried.**  `CMS_FAILED` is terminal for the
+life of the process: unlike `CMS_SKIPPED`, it does not leave `all_done` false,
+so the child's load is not attempted again.  A module load failure is
+deterministic, so a retry would re-run a failing parse — and re-report it — on
+every load of the parent, for a result that cannot change; the state left
+behind by a partially failed module load is also not defined for a second
+attempt.  The consequence is that a child fixed on disk is only picked up by a
+new process, which is the same rule that already applies to every other module
+in the process-global module registry.
+
+The recorded error stays available through `get_module_hash()` for the life of
+the process (see *Introspection* below), which is what a test or an operator
+uses to discover the problem after the fact.
 
 ### Attach point
 
@@ -126,11 +172,14 @@ that itself declares children has them attached before the next sibling of the
 first child.
 
 The attach runs **before** the parent is merged into the requesting
-`QoreProgram`, so a broken child is all-or-nothing for the caller.
+`QoreProgram`, so the set of extensions a caller can observe is complete as
+soon as the parent is available to it.
 
 If the outer load is already failing when the queue is drained, statuses are
-still recorded but no new exception is added to the caller's sink; the recorded
-failure is raised on the next load attempt.
+still recorded and reported, but nothing is added to the caller's sink.  Only
+an interrupted attach (a thread interrupt while waiting for another thread to
+finish attaching the same parent's children) can be lost that way, and the
+enclosing failure already reports the load as failed.
 
 ### Program and parse-option context
 
@@ -148,9 +197,9 @@ non-standard search path find its children in that same path.
 
 ### `PO_NO_MODULES`
 
-`load_module()` carries the `MODULES` functional domain, and hosts such as
-Qorus parse interface code with restricted parse options, so the behaviour must
-be defined rather than accidental.
+`load_module()` carries the `MODULES` functional domain, and a consuming
+platform parses interface code with restricted parse options, so the behaviour
+must be defined rather than accidental.
 
 `%requires` and `Program::loadModule()` already fail on a `PO_NO_MODULES`
 program before any parent could be loaded, so the reachable case is
@@ -246,8 +295,9 @@ matters.
   execute only during the first shared AOT initialization; importing the child
   explicitly later does not repeat registrations or other global effects.  An
   exception from that initializer retains its original error code and detail,
-  marks the child attachment as failed, and is raised again on later attempts
-  to load the parent, matching the source-module failure contract.
+  marks the child attachment as failed, and is reported and skipped exactly as
+  an exception from a source child module's `init` closure is: the AOT parent
+  loads and stays usable.
 - The directive is stripped from embedded source before it is re-parsed at
   runtime (`stripRequiresDirectives()`), because at that point the declaration
   has already arrived through the description function.

@@ -1444,6 +1444,18 @@ module MyBaseExtension {
     A child module's namespace is <b>not</b> imported into any @ref Qore::Program "Program" object; only its
     initialization code runs.  Code that needs the child's classes must load the child explicitly.
 
+    A child declaration is optional, so no child ever fails the declaring module's load.  A child that is not
+    installed is silently ignored, and a child that is installed but cannot be loaded (due to a parse error, an error
+    in its initialization code, or a version mismatch) is skipped, leaving the declaring module fully usable without
+    it.  Because an extension that silently disappears is a deployment problem in its own right, a child that could
+    not be loaded is always reported: as a \c MODULE-CHILD-FAILED warning if the module is loaded with a warning sink
+    (as with Program::loadModuleWarn()), and otherwise on \c stderr.  The child's own error is also recorded in the
+    module hash, as shown below, which is how an incompatible or broken extension is diagnosed after the fact.
+
+    A child that could not be loaded is not tried again in the same process: a module load failure is deterministic,
+    so retrying it on every load of the parent would only repeat the cost and the diagnostic.  An extension fixed on
+    disk is therefore picked up the next time the program is started.
+
     Attachment status can be queried with get_module_hash(), which reports each declared child module under the
     \c "child-modules" key of the declaring module's entry:
     @code{.py}
@@ -1455,7 +1467,7 @@ printf("%N\n", get_module_hash().MyBase."child-modules");
     |!Status|!Description
     |\c "attached"|the child module was loaded
     |\c "absent"|the child module is not installed; this is not an error
-    |\c "failed"|the child module is installed but could not be loaded; the error is reported in the \c "err" and \c "desc" keys and is raised on every load of the parent module
+    |\c "failed"|the child module is installed but could not be loaded; the declaring module is loaded without it, and the child's own error is reported in the \c "err" and \c "desc" keys
     |\c "skipped"|the child module was not loaded because module loading is not allowed in the declaring module's @ref Qore::Program "Program" object; the reason is reported in the \c "desc" key
     |\c "pending"|the attachment has not been attempted yet
 

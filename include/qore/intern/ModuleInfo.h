@@ -94,7 +94,7 @@ enum ChildModuleStatus : unsigned char {
     CMS_ATTACHED,       //!< the child was loaded, or its load was already in progress in this thread
     CMS_ABSENT,         //!< no module with this name could be found in the module path
     CMS_SKIPPED,        //!< not attempted; module loading is not allowed in the parent module's Program
-    CMS_FAILED,         //!< the child is present but could not be loaded
+    CMS_FAILED,         //!< the child is present but could not be loaded; the parent is loaded without it
 };
 
 //! a child module declared with the %try-child-module parse directive
@@ -105,9 +105,12 @@ struct ChildModuleInfo {
     std::string name;
     //! the current attach status
     ChildModuleStatus status = CMS_PENDING;
-    //! the exception error string; set only with CMS_FAILED
+    //! the error code of the child's own load exception; set only with CMS_FAILED
+    /** the failure is reported when it happens and is not raised to the parent's caller, so this and \a desc
+        are how a broken child is diagnosed afterwards through the module hash
+    */
     std::string err;
-    //! the exception description with CMS_FAILED, the reason with CMS_SKIPPED
+    //! the description of the child's own load exception with CMS_FAILED, the reason with CMS_SKIPPED
     std::string desc;
 
     DLLLOCAL ChildModuleInfo(const char* spec, const char* name) : spec(spec), name(name) {
@@ -696,12 +699,16 @@ public:
         mutex is released and reacquired while each child is loaded.  See
         design/parse-directive-try-child-module.md for the contract implemented here.
 
+        A child declaration is optional, so no child status fails the parent; a child that is present but
+        cannot be loaded is reported and skipped.
+
         @param mi the parent module
-        @param xsink exception sink; a child that is present but cannot be loaded raises here
-        @param wsink warning sink for skipped children
+        @param xsink exception sink; used only for interruptions of the attach itself
+        @param wsink warning sink for children that could not be attached
         @param warning_mask the warning mask in effect for the load
 
-        @return 0 for OK (including for absent children), -1 if an exception was raised
+        @return 0 for OK (including for absent, skipped, and failed children), -1 if the attach was
+        interrupted
     */
     DLLLOCAL int attachChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
             int warning_mask);

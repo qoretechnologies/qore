@@ -26,6 +26,9 @@ public class TryChildModuleTest inherits QUnit::Test {
     private {
         # absolute path to the directory holding the fixture modules
         string dir;
+
+        # the qore binary running this test; used for test cases that need their own module registry
+        string qore_bin;
     }
 
     constructor() : Test("Try child module test", "1.0") {
@@ -35,6 +38,7 @@ public class TryChildModuleTest inherits QUnit::Test {
         addTestCase("child module loaded first", \childFirstTest());
         addTestCase("mutual child declarations", \cycleTest());
         addTestCase("broken child module", \brokenTest());
+        addTestCase("broken child module reporting", \brokenReportTest());
         addTestCase("version constraints", \versionTest());
         addTestCase("PO_NO_MODULES", \noModulesTest());
         addTestCase("declaration errors", \declarationErrorTest());
@@ -44,6 +48,8 @@ public class TryChildModuleTest inherits QUnit::Test {
         if (dir !~ /^\//) {
             dir = getcwd() + "/" + dir;
         }
+
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 
         set_return_value(main());
     }
@@ -63,6 +69,19 @@ public class TryChildModuleTest inherits QUnit::Test {
     private *hash<auto> childInfo(string mod) {
         hash<string, hash<auto>> mh = get_module_hash();
         return mh{mod}."child-modules";
+    }
+
+    #! runs the given code in a subprocess with the fixture directory as the module path
+    /** used for checks that need a module registry of their own, or that must observe what the module
+        loader writes to the console; returns the merged standard output and error output
+
+        @param code the script to run
+    */
+    private string runScript(string code) {
+        TmpFile tmp("tcm-", ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return backquote(sprintf("QORE_MODULE_DIR=%s %s %s 2>&1", dir, qore_bin, tmp.path));
     }
 
     basicTest() {
@@ -138,32 +157,62 @@ public class TryChildModuleTest inherits QUnit::Test {
     }
 
     brokenTest() {
-        # a child module that is present but cannot be loaded raises the child module's own error
-        try {
-            loadModule("TcmBrokenBase");
-            fail("loading a module with a broken child module must raise an exception");
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("PARSE-EXCEPTION", ex.err);
-            assertRegex("no_such_method", ex.desc);
-            assertRegex("while attaching child module \"TcmBroken\" declared by module \"TcmBrokenBase\"",
-                ex.desc);
-        }
+        # a child module declaration is optional, so a child that is present but cannot be loaded must not
+        # make the module that declares it unusable: the failure is reported and the child is skipped
+        Program p = loadModule("TcmBrokenBase",
+            "string sub broken_hello() { return TcmBrokenBase::hello(); }\n");
+        assertEq("hello", p.callFunction("broken_hello"));
 
+        # the child module's own error is recorded so that a broken extension can be told from an absent
+        # one; this is the only place the diagnostic survives, so it must not be swallowed
         *hash<auto> ci = childInfo("TcmBrokenBase");
         assertEq("failed", ci.TcmBroken.status);
         assertEq("PARSE-EXCEPTION", ci.TcmBroken.err);
         assertRegex("no_such_method", ci.TcmBroken.desc);
 
-        # the failure is sticky: it is raised again on every load of the parent module, so that a broken
-        # extension cannot be confused with a missing one
-        try {
-            loadModule("TcmBrokenBase");
-            fail("a failed child module load must be raised again on the next load of the parent module");
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("PARSE-EXCEPTION", ex.err);
-            assertRegex("child module 'TcmBroken' declared with %try-child-module is present but failed to "
-                "load", ex.desc);
-        }
+        # the child module was not registered, and its namespace is not visible through the parent
+        assertNothing(get_module_hash().TcmBroken);
+        assertThrows("PARSE-EXCEPTION", "TcmBrokenChild", \loadModule(),
+            ("TcmBrokenBase", "string sub get_child() { return TcmBrokenChild::hello(); }\n"));
+
+        # the failure is remembered: the child's failing load is not retried on every load of the parent,
+        # and the parent module keeps working
+        Program p2 = loadModule("TcmBrokenBase",
+            "string sub broken_hello2() { return TcmBrokenBase::hello(); }\n");
+        assertEq("hello", p2.callFunction("broken_hello2"));
+        assertEq("failed", childInfo("TcmBrokenBase").TcmBroken.status);
+    }
+
+    brokenReportTest() {
+        # A broken child must never be silently indistinguishable from an absent one, so it is always
+        # reported.  Both channels are checked here, each in a process of its own, since a module can only
+        # fail to load once per process: a %requires load has no warning sink separate from its exception
+        # sink and therefore writes to the console, while Program::loadModuleWarn() has one and gets a
+        # MODULE-CHILD-FAILED warning.
+        string out = runScript("%modern
+%requires TcmBrokenBase
+
+printf(\"hello: %s\\n\", TcmBrokenBase::hello());
+");
+        assertRegex("warning: module 'TcmBrokenBase': child module 'TcmBroken' declared with "
+            "%try-child-module is present but failed to load and was skipped", out);
+        # the child module's own error must be part of the message; it is how the broken child is found
+        assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmBrokenBase::no_such_method\\(\\)'", out);
+        assertRegex("hello: hello", out);
+
+        out = runScript("%modern
+Program p(PO_NEW_STYLE);
+*hash<ExceptionInfo> w = p.loadModuleWarn(\"TcmBrokenBase\", WARN_MODULES);
+printf(\"warn: %s: %s: %s\\n\", w.err, w.arg, w.desc);
+p.parse(\"string sub h() { return TcmBrokenBase::hello(); }\\n\", \"use\");
+printf(\"hello: %s\\n\", p.callFunction(\"h\"));
+");
+        assertRegex("warn: MODULE-CHILD-FAILED: TcmBroken: module 'TcmBrokenBase': child module "
+            "'TcmBroken' declared with %try-child-module is present but failed to load and was skipped",
+            out);
+        assertRegex("hello: hello", out);
+        # with a warning sink available nothing is written to the console
+        assertFalse(out =~ /^warning: /m);
     }
 
     versionTest() {
@@ -174,12 +223,16 @@ public class TryChildModuleTest inherits QUnit::Test {
         assertEq("attached", childInfo("TcmVerOkBase").TcmVerChild.status);
         assertEq("TcmVerChild >= 1.0", childInfo("TcmVerOkBase").TcmVerChild.spec);
 
-        # a child module that is installed but does not satisfy the version constraint is an error, not an
-        # absent child module
-        assertThrows("LOAD-MODULE-ERROR", "does not satisfy", \loadModule(), ("TcmVerBadBase",));
+        # a child module that is installed but does not satisfy the version constraint is a failed child,
+        # not an absent one; like any other broken child it is reported and skipped
+        Program p2 = loadModule("TcmVerBadBase",
+            "string sub ver_hello() { return TcmVerBadBase::hello(); }\n");
+        assertEq("hello", p2.callFunction("ver_hello"));
+
         *hash<auto> ci = childInfo("TcmVerBadBase");
         assertEq("failed", ci.TcmVerChild.status);
         assertEq("LOAD-MODULE-ERROR", ci.TcmVerChild.err);
+        assertRegex("does not satisfy", ci.TcmVerChild.desc);
     }
 
     noModulesTest() {
@@ -225,7 +278,6 @@ public class TryChildModuleTest inherits QUnit::Test {
     aotTest() {
         # a qlib module normally reaches deployments as an AOT-compiled binary module, so child module
         # declarations must survive AOT compilation; they are delivered by the module description function
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string qcc = dirname(qore_bin) + "/qcc";
         if (!is_executable(qcc)) {
             testSkip("no qcc found at " + qcc + "; cannot test AOT-compiled child module declarations");
@@ -366,8 +418,8 @@ printf(\"registrations: %%y\\n\", AotTcmBase::registrations);
         assertRegex("status: attached", out);
         assertRegex("registrations: \\[\"ext\"\\]", out);
 
-        # An exception from the deferred AOT child initializer is a sticky child-load failure, just like an
-        # exception from a source child module's init closure.
+        # An exception from the deferred AOT child initializer is reported and the child skipped, just like
+        # an exception from a source child module's init closure; the parent module stays usable.
         string broken_base_src = tmp.path + "/AotTcmBrokenBase.qm";
         f.open2(broken_base_src, O_WRONLY | O_CREAT | O_TRUNC);
         f.write("%modern
@@ -378,6 +430,12 @@ module AotTcmBrokenBase {
     desc = \"AOT child init failure test parent\";
     author = \"Qore Technologies, s.r.o.\";
     license = \"MIT\";
+}
+
+public class AotTcmBrokenBase {
+    static string hello() {
+        return \"broken-base\";
+    }
 }
 ");
         f.close();
@@ -432,7 +490,8 @@ module AotTcmBrokenBase {
 %%prepend-module-path %y
 try {
     load_module(\"AotTcmBrokenBase\");
-    printf(\"unexpected first success\\n\");
+    # the module is loaded at run time, so the parent's class cannot be resolved at parse time here
+    printf(\"first: ok: %%s\\n\", call_static_method(\"AotTcmBrokenBase\", \"hello\"));
 } catch (hash<ExceptionInfo> ex) {
     printf(\"first: %%s: %%s\\n\", ex.err, ex.desc);
 }
@@ -442,7 +501,7 @@ printf(\"stored: %%s: %%s\\n\", mh.AotTcmBrokenBase.\"child-modules\".AotTcmBrok
     mh.AotTcmBrokenBase.\"child-modules\".AotTcmBrokenExt.desc);
 try {
     load_module(\"AotTcmBrokenBase\");
-    printf(\"unexpected second success\\n\");
+    printf(\"second: ok\\n\");
 } catch (hash<ExceptionInfo> ex) {
     printf(\"second: %%s: %%s\\n\", ex.err, ex.desc);
 }
@@ -450,13 +509,16 @@ try {
         f.close();
 
         out = backquote(sprintf("%s %s 2>&1", qore_bin, broken_script));
-        assertRegex("first: AOT-CHILD-INIT-ERROR: intentional AOT child initialization failure", out);
-        assertRegex("while attaching child module \\\"AotTcmBrokenExt\\\" declared by module "
-            "\\\"AotTcmBrokenBase\\\"", out);
+        # the parent module loads and its own symbols work without the optional extension
+        assertRegex("first: ok: broken-base", out);
+        assertRegex("second: ok", out);
+        # the child's initialization error is reported with both module names
+        assertRegex("warning: module 'AotTcmBrokenBase': child module 'AotTcmBrokenExt' declared with "
+            "%try-child-module is present but failed to load and was skipped", out);
+        assertRegex("AOT-CHILD-INIT-ERROR: intentional AOT child initialization failure", out);
         assertRegex("status: failed", out);
         assertRegex("stored: AOT-CHILD-INIT-ERROR: intentional AOT child initialization failure", out);
-        assertRegex("second: AOT-CHILD-INIT-ERROR: module 'AotTcmBrokenBase': child module "
-            "'AotTcmBrokenExt' declared with %try-child-module is present but failed to load: "
-            "intentional AOT child initialization failure", out);
+        # the failing child load is not retried, so the report is made exactly once
+        assertEq(1, (select out.split("\n"), $1 =~ /child module 'AotTcmBrokenExt'/).size());
     }
 }

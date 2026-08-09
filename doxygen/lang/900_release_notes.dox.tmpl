@@ -720,11 +720,14 @@ cargo install tree-sitter-cli@0.26.5
     references to the parent resolve normally &mdash; which is not possible when
     loading an extension from the parent's own \c init closure.
 
-    A child that is not installed is silently ignored; a child that is installed
-    but cannot be loaded raises the child's own error, so a broken extension can
-    no longer be confused with a missing one.  Attachment status for every
-    declared child is reported by get_module_hash() under the
-    \c "child-modules" key.
+    The declaration is optional, so no child ever fails the declaring module's
+    load: a child that is not installed is silently ignored, and a child that is
+    installed but cannot be loaded is reported and skipped, leaving the
+    declaring module usable without it.  A broken child is always reported
+    &mdash; as a \c MODULE-CHILD-FAILED warning, or on \c stderr when the module
+    is loaded without a warning sink &mdash; so a broken extension can no longer
+    be confused with a missing one.  Attachment status for every declared child
+    is reported by get_module_hash() under the \c "child-modules" key.
 
     See @ref try-child-module "%try-child-module" and
     @ref user_module_children "Child Modules" for details.

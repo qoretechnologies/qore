@@ -1189,7 +1189,8 @@ static int qore_check_load_module_intern(QoreAbstractModule* mi, mod_op_e op, ve
     }
 
     // attach any child modules declared with %try-child-module before the module is applied to the
-    // requesting Program, so that a child that is present but broken fails the load as a whole
+    // requesting Program, so that the extensions a caller can see are complete as soon as the module is
+    // available to it
     if (QMM.queueChildModules(*mi, xsink, wsink, warning_mask)) {
         return -1;
     }
@@ -2064,23 +2065,42 @@ ChildAttachHelper::~ChildAttachHelper() {
     }
 }
 
-//! Raises a warning for a child module declaration that could not be honored
-static void qore_warn_child_module_skipped(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
-        const char* mod_name, const ChildModuleInfo& c) {
-    if (!warning_mask) {
+//! Reports a child module declaration that could not be honored
+/** A child declared with %try-child-module is optional, so neither a skipped nor a failed child is an
+    error for the parent; the diagnostic is reported as a warning instead.
+
+    A broken child is reported unconditionally: if warnings are disabled, or if the caller has no warning
+    sink separate from its exception sink (the %requires path, where a warning raised in the sink would
+    become a parse error), the message is written to \c stderr.  A broken extension must never be silently
+    indistinguishable from an absent one.
+
+    A skipped child reflects a deliberate restriction in the container Program and is only reported when
+    warnings are enabled.
+*/
+static void qore_report_child_module_not_attached(ExceptionSink& xsink, ExceptionSink& wsink,
+        int warning_mask, const char* mod_name, const ChildModuleInfo& c) {
+    const bool failed = c.status == CMS_FAILED;
+    if (!warning_mask && !failed) {
         return;
     }
 
-    QoreStringNode* warn_desc = new QoreStringNodeMaker("module '%s': child module '%s' declared with "
-        "%%try-child-module was not attached: %s", mod_name, c.name.c_str(), c.desc.c_str());
+    SimpleRefHolder<QoreStringNode> warn_desc(failed
+        ? new QoreStringNodeMaker("module '%s': child module '%s' declared with %%try-child-module is "
+            "present but failed to load and was skipped; the module was loaded without it: %s: %s",
+            mod_name, c.name.c_str(), c.err.c_str(), c.desc.c_str())
+        : new QoreStringNodeMaker("module '%s': child module '%s' declared with %%try-child-module was "
+            "not attached: %s", mod_name, c.name.c_str(), c.desc.c_str()));
 
-    if (&xsink == &wsink) {
+    if (!warning_mask || &xsink == &wsink) {
         printe("warning: %s\n", warn_desc->c_str());
-        warn_desc->deref();
         return;
     }
 
-    wsink.raiseExceptionArg("MODULE-CHILD-SKIPPED", new QoreStringNode(c.name), warn_desc);
+    // no allocation may happen between the two release() calls; the argument evaluation order is
+    // unspecified, and a throw between them would leak the other argument
+    SimpleRefHolder<QoreStringNode> arg(new QoreStringNode(c.name));
+    wsink.raiseExceptionArg(failed ? "MODULE-CHILD-FAILED" : "MODULE-CHILD-SKIPPED", arg.release(),
+        warn_desc.release());
 }
 
 bool QoreModuleManager::hasUserModuleDependencyPath(const std::string& from, const std::string& to) {
@@ -2116,17 +2136,6 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
     const std::string mname = mi.getName();
 
     while (true) {
-        // a child that is present but broken fails every load of the parent, so that a "%requires <parent>"
-        // is deterministic for a given set of installed modules
-        for (const ChildModuleInfo& c : mi.children) {
-            if (c.status == CMS_FAILED) {
-                xsink.raiseExceptionArg(c.err.c_str(), new QoreStringNode(mi.getName()), "module '%s': child "
-                    "module '%s' declared with %%try-child-module is present but failed to load: %s",
-                    mi.getName(), c.name.c_str(), c.desc.c_str());
-                return -1;
-            }
-        }
-
         if (mi.children_done) {
             return 0;
         }
@@ -2162,10 +2171,12 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
         : qore_aot_get_module_pgm(mi.getName());
     const bool no_modules = ppgm && (ppgm->getParseOptions() & PO_NO_MODULES);
 
-    int rc = 0;
     bool all_done = true;
     for (ChildModuleInfo& c : mi.children) {
-        if (c.status == CMS_ATTACHED || c.status == CMS_ABSENT) {
+        // CMS_FAILED is final for the life of the process: a module load failure is deterministic, so
+        // retrying the child's failing parse on every load of the parent would only repeat the cost and the
+        // diagnostic.  The recorded failure stays visible in the module hash
+        if (c.status == CMS_ATTACHED || c.status == CMS_ABSENT || c.status == CMS_FAILED) {
             continue;
         }
 
@@ -2175,7 +2186,7 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
             c.status = CMS_SKIPPED;
             c.desc = "module loading is not allowed in the parent module's Program object (PO_NO_MODULES)";
             all_done = false;
-            qore_warn_child_module_skipped(xsink, wsink, warning_mask, mi.getName(), c);
+            qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
             continue;
         }
 
@@ -2232,26 +2243,25 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
             continue;
         }
 
-        // the child is present but could not be loaded; record the error so that it is raised on every
-        // subsequent load of the parent as well
+        // The child is present but could not be loaded.  The declaration is optional, so this does not fail
+        // the parent: an extension that cannot be used must never make the module that declares it
+        // unusable.  Record the child's own error for introspection, report it, and carry on with the next
+        // declaration
         c.status = CMS_FAILED;
         QoreStringValueHelper err(cx.getExceptionErr());
         QoreStringValueHelper desc(cx.getExceptionDesc());
         c.err = err->empty() ? "LOAD-MODULE-ERROR" : err->c_str();
         c.desc = desc->c_str();
+        cx.clear();
 
-        cx.appendLastDescription(" (while attaching child module \"%s\" declared by module \"%s\")",
-            c.name.c_str(), mi.getName());
-        xsink.assimilate(cx);
-        rc = -1;
-        break;
+        qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
     }
 
-    if (!rc && all_done) {
+    if (all_done) {
         mi.children_done = true;
     }
 
-    return rc;
+    return 0;
 }
 
 int QoreModuleManager::queueChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
@@ -2277,8 +2287,9 @@ int QoreModuleManager::queueChildModules(QoreAbstractModule& mi, ExceptionSink& 
         return 0;
     }
 
-    // if the enclosing load already failed, record child statuses without adding to the caller's sink; any
-    // failure is raised the next time the parent module is loaded
+    // if the enclosing load already failed, record child statuses without adding to the caller's sink; a
+    // broken child never fails the parent in any case, so only an interrupted attach can be lost here, and
+    // that is reported by the enclosing failure
     const bool use_scratch = (bool)xsink;
     ExceptionSink scratch;
     // ensure that the scratch sink is empty on every exit path; a discarded sink would otherwise report the
@@ -2297,8 +2308,8 @@ int QoreModuleManager::queueChildModules(QoreAbstractModule& mi, ExceptionSink& 
         }
 
         if (attachChildModules(*pmi, sink, wsink, warning_mask)) {
-            // leave the rest of the queue in place; it is drained when the next module load completes, and
-            // any recorded failure is raised again when the parent module is loaded again
+            // the attach was interrupted; leave the rest of the queue in place, it is drained when the next
+            // module load completes in this thread
             rc = use_scratch ? 0 : -1;
             break;
         }
