@@ -2499,19 +2499,38 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 # Installs source-owned native catalogs for a user module.  Directory modules
 # use qlib/<Module>/i18n; flat qlib/<Module>.qm modules use the sibling
 # qlib/<Module>.i18n directory so adding catalogs cannot change the module's
-# source layout classification.  Each source locale is installed as
+# source layout classification.  An optional second argument supplies an
+# explicit catalog source directory for projects whose modules do not live
+# below qlib/.  An optional third argument overrides the install component.
+# Each source locale is installed as
 # <domain>/<locale>/<Module>.json.  The owner-qualified fragment layout lets
 # multiple modules contribute disjoint messages to one catalog domain without
 # overwriting each other; I18n::discover_catalog_files() composes fragments in
 # deterministic filename order.
 FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
     unset(_qore_module_catalog_dir)
-    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${_module_name}/i18n)
+    if (ARGC GREATER 3)
+        message(FATAL_ERROR
+            "QORE_INSTALL_USER_MODULE_CATALOGS accepts at most a module name, catalog source directory, and install component")
+    endif()
+    if (ARGC GREATER 1)
+        get_filename_component(_qore_module_catalog_dir "${ARGV1}"
+            ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+        if (NOT IS_DIRECTORY "${_qore_module_catalog_dir}")
+            message(FATAL_ERROR
+                "catalog source directory does not exist for ${_module_name}: ${_qore_module_catalog_dir}")
+        endif()
+    elseif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${_module_name}/i18n)
         set(_qore_module_catalog_dir
             ${CMAKE_SOURCE_DIR}/qlib/${_module_name}/i18n)
     elseif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${_module_name}.i18n)
         set(_qore_module_catalog_dir
             ${CMAKE_SOURCE_DIR}/qlib/${_module_name}.i18n)
+    endif()
+    set(_qore_catalog_install_component
+        "${QORE_QM_SOURCE_INSTALL_COMPONENT}")
+    if (ARGC GREATER 2)
+        set(_qore_catalog_install_component "${ARGV2}")
     endif()
     if (_qore_module_catalog_dir)
         if (NOT QORE_CATALOG_DIR)
@@ -2537,7 +2556,7 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
                     DESTINATION
                         "${QORE_CATALOG_DIR}/${_qore_catalog_domain}/${_qore_catalog_locale}"
                     RENAME "${_module_name}.json"
-                    COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+                    COMPONENT ${_qore_catalog_install_component})
             endforeach()
         endforeach()
 
@@ -2559,7 +2578,7 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
                 DESTINATION
                     "${QORE_CATALOG_DIR}/${_qore_catalog_domain}/${_qore_catalog_locale}"
                 RENAME "${_module_name}.json"
-                COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+                COMPONENT ${_qore_catalog_install_component})
         endforeach()
     endif()
 ENDFUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS)

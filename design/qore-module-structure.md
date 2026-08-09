@@ -67,6 +67,23 @@ Rules:
   helpers) also in `cmake/QoreMacros.cmake` — documented under "AOT Module-Build Macros"
   in the CMake API guide (`doxygen/lib/90_cmake.doxygen`).
 
+### Source-Owned Native Catalogs
+
+Provider presentation catalogs belong to the module that registers the app or
+action contribution. Directory modules store them below
+`qlib/<ModuleName>/i18n`; flat modules use `qlib/<ModuleName>.i18n`. The module
+registration macros install each locale as the owner-qualified fragment
+`<catalog-root>/<domain>/<locale>/<ModuleName>.json`, so several modules can
+contribute disjoint messages to the same app domain without overwriting one
+another.
+
+Projects that consume Qore's CMake API but keep modules outside `qlib/` call
+`QORE_INSTALL_USER_MODULE_CATALOGS(<ModuleName> <catalog-source-dir>
+<install-component>)` explicitly. The source directory and component arguments
+are optional; omitting them preserves the standard Qore layout and component.
+Do not install the source `i18n/` directory inside the runtime module directory:
+the native i18n search path resolves the owner-qualified installed fragments.
+
 ### 2) Single-File Modules (for small modules)
 
 Use when a module is defined in a single `.qm` file.
