@@ -10,10 +10,10 @@ Paddle publishes an official OpenAPI description, so this is the same shape of w
 a manifest plus a UX overlay over `RestSchemaActions`, not 6,000 lines of hand-written actions.
 The infrastructure that made Stripe cheap already exists and applies unchanged.
 
-The gate is real, though: Paddle's spec is **OpenAPI 3.1**, and `OpenApi3.qm` cannot parse 3.1
-today. That work is a shared-infrastructure investment rather than a Paddle cost — 3.1 is
-increasingly the norm for newly published specs — but it has to happen first, and it is the
-dominant part of the estimate.
+The gate is real but small: Paddle's spec is **OpenAPI 3.1**, and `OpenApi3.qm` rejects two
+constructs it uses. Most of 3.1 already works — see the corrected analysis below. The two fixes
+are shared-infrastructure wins rather than Paddle costs (one of them is a plain bug affecting 3.0
+specs), and they are **not** the dominant part of the estimate; the manifest and overlay are.
 
 ## What exists today
 
@@ -40,8 +40,10 @@ There is no Paddle client in `qlib` yet, so the port starts from nothing on the 
 |Servers|`https://sandbox-api.paddle.com`, `https://api.paddle.com`
 |Webhook events|**56**, in the 3.1 top-level `webhooks` section
 
-It is roughly an order of magnitude smaller than Stripe's (416 paths / 1440 schemas), and parses
-in **0.66 s** once normalized — so pruning may not even be necessary.
+It is roughly an order of magnitude smaller than Stripe's (416 paths / 1440 schemas), but the full
+document still takes **11.3 s** to parse (corrected 2026-08-09; the earlier 0.66 s figure was
+measured on a reduced copy). That is too slow for provider construction, so the schema should be
+vendored **pruned**, as Stripe's was.
 
 Coverage of what the TypeScript app exposes is complete, with room to grow:
 
@@ -59,15 +61,20 @@ simulations, metrics, discounts, adjustments, checkout domains, client tokens, e
 
 ## The blocker: OpenAPI 3.1 support in OpenApi3.qm
 
-Parsing the unmodified spec fails. Working through the failures by normalizing each construct
-and re-parsing gives the full list, with counts from this spec:
+> **Corrected 2026-08-09.** The list below was measured by normalizing constructs in bulk and
+> re-parsing, which conflated "I normalized it" with "it had to be normalized". Probing each
+> construct in isolation against the module shows **only two actually fail**; `examples` arrays,
+> `unevaluatedProperties`, `prefixItems`, `const`, the array form `type: ["string","null"]`, the
+> top-level `webhooks` section and `openapi: 3.1` itself are **already supported**. The two real
+> fixes are enough to parse the unmodified 7.4 MB spec — verified. The gate is therefore much
+> smaller than stated here, and is **not** the dominant part of the estimate. See
+> [paddle-migration-plan.md](paddle-migration-plan.md) phase 0.
 
-|!Construct|!Count|!Note
-|`type: "null"`|1,504|3.1 expresses nullability this way; 3.0 used `nullable: true`. **Hard parse failure.**
-|`examples:` as an array|2,179|3.1 replaced the singular `example`
-|`unevaluatedProperties`|78|JSON Schema 2020-12
-|`discriminator` as an **object**|1|see below — this one is not a 3.1 issue at all
-|top-level `webhooks`|56 events|3.1 feature; not needed for actions, valuable for triggers
+Parsing the unmodified spec fails on two constructs:
+
+|!Construct|!Occurrences|!Note
+|scalar `type: "null"`|1,504|**Hard parse failure.** The array form is handled; the string branch is not, so `anyOf` members expressing nullability throw.
+|`discriminator` as an **object**|1|not a 3.1 issue at all — see below
 
 **`discriminator` is a pre-existing bug, not a 3.1 gap.** `OpenApi3.qm` expects a string, which
 is the *Swagger 2.0* form; in OpenAPI **3.0 and 3.1 alike** it is an object
@@ -89,10 +96,9 @@ manifest hint.
 
 ## How the port would go
 
-1. **OpenAPI 3.1 in `OpenApi3.qm`** — accept `type: "null"` and union `type` arrays as
-   nullability, accept `examples` arrays, ignore `unevaluatedProperties`, and fix `discriminator`
-   to the 3.x object form. Tests belong with the existing OpenApi3 suite. This is the bulk of the
-   work and it benefits every 3.1 API, not only Paddle.
+1. **OpenAPI 3.1 in `OpenApi3.qm`** — accept the scalar `type: "null"` (the union array form
+   already works), and fix `discriminator` to the 3.x object form. Tests belong with the existing
+   OpenApi3 suite. Small, and it benefits every 3.1 API, not only Paddle.
 2. **`qlib/PaddleRestClient.qm`** — `paddle://` scheme, bearer API key, and a sandbox/production
    selector. The schema declares both hosts and the sandbox is listed **first**, so the connection
    must choose deliberately rather than inherit the schema's target URL. `required_options` must
