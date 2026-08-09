@@ -334,6 +334,12 @@ class DataProviderPresentationTest inherits QUnit::Test {
             DataProviderPresentationCatalog conflicting(Domain, "root",
                 {"search_path": (root,)});
         }, NOTHING, "conflicting root owner fragments cannot depend on load order");
+        assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", sub () {
+            DataProviderPresentationEmbeddingCatalog embedding(app(), {
+                "search_path": (root,),
+            });
+            embedding.projectAction(action());
+        }, NOTHING, "embedding population validates root owner fragments");
 
         unlink(root_dir + DirSep + "OwnerTwo.json");
         string ja_dir = root + DirSep + Domain + DirSep + "ja";

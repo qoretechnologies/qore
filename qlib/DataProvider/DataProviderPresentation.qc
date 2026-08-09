@@ -670,6 +670,8 @@ public class DataProviderPresentationCatalog {
 
         @throw I18N-CATALOG-ERROR if catalog discovery or parsing fails
         @throw I18N-LOCALE-ERROR if \a requested_locale is invalid
+        @throw DATA-PROVIDER-PRESENTATION-CATALOG-ERROR if discovered owner
+            fragments conflict for the same locale and message id
 
         @par Example
         A design client can project one provider action without changing its exact technical identity:
@@ -917,6 +919,8 @@ public class DataProviderPresentationEmbeddingCatalog {
             different app
         @throw I18N-CATALOG-ERROR if a discovered catalog is invalid
         @throw I18N-LOCALE-ERROR if a declared or discovered locale is invalid
+        @throw DATA-PROVIDER-PRESENTATION-CATALOG-ERROR if discovered owner
+            fragments conflict for the same locale and message id
 
         @par Example
         A Qore @c histogram record with Japanese and Portuguese catalogs keeps
@@ -984,9 +988,14 @@ public class DataProviderPresentationEmbeddingCatalog {
         foreach string locale in (
                 DataProviderPresentation::discoverCatalogLocales(domain,
                     discovery_opts)) {
+            DataProviderPresentationCatalog catalog(domain, locale,
+                discovery_opts);
+            # Root source text is already present in the canonical provider
+            # metadata and must not be duplicated in the embedding document.
+            # Construct its catalog anyway so owner-fragment conflicts fail
+            # population instead of remaining dependent on a later request.
             if (locale != DataProviderPresentation::RootLocale) {
-                catalogs += new DataProviderPresentationCatalog(domain,
-                    locale, discovery_opts);
+                catalogs += catalog;
             }
         }
         catalog_cache{domain} = catalogs;
