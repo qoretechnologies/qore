@@ -135,7 +135,20 @@ public class PaddleBaseEventDataProvider inherits AbstractDataProvider, DataProv
             "method": "POST",
             "callback": \handleWebhookEvent(),
         });
-        registerNotificationSetting(webhook_info.url);
+        # if Paddle will not accept the destination, give the local URL back rather than leaving one
+        # allocated that nothing will ever post to
+        {
+            on_error {
+                try {
+                    DataProvider::DataProviderWebhook::deleteWebhook(webhook_info);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::WARN, "%s: could not release the webhook URL %y after registration "
+                        "failed: %s", self.className(), webhook_info.url, get_exception_string(ex));
+                }
+                remove webhook_info;
+            }
+            registerNotificationSetting(webhook_info.url);
+        }
         log(LoggerLevel::INFO, "%s: notification destination created at %y for Paddle event %y",
             self.className(), webhook_info.url, getPaddleEventType());
     }

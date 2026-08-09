@@ -136,8 +136,9 @@ module PaddleDataProvider {
     |Upstream updated|2026-07-09
     |Imported|2026-08-09
 
-    The committed copy is pruned to the exported operations and everything they reference — 15 of 70
-    paths and 237 of 519 component schemas.  That is not only a size reduction: the full 7.4 MB document
+    The committed copy is pruned to the exported operations, the two \c /notification-settings
+    operations the webhook event providers call, and everything they reference — 17 of 70 paths and
+    244 of 519 component schemas.  That is not only a size reduction: the full 7.4 MB document
     takes around a second to parse, which is not a reasonable cost to pay on every data provider
     construction.
 
@@ -205,6 +206,121 @@ module PaddleDataProvider {
       what distinguishes a redelivery from the original.
     - **Paddle sends the entity in full, not a diff.**  An update event does not say which field
       changed, so compare against what you hold if that matters.
+
+    @section paddledataprovider_examples Examples
+
+    @subsection paddledataprovider_ex_provider Getting the Data Provider
+
+    From a connection, which is how a Qorus interface reaches it:
+
+    @code{.py}
+%requires ConnectionProvider
+%requires PaddleDataProvider
+
+AbstractDataProvider paddle = get_connection("paddle-sandbox").getDataProvider();
+    @endcode
+
+    Or directly from an API key, for a script:
+
+    @code{.py}
+%requires PaddleDataProvider
+%requires PaddleRestClient
+
+PaddleDataProvider paddle(new PaddleRestClientIo({
+    "token": ENV.PADDLE_API_KEY,
+    "instance_type": "sandbox-api",
+}));
+    @endcode
+
+    @subsection paddledataprovider_ex_list Listing, and Paging Through a Listing
+
+    A listing returns Paddle's envelope, so \c meta.pagination is what drives the loop.  Page on
+    \c has_more: \c next is returned even on the last page, so a loop that tests for its presence never
+    terminates.
+
+    @code{.py}
+AbstractDataProvider list_customers = paddle.getChildProviderEx("list_customers");
+
+*string after;
+list<hash<auto>> all = ();
+while (True) {
+    hash<auto> page = list_customers.doRequest({
+        "per_page": 200,
+        "status": ("active",),
+    } + (after ? {"after": after} : {}));
+    all += page.data;
+    if (!page.meta.pagination.has_more) {
+        break;
+    }
+    # the cursor for the next page is the "after" argument of the URL Paddle returns
+    after = (page.meta.pagination.next =~ x/after=([^&]+)/)[0];
+}
+printf("%d active customers\n", all.size());
+    @endcode
+
+    Set \c skip_count when walking a large collection: it asks Paddle to skip the count query it would
+    otherwise run for every page.
+
+    @subsection paddledataprovider_ex_catalog Creating a Product and a Price
+
+    A product carries no price of its own, so selling anything takes both.  \c unit_price.amount is a
+    string in the **smallest unit** of its currency.
+
+    @code{.py}
+hash<auto> product = paddle.getChildProviderEx("create_product").doRequest({
+    "name": "Acme Pro",
+    "tax_category": "standard",
+    "description": "The professional plan",
+    "custom_data": {"internal_sku": "ACME-PRO"},
+});
+
+hash<auto> price = paddle.getChildProviderEx("create_price").doRequest({
+    "product_id": product.id,
+    "description": "Acme Pro monthly",
+    # "9900" is $99.00; in JPY the same string would be 9900 yen
+    "unit_price": {"amount": "9900", "currency_code": "USD"},
+    "billing_cycle": {"interval": "month", "frequency": 1},
+});
+printf("created price %y for product %y\n", price.id, product.id);
+    @endcode
+
+    A catalog object cannot be deleted, only withdrawn from sale:
+
+    @code{.py}
+paddle.getChildProviderEx("archive_product").doRequest({"product_id": product.id});
+    @endcode
+
+    @subsection paddledataprovider_ex_events Reacting to an Event
+
+    Subscribing registers a notification destination with Paddle and removes it again when the
+    subscription stops; every delivery is signature-verified before an observer sees it.
+
+    @code{.py}
+class PaymentObserver inherits DataProvider::Observer {
+    update(string event_id, hash<auto> data) {
+        printf("%s: transaction %y for %s %s\n", event_id, data.data.id,
+            data.data.details.totals.total, data.data.currency_code);
+    }
+}
+
+AbstractDataProvider event = paddle.getChildProviderEx("events")
+    .getChildProviderEx("transaction-completed");
+event.registerObserver(new PaymentObserver());
+cast<DelayedObservable>(event).observersReady();
+    @endcode
+
+    @subsection paddledataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+
+    The application exports a reviewed subset of Paddle's API.  For anything else, the generic API call
+    action reaches the rest of it with the same connection and authentication:
+
+    @code{.py}
+hash<auto> res = paddle.getChildProviderEx("__call__").doRequest({
+    "method": "GET",
+    "path": "/event-types",
+});
+printf("%d event types\n", res.body.data.size());
+    @endcode
 
     @section paddledataproviderrelnotes Release Notes
 
