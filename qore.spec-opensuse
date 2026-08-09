@@ -2,7 +2,7 @@
 # spec file for package qore
 #
 # Copyright (c) 2017 SUSE LINUX GmbH, Nuernberg, Germany.
-# Copyright (c) 2014 - 2023 David Nichols <david@qore.org>
+# Copyright (c) 2014 - 2026 David Nichols <david@qore.org>
 # Copyright (c) 2014 Petr Vanek <petr@yarpen.cz>
 #
 # All modifications and additions to the file contributed by third parties
@@ -24,8 +24,8 @@ Release:        0
 Summary:        Multithreaded Programming Language
 License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Group:          Development/Languages/Other
-Url:            http://qore.org
-Source:         https://github.com/qorelanguage/qore/releases/download/release-%{version}/qore-%{version}.tar.bz2
+Url:            https://qore.org
+Source:         https://github.com/qoretechnologies/qore/releases/download/release-%{version}/qore-%{version}.tar.bz2
 Patch:          qore-libtool-2.4.6.patch
 BuildRequires:  automake
 BuildRequires:  bison
@@ -117,8 +117,7 @@ Qore library.
 %dir %{_libdir}/cmake
 %{_libdir}/cmake/Qore
 %{_includedir}/*
-%{_datadir}/qore
-%{_datadir}/qore/*
+%{_datadir}/qore/
 
 %package devel-doc
 Summary:        C++ API documentation for the qore library
@@ -136,7 +135,7 @@ development but is also useful as a general purpose language.
 %doc docs/library/html/*
 
 %package misc-tools
-Summary:        Miscellaneous user tools writen in Qore Programming Language
+Summary:        Miscellaneous user tools written in Qore Programming Language
 License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Group:          Development/Tools/Other
 Requires:       qore = %{version}-%{release}

@@ -5,15 +5,31 @@
     @section qore_2_2_1 Qore 2.2.1
 
     @par Release Summary
-    Minor bugfixes; see below for more information
+    Minor bugfix release including compatibility with GCC 16; see below for more information
 
     @subsection qore_2_2_1_bug_fixes Bug Fixes in Qore
+    - <a href="../../modules/DataProvider/html/index.html">DataProvider</a> module
+      - fixed the bulk record interface to allow implementations to return @ref nothing or an empty hash at the end
+        of iteration
+      - added the missing \c field and \c all entries to the expression role code map
+    - <a href="../../modules/GmailDataProvider/html/index.html">GmailDataProvider</a> module
+      - allow message event objects to be created when optional email headers are missing
+    - <a href="../../modules/MewsRestDataProvider/html/index.html">MewsRestDataProvider</a> module
+      - use an absolute 90-day default query interval to ensure that DST transitions cannot produce requests longer
+        than the Mews API limit
     - <a href="../../modules/RestClient/html/index.html">RestClient</a> module
-      - fixed parsing token responses with URL encoding in non-blocking pings
-        (<a href="https://github.com/qorelanguage/qore/issues/4993">issue 4993</a>)
+      - fixed parsing URL-encoded OAuth2 token responses and \c Content-Type parameters in non-blocking pings
+        (<a href="https://github.com/qoretechnologies/qore/issues/4993">issue 4993</a>)
+    - <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module
+      - fixed PostgreSQL table discovery and description support for partitioned tables
+    - <a href="../../modules/WebSocketHandler/html/index.html">WebSocketHandler</a> module
+      - removed a debug logging call from the message send path that could cause an infinite loop
+    - fixed a crash when destroying uninitialized thread-local storage on Alpine Linux
     - fixed an infinite loop with a memory leak caused by a missing break statement in internal Socket SSL
       error-handling code
-      (<a href="https://github.com/qorelanguage/qore/issues/4994">issue 4994</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4994">issue 4994</a>)
+    - fixed a scanner macro collision that prevented Qore from being compiled with GCC 16
+      (<a href="https://github.com/qoretechnologies/qore/issues/5391">issue 5391</a>)
 
     @section qore_2_2_0 Qore 2.2.0
 

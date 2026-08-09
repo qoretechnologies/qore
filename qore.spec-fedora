@@ -6,10 +6,10 @@ Version: 2.2.1
 Release: 1%{?dist}
 Summary: Multithreaded Programming Language
 
-# see https://github.com/qorelanguage/qore/blob/develop/README-LICENSE for license info
-License: LGPLv2+ or GPLv2+ or MIT
+# see https://github.com/qoretechnologies/qore/blob/develop/README-LICENSE for license info
+License: LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 URL: https://qore.org
-Source0: https://github.com/qorelanguage/qore/releases/download/release-%{version}/%{name}-%{version}.tar.bz2
+Source0: https://github.com/qoretechnologies/qore/releases/download/release-%{version}/%{name}-%{version}.tar.bz2
 
 Requires: libqore%{?_isa} = %{version}-%{release}
 Requires: %{name}-stdlib%{?_isa} = %{version}-%{release}
@@ -128,8 +128,8 @@ This package provides HTML documentation for the C++ API for the Qore library.
 %doc docs/library/html/*
 
 %package misc-tools
-Summary: Miscellaneous user tools writen in Qore Programming Language
-License: LGPLv2+ or GPLv2+ or MIT
+Summary: Miscellaneous user tools written in Qore Programming Language
+License: LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Requires: %{name} = %{version}-%{release}
 BuildArch: noarch
 
@@ -183,7 +183,7 @@ export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{
 %{_mandir}/man1/qore.1.*
 
 %changelog
-* Fri Oct 10 2025 David Nichols <david@qore.org> 2.2.1-1
+* Sun Aug 09 2026 David Nichols <david@qore.org> 2.2.1-1
 - updated version to 2.2.1-1
 
 * Fri Jun 13 2025 David Nichols <david@qore.org> 2.2.0-1
