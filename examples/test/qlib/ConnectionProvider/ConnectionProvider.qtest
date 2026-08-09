@@ -506,6 +506,25 @@ public class ConnectionProviderTest inherits QUnit::Test {
             assertTrue(seen{"multi-3"});
         }
 
+        # The monitor must not destroy the ping poll operation when the ping ends: the operation is
+        # submitted to the async I/O controller wrapped in a DelegatingPollOperation, and the controller
+        # holds its own reference to it.  Destroying it while the controller can still delegate abort()
+        # into it surfaces as OBJECT-ALREADY-DELETED from the controller's worker loop.  Holding a
+        # reference here stands in for the controller's.
+        {
+            RecordingHttpConnection hc("spop-lifetime", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("OK", result.result);
+
+            assertTrue(exists hc.last_spop, "the ping poll operation was captured");
+            # a reference held elsewhere must still address a live object once the ping has ended
+            assertEq(Type::String, hc.last_spop.getState().type());
+            hc.last_spop.abort();
+        }
+
         # Test stopClear removes all connections and stops
         {
             HttpConnection hc1("clear-1", "test", url);
@@ -811,6 +830,25 @@ class MyConnection inherits AbstractConnection {
 
     object getImpl(bool _ = True, *hash<auto> __) {
         return new Dir(); # just a silence the missing abtsract method. No use for Dir at all
+    }
+}
+
+#! An HTTP connection that keeps a reference to the last ping poll operation it created
+/** stands in for the async I/O controller, which keeps its own reference to the operation through the
+    DelegatingPollOperation wrapper it is submitted in
+*/
+class RecordingHttpConnection inherits HttpConnection {
+    public {
+        #! the last poll operation returned by startPollConnect()
+        *Qore::AbstractPollOperation last_spop;
+    }
+
+    constructor(string name, string desc, string url, *hash<auto> attributes, *hash<auto> options)
+            : HttpConnection(name, desc, url, attributes ?? {}, options ?? {}) {
+    }
+
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        return last_spop = HttpConnection::startPollConnect(logger);
     }
 }
 

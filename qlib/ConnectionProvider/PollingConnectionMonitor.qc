@@ -702,7 +702,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         cache{name}.conn.last_check = cache{name}.start;
 
         if (result.canceled) {
-            delete cache{name}.spop;
+            releasePollOperation(name);
             cache{name}.start = now_us();
             return;
         }
@@ -751,7 +751,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         deferLog(LoggerLevel::INFO, sprintf("%y (poll state %y was up: %y): successful ping (duration: %y)",
             name, cache{name}.spop.getState(), oldok ?? False, delta));
         cache{name}.conn.handlePingSuccess(delta);
-        delete cache{name}.spop;
+        releasePollOperation(name);
         cache{name}.start = now_us();
     }
 
@@ -761,7 +761,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         deferLog(LoggerLevel::ERROR, sprintf("%y (poll state %y was up: %y): error in ping (duration: %y): %s",
             name, cache{name}.spop.getState(), c.up, delta, get_exception_string(ex)));
         c.handlePingFailed(delta, ex);
-        delete cache{name}.spop;
+        releasePollOperation(name);
         cache{name}.start = now_us();
     }
 
@@ -770,8 +770,25 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         if (cache{name}.spop) {
             handlePingTimeoutIntern(name, delta);
         }
-        delete cache{name}.spop;
+        releasePollOperation(name);
         cache{name}.start = now_us();
+    }
+
+    #! Drops this monitor's reference to the ping poll operation for the given connection
+    /** The poll operation is submitted to the async I/O controller wrapped in a
+        @ref Qore::DelegatingPollOperation "DelegatingPollOperation", and the controller keeps its own
+        reference to the wrapper (and through it to this operation) until it has finished with the
+        submission.  \c delete would run the operation's destructor immediately, while the controller
+        can still dispatch to it: a \c cancelByOwner() racing the completion then delegates
+        @ref Qore::AbstractPollOperation::abort() "abort()" into a destroyed object, which surfaces as
+        \c OBJECT-ALREADY-DELETED from the controller's worker loop and leaves the abort unperformed.
+
+        Dropping the reference instead lets the object be destroyed once the controller has released
+        the wrapper, which is the same rule the REST ping operation follows for its own OAuth2
+        sub-operation.
+    */
+    private releasePollOperation(string name) {
+        remove cache{name}.spop;
     }
 
     #! Handles a ping timeout
