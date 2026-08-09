@@ -59,7 +59,10 @@ I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
 
     Discovery uses the configured system catalog directory by default.  \c QORE_CATALOG_DIR replaces that default,
     and an explicit \c search_path option replaces both. Returned files are already ordered for deterministic
-    composition: lower precedence first, with \c root before more-specific locale files.
+    composition: lower precedence first, with \c root before more-specific locale files. Applications and modules can
+    contribute independently to one domain by installing owner fragments as
+    \c domain/locale/owner.json; fragments are composed in deterministic filename order after the direct catalog for
+    the same domain and locale.
 
     @code{.py}
 list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {

@@ -319,6 +319,17 @@ public class DataProviderPresentation {
                     name.substr(0, name.length() - 5), file);
             }
 
+            # Installed source catalogs can contain independently composable
+            # owner fragments at domain/locale/owner.json.
+            foreach string file in (glob(nested_dir + DirSep + "*"
+                    + DirSep + "*.json")) {
+                if (!is_file(file)) {
+                    continue;
+                }
+                addDiscoveredCatalogLocale(\locales,
+                    basename(dirname(file)), file);
+            }
+
             string flat_prefix = domain + ".";
             foreach string file in (glob(search_root + DirSep
                     + flat_prefix + "*.json")) {

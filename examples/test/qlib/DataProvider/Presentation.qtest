@@ -700,7 +700,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
             DataProviderPresentation::buildSourceCatalogs(app(), (action(),));
         writeJson(root + DirSep + Domain + DirSep + "root.json",
             source_catalogs{Domain});
-        writeJson(root + DirSep + Domain + DirSep + "ja.json", {
+        mkdir(root + DirSep + Domain + DirSep + "ja");
+        writeJson(root + DirSep + Domain + DirSep + "ja"
+                + DirSep + "PresentationTest.json", {
             "schema_version": I18n::get_catalog_schema_version(),
             "locales": {"ja": {"messages": messages()}},
         });

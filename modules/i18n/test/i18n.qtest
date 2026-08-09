@@ -487,12 +487,20 @@ class I18nTest inherits QUnit::Test {
 
         mkdir(base_dir + "/billing");
         mkdir(override_dir + "/billing");
+        mkdir(base_dir + "/billing/root");
+        mkdir(base_dir + "/billing/cs");
 
         string base_root = base_dir + "/billing/root.json";
+        string base_root_fragment = base_dir + "/billing/root/base.json";
         string base_cs = base_dir + "/billing/cs.json";
+        string base_cs_fragment_a = base_dir + "/billing/cs/first.json";
+        string base_cs_fragment_z = base_dir + "/billing/cs/second.json";
         string override_cs = override_dir + "/billing/cs.json";
         writeTextFile(base_root, createCatalogJson("Root"));
+        writeTextFile(base_root_fragment, createCatalogJson("Fragment root"));
         writeTextFile(base_cs, createCatalogJson("Ahoj"));
+        writeTextFile(base_cs_fragment_a, createCatalogJson("Nazdar"));
+        writeTextFile(base_cs_fragment_z, createCatalogJson("Dobry den"));
         writeTextFile(override_cs, createCatalogJson("Cau"));
 
         list<string> search_path = I18n::get_catalog_search_path({
@@ -505,7 +513,14 @@ class I18nTest inherits QUnit::Test {
             "search_path": (base_dir,),
             "override_path": override_dir,
         });
-        assertEq((base_root, base_cs, override_cs), files);
+        assertEq((base_root, base_root_fragment, base_cs,
+                base_cs_fragment_a, base_cs_fragment_z, override_cs), files);
+
+        I18n::MessageCatalog fragment_catalog((base_root,
+            base_root_fragment, base_cs, base_cs_fragment_a,
+            base_cs_fragment_z));
+        assertEq("Dobry den, Eva", fragment_catalog.t("Hello, {name}",
+            "cs", {"name": "Eva"}));
 
         I18n::MessageCatalog catalog(files);
         assertEq("Cau, Eva", catalog.t("Hello, {name}", "cs", {"name": "Eva"}));

@@ -2499,7 +2499,11 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 # Installs source-owned native catalogs for a user module.  Directory modules
 # use qlib/<Module>/i18n; flat qlib/<Module>.qm modules use the sibling
 # qlib/<Module>.i18n directory so adding catalogs cannot change the module's
-# source layout classification.
+# source layout classification.  Each source locale is installed as
+# <domain>/<locale>/<Module>.json.  The owner-qualified fragment layout lets
+# multiple modules contribute disjoint messages to one catalog domain without
+# overwriting each other; I18n::discover_catalog_files() composes fragments in
+# deterministic filename order.
 FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
     unset(_qore_module_catalog_dir)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${_module_name}/i18n)
@@ -2514,10 +2518,49 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
             message(FATAL_ERROR
                 "QORE_CATALOG_DIR is required to install i18n catalogs for ${_module_name}")
         endif()
-        install(DIRECTORY ${_qore_module_catalog_dir}/
-            DESTINATION ${QORE_CATALOG_DIR}
-            COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT}
-            FILES_MATCHING PATTERN "*.json")
+        file(GLOB _qore_catalog_domain_paths CONFIGURE_DEPENDS
+            LIST_DIRECTORIES true
+            "${_qore_module_catalog_dir}/*")
+        foreach (_qore_catalog_domain_path IN LISTS _qore_catalog_domain_paths)
+            if (NOT IS_DIRECTORY "${_qore_catalog_domain_path}")
+                continue()
+            endif()
+            get_filename_component(_qore_catalog_domain
+                "${_qore_catalog_domain_path}" NAME)
+            file(GLOB _qore_catalog_locale_files CONFIGURE_DEPENDS
+                "${_qore_catalog_domain_path}/*.json")
+            foreach (_qore_catalog_locale_file IN LISTS
+                    _qore_catalog_locale_files)
+                get_filename_component(_qore_catalog_locale
+                    "${_qore_catalog_locale_file}" NAME_WE)
+                install(FILES "${_qore_catalog_locale_file}"
+                    DESTINATION
+                        "${QORE_CATALOG_DIR}/${_qore_catalog_domain}/${_qore_catalog_locale}"
+                    RENAME "${_module_name}.json"
+                    COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+            endforeach()
+        endforeach()
+
+        # Preserve support for the native flat domain.locale.json source
+        # layout while installing it in the same fragment representation.
+        file(GLOB _qore_flat_catalog_files CONFIGURE_DEPENDS
+            "${_qore_module_catalog_dir}/*.json")
+        foreach (_qore_flat_catalog_file IN LISTS _qore_flat_catalog_files)
+            get_filename_component(_qore_flat_catalog_name
+                "${_qore_flat_catalog_file}" NAME)
+            if (NOT _qore_flat_catalog_name MATCHES
+                    "^(.+)\\.([^.]+)\\.json$")
+                message(FATAL_ERROR
+                    "invalid flat native catalog filename ${_qore_flat_catalog_name}")
+            endif()
+            set(_qore_catalog_domain "${CMAKE_MATCH_1}")
+            set(_qore_catalog_locale "${CMAKE_MATCH_2}")
+            install(FILES "${_qore_flat_catalog_file}"
+                DESTINATION
+                    "${QORE_CATALOG_DIR}/${_qore_catalog_domain}/${_qore_catalog_locale}"
+                RENAME "${_module_name}.json"
+                COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+        endforeach()
     endif()
 ENDFUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS)
 

@@ -1400,7 +1400,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         checks independent of ambient modules, rejects orphaned catalog domains, and correctly separates action
         contributions when multiple modules share an application catalog domain; source-tree verification also
         discovers new provider owner modules before their first catalog exists and preserves the actual owner of
-        registrations performed by a module loaded from a deferred provider initializer
+        registrations performed by a module loaded from a deferred provider initializer; installed owner fragments
+        compose those shared-domain contributions without duplicating source text between repositories
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
@@ -1669,6 +1670,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         isolation; BCP 47 locale negotiation and \c Accept-Language parsing
       - configurable system catalog discovery and per-message locale introspection allow applications to
         distinguish translated messages from source-language fallback
+      - independently installed catalog fragments allow multiple modules to contribute localized messages to the
+        same application domain without overwriting one another
       - message catalogs can treat non-plural entries as literal text, allowing producer descriptions with JSON
         examples and path templates to be localized without interpreting braces as placeholders
       - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a
