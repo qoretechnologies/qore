@@ -170,6 +170,19 @@ public class AbstractFileLocationHandler {
         return selfValidatesOptionsImpl();
     }
 
+    #! Returns @ref True if the handler is bound to an already-authenticated client
+    /** A bound handler treats the location as a URI path on its client's target rather than as a URL, and therefore
+        accepts only the options that still apply once there is no client to construct; see
+        @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "FileLocationHandler::getHttpHandlerForClient()".
+
+        @return @ref True if the handler is bound to an already-authenticated client
+
+        @since FileLocationHandler 3.0
+    */
+    bool isBound() {
+        return isBoundImpl();
+    }
+
     #! Returns a string tagged with the given encoding, if any
     private static string forceEncoding(string str, *string encoding) {
         if (encoding && encoding.lwr() != str.encoding().lwr()) {
@@ -282,6 +295,17 @@ public class AbstractFileLocationHandler {
         @since FileLocationHandler 3.0
     */
     private bool selfValidatesOptionsImpl() {
+        return False;
+    }
+
+    #! Returns @ref True if the handler is bound to an already-authenticated client
+    /** The default implementation returns @ref False; override in handlers that can be bound to a client
+
+        @return @ref False in the base class
+
+        @since FileLocationHandler 3.0
+    */
+    private bool isBoundImpl() {
         return False;
     }
 }

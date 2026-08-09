@@ -53,7 +53,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     }
 
     #! Returns @ref True if this handler is bound to an already-authenticated client
-    bool isBound() {
+    private bool isBoundImpl() {
         return exists bound_client;
     }
 

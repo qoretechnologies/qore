@@ -235,6 +235,9 @@ FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
       "AbstractFileLocationHandler::selfValidatesOptions()" so that handlers that cannot know their effective
       option set until the location is resolved can validate options themselves
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - added @ref FileLocationHandler::AbstractFileLocationHandler::isBound() "AbstractFileLocationHandler::isBound()"
+      so that any handler reference can be asked whether it is bound to an already-authenticated client
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
 
     @subsection filelocationhandler_v2_2_1 FileLocationHandler v2.2.1
     - allow handler information to be returned
