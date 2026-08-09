@@ -109,6 +109,12 @@ public class OpenApi3Test inherits QUnit::Test {
                 ),
             },
         };
+        #! a minimal valid OpenAPI 3.1 document; add a "components" key to declare schemas under test
+        const ValidOpenApi31Schema = {
+            "openapi": "3.1.0",
+            "info": ValidInfoObject,
+            "paths": {},
+        };
         const ValidOpenApi3Schema = {
             "openapi": "3.0",
             "info": ValidInfoObject,
@@ -391,6 +397,11 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test real msgs", \testRealMessages());
         addTestCase("Test OpenAPI 3.1 version detection", \testOpenApi31Version());
         addTestCase("Test OpenAPI 3.1 type arrays", \testOpenApi31TypeArrays());
+        addTestCase("Test OpenAPI 3.1 scalar null type", \testOpenApi31NullType());
+        addTestCase("Test OpenAPI 3.x discriminator object", \testOpenApi3DiscriminatorObject());
+        addTestCase("Test OpenAPI 3.x allOf scalar type adoption", \testOpenApi3AllOfScalar());
+        addTestCase("Test JSON Schema 2020-12 keywords", \testOpenApi31JsonSchemaKeywords());
+        addTestCase("Test OpenAPI 3.1 file", \testOpenApi31File());
         addTestCase("Test OpenAPI 3.1 exclusive min/max", \testOpenApi31ExclusiveNumeric());
         addTestCase("Test OpenAPI 3.1 examples array", \testOpenApi31Examples());
         addTestCase("Test OpenAPI 3.1 webhooks", \testOpenApi31Webhooks());
@@ -3844,6 +3855,601 @@ public class OpenApi3Test inherits QUnit::Test {
             assertEq("integer", nullableInt.type);
             assertTrue(nullableInt.nullable);
         }
+    }
+
+    testOpenApi31NullType() {
+        checkModules();
+
+        # a standalone scalar "null" type: unconstrained and nullable, symmetric with the list form
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "NullOnly": {"type": "null"},
+                    },
+                },
+            });
+            OpenApi3::SchemaObject nullOnly = so.components.schemas.NullOnly;
+            assertEq("any", nullOnly.type);
+            assertTrue(nullOnly.nullable);
+            assertTrue(nullOnly.nullType);
+            assertEq("any", nullOnly.getDataType().getName());
+        }
+
+        # the list form with only "null" must be identical to the scalar form
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "NullOnly": {"type": ("null",)},
+                    },
+                },
+            });
+            OpenApi3::SchemaObject nullOnly = so.components.schemas.NullOnly;
+            assertEq("any", nullOnly.type);
+            assertTrue(nullOnly.nullable);
+            assertTrue(nullOnly.nullType);
+        }
+
+        # an empty type list is unconstrained but NOT a null type
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "EmptyType": {"type": ()},
+                    },
+                },
+            });
+            OpenApi3::SchemaObject emptyType = so.components.schemas.EmptyType;
+            assertEq("any", emptyType.type);
+            assertFalse(emptyType.nullable);
+            assertFalse(emptyType.nullType);
+        }
+
+        # "anyOf" with a "null" member is the OpenAPI 3.1 nullability idiom: it must produce exactly the same
+        # data type as the equivalent list form "type: [string, null]", not a union widened to "any"
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Obj": {
+                            "type": "object",
+                            "properties": {
+                                "listForm": {"type": ("string", "null")},
+                                "anyOfForm": {"anyOf": ({"type": "string"}, {"type": "null"})},
+                                "oneOfForm": {"oneOf": ({"type": "integer"}, {"type": "null"})},
+                                "optionalAnyOfForm": {"anyOf": ({"type": "string"}, {"type": "null"})},
+                                "realUnion": {"anyOf": ({"type": "string"}, {"type": "integer"})},
+                            },
+                            "required": ("listForm", "anyOfForm", "oneOfForm", "realUnion"),
+                        },
+                    },
+                },
+            });
+            OpenApi3::SchemaObject obj = so.components.schemas.Obj;
+            OpenApi3::SchemaObject any_of_form = obj.properties.anyOfForm;
+            OpenApi3::SchemaObject one_of_form = obj.properties.oneOfForm;
+            OpenApi3::SchemaObject real_union = obj.properties.realUnion;
+
+            # the composition is marked nullable by its "null" member
+            assertTrue(any_of_form.nullable);
+            assertTrue(one_of_form.nullable);
+            # ... but the "null" member is still present in the parsed composition
+            assertEq(2, any_of_form.anyOf.size());
+            assertTrue(any_of_form.anyOf[1].nullType);
+            # a union with no "null" member is not nullable
+            assertFalse(real_union.nullable);
+
+            hash<string, AbstractDataField> fields = obj.getDataType().getFields();
+            assertEq(fields.listForm.getType().getName(), fields.anyOfForm.getType().getName());
+            assertEq("softstring", fields.anyOfForm.getType().getName());
+            assertTrue(fields.anyOfForm.isMandatory());
+            assertEq("softint", fields.oneOfForm.getType().getName());
+            assertTrue(fields.oneOfForm.isMandatory());
+            # an optional nullable field is an "or nothing" type
+            assertEq("*softstring", fields.optionalAnyOfForm.getType().getName());
+            assertFalse(fields.optionalAnyOfForm.isMandatory());
+            # a real union is still exposed as a union
+            assertEq("softstring|softint", fields.realUnion.getType().getName());
+        }
+
+        # a composition consisting only of "null" members is unconstrained
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "AllNull": {"anyOf": ({"type": "null"}, {"type": "null"})},
+                    },
+                },
+            });
+            OpenApi3::SchemaObject allNull = so.components.schemas.AllNull;
+            assertTrue(allNull.nullable);
+            assertEq("any", allNull.getDataType().getName());
+        }
+
+        # a "null"-typed value still validates against the composition at runtime
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "MaybeString": {"anyOf": ({"type": "string"}, {"type": "null"})},
+                    },
+                },
+            });
+            OpenApi3::SchemaObject maybeString = so.components.schemas.MaybeString;
+            auto val = "x";
+            maybeString.check(False, True, "/", "POST", "MaybeString", \val);
+            assertEq("x", val);
+            val = NOTHING;
+            maybeString.check(False, True, "/", "POST", "MaybeString", \val);
+            assertNothing(val);
+        }
+
+        # negative: an unknown scalar type value is still rejected; "null" must not open the door to typos
+        {
+            assertThrows("INVALID-FIELD-VALUE", "invalid schema type value", sub () {
+                new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                    "components": {"schemas": {"Bogus": {"type": "nul"}}},
+                });
+            });
+        }
+    }
+
+    testOpenApi3DiscriminatorObject() {
+        checkModules();
+
+        # OpenAPI 3.x object form with a mapping
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Pet": {
+                            "type": "object",
+                            "properties": {"petType": {"type": "string"}, "name": {"type": "string"}},
+                            "required": ("petType",),
+                            "discriminator": {
+                                "propertyName": "petType",
+                                "mapping": {
+                                    "dog": "#/components/schemas/Pet",
+                                    "cat": "Cat",
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            OpenApi3::SchemaObject pet = so.components.schemas.Pet;
+            assertEq("petType", pet.discriminator);
+            assertEq({"dog": "#/components/schemas/Pet", "cat": "Cat"}, pet.discriminatorMapping);
+        }
+
+        # object form without a mapping
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Pet": {
+                            "type": "object",
+                            "properties": {"petType": {"type": "string"}},
+                            "required": ("petType",),
+                            "discriminator": {"propertyName": "petType"},
+                        },
+                    },
+                },
+            });
+            OpenApi3::SchemaObject pet = so.components.schemas.Pet;
+            assertEq("petType", pet.discriminator);
+            assertNothing(pet.discriminatorMapping);
+        }
+
+        # OpenAPI 3.x says the discriminator property SHOULD be required, not MUST, so the object form must be
+        # accepted when the property is missing from the "required" list
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Pet": {
+                            "type": "object",
+                            "properties": {"petType": {"type": "string"}},
+                            "discriminator": {"propertyName": "petType"},
+                        },
+                    },
+                },
+            });
+            assertEq("petType", so.components.schemas.Pet.discriminator);
+        }
+
+        # the Swagger 2.0 string form is still accepted (and still requires the property to be in "required")
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Pet": {
+                            "type": "object",
+                            "properties": {"petType": {"type": "string"}},
+                            "required": ("petType",),
+                            "discriminator": "petType",
+                        },
+                    },
+                },
+            });
+            assertEq("petType", so.components.schemas.Pet.discriminator);
+            assertNothing(so.components.schemas.Pet.discriminatorMapping);
+        }
+
+        # negative: the object form requires "propertyName"
+        {
+            assertThrows("REQUIRED-FIELD-MISSING", "propertyName", sub () {
+                new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                    "components": {
+                        "schemas": {
+                            "Pet": {
+                                "type": "object",
+                                "properties": {"petType": {"type": "string"}},
+                                "discriminator": {"mapping": {"dog": "Dog"}},
+                            },
+                        },
+                    },
+                });
+            });
+        }
+
+        # negative: "propertyName" must be a string
+        {
+            assertThrows("INVALID-FIELD-TYPE", "discriminator.propertyName", sub () {
+                new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                    "components": {
+                        "schemas": {
+                            "Pet": {
+                                "type": "object",
+                                "properties": {"petType": {"type": "string"}},
+                                "discriminator": {"propertyName": 5},
+                            },
+                        },
+                    },
+                });
+            });
+        }
+
+        # negative: "mapping" must be a hash
+        {
+            assertThrows("INVALID-FIELD-TYPE", "discriminator.mapping", sub () {
+                new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                    "components": {
+                        "schemas": {
+                            "Pet": {
+                                "type": "object",
+                                "properties": {"petType": {"type": "string"}},
+                                "discriminator": {"propertyName": "petType", "mapping": ("dog",)},
+                            },
+                        },
+                    },
+                });
+            });
+        }
+
+        # negative: "mapping" values must be strings
+        {
+            assertThrows("INVALID-FIELD-TYPE", "discriminator.mapping", sub () {
+                new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                    "components": {
+                        "schemas": {
+                            "Pet": {
+                                "type": "object",
+                                "properties": {"petType": {"type": "string"}},
+                                "discriminator": {"propertyName": "petType", "mapping": {"dog": 1}},
+                            },
+                        },
+                    },
+                });
+            });
+        }
+
+        # negative: neither a string nor a hash
+        {
+            assertThrows("INVALID-FIELD-TYPE", "discriminator", sub () {
+                new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                    "components": {"schemas": {"Pet": {"type": "string", "discriminator": 5}}},
+                });
+            });
+        }
+
+        # negative: the string form still requires the property to be in the "required" list
+        {
+            assertThrows("INVALID-FIELD-VALUE", "'required' list", sub () {
+                new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                    "components": {
+                        "schemas": {
+                            "Pet": {
+                                "type": "object",
+                                "properties": {"petType": {"type": "string"}},
+                                "discriminator": "petType",
+                            },
+                        },
+                    },
+                });
+            });
+        }
+    }
+
+    testOpenApi3AllOfScalar() {
+        checkModules();
+
+        # a one-member "allOf" wrapping a scalar $ref is how OpenAPI 3.x attaches a per-use description to a
+        # reusable scalar type; the composition must adopt the referenced type rather than stay unconstrained
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Email": {"type": "string", "format": "email"},
+                        "Kind": {"type": "string", "enum": ("a", "b")},
+                        "Ids": {"type": "array", "items": {"type": "string"}},
+                        "Obj": {
+                            "type": "object",
+                            "properties": {
+                                "email": {
+                                    "allOf": ({"$ref": "#/components/schemas/Email"},),
+                                    "description": "the customer's email address",
+                                },
+                                "kind": {"allOf": ({"$ref": "#/components/schemas/Kind"},)},
+                                "ids": {"allOf": ({"$ref": "#/components/schemas/Ids"},)},
+                                "count": {"allOf": ({"type": "integer"},)},
+                            },
+                            "required": ("email",),
+                        },
+                    },
+                },
+            });
+            OpenApi3::SchemaObject obj = so.components.schemas.Obj;
+            OpenApi3::SchemaObject email = obj.properties.email;
+            OpenApi3::SchemaObject kind = obj.properties.kind;
+            OpenApi3::SchemaObject ids = obj.properties.ids;
+
+            # the type and the constraints that belong to it are both adopted
+            assertEq("string", email.type);
+            assertEq("email", email.format);
+            # the outer schema's own description is not overwritten by the member's
+            assertEq("the customer's email address", email.desc);
+            assertEq("string", kind.type);
+            assertEq({"a": True, "b": True}, kind.enumValues);
+            assertEq("array", ids.type);
+            assertEq("string", ids.items.type);
+
+            hash<string, AbstractDataField> fields = obj.getDataType().getFields();
+            assertEq("email", fields.email.getType().getName());
+            assertTrue(fields.email.isMandatory());
+            assertEq("*softstring", fields.kind.getType().getName());
+            assertEq("*softlist<softstring>", fields.ids.getType().getName());
+            assertEq("*softint", fields.count.getType().getName());
+        }
+
+        # an explicit type on the outer schema wins over the members
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Wrapped": {
+                            "type": "string",
+                            "allOf": ({"type": "integer"},),
+                        },
+                    },
+                },
+            });
+            assertEq("string", so.components.schemas.Wrapped.type);
+        }
+
+        # members that disagree describe an unsatisfiable intersection; no type is invented
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Conflict": {"allOf": ({"type": "string"}, {"type": "integer"})},
+                    },
+                },
+            });
+            assertEq("any", so.components.schemas.Conflict.type);
+        }
+
+        # object composition is unaffected: properties are merged and the type is "object"
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Base": {
+                            "type": "object",
+                            "properties": {"a": {"type": "string"}},
+                            "required": ("a",),
+                        },
+                        "Derived": {
+                            "allOf": (
+                                {"$ref": "#/components/schemas/Base"},
+                                {"type": "object", "properties": {"b": {"type": "integer"}}},
+                            ),
+                        },
+                    },
+                },
+            });
+            OpenApi3::SchemaObject derived = so.components.schemas.Derived;
+            assertEq("object", derived.type);
+            hash<string, AbstractDataField> fields = derived.getDataType().getFields();
+            assertEq("softstring", fields.a.getType().getName());
+            assertTrue(fields.a.isMandatory());
+            assertEq("*softint", fields.b.getType().getName());
+        }
+
+        # a reusable type is often reached through a chain of single-member compositions: an "allOf" that
+        # adds a description, around a "$ref" to a "oneOf" naming one enum.  Every link declares no type of
+        # its own, so the chain has to be followed to reach the type at the end
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "PublicOrigin": {"type": "string", "enum": ("api", "web")},
+                        "Origin": {"oneOf": ({"$ref": "#/components/schemas/PublicOrigin"},)},
+                        "Obj": {
+                            "type": "object",
+                            "properties": {
+                                "origin": {
+                                    "allOf": ({"$ref": "#/components/schemas/Origin"},),
+                                    "description": "how the transaction was created",
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            OpenApi3::SchemaObject origin = so.components.schemas.Obj.properties.origin;
+            assertEq("string", origin.type);
+            assertEq({"api": True, "web": True}, origin.enumValues);
+            assertEq("*softstring",
+                so.components.schemas.Obj.getDataType().getFields().origin.getType().getName());
+        }
+
+        # a chain that never reaches a declared type stays unconstrained rather than looping
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Inner": {"description": "no type anywhere"},
+                        "Middle": {"oneOf": ({"$ref": "#/components/schemas/Inner"},)},
+                        "Outer": {"allOf": ({"$ref": "#/components/schemas/Middle"},)},
+                    },
+                },
+            });
+            assertEq("any", so.components.schemas.Outer.type);
+        }
+
+        # a multi-member composition inside the chain is ambiguous and is not followed
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Either": {"oneOf": ({"type": "string"}, {"type": "integer"})},
+                        "Outer": {"allOf": ({"$ref": "#/components/schemas/Either"},)},
+                    },
+                },
+            });
+            assertEq("any", so.components.schemas.Outer.type);
+            # ... but the data type still resolves through the wrapper, because a union can be expressed
+            assertEq("softstring|softint", so.components.schemas.Outer.getDataType().getName());
+        }
+
+        # an "allOf" of unconstrained members stays unconstrained
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Unconstrained": {"allOf": ({"description": "no type here"},)},
+                    },
+                },
+            });
+            assertEq("any", so.components.schemas.Unconstrained.type);
+        }
+
+        # a nullable scalar member carries its nullability to the composition
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "MaybeName": {"allOf": ({"type": ("string", "null")},)},
+                    },
+                },
+            });
+            OpenApi3::SchemaObject maybe_name = so.components.schemas.MaybeName;
+            assertEq("string", maybe_name.type);
+            assertTrue(maybe_name.nullable);
+        }
+    }
+
+    testOpenApi31JsonSchemaKeywords() {
+        checkModules();
+
+        # JSON Schema 2020-12 keywords adopted by OpenAPI 3.1 that the module does not model but must accept
+        # rather than reject; these are regression tests locking in that documents using them still parse
+        {
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+                "components": {
+                    "schemas": {
+                        "Tuple": {
+                            "type": "array",
+                            "prefixItems": ({"type": "string"}, {"type": "integer"}),
+                            "items": {"type": "string"},
+                        },
+                        "Closed": {
+                            "type": "object",
+                            "properties": {"a": {"type": "string"}},
+                            "unevaluatedProperties": False,
+                        },
+                        "Fixed": {
+                            "type": "string",
+                            "const": "only-value",
+                        },
+                    },
+                },
+            });
+            assertEq("array", so.components.schemas.Tuple.type);
+            assertEq("string", so.components.schemas.Tuple.items.type);
+            assertEq("object", so.components.schemas.Closed.type);
+            assertEq("*softstring", so.components.schemas.Closed.getDataType().getFields().a.getType().getName());
+            assertEq("string", so.components.schemas.Fixed.type);
+        }
+    }
+
+    testOpenApi31File() {
+        checkModules();
+
+        # the 3.1 fixture exercises every 3.1-specific construct the module supports, in a real document
+        string path = normalize_dir(dirname(get_script_path())) + DirSep + "PetStore31.openapi3.yaml";
+        OpenApi3::OpenApi3Schema so = OpenApi3::OpenApi3Loader::fromFile(path);
+        assertTrue(so.is31OrLater());
+        assertEq("/v31", so.getBasePath());
+        assertEq("An OpenAPI 3.1 variant of the Petstore used to exercise 3.1-only constructs", so.info.summary);
+        assertEq("Apache-2.0", so.info.license.identifier);
+
+        # top-level webhooks
+        assertEq(1, so.webhooks.size());
+        assertEq("PathItemObject", so.webhooks.petCreated.className());
+
+        OpenApi3::SchemaObject pet = so.components.schemas.Pet;
+        # the discriminator object form, with its mapping
+        assertEq("petType", pet.discriminator);
+        assertEq({"dog": "#/components/schemas/Dog", "cat": "#/components/schemas/Cat"}, pet.discriminatorMapping);
+
+        # both nullability idioms produce the same type
+        OpenApi3::SchemaObject tag = pet.properties.tag;
+        OpenApi3::SchemaObject nickname = pet.properties.nickname;
+        assertTrue(tag.nullable);
+        assertTrue(nickname.nullable);
+        hash<string, AbstractDataField> fields = pet.getDataType().getFields();
+        assertEq(fields.tag.getType().getName(), fields.nickname.getType().getName());
+        assertEq("*softstring", fields.tag.getType().getName());
+
+        # 3.1 annotations
+        OpenApi3::SchemaObject color = pet.properties.color;
+        OpenApi3::SchemaObject photo = pet.properties.photo;
+        assertEq(("black", "white"), color.examples);
+        assertEq("base64", photo.contentEncoding);
+        assertEq("image/png", photo.contentMediaType);
+
+        # numeric exclusiveMinimum/exclusiveMaximum on an operation parameter
+        OpenApi3::PathItemObject pio = so.paths.match("/pets");
+        OpenApi3::OperationObject get_op = pio.getOperation("get", "/pets");
+        assertEq("findPets31", get_op.operationId);
+
+        # allOf composition against a discriminated base schema
+        OpenApi3::SchemaObject dog = so.components.schemas.Dog;
+        assertEq("*softint", dog.getDataType().getFields().packSize.getType().getName());
+
+        # a document-declared request round-trips through validation, with a null-valued nullable field
+        OpenApi3::OperationObject post_op = pio.getOperation("post", "/pets");
+        hash<auto> hdr = {};
+        *data req = post_op.getRequestBody(pio, {"name": "Rex", "petType": "dog", "tag": NOTHING}, \hdr, True);
+        assertEq(MimeTypeJson, hdr."Content-Type");
+        assertEq("Rex", parse_json(req.toString()).name);
+
+        # negative: a required property must be present
+        assertThrows("SCHEMA-VALIDATION-ERROR", "name", \post_op.getRequestBody(), (pio, {"petType": "dog"},
+            \hdr, True));
     }
 
     testOpenApi31ExclusiveNumeric() {

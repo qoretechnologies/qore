@@ -253,6 +253,52 @@ qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
 #   -b, --base-path=PATH   Base path prefix for endpoints
     @endcode
 
+    @section openapi3_31 OpenAPI 3.1 Support
+
+    Documents declaring \c "openapi": \c "3.1.x" are supported alongside 3.0.x; call
+    @ref OpenApi3::OpenApi3Schema::is31OrLater() "OpenApi3Schema::is31OrLater()" to determine which specification
+    version a loaded schema declares.  The JSON Schema 2020-12 constructs adopted by OpenAPI 3.1 are handled as
+    follows.
+
+    |!Construct|!Handling
+    |\c type as a list (ex: \c {["string", "null"]})|the first non-\c "null" entry is the schema type; a \c "null" \
+entry sets @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"
+    |\c type as the scalar string \c "null"|the schema is unconstrained (type \c "any") and \
+@ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"; @ref OpenApi3::SchemaObject::nullType "nullType" \
+is set
+    |\c "null" as an \c anyOf / \c oneOf member|the composition is @ref RestSchemaValidator::AbstractSchemaObject::nullable \
+"nullable"; the \c "null" member is excluded from the union type, so \c {anyOf: [{type: "string"}, {type: "null"}]} \
+produces the same type as \c {type: ["string", "null"]}
+    |\c discriminator as an object|\c propertyName is required and gives \
+@ref RestSchemaValidator::AbstractSchemaObject::discriminator "discriminator"; \c mapping, if present, gives \
+@ref OpenApi3::SchemaObject::discriminatorMapping "discriminatorMapping".  The Swagger 2.0 string form is also \
+accepted
+    |numeric \c exclusiveMinimum / \c exclusiveMaximum|parsed as bounds; the 3.0 boolean form is also accepted
+    |\c examples as a list|available as @ref OpenApi3::SchemaObject::examples "SchemaObject::examples"
+    |\c contentEncoding / \c contentMediaType|available as the members of the same names
+    |top-level \c webhooks|parsed as @ref OpenApi3::OpenApi3Schema::webhooks "OpenApi3Schema::webhooks"
+    |\c info.summary, SPDX \c license.identifier, \c jsonSchemaDialect|parsed
+    |\c mutualTLS security schemes|parsed
+    |\c prefixItems, \c unevaluatedProperties, \c const|accepted; not modeled in the %Qore type system
+
+    @note OpenAPI 3.x states that the property named by a \c discriminator object \a SHOULD be listed in the schema's
+    \c required list; no exception is thrown when it is not.  The Swagger 2.0 string form, where the specification
+    says \a MUST, still throws in that case.
+
+    @section openapi3_composition Schema Composition
+
+    \c allOf, \c oneOf and \c anyOf are supported in both 3.0 and 3.1 documents:
+
+    |!Keyword|!Handling
+    |\c allOf|the members' \c properties and \c required sets are merged into the containing schema, local fields \
+winning.  When the containing schema declares no \c type of its own and the members contribute no properties, an \
+unambiguous scalar type among the members is adopted along with its \c format, \c enum and array \c items — which is \
+what makes a one-member \c allOf wrapping a scalar \c "$ref", the usual way to attach a per-use description to a \
+reusable type, keep the referenced type instead of becoming unconstrained.  Members declaring different types \
+describe an intersection nothing can satisfy, and are left unconstrained rather than guessed at
+    |\c oneOf / \c anyOf|exposed as a union type that preserves the keyword's matching rule; \c "null" members are \
+excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable" instead
+
     @section openapi3_relnotes OpenApi3 Module Release Notes
 
     @subsection openapi3_1_0 OpenApi3 v1.0
@@ -298,6 +344,8 @@ qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
       @ref RestSchemaValidator::AbstractRestSchemaValidator::getTypeForReference() "getTypeForReference()" and
       @ref RestSchemaValidator::AbstractRestSchemaValidator::replaceTypeForReference() "replaceTypeForReference()"
       methods inherited from @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+    - OpenAPI 3.1 documents are supported in addition to 3.0; see @ref openapi3_31 for the constructs handled and
+      how each is exposed
 */
 
 #! main namespace for all public %OpenApi3 declarations
@@ -4409,6 +4457,30 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         #! An array of examples for this schema (OpenAPI 3.1 style).
         *list<auto> examples;
 
+        #! If the schema declared a \c type of its own, as opposed to inheriting one from an \c allOf member
+        /** Recorded at parse time because @ref adoptScalarTypeFromAllOf() may fill @ref SchemaBase::type in
+            afterwards, which would otherwise make the two cases indistinguishable.
+        */
+        bool own_type = False;
+
+        #! If the schema declares the JSON Schema \c null type and nothing else.
+        /** Set when the schema's \c type is the scalar string \c "null" or a list containing only \c "null"; such a
+            schema carries no type information of its own and is only meaningful as a member of an \c anyOf or
+            \c oneOf composition, where it expresses nullability (the OpenAPI 3.1 idiom).
+
+            @see @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"
+        */
+        bool nullType = False;
+
+        #! The \c mapping of the OpenAPI 3.x \c discriminator object, if any.
+        /** Maps discriminator property values to schema names or references; only set when \c discriminator is
+            given in the OpenAPI 3.x object form (\c {propertyName, mapping}) and a \c mapping is present.
+
+            @see @ref RestSchemaValidator::AbstractSchemaObject::discriminator "discriminator" for the discriminator
+        property name itself
+        */
+        *hash<string, string> discriminatorMapping;
+
         #! valid scalar types
         const ScalarTypes = (
             "string": True,
@@ -4456,6 +4528,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
         # Parse type - supports both string (3.0) and array (3.1) formats
         if (oh.hasKey("type")) {
+            own_type = True;
             if (oh.type.typeCode() == NT_LIST) {
                 # OpenAPI 3.1 style: type: ["string", "null"]
                 list<auto> rawTypes = oh.type;
@@ -4476,13 +4549,21 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                             "expected one of: %y", name, type, keys ReferenceTypes);
                 } else {
                     type = "any";
+                    nullType = nullable;
                 }
             } else if (oh.type.typeCode() == NT_STRING) {
                 # OpenAPI 3.0 style: type: "string"
                 type = oh.type;
-                if (!ReferenceTypes{type})
+                if (type == "null") {
+                    # OpenAPI 3.1 / JSON Schema: a standalone null type; almost always an "anyOf" member
+                    # expressing nullability; handled symmetrically with the list branch above: the type is
+                    # unconstrained and the schema is nullable
+                    nullable = nullType = True;
+                    type = "any";
+                } else if (!ReferenceTypes{type}) {
                     throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
                         "expected one of: %y", name, type, keys ReferenceTypes);
+                }
             } else {
                 throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: \"type\" field has invalid type %y; "
                     "expected string or list", name, oh.type.type());
@@ -4569,7 +4650,36 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
         }
 
-        if (optional_field(obj_type, oh, "discriminator", NT_STRING, \discriminator)) {
+        # OpenAPI 3.0 and 3.1 both define "discriminator" as an object: {propertyName, mapping}; the string form
+        # is the Swagger 2.0 form and is accepted for backwards compatibility
+        if (oh.discriminator.typeCode() == NT_HASH) {
+            if (!oh.discriminator.hasKey("propertyName")) {
+                throw "REQUIRED-FIELD-MISSING", sprintf("Schema Object %y: 'discriminator' object is missing the "
+                    "required \"propertyName\" field; fields present: %y", name, keys oh.discriminator);
+            }
+            if (oh.discriminator.propertyName.typeCode() != NT_STRING) {
+                throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: 'discriminator.propertyName' field has "
+                    "invalid type %y (val: %y); expecting \"string\"", name, oh.discriminator.propertyName.type(),
+                    oh.discriminator.propertyName);
+            }
+            discriminator = oh.discriminator.propertyName;
+            if (oh.discriminator.hasKey("mapping")) {
+                if (oh.discriminator.mapping.typeCode() != NT_HASH) {
+                    throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: 'discriminator.mapping' field has invalid "
+                        "type %y (val: %y); expecting \"hash\"", name, oh.discriminator.mapping.type(),
+                        oh.discriminator.mapping);
+                }
+                foreach hash<auto> i in (oh.discriminator.mapping.pairIterator()) {
+                    if (i.value.typeCode() != NT_STRING) {
+                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: 'discriminator.mapping' key %y has "
+                            "invalid type %y (val: %y); expecting \"string\"", name, i.key, i.value.type(), i.value);
+                    }
+                }
+                discriminatorMapping = oh.discriminator.mapping;
+            }
+            # NOTE: OpenAPI 3.x says the discriminator property SHOULD be in the "required" list, not MUST, so no
+            # exception is thrown here if it's missing; the Swagger 2.0 string form below requires it (MUST)
+        } else if (optional_field(obj_type, oh, "discriminator", NT_STRING, \discriminator)) {
             if (!required{discriminator})
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: 'discriminator' field value not in the "
                     "'required' list", name);
@@ -4614,6 +4724,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 }
                 if (type == "any" && properties) {
                     type = "object";
+                } else if (type == "any" && !oh.hasKey("type")) {
+                    # "allOf" is an intersection, so a member's type constrains the composition as a whole.  A
+                    # one-member "allOf" wrapping a scalar $ref -- the standard way to attach a description or
+                    # an example to a reusable scalar type -- would otherwise leave the schema unconstrained,
+                    # discarding the referenced type entirely.
+                    adoptScalarTypeFromAllOf();
                 }
             }
         }
@@ -4627,7 +4743,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     if (val.typeCode() != NT_HASH)
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'oneOf' list value "
                             "datatype: %y", name, val.type());
-                    oneOf[oneOf.size()] = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3);
+                    SchemaObject member = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3);
+                    oneOf[oneOf.size()] = member;
+                    # a "null"-typed member expresses nullability of the composition itself
+                    if (member.nullType) {
+                        nullable = True;
+                    }
                 }
             }
         }
@@ -4641,7 +4762,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     if (val.typeCode() != NT_HASH)
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'anyOf' list value "
                             "datatype: %y", name, val.type());
-                    anyOf[anyOf.size()] = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3);
+                    SchemaObject member = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3);
+                    anyOf[anyOf.size()] = member;
+                    # a "null"-typed member expresses nullability of the composition itself
+                    if (member.nullType) {
+                        nullable = True;
+                    }
                 }
             }
         }
@@ -4788,6 +4914,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
     #! Returns the data type for the schema
     AbstractDataProviderType getDataType(bool required = True, *object rest) {
+        if (isAllOfWrapper()) {
+            # a one-member "allOf" that adds nothing of its own IS its member; delegating gives the member's
+            # type even when it is a composition, which a scalar type name cannot express
+            if (required) {
+                if (!dataType) {
+                    dataType = allOf[0].getDataType(True, rest);
+                }
+                return dataType;
+            }
+            if (!orNothingDataType) {
+                orNothingDataType = allOf[0].getDataType(False, rest);
+            }
+            return orNothingDataType;
+        }
         if (oneOf || anyOf) {
             if (required) {
                 if (!dataType) {
@@ -4816,9 +4956,117 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return RestSchemaValidator::AbstractRestSchemaObject::getDataType(required, rest);
     }
 
+    #! Resolves a schema to the constrained scalar it wraps, if it is only a wrapper around one
+    /** Reusable types are commonly reached through a chain of single-member compositions — an \c allOf
+        adding a description around a \c "$ref" to a \c oneOf that names a single enum, which is how Paddle
+        publishes several of its enumerations.  Every link in such a chain declares no type of its own, so
+        following it is the only way to reach the type at the end.
+
+        @param schema the schema to resolve
+        @param depth guards against a self-referential chain; deep nesting is a defect, not a use case
+
+        @return the schema declaring the type, or @ref nothing when there is no single unambiguous one
+    */
+    private static *SchemaObject resolveWrappedScalar(SchemaObject schema, int depth = 0) {
+        if (schema.properties || depth > 8) {
+            return;
+        }
+        if (schema.type != "any") {
+            return schema;
+        }
+        # a lone member of any single-member composition is the schema itself
+        # NOTE: these members are empty lists rather than NOTHING when unset, so "??" would not fall through
+        *list<SchemaObject> members;
+        if (schema.allOf) {
+            members = schema.allOf;
+        } else if (schema.oneOf) {
+            members = schema.oneOf;
+        } else if (schema.anyOf) {
+            members = schema.anyOf;
+        }
+        if (members.size() != 1) {
+            return;
+        }
+        return SchemaObject::resolveWrappedScalar(members[0], depth + 1);
+    }
+
+    #! Returns @ref True if this schema is a one-member \c allOf that constrains nothing itself
+    /** This is the OpenAPI 3.x idiom for attaching a per-use description, example or \c readOnly flag to a
+        reusable type without redefining it: the schema is exactly its member.
+
+        @see @ref adoptScalarTypeFromAllOf() for the type the schema itself reports
+    */
+    private bool isAllOfWrapper() {
+        return allOf.size() == 1 && !own_type && !properties && !oneOf && !anyOf && !notSchema;
+    }
+
+    #! Adopts a scalar type from the \c allOf members when the composition declares none of its own
+    /** \c allOf is an intersection: a value must validate against every member, so a member's type
+        constrains the composition as a whole.  When the outer schema declares no \c type and the members
+        contribute no properties, the composition's type is the members' — most often a single-member
+        \c allOf wrapping a scalar \c "$ref", which is how a reusable scalar type carries a per-use
+        description or example in OpenAPI 3.x.
+
+        Only an unambiguous case is adopted: exactly one distinct non-\c "any" type among the members.
+        Members that disagree describe a schema nothing can satisfy, and members that are all
+        unconstrained leave the composition unconstrained; both are left as \c "any" rather than guessed
+        at.
+
+        The constraints that belong to the adopted type are taken with it, since a type without its
+        \c format, \c enum or array \c items would validate values the schema rejects.
+    */
+    private adoptScalarTypeFromAllOf() {
+        *SchemaObject source;
+        foreach SchemaObject member in (allOf) {
+            *SchemaObject resolved = SchemaObject::resolveWrappedScalar(member);
+            if (!resolved) {
+                continue;
+            }
+            if (source && source.type != resolved.type) {
+                # the members disagree; nothing can satisfy the intersection, so do not invent a type
+                return;
+            }
+            if (!source) {
+                source = resolved;
+            }
+        }
+        if (!source) {
+            return;
+        }
+        type = source.type;
+        if (!exists format) {
+            format = source.format;
+        }
+        if (!exists items) {
+            items = source.items;
+        }
+        if (!enumValues && source.enumValues) {
+            enumValues = source.enumValues;
+        }
+        if (!nullable) {
+            nullable = source.nullable;
+        }
+    }
+
     #! Returns the union data type for \c oneOf and \c anyOf schema composition
+    /** \c "null"-typed members are excluded from the union; they carry no type information and only express
+        nullability (already reflected in @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"), so
+        including them would widen the union to \c any and discard the type of every other alternative.  This makes
+        \c {anyOf: [{type: "string"}, {type: "null"}]} produce the same type as the equivalent
+        \c {type: ["string", "null"]}.
+    */
     private AbstractDataProviderType getCompositionDataType(bool required, *object rest) {
-        list<SchemaObject> schemas = oneOf ? oneOf : anyOf;
+        list<SchemaObject> all_schemas = oneOf ? oneOf : anyOf;
+        list<SchemaObject> schemas();
+        foreach SchemaObject member in (all_schemas) {
+            if (!member.nullType) {
+                schemas += member;
+            }
+        }
+        if (!schemas) {
+            # the composition has only "null" members; the value is unconstrained
+            return getSchemaType("/", "any", NOTHING, NOTHING, required);
+        }
         if (schemas.size() == 1) {
             return schemas[0].getDataType(required, rest);
         }
