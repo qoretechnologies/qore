@@ -190,14 +190,34 @@ make -j${MAKE_JOBS}
 echo "=== Running Tests ==="
 cd "${QORE_SRC_DIR}"
 
-# Set module path to include built modules and pre-installed binary modules.
-# Binary modules (json, yaml, uuid, etc.) may live under the package manager's
-# prefix or under /usr/local — qore-test-base installs them to /usr/local
-# (INSTALL_PREFIX=/usr/local in prep-macos.sh).  Probe both.
-EXTRA_MODULE_DIRS=""
-QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
-add_macos_module_dirs "$QORE_API_VER"
-export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${EXTRA_MODULE_DIRS}${BASE_QORE_MODULE_DIR}"
+# Core tests need native modules from the image (for example yaml and xml), but
+# must not see the image's user modules: those were compiled against the Qore
+# that built the image, so a job that changes a qlib API would be tested against
+# third-party modules still speaking the old one.  Native modules carry an API
+# suffix; expose only those through an isolated link farm.  This mirrors
+# test-ubuntu.sh and test-alpine.sh, which build the same farm from
+# `qore --module-dir`; macOS cannot use that here because the job configures
+# with an empty CMAKE_INSTALL_PREFIX, so the built binary reports no usable
+# module directory of its own — hence the same prefix probing as at build time.
+CI_NATIVE_MODULE_DIR=/tmp/qore-ci-native-modules
+mkdir -p "${CI_NATIVE_MODULE_DIR}"
+find "${CI_NATIVE_MODULE_DIR}" -mindepth 1 -maxdepth 1 -delete
+for p in "${PM_PREFIX}" /usr/local; do
+    # "|| continue" and not "&& continue": under "set -e" a trailing test that
+    # fails would end the script rather than the iteration
+    [ -n "$p" ] || continue
+    for qmod in "$p"/lib/qore-modules/*-api-*.qmod; do
+        [ -e "${qmod}" ] || continue
+        # first prefix wins, matching the search order the full paths had
+        [ -e "${CI_NATIVE_MODULE_DIR}/$(basename "${qmod}")" ] || \
+            ln -s "${qmod}" "${CI_NATIVE_MODULE_DIR}/"
+    done
+done
+
+# run the tests against job-built modules, source qlib, and compatible native
+# modules only. run_tests.sh prepends the build qmod and binary-module paths.
+export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${CI_NATIVE_MODULE_DIR}"
+export QORE_MODULE_DIR_ONLY=1
 
 # Run tests using the built qore binary
 export PATH="${BUILD_DIR}:${PATH}"
