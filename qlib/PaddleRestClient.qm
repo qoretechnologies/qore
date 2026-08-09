@@ -1,0 +1,463 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file PaddleRestClient.qm Qore user module for calling Paddle REST API services
+
+/*  PaddleRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module PaddleRestClient {
+    version = "1.0";
+    desc = "User module for calling Paddle REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("paddle", PaddleRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage PaddleRestClient Module
+
+    @tableofcontents
+
+    @section paddlerestclientintro PaddleRestClient Introduction
+
+    The %PaddleRestClient module provides an API for calling
+    [Paddle](https://www.paddle.com)'s REST API services.  Paddle is a merchant of record for
+    software businesses: it sells on your behalf and therefore handles payment processing, sales
+    tax and invoicing itself.
+
+    To use this module, use \c "%requires PaddleRestClient" in your code.
+
+    All the public symbols in the module are defined in the PaddleRestClient namespace.
+
+    The main classes are:
+    - @ref PaddleRestClient::PaddleRestClient "PaddleRestClient": the REST client for the Paddle API
+    - @ref PaddleRestClient::PaddleRestClientIo "PaddleRestClientIo": the same client on the
+      asynchronous I/O transport, which is what data providers use
+    - @ref PaddleRestClient::PaddleRestConnection "PaddleRestConnection": a connection object to
+      Paddle (based on the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section paddlerestclient_auth Authentication
+
+    Paddle authenticates with an API key sent as a bearer token; there is no OAuth2 flow.  A key is
+    created in the Paddle dashboard under \c "Paddle > Developer Tools > Authentication" and is
+    granted an explicit set of permissions, so a key can be scoped to exactly the entities and
+    operations an integration needs.
+
+    A key belongs to one environment and cannot be used against the other, which is why the
+    environment is a connection option rather than something derived from the key.
+
+    @section paddlerestclient_instance Sandbox and Production
+
+    Paddle runs two entirely separate environments, each with its own dashboard, its own data and
+    its own API keys:
+
+    |!\c instance_type|!Environment|!Target URL
+    |\c "api"|Production (the default)|\c https://api.paddle.com
+    |\c "sandbox-api"|Sandbox|\c https://sandbox-api.paddle.com
+
+    The URL is derived from \c instance_type rather than taken from the API description.  Paddle's
+    OpenAPI description lists **sandbox first** in its \c servers array, so a client that adopted
+    the schema's first server would quietly talk to sandbox in production.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires PaddleRestClient
+
+PaddleRestClientIo paddle({"token": ENV.PADDLE_API_KEY, "instance_type": "sandbox-api"});
+hash<auto> result = paddle.get("/customers?per_page=1");
+printf("Customers: %Y\n", result.body);
+    @endcode
+
+    @section paddlerestclient_responses Response Shape
+
+    Every Paddle response is an envelope: the entity or list of entities is under \c data, and
+    \c meta carries the request ID and, on a list, the pagination cursor.  An error response
+    replaces \c data with \c error.
+
+    @section paddlerestclientrelnotes Release Notes
+
+    @subsection paddlerestclientv1_0 PaddleRestClient v1.0
+    - the initial version of the %PaddleRestClient module
+*/
+
+#! the PaddleRestClient namespace contains all the objects in the PaddleRestClient module
+public namespace PaddleRestClient {
+#! Common base class for PaddleRestClient functionality
+public class PaddleRestClientBase {
+    public {
+        #! Instance type: the production environment
+        const InstanceProduction = "api";
+
+        #! Instance type: the sandbox environment
+        const InstanceSandbox = "sandbox-api";
+
+        #! The default instance type
+        /** Production, matching the application this module replaces; an integration that means to
+            work against sandbox must say so.
+        */
+        const DefaultInstanceType = InstanceProduction;
+
+        #! The valid instance types and the environment each names
+        const InstanceTypes = {
+            InstanceProduction: "Production",
+            InstanceSandbox: "Sandbox",
+        };
+
+        #! Default Paddle API URL
+        const DefaultUrl = "https://" + DefaultInstanceType + ".paddle.com";
+
+        #! Default data serialization
+        /** Paddle takes and returns JSON.
+        */
+        const DefaultData = "json";
+
+        #! Default authorization token type
+        const DefaultTokenType = "Bearer";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** Listing event types is the only authenticated read Paddle offers that requires **no**
+            permissions at all (\c "x-permissions": \c []), so a ping succeeds for any valid key,
+            however narrowly it is scoped, and fails only when the key itself is not accepted.
+        */
+        const DefaultPingPath = "/event-types";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "token_type": DefaultTokenType,
+        };
+    }
+
+    #! Returns the target URL for the given instance type
+    /** @param instance_type the instance type; see @ref InstanceTypes
+
+        @return the base URL for the environment
+
+        @throw PADDLE-INSTANCE-TYPE-ERROR the instance type is not a Paddle environment
+    */
+    static string getUrlForInstanceType(string instance_type) {
+        if (!InstanceTypes{instance_type}) {
+            throw "PADDLE-INSTANCE-TYPE-ERROR", sprintf("instance type %y is unknown; expecting one "
+                "of: %y", instance_type, keys InstanceTypes);
+        }
+        return sprintf("https://%s.paddle.com", instance_type);
+    }
+
+    #! Returns options for the PaddleRestClient constructors
+    /** Consumes the Paddle-specific \c instance_type option and turns it into the target URL, unless
+        the caller supplied a URL explicitly.
+
+        @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+
+        @throw PADDLE-INSTANCE-TYPE-ERROR the instance type is not a Paddle environment
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows
+        # to that type, and the narrowing survives the copy, so adding a hash-valued default to a
+        # hash<string, string> would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        string instance_type = (remove opts.instance_type) ?? DefaultInstanceType;
+        if (!opts.url.val()) {
+            opts.url = PaddleRestClientBase::getUrlForInstanceType(instance_type);
+        } else {
+            # validate anyway, so that a bad value is reported where it was written rather than
+            # silently ignored because a URL happened to be given as well
+            PaddleRestClientBase::getUrlForInstanceType(instance_type);
+        }
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+}
+
+#! Paddle REST client
+public class PaddleRestClient inherits RestClient::RestClient, PaddleRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options; see
+        @ref PaddleRestClient::PaddleRestClientBase::getOptions() "getOptions()" for the
+        Paddle-specific options
+        @param do_not_connect if @ref False the object will immediately attempt to connect
+    */
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(PaddleRestClientBase::getOptions(opts), do_not_connect) {
+    }
+}
+
+#! Paddle REST client for non-blocking I/O
+public class PaddleRestClientIo inherits RestClientIo::RestClientIo, PaddleRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(PaddleRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Paddle REST connections
+public class PaddleRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Paddle connection URL
+        const DefaultConnectionUrl = "paddle://" + PaddleRestClientBase::DefaultInstanceType
+            + ".paddle.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Paddle REST Connection",
+            "short_desc": "A connection to the Paddle REST API",
+            "desc": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, "
+                "subscriptions and payments.\n\n"
+                "Paddle is a **merchant of record**: it sells your software on your behalf, so it "
+                "handles payment processing, sales tax and invoicing, and pays out the balance. An "
+                "integration works with catalog products and prices, customers, transactions, "
+                "subscriptions and reports.\n\n"
+                "**Authentication** is an API key sent as a bearer token; there is no OAuth2 flow. "
+                "A key is created in the Paddle dashboard under **Paddle > Developer Tools > "
+                "Authentication** and is granted an explicit set of permissions, so it can be "
+                "scoped to exactly what the integration needs.\n\n"
+                "**Sandbox and production are separate environments** with separate data and "
+                "separate keys. Set `instance_type` to match the key.\n\n"
+                "Paddle is a trademark of Paddle.com Market Ltd.",
+            "cls": Class::forName("PaddleRestConnection"),
+            # Paddle has no OAuth2 flow, so the API key is the only way to authenticate
+            "required_options": "token",
+            "auto_url": True,
+            "schemes": {
+                "paddle": True,
+            },
+            "base_scheme_map": {
+                "https": "paddle",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": PaddleRestClientBase::DefaultData,
+                },
+                "instance_type": <ConnectionOptionInfo>{
+                    "display_name": "Instance Type",
+                    "short_desc": "The Paddle environment to connect to",
+                    "type": "string",
+                    "default_value": PaddleRestClientBase::DefaultInstanceType,
+                    "desc": "The Paddle environment this connection works against, which also "
+                        "determines the target URL.\n\n"
+                        "- `api`: **Production** — `https://api.paddle.com`\n"
+                        "- `sandbox-api`: **Sandbox** — `https://sandbox-api.paddle.com`\n\n"
+                        "The two environments are entirely separate: they hold different data and "
+                        "accept different API keys, so this must match the key in `token`.",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": PaddleRestClientBase::InstanceProduction,
+                            "display_name": "Production",
+                            "desc": "The live Paddle environment: real customers, real money",
+                        },
+                        <AllowedValueInfo>{
+                            "value": PaddleRestClientBase::InstanceSandbox,
+                            "display_name": "Sandbox",
+                            "desc": "The Paddle test environment: no real money moves",
+                        },
+                    ),
+                    "preselected": True,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": PaddleRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": PaddleRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": PaddleRestClientBase::DefaultPingPath,
+                },
+                "token": RestConnection::ConnectionScheme.options."token"
+                + <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "A Paddle API key",
+                    "desc": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as "
+                        "a bearer token.\n\n"
+                        "**To obtain one:**\n"
+                        "1. Log in to the Paddle dashboard for the environment this connection "
+                        "targets\n"
+                        "2. Go to Paddle > Developer Tools > Authentication\n"
+                        "3. Create an API key and grant it the permissions this integration needs\n\n"
+                        "**Note:** a key belongs to one environment only; a sandbox key is rejected "
+                        "by production and the other way round. Set `instance_type` to match.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "token_type": RestConnection::ConnectionScheme.options."token_type"
+                + <ConnectionOptionInfo>{
+                    "default_value": PaddleRestClientBase::DefaultTokenType,
+                },
+            },
+        };
+    }
+
+    #! Creates the PaddleRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL; ignored, as the URL is derived from \c instance_type
+        @param attributes various attributes
+        @param options connection options
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description,
+                PaddleRestConnection::getConnectionUrl(options.instance_type), attributes, options) {
+    }
+
+    #! Creates the PaddleRestConnection object
+    /** @param config with the following keys:
+        - name: the connection name
+        - display_name: the display name
+        - short_desc: a short description in plain text
+        - desc: a long description with markdown formatting
+        - url: the connection URL; ignored, as the URL is derived from \c instance_type
+        - opts: connection options
+        @param attr optional connection attributes
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(PaddleRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the connection URL for the given instance type
+    /** @param instance_type the instance type, or @ref nothing for the default
+
+        @return the connection URL, in the connection's own scheme
+
+        @throw PADDLE-INSTANCE-TYPE-ERROR the instance type is not a Paddle environment
+    */
+    static string getConnectionUrl(*string instance_type) {
+        string host = PaddleRestClientBase::getUrlForInstanceType(instance_type
+            ?? PaddleRestClientBase::DefaultInstanceType);
+        # replace the transport scheme with the connection scheme
+        return regex_subst(host, "^https", "paddle");
+    }
+
+    #! Returns the config hash with the URL derived from the instance type
+    /** The environment is the connection's defining property, so the URL follows from it rather
+        than being configured separately: Paddle's API description lists **sandbox first** in its
+        \c servers array, and a URL configured independently of \c instance_type can disagree with
+        it, which would send production traffic to sandbox or the reverse without any error.
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {"url": PaddleRestConnection::getConnectionUrl(config.opts.instance_type)};
+    }
+
+    #! Re-derives the URL when the options are updated
+    /** \c instance_type decides the target environment, so a change to it must move the connection
+        with it.
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            string target = PaddleRestConnection::getConnectionUrl(opts.instance_type);
+            if (url != target) {
+                doUpdateOptions(self, {"url": target});
+            }
+        }
+    }
+
+    #! Returns the connection options with the URL derived from the instance type
+    /** The derived URL is authoritative: a stored \c url that disagrees with \c instance_type would
+        otherwise silently decide the environment.
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return (RestConnection::getConnectionOptions(rtopts) ?? {}) - "url";
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "paddle";
+    }
+
+    #! Returns the name of the application this connection serves
+    /** The base class returns nothing, and a connection that does not override this reports no
+        \c app at all, so it is never associated with its application.
+    */
+    *string getAppName() {
+        return "Paddle";
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the Paddle data provider for this connection
+    /** @param subtype the data provider subtype, if any
+        @param options the data provider options, if any
+
+        @return the data provider for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and
+        # pinged without it
+        load_module("PaddleDataProvider");
+        return create_object("PaddleDataProvider", getAsync());
+    }
+
+    #! Returns a PaddleRestClient object
+    private PaddleRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new PaddleRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new PaddleRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}
