@@ -209,7 +209,6 @@ public class DataProvider {
             "linear": "LinearDataProvider",
 
             "linkedin": "LinkedInDataProvider",
-            "stripe": "StripeDataProvider",
             "linkedinorg": "LinkedInOrganizationsDataProvider",
 
             "mcpclient": "McpClientDataProvider",
@@ -254,6 +253,8 @@ public class DataProvider {
             "cohere": "CohereDataProvider",
             "mistral": "MistralDataProvider",
             "chroma": "ChromaDataProvider",
+            "paddle": "PaddleDataProvider",
+
             "pinecone": "PineconeDataProvider",
             "weaviate": "WeaviateDataProvider",
             "milvus": "MilvusDataProvider",
@@ -270,6 +271,8 @@ public class DataProvider {
             "imap": "ImapClientDataProvider",
             "pop3": "Pop3ClientDataProvider",
             "stability-ai": "StabilityAiDataProvider",
+
+            "stripe": "StripeDataProvider",
 
             # provided by the jni module
             "powerpointread": "PowerPointDataProvider",

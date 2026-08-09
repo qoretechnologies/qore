@@ -214,7 +214,6 @@ public class ConnectionSchemeCache {
             "linear": "LinearRestClient",
 
             "linkedin": "LinkedInRestClient",
-            "stripe": "StripeRestClient",
             "linkedindma": "LinkedInRestClient",
 
             "llamaparse": "LlamaParseRestClient",
@@ -247,6 +246,8 @@ public class ConnectionSchemeCache {
 
             "openai": "OpenAiRestClient",
 
+            "paddle": "PaddleRestClient",
+
             "perplexity": "PerplexityRestClient",
 
             "pdfco": "PdfCoRestClient",
@@ -256,6 +257,8 @@ public class ConnectionSchemeCache {
             "segment": "SegmentRestClient",
 
             "stability-ai": "StabilityAiRestClient",
+
+            "stripe": "StripeRestClient",
 
             "pop3": "Pop3Client",
             "pop3s": "Pop3Client",

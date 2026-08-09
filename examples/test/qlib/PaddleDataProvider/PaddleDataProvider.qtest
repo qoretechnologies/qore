@@ -276,6 +276,8 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         addTestCase("response contract", \responseContractTest());
         addTestCase("option types", \optionTypeTest());
         addTestCase("no timestamp codecs", \noCodecTest());
+        addTestCase("module registration", \registrationTest());
+        addTestCase("action and option metadata", \metadataTest());
         addTestCase("connection", \connectionTest());
         addTestCase("instance type decides the URL", \instanceTypeTest());
         addTestCase("data provider construction", \constructionTest());
@@ -540,6 +542,64 @@ public class PaddleDataProviderTest inherits QUnit::Test {
             foreach hash<auto> i in ((info.fields ?? {}).pairIterator()) {
                 assertNothing(i.value.codec, sprintf("action %y option %y needs no codec", info.action,
                     i.key));
+            }
+        }
+    }
+
+    registrationTest() {
+        # a module that loads and registers its app is still invisible to the catalogue unless it can be
+        # found BY NAME without being loaded first: "qctl update-index" resolves the factory and the
+        # connection scheme through these two maps, and an app missing from them simply never appears in
+        # the index -- with no error and a zero exit status
+        assertTrue(exists DataProvider::getFactory("paddle"),
+            "the factory resolves by name through DataProvider.qc's FactoryMap");
+        assertTrue(exists ConnectionSchemeCache::getScheme("paddle"),
+            "the scheme resolves by name through ConnectionSchemeCache.qc's SchemeMap");
+
+        # the app itself, and the factory that backs it, must agree on the scheme
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(PaddleDataProvider::AppName);
+        assertEq("paddle", app.scheme);
+        assertEq("paddle", DataProvider::getFactory("paddle").getName());
+
+        # every "<scheme>://" literal in the client module must name a scheme the connection declares, or
+        # a connection built from it is invalid and silently filtered out of the action picker
+        assertTrue(PaddleRestConnection::ConnectionScheme.schemes.paddle);
+        assertRegex("^paddle://", PaddleRestConnection::DefaultConnectionUrl);
+        assertEq("paddle", PaddleRestConnection::ConnectionScheme.base_scheme_map."https");
+    }
+
+    metadataTest() {
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(PaddleDataProvider::AppName);
+        # a short description is shown in a narrow column and is plain text, never markdown
+        assertTrue(app.short_desc.size() < 80, "the app short description is short enough to display");
+        assertFalse(app.short_desc =~ /[*`\[]/, "the app short description is plain text");
+        assertTrue(app.desc.size() > app.short_desc.size(), "the app description says more than the summary");
+        assertTrue(app.logo.val());
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        # the group has to be an AppGroup value, which the framework enforces at registration
+        assertEq(1, app.groups.size());
+        assertEq(DataProvider::AppGroup::Payments, app.groups[0].toString());
+
+        # every action registered for the app -- schema-derived, event, and the generic API call the
+        # framework adds -- must be presentable: an option with no short description shows a user a form
+        # field with nothing to explain it
+        *list<hash<DataProviderActionInfo>> all = DataProviderActionCatalog::getActions(
+            PaddleDataProvider::AppName);
+        assertEq(ExpectedActions.size() + PaddleEvents.size() + 1, all.size(),
+            "every manifest action, every event, and the generic API call action");
+        foreach hash<DataProviderActionInfo> a in (all) {
+            assertTrue(a.display_name.val(), sprintf("%y has a display name", a.action));
+            assertTrue(a.short_desc.val(), sprintf("%y has a short description", a.action));
+            assertTrue(a.desc.val(), sprintf("%y has a description", a.action));
+            assertTrue(a.short_desc.size() < 80, sprintf("%y short description fits", a.action));
+            assertFalse(a.short_desc =~ /[*`]/, sprintf("%y short description is plain text", a.action));
+            assertTrue(a.groups.val(), sprintf("%y is in a group", a.action));
+            assertTrue(exists a.output_type, sprintf("%y publishes an output type", a.action));
+            foreach hash<auto> i in ((a.options ?? {}).pairIterator()) {
+                assertTrue(i.value.display_name.val(),
+                    sprintf("%y option %y has a display name", a.action, i.key));
+                assertTrue(i.value.short_desc.val(),
+                    sprintf("%y option %y has a short description", a.action, i.key));
             }
         }
     }
