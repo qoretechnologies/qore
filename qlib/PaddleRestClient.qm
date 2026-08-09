@@ -82,8 +82,8 @@ module PaddleRestClient {
     its own API keys:
 
     |!\c instance_type|!Environment|!Target URL
-    |\c "api"|Production (the default)|\c https://api.paddle.com
-    |\c "sandbox-api"|Sandbox|\c https://sandbox-api.paddle.com
+    |\c "api"|Production|\c https://api.paddle.com
+    |\c "sandbox-api"|Sandbox (the default)|\c https://sandbox-api.paddle.com
 
     The URL is derived from \c instance_type rather than taken from the API description.  Paddle's
     OpenAPI description lists **sandbox first** in its \c servers array, so a client that adopted
@@ -124,10 +124,11 @@ public class PaddleRestClientBase {
         const InstanceSandbox = "sandbox-api";
 
         #! The default instance type
-        /** Production, matching the application this module replaces; an integration that means to
-            work against sandbox must say so.
+        /** Sandbox.  A Paddle key belongs to one environment and is rejected by the other, so the default
+            cannot be right for everyone; defaulting to sandbox means a misconfigured connection talks to
+            test data instead of billing real customers.
         */
-        const DefaultInstanceType = InstanceProduction;
+        const DefaultInstanceType = InstanceSandbox;
 
         #! The valid instance types and the environment each names
         const InstanceTypes = {
@@ -290,7 +291,9 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
                         "- `api`: **Production** — `https://api.paddle.com`\n"
                         "- `sandbox-api`: **Sandbox** — `https://sandbox-api.paddle.com`\n\n"
                         "The two environments are entirely separate: they hold different data and "
-                        "accept different API keys, so this must match the key in `token`.",
+                        "accept different API keys, so this must match the key in `token`.\n\n"
+                        "Defaults to **sandbox**, so a connection created without setting this talks to "
+                        "test data rather than billing real customers.",
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": PaddleRestClientBase::InstanceProduction,

@@ -646,10 +646,15 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         # ... and the URL is not passed on to the client, which derives it from the option
         assertFalse(exists sbx.getConnectionOptions().url);
 
-        # production is the default, matching the application this replaces
+        # sandbox is the default: a key belongs to one environment and is rejected by the other, so no
+        # default can be right for everyone -- and getting it wrong towards sandbox costs nothing, while
+        # getting it wrong towards production bills real customers
+        assertEq(PaddleRestClientBase::InstanceSandbox, PaddleRestClientBase::DefaultInstanceType);
         PaddleRestConnection dflt({"name": "d", "opts": {"token": "x"}});
-        assertEq("paddle://api.paddle.com", dflt.getUrl());
-        assertEq("https://api.paddle.com", PaddleRestClientBase::getOptions({"token": "x"}).url);
+        assertEq("paddle://sandbox-api.paddle.com", dflt.getUrl());
+        assertEq("https://sandbox-api.paddle.com", PaddleRestClientBase::getOptions({"token": "x"}).url);
+        assertEq(PaddleRestClientBase::InstanceSandbox,
+            PaddleRestConnection::ConnectionScheme.options.instance_type.default_value);
 
         # an explicit URL is honoured, but the instance type is still validated rather than ignored
         assertEq("https://example.com", PaddleRestClientBase::getOptions({"url": "https://example.com",
