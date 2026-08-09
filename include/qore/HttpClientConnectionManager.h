@@ -431,14 +431,21 @@ public:
 
     //! Called by a connection's @ref AbstractHttpPollConnectionPriv::onClosedHook
     //! when its state first transitions to CLOSED.
-    /** Removes the connection from the pool.  Does NOT @c deref the
-        connection — that is the caller's responsibility (or the
-        connection's destructor when its last ref drops).
+    /** Queues a closed-connection notification for an application thread
+        to remove from the pool and deref.  The callback deliberately never
+        takes @ref pool_lock_: protocol close paths can still be unwinding a
+        connection method while a concurrent pool checkout holds the pool
+        lock and waits for that method to finish.
+
+        Overrides must preserve this nonblocking contract: they must not take
+        @ref pool_lock_, enter a connection method, or perform destruction.
+        A connection holds its callback-lifetime lock until this method
+        returns.
 
         Called from any thread (typically the async I/O thread when an
-        idle timeout fires or the peer closes).  Bounded latency: takes
-        @ref pool_lock briefly, removes the connection from its pool key,
-        signals @ref create_cond_, returns.
+        idle timeout fires or the peer closes).  Bounded latency: copies the
+        connection's already-stable pool key under @ref closed_lock_, signals
+        @ref create_cond_, and returns.
 
         @param conn the connection that has been closed
     */
@@ -486,13 +493,25 @@ protected:
     std::condition_variable create_cond_;
     std::unordered_set<std::string> creating_;
 
-    //! Connections removed from the pool by onConnectionClosed but not yet
-    //! deref'd.  The deref is deferred because onConnectionClosed runs on
-    //! the I/O thread; a synchronous deref that triggers destruction would
-    //! call closeConnection → controller cancel from inside continuePoll,
-    //! causing a use-after-free / deadlock.  Drained by processDeferredDeref().
-    //! Protected by pool_lock_ (write).
-    std::vector<HttpClientConnectionBase*> deferred_deref_;
+    //! A close notification copied by the I/O-thread callback.
+    struct ClosedConnectionNotification {
+        HttpClientConnectionBase* conn;
+        std::string key;
+    };
+
+    //! Closed connections awaiting application-thread pool eviction.
+    /** The queue contains non-owning pointers.  A queued connection remains
+        alive through the pool's reference until @ref processClosedConnections
+        removes it.  The copied key lets the drain path find the pool entry
+        without dereferencing a stale pointer if another path already removed
+        and destroyed the connection.
+
+        This queue has a lock independent of @ref pool_lock_ so the global
+        async I/O thread never waits behind connection checkout while
+        dispatching @ref onConnectionClosed.
+    */
+    std::mutex closed_lock_;
+    std::vector<ClosedConnectionNotification> closed_connections_;
 
     //! Sticky bitmask of protocols ever added to the pool.
     /** Bit N corresponds to the underlying_type value N of
@@ -505,10 +524,10 @@ protected:
     //! Computes the pool key for the given target (with proxy info baked in).
     DLLLOCAL std::string poolKey(const char* host, int port) const;
 
-    //! Drains deferred connection derefs from onConnectionClosed.
+    //! Drains closed-connection notifications from onConnectionClosed.
     /** Must be called from an app thread, not the I/O thread.
     */
-    DLLLOCAL void processDeferredDeref(ExceptionSink* xsink);
+    DLLLOCAL void processClosedConnections(ExceptionSink* xsink);
 
     //! Creates a new connection (must be called outside @ref pool_lock_
     //! since the connection constructor blocks on the controller submit).
@@ -553,20 +572,22 @@ private:
 
     //! Internal: removes closed and (optionally) max-age-expired connections
     //! from @c pool_[key] (caller must hold the unique lock).
-    /** Closed connections are simply deref'd (their I/O thread already
-        closed them).  Max-age-expired connections are not yet closed —
-        they are pushed into @a out_to_close instead, and the caller MUST
-        invoke @ref closeAndDerefAfterLockDrop on each entry after
-        releasing @c pool_lock_ to actually trigger the close (else they
-        linger on the I/O thread's ref).
+    /** Pool references for closed connections are transferred to
+        @a out_to_deref so destruction cannot run under @c pool_lock_.
+        Max-age-expired connections are not yet closed and are transferred
+        to @a out_to_close.  After releasing @c pool_lock_, the caller MUST
+        deref every closed entry and invoke @ref closeAndDerefAfterLockDrop
+        for every max-age entry.
 
         @param key the pool key
-        @param out_to_close optional out-vector receiving max-age-expired
-            connections that need close-after-lock-drop; pass @c nullptr
-            to skip max-age handling
+        @param out_to_close out-vector receiving max-age-expired connections
+            that need close-after-lock-drop
+        @param out_to_deref out-vector receiving already-closed connections
+            whose pool references must be released after the lock drops
     */
     DLLLOCAL void evictDeadLocked(const std::string& key,
-        std::vector<HttpClientConnectionBase*>* out_to_close = nullptr);
+        std::vector<HttpClientConnectionBase*>* out_to_close,
+        std::vector<HttpClientConnectionBase*>* out_to_deref);
 
     //! Closes and derefs a connection that was identified for eviction
     //! while a pool-lock was held.  Caller must NOT hold @c pool_lock_.

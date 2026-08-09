@@ -1143,6 +1143,204 @@ public:
     HttpClientConnectionBase* last_conn = nullptr;
 };
 
+// Deterministic lock-order regression fixture.  Pool checkout calls
+// tryReserveStream() while holding pool_lock_; this connection pauses in the
+// capacity query so a concurrent close callback can be timed independently.
+class UtBlockingPoolConnection : public HttpClientConnectionBase {
+public:
+    DLLLOCAL UtBlockingPoolConnection()
+        : HttpClientConnectionBase("unit-test.invalid", 80, false) {
+    }
+
+    DLLLOCAL int getActiveStreamCount() const override {
+        std::unique_lock<std::mutex> lk(lock);
+        capacity_check_entered = true;
+        cond.notify_all();
+        cond.wait(lk, [this] { return release_capacity_check; });
+        return 0;
+    }
+
+    DLLLOCAL bool waitForCapacityCheck(int timeout_ms) const {
+        std::unique_lock<std::mutex> lk(lock);
+        return cond.wait_for(lk, std::chrono::milliseconds(timeout_ms),
+            [this] { return capacity_check_entered; });
+    }
+
+    DLLLOCAL void releaseCapacityCheck() {
+        std::lock_guard<std::mutex> lk(lock);
+        release_capacity_check = true;
+        cond.notify_all();
+    }
+
+    DLLLOCAL void fireCloseHook() {
+        onClosedHook();
+    }
+
+private:
+    mutable std::mutex lock;
+    mutable std::condition_variable cond;
+    mutable bool capacity_check_entered = false;
+    mutable bool release_capacity_check = false;
+};
+
+class UtCloseQueueManager : public HttpClientConnectionManagerBase {
+public:
+    DLLLOCAL UtCloseQueueManager(const Options& opts, ExceptionSink* xsink)
+        : HttpClientConnectionManagerBase(opts, xsink) {
+    }
+
+    DLLLOCAL void addPooled(HttpClientConnectionBase* conn) {
+        const std::string key = "unit-test.invalid:80";
+        conn->setPoolKey(key);
+        conn->setManager(this);
+        conn->ref();
+        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        pool_[key].push_back(conn);
+    }
+
+    DLLLOCAL bool reserveWhileHoldingPool(HttpClientConnectionBase* conn) {
+        std::shared_lock<std::shared_mutex> rl(pool_lock_);
+        return conn->tryReserveStream();
+    }
+
+    DLLLOCAL void drainClosed(ExceptionSink* xsink) {
+        processClosedConnections(xsink);
+    }
+};
+
+class UtBlockingCallbackManager : public HttpClientConnectionManagerBase {
+public:
+    DLLLOCAL UtBlockingCallbackManager(const Options& opts, ExceptionSink* xsink)
+        : HttpClientConnectionManagerBase(opts, xsink) {
+    }
+
+    DLLLOCAL void onConnectionClosed(HttpClientConnectionBase* conn) override {
+        {
+            std::unique_lock<std::mutex> lk(lock);
+            callback_entered = true;
+            cond.notify_all();
+            cond.wait(lk, [this] { return release_callback; });
+        }
+        HttpClientConnectionManagerBase::onConnectionClosed(conn);
+    }
+
+    DLLLOCAL bool waitForCallback(int timeout_ms) {
+        std::unique_lock<std::mutex> lk(lock);
+        return cond.wait_for(lk, std::chrono::milliseconds(timeout_ms),
+            [this] { return callback_entered; });
+    }
+
+    DLLLOCAL void releaseCallback() {
+        std::lock_guard<std::mutex> lk(lock);
+        release_callback = true;
+        cond.notify_all();
+    }
+
+private:
+    std::mutex lock;
+    std::condition_variable cond;
+    bool callback_entered = false;
+    bool release_callback = false;
+};
+
+static void ut_manager_close_callback_does_not_wait_for_pool(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtBlockingPoolConnection> conn(
+        new UtBlockingPoolConnection(), &xsink);
+    UT_ASSERT(c, !xsink, "close-queue regression fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    mgr->addPooled(*conn);
+    std::atomic<bool> reservation_done{false};
+    std::atomic<bool> callback_done{false};
+    std::thread checkout([&] {
+        (void)mgr->reserveWhileHoldingPool(*conn);
+        reservation_done.store(true, std::memory_order_release);
+    });
+
+    bool entered = conn->waitForCapacityCheck(1000);
+    UT_ASSERT(c, entered, "pool checkout reaches paused connection capacity check");
+
+    std::thread callback([&] {
+        mgr->onConnectionClosed(*conn);
+        callback_done.store(true, std::memory_order_release);
+    });
+
+    // The close callback must finish while checkout still owns pool_lock_.
+    // Before the queue-based fix it waits on pool_lock_ here, reproducing the
+    // same ABBA edge that stalls the global AsyncIoController thread.
+    for (int i = 0; i < 100 && !callback_done.load(std::memory_order_acquire); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    UT_ASSERT(c, callback_done.load(std::memory_order_acquire),
+        "close callback does not wait for the connection pool lock");
+    UT_ASSERT(c, !reservation_done.load(std::memory_order_acquire),
+        "pool checkout remains paused while close callback completes");
+
+    conn->releaseCapacityCheck();
+    checkout.join();
+    callback.join();
+    mgr->drainClosed(&xsink);
+    UT_ASSERT(c, !xsink, "application thread drains closed connection queue");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(),
+        "closed connection is removed from the pool by queue drain");
+    xsink.clear();
+}
+
+static void ut_manager_close_callback_lifetime_handshake(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtBlockingCallbackManager> mgr(
+        new UtBlockingCallbackManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtBlockingPoolConnection> conn(
+        new UtBlockingPoolConnection(), &xsink);
+    UT_ASSERT(c, !xsink, "callback-lifetime regression fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    conn->setManager(*mgr);
+    std::atomic<bool> callback_done{false};
+    std::atomic<bool> detach_started{false};
+    std::atomic<bool> detach_done{false};
+    std::thread callback([&] {
+        conn->fireCloseHook();
+        callback_done.store(true, std::memory_order_release);
+    });
+
+    bool entered = mgr->waitForCallback(1000);
+    UT_ASSERT(c, entered, "close hook enters manager callback");
+    std::thread detach([&] {
+        detach_started.store(true, std::memory_order_release);
+        conn->setManager(nullptr);
+        detach_done.store(true, std::memory_order_release);
+    });
+    for (int i = 0; i < 100
+            && !detach_started.load(std::memory_order_acquire); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    UT_ASSERT(c, detach_started.load(std::memory_order_acquire),
+        "manager detach starts while callback is active");
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    UT_ASSERT(c, !detach_done.load(std::memory_order_acquire),
+        "manager detach waits for the active close callback");
+
+    mgr->releaseCallback();
+    callback.join();
+    detach.join();
+    UT_ASSERT(c, callback_done.load(std::memory_order_acquire),
+        "close callback finishes after release");
+    UT_ASSERT(c, detach_done.load(std::memory_order_acquire),
+        "manager detach finishes after close callback");
+}
+
 static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -3205,6 +3403,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_submit_after_ssl_error_preserves_error(c);
     ut_http1_onclosed_hook_one_shot(c);
     ut_http1_onclosed_hook_app_thread_close(c);
+    ut_manager_close_callback_does_not_wait_for_pool(c);
+    ut_manager_close_callback_lifetime_handshake(c);
     ut_manager_acquire_first_request(c);
     ut_manager_pool_reuse(c);
     ut_manager_close_all(c);

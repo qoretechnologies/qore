@@ -227,7 +227,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
 }
 
 void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
-        std::vector<HttpClientConnectionBase*>* out_to_close) {
+        std::vector<HttpClientConnectionBase*>* out_to_close,
+        std::vector<HttpClientConnectionBase*>* out_to_deref) {
     auto it = pool_.find(key);
     if (it == pool_.end()) {
         return;
@@ -235,9 +236,8 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
     auto& conns = it->second;
 
     // Compute the max-age cutoff once.  Skipped entirely if max_age_ms == 0
-    // (default) or if the caller passed nullptr for out_to_close (existing
-    // call sites that only want closed-conn eviction).
-    int64_t max_age_us = (out_to_close && opts_.max_age_ms > 0)
+    // (default).
+    int64_t max_age_us = opts_.max_age_ms > 0
         ? (int64_t)opts_.max_age_ms * 1000LL : -1;
     int64_t now_us = 0;
     if (max_age_us > 0) {
@@ -249,12 +249,10 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
     for (auto read_it = conns.begin(); read_it != conns.end(); ++read_it) {
         HttpClientConnectionBase* conn = *read_it;
         if (conn->isClosed()) {
-            // Closed connection — drop our pool ref.  setManager(nullptr)
-            // is called separately by closeAndEvict / onConnectionClosed
-            // / closeAll, so we don't need to do that here.
-            ExceptionSink xs;
-            conn->deref(&xs);
-            xs.clear();
+            // Transfer the pool ref to the caller so destruction never runs
+            // under pool_lock_.  A destructor can cancel controller work and
+            // must be allowed to wait without blocking all pool operations.
+            out_to_deref->push_back(conn);
             continue;
         }
         // Born-at TTL (max_age) check.  Gated on getActiveStreamCount() == 0
@@ -329,9 +327,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
     // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
-    // Drain any deferred derefs from onConnectionClosed.  Safe here
-    // because we're on an app thread, not the I/O thread.
-    processDeferredDeref(xsink);
+    // Drain close notifications on this application thread.  The I/O-thread
+    // callback only queues notifications and never waits for pool_lock_.
+    processClosedConnections(xsink);
 
     bool ssl_required = (strcmp(scheme, "https") == 0);
 
@@ -399,15 +397,22 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // I/O thread and is unsafe under pool_lock_).  RAII guard drains
         // them on every exit path.
         std::vector<HttpClientConnectionBase*> max_age_evicted;
-        struct MaxAgeDrainGuard {
+        std::vector<HttpClientConnectionBase*> closed_evicted;
+        struct EvictionDrainGuard {
             HttpClientConnectionManagerBase* mgr;
-            std::vector<HttpClientConnectionBase*>* v;
-            ~MaxAgeDrainGuard() {
-                for (auto* c : *v) {
+            std::vector<HttpClientConnectionBase*>* to_close;
+            std::vector<HttpClientConnectionBase*>* to_deref;
+            ~EvictionDrainGuard() {
+                for (auto* c : *to_close) {
                     mgr->closeAndDerefAfterLockDrop(c);
                 }
+                ExceptionSink xs;
+                for (auto* c : *to_deref) {
+                    c->deref(&xs);
+                    xs.clear();
+                }
             }
-        } drain_guard{this, &max_age_evicted};
+        } drain_guard{this, &max_age_evicted, &closed_evicted};
 
         HttpClientConnectionBase* live_to_return = nullptr;
         {
@@ -419,7 +424,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             }
             // Pass the out-vector so max-age-expired conns are collected
             // for close-after-lock-drop instead of being kept in the pool.
-            evictDeadLocked(key, &max_age_evicted);
+            evictDeadLocked(key, &max_age_evicted, &closed_evicted);
             live_to_return = findReusableLocked(key, streaming_send);
 
             // Capacity check
@@ -932,13 +937,13 @@ found:
 
 void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     // Drain the pool into a local vector under the write lock, then
-    // process each connection without the lock held.  This avoids
-    // taking onclose_lock while holding pool_lock (which would invert
-    // the lock order from the I/O-thread close-hook path).
+    // process each connection without the lock held.  setManager(nullptr)
+    // is a callback-lifetime handshake and closeConnection can enter the
+    // controller, so neither operation may run while pool_lock_ is held.
     std::vector<HttpClientConnectionBase*> drained;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        if (shutdown_ && pool_.empty() && deferred_deref_.empty()) {
+        if (shutdown_ && pool_.empty()) {
             return;
         }
         shutdown_ = true;
@@ -948,11 +953,6 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
             }
         }
         pool_.clear();
-        // Also drain any deferred derefs
-        for (auto* conn : deferred_deref_) {
-            drained.push_back(conn);
-        }
-        deferred_deref_.clear();
     }
 
     // Wake any thread waiting in acquireConnection's create_cond_ wait.
@@ -971,6 +971,14 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
         conn->closeConnection(&local_xs);
         local_xs.clear();
         conn->deref(xsink);
+    }
+
+    // setManager(nullptr) above is a callback-lifetime handshake, so no
+    // pooled connection can append another notification after this point.
+    // Notifications are non-owning and the pool refs have now been drained.
+    {
+        std::lock_guard<std::mutex> cl(closed_lock_);
+        closed_connections_.clear();
     }
 }
 
@@ -1022,14 +1030,39 @@ int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int po
 }
 
 // ============================================================
-// processDeferredDeref — drain deferred connection derefs
+// processClosedConnections — drain I/O-thread close notifications
 // ============================================================
 
-void HttpClientConnectionManagerBase::processDeferredDeref(ExceptionSink* xsink) {
+void HttpClientConnectionManagerBase::processClosedConnections(ExceptionSink* xsink) {
+    std::vector<ClosedConnectionNotification> closed;
+    {
+        std::lock_guard<std::mutex> cl(closed_lock_);
+        closed.swap(closed_connections_);
+    }
+    if (closed.empty()) {
+        return;
+    }
+
     std::vector<HttpClientConnectionBase*> to_deref;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        to_deref.swap(deferred_deref_);
+        for (const auto& notification : closed) {
+            auto it = pool_.find(notification.key);
+            if (it == pool_.end()) {
+                continue;
+            }
+            auto& conns = it->second;
+            for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
+                if (*cit == notification.conn) {
+                    to_deref.push_back(notification.conn);
+                    conns.erase(cit);
+                    if (conns.empty()) {
+                        pool_.erase(it);
+                    }
+                    break;
+                }
+            }
+        }
     }
     for (auto* conn : to_deref) {
         conn->deref(xsink);
@@ -1044,33 +1077,15 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
     if (!conn) {
         return;
     }
-    // Remove the connection from its pool entry using the stashed key
-    // for O(1) map lookup (the connection within the vector is still
-    // a linear scan, but vectors are tiny — typically 1-3 entries per key).
-    {
-        std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        const std::string& key = conn->getPoolKey();
-        if (!key.empty()) {
-            auto it = pool_.find(key);
-            if (it != pool_.end()) {
-                auto& conns = it->second;
-                for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
-                    if (*cit == conn) {
-                        conns.erase(cit);
-                        if (conns.empty()) {
-                            pool_.erase(it);
-                        }
-                        // Drop the pool's ref later from an app thread.
-                        // Keep this append under pool_lock_: closeAll()
-                        // and processDeferredDeref() drain the same vector
-                        // under this lock, and concurrent I/O-thread close
-                        // callbacks can otherwise corrupt the vector.
-                        deferred_deref_.push_back(conn);
-                        break;
-                    }
-                }
-            }
-        }
+    // Never take pool_lock_ here.  This callback normally runs while the
+    // global async I/O thread is still unwinding a protocol connection.  A
+    // concurrent checkout can hold pool_lock_ while entering that connection;
+    // waiting for the pool here would create an ABBA deadlock and stall every
+    // async server/client using the controller.
+    const std::string& key = conn->getPoolKey();
+    if (!key.empty()) {
+        std::lock_guard<std::mutex> cl(closed_lock_);
+        closed_connections_.push_back({conn, key});
     }
     // Wake any thread waiting in create_cond_ for this key — we don't
     // know the key, so notify all.  Acceptable: spurious wakeups just

@@ -188,8 +188,10 @@ public:
         @c manager->onConnectionClosed(this) so the manager can evict the
         connection from its pool promptly.
 
-        Lock ordering: this method takes @c onclose_lock briefly to set
-        the back-pointer.  See section 7.2 of
+        Callback lifetime: @ref onClosedHook holds @c onclose_lock while it
+        invokes the manager's nonblocking notification hook.  Therefore
+        @c setManager(nullptr) does not return until any callback that already
+        observed the manager has completed.  See section 7.2 of
         @c design/http-client-manager-cpp-port.md for the full ordering
         rules.
 
@@ -598,12 +600,13 @@ protected:
     */
     bool streaming_send_active = false;
 
-    //! Lock protecting @ref manager_.
-    /** This is the OUTERMOST lock in the close-hook lock-ordering chain:
-        @c onclose_lock → manager.pool_lock → controller.lock.  Held only
-        briefly to read or write @ref manager_; @ref onClosedHook releases
-        it BEFORE invoking the manager method to avoid lock inversion
-        with app-thread paths that take @c pool_lock first.
+    //! Lock protecting @ref manager_ and its callback lifetime.
+    /** @ref onClosedHook holds this lock through the manager notification.
+        The notification only takes the manager's independent close-queue
+        mutex and never @c pool_lock, so there is no connection/pool lock
+        inversion.  A manager clearing the pointer waits here for a callback
+        that already observed it, preventing a callback into destroyed
+        manager state.
     */
     mutable QoreThreadLock onclose_lock;
 

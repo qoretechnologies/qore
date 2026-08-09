@@ -494,42 +494,52 @@ from the C++ base can switch from its current Qore-side `onComplete`
 eviction path to `onClosedHook` and drop the
 `handleConnectionResult`/`onComplete` MRO override machinery.
 
-### 7.2 Lock ordering
+### 7.2 Lock isolation and ordering
 
-Connection close-hook callbacks acquire locks in this strict order:
+The global async I/O thread must never wait for the connection-pool lock.
+Pool checkout holds `pool_lock` while it asks a connection to reserve
+capacity; a close callback can run while that connection operation is still
+active.  Taking `pool_lock` from the callback creates an ABBA edge that can
+stall the global controller and every HTTP listener using it.
 
-```
-Http1ClientConnection::onclose_lock        (per connection)
-   ↓
-HttpClientConnectionManagerBase::pool_lock (per manager — shared_mutex)
-   ↓
-AsyncIoControllerPriv::m                   (controller)
-```
+Close notification therefore uses an isolated queue:
 
-No path may take these locks in any other order.  In particular:
+1. `onClosedHook` holds the connection's `onclose_lock` and invokes
+   `manager_->onConnectionClosed(this)`.
+2. `onConnectionClosed` may take only the manager's short-lived
+   `closed_lock`.  It copies the stable `{connection pointer, pool key}` into
+   `closed_connections`, releases that lock, signals creation waiters, and
+   returns.  It must not take `pool_lock`, enter another connection method,
+   dereference the connection, or enter the controller.
+3. An application thread swaps the notification queue under `closed_lock`
+   and releases it before taking `pool_lock`.  It removes matching entries
+   under `pool_lock`, releases that lock, and only then dereferences the
+   transferred pool references.
+4. Shutdown likewise drains the pool under `pool_lock`, releases it, and only
+   then clears each connection's manager pointer, closes, and dereferences it.
 
-- The connection's `onClosedHook` reads `manager_` under `onclose_lock`,
-  then **releases** `onclose_lock` before invoking
-  `manager_->onConnectionClosed(this)` — this prevents lock inversion
-  for app-thread paths that take `pool_lock` first.
-- The manager destructor takes `pool_lock` (drains pool into a local
-  vector), **releases** it, then walks each connection and takes
-  `onclose_lock` to null the back-pointer.  The locks are never held
-  simultaneously, so there is no inversion with the I/O-thread path.
+No path holds `closed_lock` while acquiring `pool_lock` or `onclose_lock`, and
+no path closes or destroys a connection while holding `pool_lock`.  Controller
+operations therefore remain outside all manager locks.
 
 ### 7.3 Manager / connection lifetime contract
 
 To prevent UAF when the I/O thread fires `onClosedHook` concurrently
 with manager destruction:
 
-1. Manager destructor MUST call `connection->setManager(nullptr)` on
-   every connection it has ever owned BEFORE freeing manager state.
-2. `setManager(nullptr)` takes the connection's `onclose_lock`, so any
-   in-flight hook invocation is either fully complete (manager pointer
-   read; method already finished) or has not yet read the pointer
-   (will see nullptr after `setManager(nullptr)` returns).
-3. After `setManager(nullptr)` returns for all connections, the manager
-   may safely free its state.
+1. `onClosedHook` holds `onclose_lock` while it reads the raw manager
+   pointer and throughout the nonblocking manager callback.
+2. The pool owns a reference to every queued connection.  A notification
+   copies the pool key as well as the non-owning pointer, so a later drain can
+   look up the entry without dereferencing a pointer already removed by a
+   competing path.
+3. Manager shutdown MUST call `connection->setManager(nullptr)` on every
+   drained connection before freeing manager state.  The setter takes
+   `onclose_lock`, so it cannot return while a callback that observed the
+   manager is still executing.
+4. After every back-pointer handshake has completed and the drained pool
+   references have been released, shutdown clears the remaining non-owning
+   notifications.  The manager may then safely free its state.
 
 This is the "back-pointer-nulling-under-lock" pattern.  Connection
 back-pointers are raw (no ref counting) — refs would be circular and
@@ -617,13 +627,14 @@ Reuse Safety (curl-aligned model)".  Pieces specific to the C++ manager:
   `getActiveStreamCount() == 0`, expired connections are pushed into
   the out-vector instead of being kept in the pool.
 
-- **`closeAndDerefAfterLockDrop` + RAII `MaxAgeDrainGuard`**.
+- **`closeAndDerefAfterLockDrop` + RAII eviction drain guard**.
   `closeConnection` reaches into the I/O thread and is unsafe under
   `pool_lock_` (same constraint as the existing shutdown branch in
   `acquireConnectionImpl` line ~360).  The drain guard captures the
   `max_age_evicted` vector and runs `setManager(nullptr) + closeConnection
   + deref` for each entry on every exit path of step 3 (shutdown,
-  live-found, capacity-error, fall-through).
+  live-found, capacity-error, fall-through).  Already-closed connections are
+  transferred to a separate vector and dereferenced after the same lock drop.
 
 - **No in-band stale-detect timer** in `Http1ClientPollOperationPriv`.
   An earlier design had a 500ms (later 5s) `STALE_DETECT_TIMEOUT_MS` in
@@ -665,11 +676,11 @@ production code.
 
 ### Concurrency between pool operations and poll-op continuePoll
 The pool manipulates connection state from worker threads;
-`continuePoll` runs on the I/O thread.  The full lock ordering for the
-combined stack is documented in section 7.2 — `onclose_lock` (per
-connection) → `pool_lock` (per manager) → controller `m`.
-Any deviation deadlocks. The test matrix must include concurrent
-acquire/release under load.
+`continuePoll` runs on the I/O thread.  Section 7.2 isolates I/O-thread close
+notification from the pool: `onclose_lock` may nest only the independent
+`closed_lock`, while pool and controller work occurs later with neither lock
+held.  The test matrix must include concurrent acquire/release and prove that
+a close callback completes while another thread owns `pool_lock`.
 
 ### Ownership lifetime
 `HttpClientConnectionBase` holds a `QoreObject* poll_op_obj` ref
