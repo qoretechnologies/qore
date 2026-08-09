@@ -676,7 +676,7 @@ public class LinkedInRestConnection inherits LinkedInRestConnectionBase {
         const DefaultUrl = "linkedin://api.linkedin.com";
 
         #! The URL used when a connection for this app is created with a generated URL
-        /** Qorus creates an app connection with \c auto_url by reading a URL constant off the
+        /** A consuming platform creates an app connection with \c auto_url by reading a URL constant off the
             connection class by reflection, and it looks for \c DefaultConnectionUrl before
             \c DefaultUrl; stating it explicitly keeps that resolution independent of the class
             hierarchy.

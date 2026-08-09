@@ -191,7 +191,7 @@ public class PaddleProductCreatedEventDataProvider inherits PaddleBaseEventDataP
 
     #! Returns the example entity carried by this event type
     hash<auto> getExampleObject() {
-        return {"id": "pro_01h8b8b8b8b8b8b8b8b8b8b8b8", "name": "Qorus Enterprise", "type": "standard", "tax_category": "saas", "status": "active", "description": "Enterprise plan", "created_at": "2026-08-09T12:00:00.000000Z", "updated_at": "2026-08-09T12:00:00.000000Z"};
+        return {"id": "pro_01h8b8b8b8b8b8b8b8b8b8b8b8", "name": "Acme Pro", "type": "standard", "tax_category": "saas", "status": "active", "description": "Enterprise plan", "created_at": "2026-08-09T12:00:00.000000Z", "updated_at": "2026-08-09T12:00:00.000000Z"};
     }
 }
 
@@ -232,7 +232,7 @@ public class PaddleProductUpdatedEventDataProvider inherits PaddleBaseEventDataP
 
     #! Returns the example entity carried by this event type
     hash<auto> getExampleObject() {
-        return {"id": "pro_01h8b8b8b8b8b8b8b8b8b8b8b8", "name": "Qorus Enterprise", "type": "standard", "tax_category": "saas", "status": "archived", "description": "Enterprise plan", "created_at": "2026-08-09T12:00:00.000000Z", "updated_at": "2026-08-09T14:00:00.000000Z"};
+        return {"id": "pro_01h8b8b8b8b8b8b8b8b8b8b8b8", "name": "Acme Pro", "type": "standard", "tax_category": "saas", "status": "archived", "description": "Enterprise plan", "created_at": "2026-08-09T12:00:00.000000Z", "updated_at": "2026-08-09T14:00:00.000000Z"};
     }
 }
 

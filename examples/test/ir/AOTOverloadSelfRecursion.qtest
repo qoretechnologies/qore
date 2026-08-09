@@ -125,6 +125,6 @@ printf(\"%s\\n\", resolve_value(\"test\"));
 assertInterpretedAndAot("direct", direct_overload_code, "ok:test\n",
     "direct overload-to-overload call");
 assertInterpretedAndAot("global-method", global_method_overload_code, "ok:test\n",
-    "Qorus-shaped overload-to-overload call");
+    "real-world-shaped overload-to-overload call");
 
 printf("AOT overload self-recursion regression OK\n");

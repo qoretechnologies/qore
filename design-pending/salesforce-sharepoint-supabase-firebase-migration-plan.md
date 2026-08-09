@@ -220,7 +220,7 @@ practice that means:
 `OneDriveDataProvider`, `DropboxDataProvider`, `GoogleDriveDataProvider` and
 `AwsS3DataProvider` (through `AwsRestClient`, which `%requires(reexport)
 RestClientIo`) are all already on this footing. A provider that blocks a thread
-per request does not scale to the connection counts Qorus runs, and it cannot
+per request does not scale to the connection counts a deployment runs, and it cannot
 participate in the multiplexed H2/H3 connection pooling the async controller
 provides.
 

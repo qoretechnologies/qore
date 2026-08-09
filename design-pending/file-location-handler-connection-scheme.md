@@ -507,9 +507,9 @@ combined A–G sequencing.
    (`conn://s3/key{container=bucket}`). The proposal supports both, with the
    connection's own configured bucket as the default; if only one is wanted,
    the option form is the less ambiguous.
-3. **Qorus interaction.** Qorus has its own connection namespace and its own
+3. **Platform interaction.** A consuming platform has its own connection namespace and its own
    file-location conventions; whether `conn://` should resolve against the
-   Qorus connection registry directly or through `QORE_CONNECTION_PROVIDERS`
+   platform connection registry directly or through `QORE_CONNECTION_PROVIDERS`
    needs a decision from that side.
 4. **Google Drive read.** `get_file` returns metadata only — there is no action
    that returns bytes. Resolved by the migration: the native

@@ -24,7 +24,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] Options with finite allowed values use `allowed_values` field explicitly (never describe allowed values as text in `desc` or `short_desc`)
 
 ### OAuth2 (if applicable)
-- [ ] `required_options` names the OAuth2 option set as an alternative — this is what declares OAuth2 support and lets Qorus supply the client ID and secret from its API servers
+- [ ] `required_options` names the OAuth2 option set as an alternative — this is what declares OAuth2 support and lets the platform supply the client ID and secret from its API servers
 - [ ] `oauth2_client_id` / `oauth2_client_secret` are **not** hard-coded or defaulted in the module (they come from the API servers, so the secret never reaches the instance)
 - [ ] `oauth2_grant_type` **defaulted** — without one the flow never runs and the connection silently has no token (symptom: ping returns HTTP 401)
 - [ ] `oauth2_auth_url` / `oauth2_token_url` defaulted and verified against a connection known to work — services often run more than one OAuth2 flow with different endpoints
@@ -54,7 +54,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] `groups` assigned appropriately (see [AppGroup Reference](#appgroup-reference) below)
 
 ### Visibility (the app does not appear until the index is rebuilt)
-- [ ] After installing, the index was rebuilt: `sudo make install` -> `copy-qore-modules` -> `qctl update-index` -> restart Qorus, **in that order**
+- [ ] After installing, the index was rebuilt: `sudo make install` -> `copy-qore-modules` -> `qctl update-index` -> restart the platform, **in that order**
 - [ ] `qdp @<AppName>` lists the app and its actions
 - [ ] The index build logged no `has no module path` or `unregistered scheme` error for the app — both skip it silently and leave the exit status 0
 - [ ] If the app is missing, checked whether `QORE_PROVIDER_INDEX_DIR` is set: when it is, tooling reads the index and never scans modules, so a working `load_module()` proves registration but not visibility
@@ -592,14 +592,14 @@ Within the `DataProvider` namespace, the shorter `AppGroup::XYZ` form works.
 | `AccountingErp` | Accounting & ERP | Zoho Books, FreshBooks, Wave, Cin7, Unleashed, Zoho Invoice, Business Central |
 | `AiLlm` | AI & Language Models | OpenAI, MCP, AI/ML tools |
 | `Analytics` | Analytics & Reporting | DataProviderML, analytics platforms |
-| `ApiIntegration` | API & Integration | REST client, SOAP, MCP, Qorus remote, generic API tools |
+| `ApiIntegration` | API & Integration | REST client, SOAP, MCP, remote-instance, generic API tools |
 | `CloudStorage` | Cloud Storage & File Management | WebDAV, cloud file services |
 | `CrmSales` | CRM & Sales Management | Salesforce, Dynamics CRM/CDS |
 | `CustomerSupport` | Customer Support & Helpdesk | ServiceNow |
 | `Databases` | Databases & Backend Services | DB, ElasticSearch, Redis, Memcached, MongoDB |
 | `DataTransformation` | Data Transformation | CSV, FixedLength, EDIFACT, Generator, Tar, Zip |
 | `DesignCreative` | Design & Creative Tools | ImageMagick |
-| `DevOps` | DevOps & Cloud Infrastructure | Qorus integration engine |
+| `DevOps` | DevOps & Cloud Infrastructure | integration engine |
 | `DocumentSigning` | Document Signing & Contracts | DocuSign, signing services |
 | `Documents` | Documents & Documentation | Word, PDF |
 | `Ecommerce` | E-commerce Platforms | Zoho Inventory, Square |

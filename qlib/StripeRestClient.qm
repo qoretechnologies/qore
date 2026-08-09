@@ -327,7 +327,7 @@ public class StripeRestConnection inherits RestClient::RestConnection {
                 "Stripe is a trademark of Stripe, Inc.",
             "cls": Class::forName("StripeRestConnection"),
             # a connection is valid three ways: a key, a bearer token supplied directly, or the OAuth2
-            # flow.  Declaring the OAuth2 alternative is what tells Qorus this connection supports
+            # flow.  Declaring the OAuth2 alternative is what declares that this connection supports
             # OAuth2, so that the client ID and secret are supplied from the API servers rather than
             # having to be configured - and, since those are supplied, never exposed to this instance
             "required_options": "api_key|token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"

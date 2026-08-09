@@ -211,7 +211,7 @@ module PaddleDataProvider {
 
     @subsection paddledataprovider_ex_provider Getting the Data Provider
 
-    From a connection, which is how a Qorus interface reaches it:
+    From a connection, which is how a data-provider-aware caller reaches it:
 
     @code{.py}
 %requires ConnectionProvider

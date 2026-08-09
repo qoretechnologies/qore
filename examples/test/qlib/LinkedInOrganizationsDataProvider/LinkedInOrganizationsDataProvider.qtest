@@ -1108,7 +1108,7 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
         AbstractConnection conn = get_connection(conn_name);
         if (conn.getType() != "linkedindma") {
             # a connection still serving the TypeScript application reads as
-            # "tsrest-linkedinorganizations" inside Qorus and as "invalid" outside it, since that
+            # "tsrest-linkedinorganizations" inside the platform and as "invalid" outside it, since that
             # scheme is not registered here; either way it is not what these tests can drive
             throw "OPTION-ERROR", sprintf("connection %y is type %y, but these tests need a native "
                 "\"linkedindma\" connection on the \"linkedindma://\" scheme.  A connection still "

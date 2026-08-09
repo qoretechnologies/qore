@@ -26,7 +26,7 @@ invisible until the types are used.
 
 | Decision | Rationale |
 |---|---|
-| Action IDs keep the TypeScript app's `snake_case` (`list_products`, not `list-products`) | Action identity is what existing workflows call. `qorus-api`'s `QorusSaasAdminRestHandler` resolves five of them by name as child providers. The Stripe app's IDs were schema-derived, so it had no such constraint; Paddle's were hand-written and in use. |
+| Action IDs keep the TypeScript app's `snake_case` (`list_products`, not `list-products`) | Action identity is what existing workflows call, and a downstream consumer resolves five of them by name as child providers. The Stripe app's IDs were schema-derived, so it had no such constraint; Paddle's were hand-written and in use. |
 | 24 actions, at parity with the app replaced | The schema exposes 99 operations across 70 paths. Expanding the exported set is a separate, reviewable decision; the port's job was to replace, not to grow. |
 | A listing returns Paddle's `{data, meta}` envelope; a single-entity action returns the entity | `meta.pagination` carries the cursor without which the next page cannot be fetched, and the app it replaced discarded it. A single-entity `meta` holds only a request ID, so there is nothing to keep. |
 | `archive_product` is a declared variant of `update_product` | Both are `PATCH /products/{product_id}`. `RestSchemaActions` refuses to export an operation twice, which catches a copy-and-paste slip; the deliberate case is now declarable with `variant_of` rather than the guard being removed. |

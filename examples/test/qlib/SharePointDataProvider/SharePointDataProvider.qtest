@@ -302,7 +302,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         # A stored connection is rebuilt through the config-hash constructor, and that path
         # normalizes the URL in a *static* - which cannot dispatch on the subclass.  A static that
         # read DefaultUrl directly therefore rewrote a SharePoint connection's scheme back to
-        # "onedrive://", and Qorus persisted the rewritten URL: the connection then reloaded as a
+        # "onedrive://", and the platform persisted the rewritten URL: the connection then reloaded as a
         # OneDrive connection, silently, with the SharePoint app unreachable through it.
         hash<auto> config = {
             "name": "sp-stored",
@@ -320,7 +320,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         assertEq("sharepoint://graph.microsoft.com", stored.getUrl(),
             "a stored SharePoint connection keeps its own scheme");
 
-        # Qorus creates an app connection with auto_url by reading a URL constant off the connection
+        # A consuming platform creates an app connection with auto_url by reading a URL constant off the connection
         # class by reflection, preferring DefaultConnectionUrl over DefaultUrl so that a class in a
         # hierarchy where DefaultUrl is shadowed can state its URL unambiguously.  This class does
         # shadow it, so it must say so explicitly rather than depend on which constant a hierarchy

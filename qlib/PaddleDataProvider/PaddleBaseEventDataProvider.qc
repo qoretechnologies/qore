@@ -219,7 +219,7 @@ public class PaddleBaseEventDataProvider inherits AbstractDataProvider, DataProv
         on_error rethrow $1.err, sprintf("%s (while registering a Paddle notification destination for %y)",
             $1.desc, getPaddleEventType());
         hash<auto> resp = rest.restPost(NotificationSettingPath, {
-            "description": sprintf("Qorus %s", getEventId()),
+            "description": sprintf("%s %s", PaddleDataProvider::AppName, getEventId()),
             "type": NotificationTypeUrl,
             "destination": url,
             "subscribed_events": (getPaddleEventType(),),

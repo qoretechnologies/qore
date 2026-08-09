@@ -620,7 +620,7 @@ public class SharePointRestConnection inherits OneDriveRestConnection {
         const DefaultUrl = "sharepoint://graph.microsoft.com";
 
         #! The URL used when a connection for this app is created with a generated URL
-        /** Qorus creates an app connection with \c auto_url by reading a URL constant off the
+        /** A consuming platform creates an app connection with \c auto_url by reading a URL constant off the
             connection class **by reflection**, and it looks for \c DefaultConnectionUrl before
             \c DefaultUrl - precisely so that a class in a hierarchy where \c DefaultUrl is
             shadowed can state its URL unambiguously rather than depending on which of the two

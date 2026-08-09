@@ -46,7 +46,7 @@ module-v8 app is limited to `salesforce` → `SalesforceRestDataProvider`,
 
 ### 0.1 The ts-proxy tax
 
-Every app with *any* TypeScript in it keeps Qorus on the `ts-proxy` path: an
+Every app with *any* TypeScript in it keeps the platform on the `ts-proxy` path: an
 out-of-process Node/V8 child spoken to over a UNIX socket with a length-prefixed
 YAML protocol (`module-v8/design/ts-proxy.md`). Actions pay a serialization
 round-trip per call; **event actions are worse** — each one requires a dedicated
@@ -269,7 +269,7 @@ unreachable. Coverage percentage on its own is therefore **not** a migration
 argument.
 
 > **Caveat — that injection is currently failing for the TypeScript apps.**
-> Loading connections in a live Qorus tree logs, for every TS-backed app:
+> Loading connections in a live deployed tree logs, for every TS-backed app:
 >
 > ```
 > DataProviderActionCatalog: failed to auto-register generic API call action for

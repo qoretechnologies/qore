@@ -216,7 +216,7 @@ twice.
 and shadows `DefaultUrl`, three separate readers get the *base* class's value
 because a Qore constant reference resolves lexically, not virtually: the inherited
 `setUpdateOptionsCode()` (which **persists** the wrong URL back to the
-configuration store), the static config normalizer, and Qorus's
+configuration store), the static config normalizer, and the platform's
 `DataProviderAppRestClass::getAutoConnectionUrl()`, which reads the constant by
 reflection and prefers `DefaultConnectionUrl` over `DefaultUrl` precisely to let a
 shadowing subclass disambiguate. This cost hours in phase SP; see commit
@@ -300,7 +300,7 @@ Qore has **most** of this already:
 What is missing is narrow and specific:
 
 - **nothing registers app *actions* from a schema.** That is
-  `TypeScriptActionInterface::getRestSchema()`, which lives in Qorus's qlib, and
+  `TypeScriptActionInterface::getRestSchema()`, which lives in the platform's qlib, and
   the `openapi_type_overrides` mechanism it consumes has **zero consumers in the
   qore repo**.
 

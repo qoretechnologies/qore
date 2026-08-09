@@ -23,7 +23,7 @@
     That is only ever correct when the callee is the very variant being lowered.  Detection used to
     compare the QoreFunction (and, when unset, the base name); all overloads of a function share one
     QoreFunction - and one FunctionEntry - so a call to a sibling overload was flagged and the
-    compiled body re-entered itself with the sibling's arguments.  In Qorus that surfaced as a
+    compiled body re-entered itself with the sibling's arguments.  In a large application that surfaced as a
     SIGSEGV in qore_rt_resolve_global_slot_aot() from get_sql_table_system_trans(string, string),
     which delegates to its (AbstractDatasource, string) sibling.
 

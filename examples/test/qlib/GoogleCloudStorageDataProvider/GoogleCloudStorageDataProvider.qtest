@@ -360,7 +360,7 @@ public class GoogleCloudStorageDataProviderTest inherits QUnit::Test {
         assertEq(True, conn.hasDataProvider());
         assertEq("gcs://storage.googleapis.com",
             GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection::DefaultUrl);
-        # Qorus reads this by reflection and prefers it over DefaultUrl
+        # the consuming platform reads this by reflection and prefers it over DefaultUrl
         assertEq(GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection::DefaultUrl,
             GoogleCloudStorageRestClient::GoogleCloudStorageRestConnection::DefaultConnectionUrl,
             "the reflected connection URL matches the default URL");
@@ -1269,7 +1269,7 @@ public class GoogleCloudStorageDataProviderTest inherits QUnit::Test {
         assertEq(True, info.ok, "ping succeeded");
         assertTrue(info.time > 0s, "the ping reports how long it took");
 
-        # getDataProvider() is how Qorus reaches this app, and a connection carries the whole REST
+        # getDataProvider() is how a consuming platform reaches this app, and a connection carries the whole REST
         # option set (url, timeouts, oauth2_*, logger, ...) while the provider declares only its own;
         # passing them all made this fail outright with an "invalid options" constructor error
         AbstractDataProvider dp = conn.getDataProvider();

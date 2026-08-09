@@ -198,7 +198,7 @@ public class StripeBaseEventDataProvider inherits AbstractDataProvider, DataProv
             "url": url,
             "enabled_events": (getStripeEventType(),),
             "api_version": StripeSchema::Provenance.api_version,
-            "description": sprintf("Qorus %s", getEventId()),
+            "description": sprintf("%s %s", StripeDataProvider::AppName, getEventId()),
         });
         endpoint_id = resp.body.id;
         webhook_secret = resp.body.secret;

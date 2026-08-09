@@ -54,8 +54,8 @@ application:
 
 ### OAuth2: Declare It, Do Not Configure It
 
-Qorus performs OAuth2 through its API servers, which hold the client ID and secret for every supported
-app, so that **the OAuth2 secret is never exposed to a Qorus instance**. What the module supplies is
+The consuming platform performs OAuth2 through its API servers, which hold the client ID and secret for
+every supported app, so that **the OAuth2 secret is never exposed to an instance**. What the module supplies is
 everything else about the flow; what it must not supply is the credentials:
 
 ```qore
@@ -78,7 +78,7 @@ const ConnectionScheme = <ConnectionSchemeInfo>{
 ```
 
 `required_options` is the declaration: names separated by commas are required together, alternatives
-are separated by `|`. Listing the OAuth2 set as one alternative is what tells Qorus this connection can
+are separated by `|`. Listing the OAuth2 set as one alternative is what declares that this connection can
 be authorized through the API servers; the client ID and secret then arrive from
 `dataprovider/apps/<App>/oauth2_clients` and never live in the module or the connection.
 
@@ -267,7 +267,7 @@ const FactoryMap = {
 };
 ```
 
-**Without this entry:** Module loads fine but doesn't appear in Qorus apps list.
+**Without this entry:** Module loads fine but doesn't appear in the apps list.
 
 ### App Registration
 
@@ -303,7 +303,7 @@ qdp @MyService
 
 `QORE_PROVIDER_INDEX_DIR` decides which path is taken:
 
-- **set** (the normal Qorus configuration): tools read the index and do **not** scan modules. A newly
+- **set** (the normal deployed configuration): tools read the index and do **not** scan modules. A newly
   installed app is invisible until the index is rebuilt.
 - **unset**: tools call `DataProvider::registerKnownFactories()`, which loads every module named in
   `DataProvider::FactoryMap`, so a correctly registered app is found immediately.
@@ -321,9 +321,9 @@ printf("%y\n", DataProviderActionCatalog::getApp("MyService").display_name);
 
 ```bash
 sudo make install                 # in the qore repo: modules into the system qlib
-copy-qore-modules                 # into the Qorus qlib; qmods are no longer live from the build tree
+copy-qore-modules                 # into the deployed qlib; qmods are no longer live from the build tree
 qctl update-index                 # rebuild the index
-# restart Qorus to pick up the new modules
+# restart the platform to pick up the new modules
 ```
 
 Running `qctl update-index` before the modules are in place produces an index without the app and no
@@ -937,7 +937,7 @@ For dynamic options, implement `getRequestTypeWithDataImpl()`.
 > `hasGenericApiCallChildImpl()` to return `False`. See
 > [Generic "Make an API call" Action](generic-api-call-action.md) for the
 > full design (reflective discovery, injection point, builder hooks,
-> request/response schema, opt-out, and the Qorus UI encoding boundary).
+> request/response schema, opt-out, and the UI encoding boundary).
 
 ### DPAT_EVENT
 
@@ -1153,8 +1153,8 @@ private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
 }
 ```
 
-Provider implementations should not unwrap Qorus UI `{type, value}` hashes.
-That encoding belongs to the Qorus `context=ui` REST/API boundary; by the time
+Provider implementations should not unwrap UI `{type, value}` hashes.
+That encoding belongs to the `context=ui` REST/API boundary; by the time
 these methods are called, `options`, request data, and action input should
 already be plain Qore values.
 
@@ -1623,7 +1623,7 @@ rest.post(path, encoded_body, NOTHING, {"Content-Type": "application/x-www-form-
 ```
 
 ### 9. Missing FactoryMap entry
-Module works when loaded directly but doesn't appear in Qorus apps. Add to `DataProvider.qc` -> `FactoryMap`.
+Module works when loaded directly but doesn't appear in the apps list. Add to `DataProvider.qc` -> `FactoryMap`.
 
 ### 10. Allowed values in option descriptions
 Never describe allowed values in the `desc` or `short_desc` text. Always declare them explicitly using the `allowed_values` field in `DataProviderOptionInfo`, `ConnectionOptionInfo`, or `ActionOptionInfo`. Text descriptions of allowed values cannot be parsed by the UI for dropdown generation.

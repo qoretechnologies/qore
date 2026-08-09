@@ -604,8 +604,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! URL substitution info applied to oauth2_alt_token_url by external tooling
             /** Config-level pass-through; mirrors @ref RestClient::RestClient's field of the
-                same name.  Returned by @ref getOAuth2Options() for external programs (Qorus
-                connection management, etc.) to read.  Not consumed internally.
+                same name.  Returned by @ref getOAuth2Options() for external connection-management
+                tooling to read.  Not consumed internally.
             */
             *hash<auto> oauth2_alt_url_subst;
 
@@ -2893,8 +2893,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
 
             if (!req_error_passthru && raw.status_code >= 300) {
-                # Unwrap server-produced typed errors: Qorus and similar
-                # services return error responses as {err, desc, arg}
+                # Unwrap server-produced typed errors: some services return
+                # error responses as {err, desc, arg}
                 # hashes so callers can catch specific typed exceptions
                 # (e.g. SQLUTIL-ERROR) instead of generic REST-RESPONSE-ERROR.
                 # Mirrors the behaviour of the synchronous

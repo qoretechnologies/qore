@@ -1393,7 +1393,7 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - the \c qore-data-provider-i18n catalog check now validates every discovered sibling translation against
         current producer metadata, rejecting removed message ids and stale source text while allowing partial
         catalogs and identical brand names or cognates; it can also recursively validate catalog trees from Qore,
-        external modules, and Qorus without hardcoded provider or locale lists; owner-scoped extraction makes source
+        external modules, and downstream platforms without hardcoded provider or locale lists; owner-scoped extraction makes source
         checks independent of ambient modules, rejects orphaned catalog domains, and correctly separates action
         contributions when multiple modules share an application catalog domain
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,

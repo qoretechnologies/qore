@@ -297,7 +297,7 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
         const DefaultUrl = "gcs://storage.googleapis.com";
 
         #! The default connection URL, read by reflection when a connection URL is generated
-        /** Identical to @ref DefaultUrl here.  It is declared because Qorus's
+        /** Identical to @ref DefaultUrl here.  It is declared because the consuming platform's
             \c DataProviderAppRestClass::getAutoConnectionUrl() reads it by reflection and prefers it
             over \c DefaultUrl: a Qore constant reference resolves *lexically*, so a subclass that
             shadowed \c DefaultUrl would not change what inherited code sees, and this constant is

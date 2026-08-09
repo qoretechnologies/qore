@@ -873,7 +873,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
 
     authenticationTest() {
         # Stripe authenticates either with a key or through its OAuth2 flow, and both have to work
-        # without the user configuring anything: Qorus supplies the client ID and secret from its API
+        # without the user configuring anything: the platform supplies the client ID and secret from its API
         # servers, so what this module must get right is the rest of the OAuth2 configuration
 
         # a key: sent as a bearer token, with no OAuth2 configuration left to demand a client ID
@@ -922,7 +922,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         assertEq("https://api.stripe.com/v1/oauth/token", copts.oauth2_token_url);
 
         # the scheme must declare that OAuth2 is one way to configure this connection: that declaration
-        # is what makes Qorus offer the flow and supply the client ID and secret from its API servers,
+        # is what makes a platform offer the flow and supply the client ID and secret from its API servers,
         # so that the secret is never exposed to the instance
         hash<ConnectionSchemeInfo> scheme = StripeRestConnection::ConnectionScheme;
         assertTrue(scheme.required_options.val());
@@ -959,7 +959,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderWebhook::registerWebhookApis(
                 auto sub (hash<auto> config) {
                     created = config;
-                    return {"url": "https://qorus.example.com/webhook/1", "ctx": "ctx-1"};
+                    return {"url": "https://webhooks.example.com/1", "ctx": "ctx-1"};
                 },
                 sub (hash<auto> info) {
                     deleted = info;
@@ -981,7 +981,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         hash<auto> body = rest.last().body;
         assertEq(("charge.succeeded",), body.enabled_events);
         assertEq(StripeSchema::Provenance.api_version, body.api_version);
-        assertEq("https://qorus.example.com/webhook/1", body.url);
+        assertEq("https://webhooks.example.com/1", body.url);
         assertRegex("charge-succeeded", body.description);
         # the callback the framework will deliver to
         assertEq("POST", created.method);
@@ -994,7 +994,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         ep.stopEvents();
         assertEq("DELETE", rest.last().method);
         assertEq("/v1/webhook_endpoints/we_test_1", rest.last().path);
-        assertEq("https://qorus.example.com/webhook/1", deleted.url);
+        assertEq("https://webhooks.example.com/1", deleted.url);
 
         # stopping twice must not try to delete twice
         rest.reset();
