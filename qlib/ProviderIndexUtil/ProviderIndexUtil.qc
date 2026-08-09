@@ -1437,26 +1437,36 @@ public class ProviderIndexUtil {
         if (!ENV{ProviderIndexEnvVar}.val()) {
             return;
         }
+        *string path;
         try {
-            string path = getIndexPath(type);
+            path = getIndexPath(type);
             *hash<auto> rv = parse_yaml(File::readTextFile(path));
             if (type == "data") {
                 remove index_read_error;
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
+            # an index that has not been created yet is not an error; anything else (ex: a permissions
+            # problem or a corrupt file) is recorded so that callers can detect the degraded state
+            bool missing = ex.arg == ENOENT;
             if (type == "data") {
-                # an index that has not been created yet is not an error; anything else (ex: a permissions
-                # problem or a corrupt file) is recorded so that callers can detect the degraded state
-                if (ex.arg == ENOENT) {
+                if (missing) {
                     remove index_read_error;
                 } else {
                     index_read_error = sprintf("%s: %s", ex.err, ex.desc);
                 }
             }
             if (!quiet) {
-                log(LoggerLevel::LevelError, "Ignoring error reading data provider %s index: %s: %s",
-                    type, ex.err, ex.desc);
+                if (missing) {
+                    # the normal state before the first write; reporting it as an error would make every
+                    # fresh deployment look broken
+                    log(LoggerLevel::LevelInfo, "No %s provider index at %y yet", type, path ?? "<unknown>");
+                } else {
+                    # the file is named because without it neither a permissions problem nor a corrupt file
+                    # can be acted on
+                    log(LoggerLevel::LevelError, "Ignoring error reading the %s provider index %y: %s: %s",
+                        type, path ?? "<unknown>", ex.err, ex.desc);
+                }
             }
         }
 %endif

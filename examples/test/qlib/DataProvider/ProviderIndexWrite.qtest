@@ -77,9 +77,22 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
 
         assertNothing(ProviderIndexUtil::getIndexReadError(), "no read error before the index is read");
 
+        # capture log messages so that the level and the text of the report can be asserted, instead of the
+        # report going to stderr where it is indistinguishable from a real failure in the test output
+        IndexLogCapture log();
+        ProviderIndexUtil::setGlobalLogger(log);
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        string path = sprintf("%s%sqore-data-index.yaml", dir, DirSep);
+
+        # an index that has not been written yet is the normal state and must not be reported as an error
+        assertNothing(ProviderIndexUtil::readDataProviderIndex(), "a missing index reads as no index");
+        assertNothing(ProviderIndexUtil::getIndexReadError(), "a missing index is not a read error");
+        assertEq((), log.errors(), "a missing index is not logged as an error");
+
         # write a corrupt index file
         File f();
-        f.open2(path: sprintf("%s%sqore-data-index.yaml", dir, DirSep), flags: O_CREAT | O_TRUNC | O_WRONLY);
+        f.open2(path: path, flags: O_CREAT | O_TRUNC | O_WRONLY);
         f.write("this is: not: a valid: index\n\t- broken\n");
         f.close();
 
@@ -88,6 +101,12 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
 
         *string err = ProviderIndexUtil::getIndexReadError();
         assertTrue(err.val(), "a corrupt index is reported as a read error");
+        assertRegex("YAML-PARSER-ERROR", err, "the read error names the parse failure");
+
+        list<string> errors = log.errors();
+        assertEq(1, errors.size(), "the corrupt index is logged exactly once as an error");
+        assertTrue(errors[0].find(path) > -1, "the error names the unreadable index file");
+        assertRegex("YAML-PARSER-ERROR", errors[0], "the error names the parse failure");
     }
 
     #! The index directory must be created with the execute bit set, otherwise it cannot be used at all
@@ -223,5 +242,30 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
             "the cached app preserves its explicit presentation source locale");
         assertEq(action, ProviderIndexUtil::tryGetApproximateAppAction(app, action).action,
             "the registered action is visible in the cache");
+    }
+}
+
+#! Captures index log messages so that a test can assert what was reported and at which level
+class IndexLogCapture inherits Qore::Logger::Logger {
+    private {
+        list<hash<auto>> messages();
+        Mutex mtx();
+    }
+
+    constructor() : Qore::Logger::Logger("index-test", LoggerLevel::LevelAll) {
+    }
+
+    logArgs(Qore::Logger::LoggerLevel level, string message, *softlist<auto> args) {
+        AutoLock al(mtx);
+        push messages, {
+            "level": level.getValue(),
+            "message": args ? vsprintf(message, args) : message,
+        };
+    }
+
+    #! Returns all messages logged at error level or above
+    list<string> errors() {
+        AutoLock al(mtx);
+        return map $1.message, messages, $1.level >= LoggerLevel::LevelError.getValue();
     }
 }
