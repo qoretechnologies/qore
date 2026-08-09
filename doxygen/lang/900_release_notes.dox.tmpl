@@ -1402,9 +1402,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         discovers new provider owner modules before their first catalog exists and preserves the actual owner of
         registrations performed by a module loaded from a deferred provider initializer; installed owner fragments
         compose those shared-domain contributions without duplicating source text between repositories
-      - the user-module catalog install helper accepts explicit source directories and package components, allowing
-        products with nonstandard module layouts to install the same owner-qualified, composable catalog fragments
-        as Qore and external modules
+      - the user-module catalog install helper accepts explicit source directories, package components, and install
+        destinations, allowing products with nonstandard module layouts and installation prefixes to install the
+        same owner-qualified, composable catalog fragments as Qore and external modules
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
