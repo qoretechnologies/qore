@@ -441,7 +441,7 @@ int sub getValue() { return 1; }
         # %else with invalid trailing text (not a comment)
         {
             Program p(PO_NEW_STYLE);
-            assertThrows("PARSE-EXCEPTION", NOTHING, \p.parse(), ("
+            assertThrows("PARSE-EXCEPTION", "invalid trailing text after %else", \p.parse(), ("
 %new-style
 %ifdef TestDefine
 int sub getValue() { return 1; }
@@ -451,11 +451,26 @@ int sub getValue() { return 2; }
 ", "else-invalid-text-test"));
         }
 
+        # the same, with code outside the conditional block: the error must come from the directive
+        # itself and not from the source unit ending up empty because everything was skipped
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "invalid trailing text after %else", \p.parse(), ("
+%new-style
+int sub other() { return 0; }
+%ifdef TestDefine
+int sub getValue() { return 1; }
+%else junk
+int sub getValue() { return 2; }
+%endif
+", "else-invalid-text-with-code-test"));
+        }
+
         # %endif with invalid trailing text (not a comment)
         {
             Program p(PO_NEW_STYLE);
             p.define("TestDefine", True);
-            assertThrows("PARSE-EXCEPTION", NOTHING, \p.parse(), ("
+            assertThrows("PARSE-EXCEPTION", "invalid trailing text after %endif", \p.parse(), ("
 %new-style
 %ifdef TestDefine
 int sub getValue() { return 1; }

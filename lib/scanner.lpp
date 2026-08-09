@@ -808,6 +808,27 @@ static void strip_trailing_comment(QoreString& str) {
     }
 }
 
+// Reports invalid trailing text after a conditional parse directive that takes no argument.
+// %else and %endif accept only a comment after the directive; anything else is a typo or a misplaced
+// argument.  It has to be diagnosed here, because the scanner silently skips every line it does not
+// recognize while looking for the end of a conditional block, so an unrecognized directive line would
+// otherwise disappear without a trace.
+// text is the whole matched line and directive is the directive with its leading '%'.
+static void check_cond_directive_tail(YYLTYPE* yylloc, const char* text, const char* directive) {
+    const char* p = text + strlen(directive);
+    while (*p == ' ' || *p == '\t' || *p == '\r') {
+        ++p;
+    }
+    // no argument, a line comment, or a block comment: all valid
+    if (!*p || *p == '#' || (p[0] == '/' && p[1] == '*')) {
+        return;
+    }
+    QoreString tail(p);
+    tail.trim();
+    parse_error(*get_loc(yylloc), "invalid trailing text after %s: '%s'; only a comment can follow this "
+        "parse directive", directive, tail.c_str());
+}
+
 static bool parse_is_defined(YYLTYPE* yylloc, const char* pstr, bool def = true) {
     QoreString str(pstr);
     str.trim();
@@ -1700,7 +1721,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%else{WS}*(#.*|\/\*.*)?$                            {
+^%else({WS}+[^\n\r]*)?$                              {
+                                            check_cond_directive_tail(yylloc, yytext, "%else");
                                             if (!parse_cond_can_else(get_loc(yylloc))) {
                                                 if (!parse_cond_else()) {
                                                     parse_error(*get_loc(yylloc), "%%else found without %%if");
@@ -1713,7 +1735,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             }
                                         }
 <p_skip_to_endif>{
-   ^%endif{WS}*(#.*|\/\*.*)?$                        {
+   ^%endif({WS}+[^\n\r]*)?$                          {
+                                            check_cond_directive_tail(yylloc, yytext, "%endif");
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
                                                 BEGIN(INITIAL);
@@ -1723,7 +1746,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
 #endif
                                         }
-   ^%else{WS}*(#.*|\/\*.*)?$                         {
+   ^%else({WS}+[^\n\r]*)?$                           {
+                                            check_cond_directive_tail(yylloc, yytext, "%else");
                                             // Check for duplicate %else at the current level
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 if (parse_cond_has_else()) {
@@ -1789,8 +1813,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             }
                                             // If not at top level, just continue skipping (stay in current state)
                                         }
-   ^%else{WS}*(#.*|\/\*.*)?$                         {
+   ^%else({WS}+[^\n\r]*)?$                           {
                                             //printd(5, "p_skip_to_endif_or_else: found %else\n");
+                                            check_cond_directive_tail(yylloc, yytext, "%else");
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 // Check for duplicate %else
                                                 if (parse_cond_has_else()) {
@@ -1802,7 +1827,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 }
                                             }
                                         }
-   ^%endif{WS}*(#.*|\/\*.*)?$                   {
+   ^%endif({WS}+[^\n\r]*)?$                     {
+                                            check_cond_directive_tail(yylloc, yytext, "%endif");
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
                                                 BEGIN(INITIAL);
@@ -1890,7 +1916,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%endif{WS}*(#.*|\/\*.*)?$                           parse_cond_pop(get_loc(yylloc));
+^%endif({WS}+[^\n\r]*)?$                             {
+                                            check_cond_directive_tail(yylloc, yytext, "%endif");
+                                            parse_cond_pop(get_loc(yylloc));
+                                        }
 ^%include{WS}*$                         { parse_error(*get_loc(yylloc), "missing argument to %%include"); }
 ^%include{WS}+                          BEGIN(incl);
 <exec_class_state>{
@@ -3297,7 +3326,11 @@ hash\<{WORD}\>\{                        {
 <block_comment1>{
       \*                                BEGIN(block_comment2);
       <<EOF>>                           {
-                                           // do not throw an extra exception here; "unexpected $end" raised due to premature EOF
+                                           // the parser cannot report this: any source unit with at least one
+                                           // top-level command parses successfully no matter what the scanner
+                                           // was in the middle of when the input ran out
+                                           parse_error(*get_loc(yylloc), "unexpected end of file in block comment "
+                                               "(unterminated \"/*\"; missing \"*/\")");
                                            QORE_FLEX_DO_EOF;
                                         }
       [^\*]                             // ignore other input
@@ -3306,7 +3339,8 @@ hash\<{WORD}\>\{                        {
       \/                                BEGIN(INITIAL);
       \*                                // ignore
       <<EOF>>                           {
-                                           // do not throw an extra exception here; "unexpected $end" raised due to premature EOF
+                                           parse_error(*get_loc(yylloc), "unexpected end of file in block comment "
+                                               "(unterminated \"/*\"; missing \"*/\")");
                                            QORE_FLEX_DO_EOF;
                                         }
       [^\/\*]                           BEGIN(block_comment1);

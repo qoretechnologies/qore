@@ -16,6 +16,7 @@ public class EmptyStmtTest inherits QUnit::Test {
         addTestCase("topLevelSemicolon", \topLevelSemicolon(), NOTHING);
         addTestCase("emptyBlock", \emptyBlock(), NOTHING);
         addTestCase("semicolon", \semicolon(), NOTHING);
+        addTestCase("noTopLevelCommands", \noTopLevelCommands(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -43,5 +44,31 @@ public class EmptyStmtTest inherits QUnit::Test {
         Program p();
         p.replaceParseOptions(PO_DEFAULT);
         p.parse("while (True) ;", "");
+    }
+
+    #! a source unit with no top-level commands at all is valid
+    /** comments and parse directives are consumed by the scanner, so a file holding nothing but those
+        reaches the parser as an empty token stream; such a file must parse, and must not disturb the
+        code parsed around it
+    */
+    noTopLevelCommands() {
+        Program p();
+        p.replaceParseOptions(PO_DEFAULT);
+        p.parsePending("# nothing but a comment\n", "comment-only");
+        p.parsePending("%strict-args\n", "directive-only");
+        p.parsePending("int sub answer() { return 42; }\n", "code");
+        p.parseCommit();
+        assertEq(42, p.callFunction("answer"));
+
+        # an empty source unit is equally valid on its own
+        Program p2();
+        p2.replaceParseOptions(PO_DEFAULT);
+        p2.parse("# only a comment\n", "comment-only");
+
+        # a real syntax error is still reported: accepting an empty token stream must not make the
+        # parser accept a partial one
+        Program p3();
+        p3.replaceParseOptions(PO_DEFAULT);
+        assertThrows("PARSE-EXCEPTION", "syntax error", \p3.parse(), ("int sub ;\n", "bad-code"));
     }
 }

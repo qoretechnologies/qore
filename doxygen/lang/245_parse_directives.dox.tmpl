@@ -1128,7 +1128,8 @@ i+ =4;
     n/a
 
     @par Description:
-    Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
+    Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)\n\n
+    This directive takes no argument; only a comment can follow it on the same line.  Any other trailing text is a parse error.
 
     @since %Qore 0.8.3
 
@@ -1297,7 +1298,8 @@ sub validate_input(int value, int max_value) {
     n/a
 
     @par Description:
-    Closes a conditionally-parsed block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
+    Closes a conditionally-parsed block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)\n\n
+    This directive takes no argument; only a comment can follow it on the same line.  Any other trailing text is a parse error.
 
     @since %Qore 0.8.3
 

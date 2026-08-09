@@ -2844,6 +2844,14 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 #endif
 }
 %%
+// the start symbol; a source unit with no top-level commands at all is valid.  Comments and parse
+// directives are consumed by the scanner, so a file holding nothing but those (a script that only
+// declares its %requires, a .qc file reduced to comments) reaches the parser as an empty token stream
+program:
+    /* empty */
+    | top_level_commands
+    ;
+
 top_level_commands:
     top_level_command
     | top_level_commands top_level_command

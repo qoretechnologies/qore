@@ -557,11 +557,20 @@ class ProgramTest inherits QUnit::Test {
         }
 
         {
+            # issue #2175: both of the following will crash without the fix
+            # a line comment that is not terminated by a newline is valid; the source unit holds no
+            # top-level commands at all, which is also valid
             Program p5(PO_NEW_STYLE);
-            # issue #2175: the following code will crash without the fix
-            assertThrows("PARSE-EXCEPTION", \p5.parse(), ("#", ""));
-            # issue #2175: the following code will crash without the fix
-            assertThrows("PARSE-EXCEPTION", \p5.parse(), ("/*", ""));
+            p5.parse("#", "");
+            assertNothing(p5.run(), "a source unit holding only a comment parses and runs");
+
+            # an unterminated block comment is an error, and is reported by the scanner: the parser
+            # cannot see it, since a source unit with any top-level command at all parses regardless
+            Program p6(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "unterminated", \p6.parse(), ("/*", ""));
+            Program p7(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "unterminated", \p7.parse(),
+                ("int sub f() { return 1; }\n/*", ""));
         }
 
         {
