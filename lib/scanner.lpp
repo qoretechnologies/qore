@@ -723,7 +723,7 @@ static bool angle_balanced(const char* p) {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires_state regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -1026,8 +1026,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 }
 ^%endtry{WS}*$                          parse_try_module_dec(get_loc(yylloc));
 ^%requires{WS}*$                        { parse_error(*get_loc(yylloc), "missing argument to %%requires"); }
-^%requires                              BEGIN(requires);
-<requires>[^\n\r]+                      {
+^%requires                              BEGIN(requires_state);
+<requires_state>[^\n\r]+                {
                                            char* cn = trim_inplace(yytext);
                                            if (!cn)
                                               parse_error(*get_loc(yylloc), "missing argument to %%requires");
@@ -1043,7 +1043,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            }
                                            BEGIN(INITIAL);
                                         }
-<requires><<EOF>>                       {
+<requires_state><<EOF>>                 {
                                            QORE_FLEX_DO_EOF
                                         }
 ^%module-cmd{WS}*$                      { parse_error(*get_loc(yylloc), "missing argument to %%module-cmd"); }
