@@ -251,12 +251,16 @@ public class WebhookSignature {
         return diff == 0;
     }
 
-    #! Parses a comma-separated key/value signature header
+    #! Parses a key/value signature header
     /** Several services present a signature as a list of \c "key=value" pairs, where one key carries the
         time the payload was signed and another carries the signature itself, repeated when more than one
         secret is currently valid (\c "t=1614556800,v1=5257a8...,v1=a1b2c3...").
 
+        The separator differs between services — Stripe uses a comma, Paddle a semicolon
+        (\c "ts=1614556800;h1=5257a8...") — so it is a parameter rather than an assumption.
+
         @param header the header value
+        @param separator the character separating one pair from the next
 
         @return the values for each key, in the order they appeared
 
@@ -266,9 +270,9 @@ hash<string, list<string>> parts = WebhookSignature::parseKeyValueHeader(hdr);
 *string timestamp = parts.t[0];
     @endcode
     */
-    static hash<string, list<string>> parseKeyValueHeader(string header) {
+    static hash<string, list<string>> parseKeyValueHeader(string header, string separator = ",") {
         hash<string, list<string>> rv = {};
-        foreach string part in (header.split(",")) {
+        foreach string part in (header.split(separator)) {
             part = trim(part);
             int pos = part.find("=");
             if (pos <= 0) {

@@ -143,6 +143,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("overlay presentation", \overlayTest());
         addTestCase("overlay errors", \overlayErrorTest());
         addTestCase("manifest errors", \manifestErrorTest());
+        addTestCase("narrowed operation variants", \variantTest());
         addTestCase("operation id drift", \driftTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("action registration", \actionRegistrationTest());
@@ -557,6 +558,41 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         ));
         assertThrows("REST-SCHEMA-ACTION-ERROR", "is exported twice", \makeSet(), (
             (entry("a", "GET", "/status"), entry("b", "GET", "/status")),
+        ));
+    }
+
+    variantTest() {
+        # a second action on the same operation is allowed when it says it is a deliberately narrowed
+        # variant, so that an application can export both a general action and a one-job version of it
+        RestSchemaActionSet aset = makeSet((
+            entry("update-widget", "POST", "/widgets"),
+            entry("archive-widget", "POST", "/widgets", {"variant_of": "update-widget"}),
+        ));
+        assertEq(("update-widget", "archive-widget"), aset.getActionNames());
+        assertEq("POST", aset.getOperationEx("archive-widget").getMethod());
+        assertEq("/widgets", aset.getOperationEx("archive-widget").getPath());
+
+        # the guard still catches the accident it exists for, and says how to declare the exception
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "variant_of", \makeSet(), (
+            (entry("update-widget", "POST", "/widgets"), entry("archive-widget", "POST", "/widgets")),
+        ));
+
+        # a variant of an action that does not exist is a typo, not an export
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "not declared before it in the manifest", \makeSet(), (
+            (entry("update-widget", "POST", "/widgets"),
+                entry("archive-widget", "POST", "/widgets", {"variant_of": "no-such-action"})),
+        ));
+
+        # naming a variant base declared later cannot work, because it has not been seen yet
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "not declared before it in the manifest", \makeSet(), (
+            (entry("archive-widget", "POST", "/widgets", {"variant_of": "update-widget"}),
+                entry("update-widget", "POST", "/widgets")),
+        ));
+
+        # the marker must not be usable to wave through an unrelated duplicate
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "a variant must narrow the same operation", \makeSet(), (
+            (entry("get-status", "GET", "/status"),
+                entry("list-categories", "GET", "/categories", {"variant_of": "get-status"})),
         ));
     }
 

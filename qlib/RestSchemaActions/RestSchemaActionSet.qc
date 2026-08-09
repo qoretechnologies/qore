@@ -101,17 +101,36 @@ public class RestSchemaActionSet {
         self.refdata = refdata ?? {};
 
         hash<string, string> seen_ops = {};
+        # manifest entries by action ID, for resolving "variant_of" against what came before
+        hash<string, hash<RestSchemaActionInfo>> variant_base = {};
         foreach hash<RestSchemaActionInfo> info in (manifest) {
             if (exists opmap{info.action}) {
                 throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y is declared more than once in the manifest",
                     info.action);
             }
             string opkey = info.method.upr() + " " + info.path;
-            if (exists seen_ops{opkey}) {
+            if (exists seen_ops{opkey} && !info.variant_of.val()) {
                 throw "REST-SCHEMA-ACTION-ERROR", sprintf("operation \"%s\" is exported twice: as action %y and "
-                    "as action %y", opkey, seen_ops{opkey}, info.action);
+                    "as action %y; if the second is a deliberately narrowed variant of the first, say so with "
+                    "\"variant_of\"", opkey, seen_ops{opkey}, info.action);
             }
-            seen_ops{opkey} = info.action;
+            if (info.variant_of.val()) {
+                *hash<RestSchemaActionInfo> base = variant_base{info.variant_of};
+                if (!base) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y declares itself a variant of action %y, "
+                        "which is not declared before it in the manifest", info.action, info.variant_of);
+                }
+                if (base.method.upr() != info.method.upr() || base.path != info.path) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y declares itself a variant of action %y, "
+                        "but exports \"%s\" where %y exports \"%s %s\"; a variant must narrow the same "
+                        "operation", info.action, info.variant_of, opkey, info.variant_of,
+                        base.method.upr(), base.path);
+                }
+            }
+            variant_base{info.action} = info;
+            if (!exists seen_ops{opkey}) {
+                seen_ops{opkey} = info.action;
+            }
             opmap{info.action} = new RestSchemaActionOperation(schema, info);
         }
         checkReferenceData();

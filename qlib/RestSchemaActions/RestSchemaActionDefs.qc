@@ -258,6 +258,18 @@ public hashdecl RestSchemaActionInfo {
     */
     *string operation_id;
 
+    #! Names the action this one is a deliberately narrowed variant of
+    /** An operation may normally be exported only once, so that a copy-and-paste slip in the manifest is
+        caught rather than producing two actions nobody meant to have.  Setting this declares the exception:
+        a second action on the same operation whose overlay narrows it to one job — an "archive" action that
+        is an update with the status fixed, say — where the general action remains available for everything
+        else.
+
+        The named action must be in the same manifest and must resolve to the same method and path, so that
+        the marker cannot be used to wave through an unrelated duplicate.
+    */
+    *string variant_of;
+
     #! The action display name
     string display_name;
 
