@@ -1,13 +1,19 @@
 # Migration candidates: module-v8 TypeScript apps → native Qore providers
 
-**Status:** Analysis / design proposal. Tracked by
+**Status:** Analysis. Tracked by
 [#5388](https://github.com/qoretechnologies/qore/issues/5388), branch
 `feature/5388_app_migration`.
 
-**Companions:**
-- [`cloud-storage-qlib-modules.md`](cloud-storage-qlib-modules.md) — the completed
-  S3 / Google Drive / Dropbox migration ([#5386](https://github.com/qoretechnologies/qore/issues/5386))
-- [`file-app-improvements-implementation-plan.md`](file-app-improvements-implementation-plan.md)
+**Most of the ranking in §4 has since been executed** — Salesforce, SharePoint, the
+generalized schema-driven action registration (shipped as `RestSchemaActions`), and
+Google Cloud Storage are all done, as are LinkedIn, Paddle and Stripe. Each is
+recorded where it was built: the modules' own documentation, and
+[`design/data-provider-rest-schema-apps.md`](../design/data-provider-rest-schema-apps.md)
+for the schema-driven path.
+
+What is still live here is the **method**, not the queue: the acceptance bar below,
+the coverage measurement in §3, the override-layer cost in §3.3, and §5 on what
+migration does not buy. Read §4 as the record of a decision already carried out.
 
 **Question answered:** now that `AwsS3DataProvider`, `GoogleDriveDataProvider` and
 `DropboxDataProvider` are native qlib modules and the corresponding TS apps have
@@ -205,10 +211,10 @@ or get anything out. Any migration should add the object surface
 
 `apps/firebase` has a real object surface — `upload-file`, `delete-file`,
 `list-files-in-bucket`, `get-file-metadata`, `list-buckets` — plus Auth and FCM
-actions. It is a legitimate `registerAppFileApi()` candidate. The known TS
-weaknesses from §1.2 of `cloud-storage-qlib-modules.md` apply here too: content
-crosses the proxy base64-inflated in a JSON field, and there is no streaming or
-resumable upload.
+actions. It is a legitimate `registerAppFileApi()` candidate. The TS weaknesses that
+motivated the S3 / Drive / Dropbox migration apply here too: content crosses the
+proxy base64-inflated in a JSON field, and there is no streaming or resumable
+upload.
 
 ### 2.4 Canva and Contentful — asset APIs
 
@@ -356,8 +362,7 @@ should that judgement change.
 
 **Architectural constraint on every candidate above:** all I/O runs on the async
 socket I/O controller — data providers hold `RestClientIo`, never `RestClient`.
-See §0.9 of the implementation plan, which also records that
-`SalesforceRestDataProvider` does not yet comply.
+Every migrated module now complies, `SalesforceRestDataProvider` included.
 
 ## 5. What migration does not buy
 

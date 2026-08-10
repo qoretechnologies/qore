@@ -18,8 +18,7 @@ set-wise and aggregate cases:
   `DBMS_STATS.SET_TABLE_PREFS`.
 
 Partition architecture and its sole future roadmap live in
-[`design/sqlutil-partitions.md`](../design/sqlutil-partitions.md) and
-[`sqlutil-partitions-deferred.md`](sqlutil-partitions-deferred.md).
+[`design/sqlutil-partitions.md`](../design/sqlutil-partitions.md).
 
 ## Remaining generic questions
 

@@ -30,10 +30,11 @@ the Google Cloud Storage provider that should replace Firebase if demand appears
 **Analysis this plan implements:**
 [`module-v8-migration-candidates.md`](module-v8-migration-candidates.md).
 
-**Precedent:** [`file-app-improvements-implementation-plan.md`](file-app-improvements-implementation-plan.md)
-(issue [#5386](https://github.com/qoretechnologies/qore/issues/5386)) — the
-completed S3 / Google Drive / Dropbox migration. Its ground rules apply here
-unchanged unless restated.
+**Precedent:** the completed S3 / Google Drive / Dropbox migration
+(issue [#5386](https://github.com/qoretechnologies/qore/issues/5386)); its
+architecture is recorded in
+[`design/file-location-connections.md`](../design/file-location-connections.md).
+Its ground rules apply here unchanged unless restated.
 
 **Normative references.** Every phase conforms to these:
 - `design/qore-module-structure.md`
@@ -189,9 +190,8 @@ No phase is complete until all of:
 
 ### 0.8 Live testing is mandatory
 
-`file-app-improvements-implementation-plan.md` §"What live testing found that
-offline testing had not" is the precedent: every defect in that table passed a
-full offline suite first. Each phase here needs a live tenant —  a Salesforce
+The #5386 migration is the precedent: every defect its live testing found had
+passed a full offline suite first. Each phase here needs a live tenant —  a Salesforce
 developer org with CDC enabled, a SharePoint site with a document library, a
 Supabase project, a Firebase project. Budget for it up front; a green offline
 suite is not evidence.
@@ -653,8 +653,8 @@ never delete one).
 `delete_records`, `search_options` and `expressions` over list items. Do not
 drop this: implement the `AbstractDataProvider` record API over
 `/lists/{list-id}/items` with a `SharePointRecordIterator` that fetches each
-page as it is reached (the pattern in `file-app-improvements-implementation-plan.md`
-tranche 4). Map the TS `expressions` to DPQL-compatible search options.
+page as it is reached, as the #5386 migration did. Map the TS `expressions` to
+DPQL-compatible search options.
 
 ### SP.6 Events
 
@@ -862,8 +862,8 @@ previous plan. This reuses Google's OAuth2 refresh handling wholesale.
 > A `GoogleCloudStorage` module should therefore follow the **VertexAI /
 > DocumentAI** precedent — `GcpAuth` plus a dedicated client — not
 > `GoogleRestClient`'s `api_profile`. Interactive OAuth2 can be added as a
-> secondary grant later; the reverse is far harder. See
-> `gcs-linkedin-stripe-migration-plan.md` phase G.
+> secondary grant later; the reverse is far harder. This is what
+> `GoogleCloudStorageRestClient` does.
 
 Narrow the scopes while porting: `devstorage.full_control` *and*
 `read_write` *and* `cloud-platform` is broader than any action needs.

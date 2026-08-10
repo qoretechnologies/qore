@@ -1628,6 +1628,20 @@ on_exit rest.setSerialization(old);
 rest.post(path, encoded_body, NOTHING, {"Content-Type": "application/x-www-form-urlencoded"});
 ```
 
+**`setSerialization()` mutates client-wide state shared between provider objects and
+threads**, so even the save/restore form above is only safe when the client is not
+shared. Prefer `restDoRawRequest()`, which takes the body and content type per call.
+
+### 8a. Binary bodies must never go through the JSON codec
+A connection with `data = "json"` base64-encodes a `binary` body into a JSON string,
+and the server stores the corrupted result **and returns success** — 256 bytes became
+346 in the OneDrive case (fixed in `8c11c406b`). There is no error to notice; the
+damage is only visible on download.
+
+Send binary through `restDoRawRequest()`. Do not reach for
+`setSerialization("bin")`: besides the shared-state problem above, it changes the
+codec for every request the client makes, including concurrent ones on other threads.
+
 ### 9. Missing FactoryMap entry
 Module works when loaded directly but doesn't appear in the apps list. Add to `DataProvider.qc` -> `FactoryMap`.
 
