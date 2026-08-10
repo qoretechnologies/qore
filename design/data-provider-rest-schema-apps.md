@@ -231,10 +231,21 @@ none says so. A generated listing action therefore cannot ask for page 2 or for 
 default page of 10, which is a regression against any application that paged by hand — and it is invisible
 until somebody opens a dropdown against a workspace with more than ten repositories in it.
 
-Measure this the same way as operation coverage: count the collection operations that declare a paging
-parameter, not just the ones that exist. Where the count is low the document needs an import-time
-normalization step before the path is usable, which is a decision to take before the port starts rather
-than after the manifest is written.
+Measure this over the **exported** operations, not the whole document, and ignore single-entity reads —
+a `GET /pages/{id}` has nothing to page. Across the five applications evaluated for #5394 the measurement
+separates cleanly:
+
+| app | exported collection GETs that can be paged |
+|---|---|
+| GitLab | all of them (`page`, `per_page`) |
+| Confluence | all of them (`limit`, `cursor`) |
+| GitHub | all of them (`page`, `per_page`) |
+| Bitbucket | **3 of 16** — only the three code-search endpoints |
+
+So this is not a general property of published descriptions; it is one vendor's description being wrong in
+one specific way. Where the count is low the document needs an import-time normalization step before the
+path is usable at all, which is a decision to take before the port starts rather than after the manifest is
+written.
 
 **Almost no identifier is global, so a dropdown usually needs scope.** A branch belongs to a repository, a
 page to a space, a member to a workspace. `RestSchemaReferenceDataInfo::options_from` forwards named options
