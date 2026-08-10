@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ActionCatalogDeferredOwnerModule
+
+%exec-class ActionCatalogDeferredOwnerTest
+
+const DeferredOwnerModule = "ActionCatalogDeferredOwnerModule";
+const NestedOwnerModule = "ActionCatalogNestedOwnerModule";
+const DeferredApp = "QoreTestDeferredOwnerApp";
+const NestedApp = "QoreTestNestedOwnerApp";
+const OwnedAction = "owned-action";
+const NestedAction = "nested-action";
+const ForeignAction = "foreign-action";
+
+#! Verifies module ownership of apps and actions registered from a deferred initialization closure
+/** ActionCatalogDeferredOwnerModule registers its app pending; initializing it loads
+    ActionCatalogNestedOwnerModule, which registers an app of its own plus an action on the
+    deferring module's app.  Each registration must be attributed to the module that made it.
+*/
+class ActionCatalogDeferredOwnerTest inherits QUnit::Test {
+    private {
+        hash<string, hash<auto>> deferred_contributions;
+        hash<string, hash<auto>> nested_contributions;
+    }
+
+    constructor() : Test("DataProvider action catalog deferred owner test", "1.0") {
+        addTestCase("a nested module load does not inherit the deferring module's ownership",
+            \nestedModuleLoadDoesNotInheritOwnership());
+        addTestCase("an action-only contribution is owned by its own module",
+            \actionOnlyContributionIsOwnedByItsOwnModule());
+        addTestCase("app module paths name the registering module",
+            \appModulePathsNameTheRegisteringModule());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # initializing the pending app runs the closure that loads the nested module
+        assertEq(DeferredApp, DataProviderActionCatalog::getAppEx(DeferredApp).name);
+        deferred_contributions = ActionCatalogDeferredOwnerTest::byApp(
+            DataProviderActionCatalog::getPresentationContributionsForModule(DeferredOwnerModule));
+        nested_contributions = ActionCatalogDeferredOwnerTest::byApp(
+            DataProviderActionCatalog::getPresentationContributionsForModule(NestedOwnerModule));
+    }
+
+    static hash<string, hash<auto>> byApp(list<hash<auto>> contributions) {
+        return map {
+            $1.app.name: $1 + {
+                "action_names": map $1.action, $1.actions,
+            },
+        }, contributions;
+    }
+
+    nestedModuleLoadDoesNotInheritOwnership() {
+        assertEq((DeferredApp,), keys deferred_contributions);
+        assertTrue(deferred_contributions{DeferredApp}.include_app);
+        assertTrue(inlist(OwnedAction, deferred_contributions{DeferredApp}.action_names));
+
+        # the nested module's app must not be reported as owned by the deferring module
+        assertFalse(exists deferred_contributions{NestedApp});
+        assertTrue(exists nested_contributions{NestedApp});
+        assertTrue(nested_contributions{NestedApp}.include_app);
+        assertTrue(inlist(NestedAction, nested_contributions{NestedApp}.action_names));
+    }
+
+    actionOnlyContributionIsOwnedByItsOwnModule() {
+        # the nested module contributes an action to the deferring module's app; it owns the action
+        # but not the app
+        assertTrue(exists nested_contributions{DeferredApp});
+        assertFalse(nested_contributions{DeferredApp}.include_app);
+        assertEq((ForeignAction,), nested_contributions{DeferredApp}.action_names);
+
+        # and the deferring module must not claim it
+        assertFalse(inlist(ForeignAction, deferred_contributions{DeferredApp}.action_names));
+    }
+
+    appModulePathsNameTheRegisteringModule() {
+        assertEq((NestedOwnerModule + ".qm",),
+            (map basename($1), DataProviderActionCatalog::getModulePathsForApp(NestedApp)));
+        assertEq((DeferredOwnerModule + ".qm",),
+            (map basename($1), DataProviderActionCatalog::getModulePathsForApp(DeferredApp)));
+    }
+}

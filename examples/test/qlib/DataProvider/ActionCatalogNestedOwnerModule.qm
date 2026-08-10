@@ -1,0 +1,58 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ActionCatalogNestedOwnerModule.qm - test module loaded from a deferred app initialization closure
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module ActionCatalogNestedOwnerModule {
+    version = "1.0";
+    desc = "test module registering apps and actions from a nested module load";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        # this app belongs to this module, even though it is registered while the deferred
+        # initialization of ActionCatalogDeferredOwnerModule's app is running
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": "QoreTestNestedOwnerApp",
+            "display_name": "Nested Owner App",
+            "short_desc": "App owned by the nested module",
+            "desc": "App owned by the nested module",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "nested-owner.svg",
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": "QoreTestNestedOwnerApp",
+            "path": "/nested-action",
+            "action": "nested-action",
+            "display_name": "Nested Action",
+            "short_desc": "Action owned by the nested module",
+            "desc": "Action owned by the nested module",
+            "action_code": DPAT_API,
+            "output_type": new QoreHashDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "value": new QoreDataField("value", "Value", new QoreStringDataType()),
+            }),
+        });
+
+        # an action-only contribution to an app owned by another module
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": "QoreTestDeferredOwnerApp",
+            "path": "/foreign-action",
+            "action": "foreign-action",
+            "display_name": "Foreign Action",
+            "short_desc": "Action contributed to another module's app",
+            "desc": "Action contributed to another module's app",
+            "action_code": DPAT_API,
+            "output_type": new QoreHashDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "value": new QoreDataField("value", "Value", new QoreStringDataType()),
+            }),
+        });
+    };
+}

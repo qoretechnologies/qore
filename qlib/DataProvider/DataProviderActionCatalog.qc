@@ -795,7 +795,8 @@ public class DataProviderActionCatalog {
 
         initmap{app} = {
             "init": init,
-            "module_context": module_context ?? get_module_context_path(),
+            "module_context": module_context
+                ?? DataProviderActionCatalog::registrationModulePath(),
         };
     }
 
@@ -2717,18 +2718,31 @@ public class DataProviderActionCatalog {
     }
 
     #! Returns the technical owner path for a provider registration
-    /** A deferred app initializer carries the path of the module that queued
-        it in \ref _mod_init_ctx.  The initializer can load another module,
-        however, and that nested module must own the apps and actions it
-        registers.  Qore exposes the actively loading module through
-        \ref get_module_context_path(); prefer that exact path and use the
-        deferred path only when no module load is active.
+    /** Registrations made while a module is being loaded belong to that module, which
+        \c get_module_context_path() reports.
+
+        Deferred initialization closures (see registerPendingApp() and registerPendingAppAction())
+        run when the app is first used and therefore normally outside any module load; the owning
+        module path is then taken from \c _mod_init_ctx, which doInit() sets to the path captured
+        when the pending registration was made.
+
+        Such a closure can load further modules, and everything a module registers while its own
+        initializer runs belongs to it, not to the module whose deferred initialization triggered
+        the load.  A nested load is exactly the case where the live module load context differs
+        from the one in effect when the deferred initialization started, so that captured context -
+        and not merely the presence of a live context - decides here; a deferred initialization
+        driven from inside an unrelated module's load must still attribute the closure's own
+        registrations to the module that registered them.
 
         @return the active module path, the deferred initializer path, or
         @ref NOTHING outside a module-owned registration
     */
     private static *string registrationModulePath() {
-        return get_module_context_path() ?? _mod_init_ctx;
+        *string path = get_module_context_path();
+        if (exists _mod_init_ctx && path == _mod_init_load_ctx) {
+            return _mod_init_ctx;
+        }
+        return path ?? _mod_init_ctx;
     }
 
     #! Makes the framework-injected generic API action part of every app owner's presentation catalog
@@ -2752,8 +2766,15 @@ public class DataProviderActionCatalog {
     private static doInit(hash<auto> h) {
         try {
             *string save = _mod_init_ctx;
-            on_exit _mod_init_ctx = save;
+            *string save_load = _mod_init_load_ctx;
+            on_exit {
+                _mod_init_ctx = save;
+                _mod_init_load_ctx = save_load;
+            }
             _mod_init_ctx = h.module_context;
+            # capture the module load context in effect here, so that a module loaded by the
+            # closure below can be told apart from this one and own what it registers itself
+            _mod_init_load_ctx = get_module_context_path();
             h.init();
         } catch (hash<ExceptionInfo> ex) {
             stderr.printf("%s\n", get_exception_string(ex));
@@ -2766,4 +2787,6 @@ public class DataProviderActionCatalog {
 
 namespace Priv {
 thread_local *string _mod_init_ctx;
+#! The module load context in effect when the deferred initialization in progress was started
+thread_local *string _mod_init_load_ctx;
 }

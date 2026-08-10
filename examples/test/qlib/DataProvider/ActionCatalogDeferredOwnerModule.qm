@@ -1,0 +1,47 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ActionCatalogDeferredOwnerModule.qm - test module registering an app for deferred initialization
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module ActionCatalogDeferredOwnerModule {
+    version = "1.0";
+    desc = "test module registering a pending app whose initialization loads another module";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerPendingApp("QoreTestDeferredOwnerApp", sub () {
+            DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+                "name": "QoreTestDeferredOwnerApp",
+                "display_name": "Deferred Owner App",
+                "short_desc": "App owned by the deferring module",
+                "desc": "App owned by the deferring module",
+                "groups": (AppGroup::DataTransformation,),
+                "logo": "data",
+                "logo_mime_type": MimeTypeSvg,
+                "logo_file_name": "deferred-owner.svg",
+            });
+
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": "QoreTestDeferredOwnerApp",
+                "path": "/owned-action",
+                "action": "owned-action",
+                "display_name": "Owned Action",
+                "short_desc": "Action owned by the deferring module",
+                "desc": "Action owned by the deferring module",
+                "action_code": DPAT_API,
+                "output_type": new QoreHashDataType(),
+                "options": DataProviderActionCatalog::getActionOptionFromFields({
+                    "value": new QoreDataField("value", "Value", new QoreStringDataType()),
+                }),
+            });
+
+            # a deferred initialization closure regularly loads further modules on demand; anything
+            # they register while their own initializer runs belongs to them and not to this module
+            load_module("ActionCatalogNestedOwnerModule");
+        });
+    };
+}
