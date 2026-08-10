@@ -1,0 +1,29 @@
+# Import spec for the vendored Confluence schema.
+#
+#   QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+#       --spec qlib/ConfluenceDataProvider/confluence-import.yaml
+#
+# Paths are resolved against this file.  The operations come from the manifest itself, so the selection
+# and what the application exports cannot drift apart.
+documents:
+  - name: Confluence
+    source: https://developer.atlassian.com/cloud/confluence/openapi-v2.v3.json
+    output: confluence-openapi.json
+    manifest: ConfluenceDataProvider:ConfluenceManifest::Manifest
+    provenance: ConfluenceSchema.qc
+
+    # Repairs applied to the document before it is pruned.  Each is checked, so a repair upstream has
+    # since made unnecessary fails the next import rather than staying here forever.
+    normalize:
+      - reason: >-
+          Confluence declares a page or blog post body as
+          "oneOf: [<Type>BodyWrite, <Type>NestedBodyWrite]", but neither branch requires any property, so
+          every body matches both and "oneOf" — which means exactly one — can never be satisfied. Every
+          create and update was rejected before the request was sent. The branches are alternatives the
+          API accepts, which is "anyOf"; Atlassian's own prose says as much ("Only one body format should
+          be specified as the property for this object"), it is simply not what the document encodes.
+        relax_oneof:
+          - "#/components/requestBodies/PageCreateRequest/content/application~1json/schema/properties/body"
+          - "#/components/requestBodies/PageUpdateRequest/content/application~1json/schema/properties/body"
+          - "#/components/requestBodies/BlogPostCreateRequest/content/application~1json/schema/properties/body"
+          - "#/components/requestBodies/BlogPostUpdateRequest/content/application~1json/schema/properties/body"

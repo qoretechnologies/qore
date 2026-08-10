@@ -87,6 +87,22 @@ public hashdecl RestSchemaFlatFieldInfo {
     *string codec;
 }
 
+#! Describes a value the request sends but the action does not ask for
+/** @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::value_from "value_from"
+*/
+public hashdecl RestSchemaDerivedValueInfo {
+    #! The action option this value follows
+    string source;
+
+    #! The transport location this value travels in
+    /** @see @ref RestSchemaActionLocations
+    */
+    string loc;
+
+    #! The name of this value in its transport location
+    string wire_name;
+}
+
 #! Describes a bidirectional conversion between an action-facing value and its wire representation
 /** A codec exists so that an action can present a semantically correct type — a %Qore
     @ref date "date", say — for a wire value that is something else, such as an integer count of
@@ -137,6 +153,20 @@ public hashdecl RestSchemaFieldOverlayInfo {
         two transport locations is resolved.
     */
     *string name;
+
+    #! Send this value, but take it from another option rather than asking for it
+    /** Some APIs require the identity of the object being changed in **both** the URL and the request
+        body: Confluence's page, blog post and task updates all declare a required \c id property beside
+        the \c {id} path variable, and the two must always be equal.
+
+        Presenting both would ask a user to type the same value twice and let them get it wrong; dropping
+        the body one with @ref ignore would produce a request the API rejects.  Naming the option it
+        follows resolves it: the field is not published as an option, and its wire value is copied from
+        that option when the request is built.
+
+        The named option must exist on the same action, which is checked when the action set is built.
+    */
+    *string value_from;
 
     #! The display name for the field
     *string display_name;

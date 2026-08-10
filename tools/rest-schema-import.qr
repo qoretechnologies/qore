@@ -250,8 +250,9 @@ class RestSchemaImport {
             if (!n.reason.val()) {
                 error("every entry of \"normalize\" in %y needs a \"reason\"", path);
             }
-            if (!n.operations) {
-                error("the repair %y in %y names no operations", n.reason, path);
+            if (!n.operations && !n.relax_oneof) {
+                error("the repair %y in %y does nothing: it names neither operations nor \"relax_oneof\" "
+                    "pointers", n.reason, path);
             }
             list<hash<auto>> params = ();
             foreach auto p in (n.add_parameters ?? ()) {
@@ -261,10 +262,15 @@ class RestSchemaImport {
                 }
                 params += p;
             }
+            list<string> relax = ();
+            foreach auto ptr in (n.relax_oneof ?? ()) {
+                relax += ptr.toString();
+            }
             rv += <RestSchemaNormalizationInfo>{
                 "reason": n.reason,
-                "operations": RestSchemaImporter::parseOperations(n.operations),
+                "operations": n.operations ? RestSchemaImporter::parseOperations(n.operations) : (),
                 "add_parameters": params,
+                "relax_oneof": relax,
             };
         }
         return rv;

@@ -68,7 +68,15 @@ public class RestSchemaImporterTest inherits QUnit::Test {
             },
             "components": {
                 "schemas": {
-                    "Board": {"type": "object", "properties": {"id": {"type": "string"}}},
+                    "Board": {"type": "object", "properties": {
+                        "id": {"type": "string"},
+                        # an overlapping "oneOf": neither branch requires anything, so every value
+                        # matches both and "exactly one" can never be satisfied
+                        "shape": {"oneOf": (
+                            {"type": "object", "properties": {"a": {"type": "string"}}},
+                            {"type": "object", "properties": {"b": {"type": "string"}}},
+                        )},
+                    }},
                     "Contact": {"type": "object", "properties": {
                         "id": {"type": "string"},
                         "board": {"$ref": "#/components/schemas/Board"},
@@ -432,6 +440,41 @@ public class TestSchema {
             )}));
 
         assertRegex("repaired: 1 operation", RestSchemaImporter::getReport(res));
+
+        # a composition the document writes as "oneOf" where it means "anyOf"
+        string relaxed = tmp.path + DirSep + "relaxed.json";
+        string ptr = "#/components/schemas/Board/properties/shape";
+        hash<RestSchemaImportResultInfo> rres = RestSchemaImporter::import(
+            cast<hash<RestSchemaImportInfo>>(doc + {
+                "output": relaxed,
+                "normalize": (
+                    <RestSchemaNormalizationInfo>{
+                        "reason": "the branches overlap, so \"exactly one\" can never be satisfied",
+                        "relax_oneof": (ptr,),
+                    },
+                ),
+            }));
+        assertEq(1, rres.normalized_operations);
+        hash<auto> rdoc = parse_json(File::readTextFile(relaxed));
+        assertNothing(rdoc.components.schemas.Board.properties.shape.oneOf);
+        assertEq(2, rdoc.components.schemas.Board.properties.shape.anyOf.size());
+        assertEq((ptr,), rdoc{RestSchemaImporter::NormalizationMarker}[0].relax_oneof);
+
+        # a pointer that does not resolve, or names no "oneOf", is a stale repair
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "which the document does not declare",
+            \RestSchemaImporter::import(), cast<hash<RestSchemaImportInfo>>(doc + {"normalize": (
+                <RestSchemaNormalizationInfo>{
+                    "reason": "r",
+                    "relax_oneof": ("#/components/schemas/Nope/properties/shape",),
+                },
+            )}));
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares none", \RestSchemaImporter::import(),
+            cast<hash<RestSchemaImportInfo>>(doc + {"normalize": (
+                <RestSchemaNormalizationInfo>{
+                    "reason": "r",
+                    "relax_oneof": ("#/components/schemas/Board/properties/id",),
+                },
+            )}));
     }
 
     private importAllTest() {

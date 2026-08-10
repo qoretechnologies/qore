@@ -1,0 +1,4909 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "The Confluence Cloud REST API v2",
+    "description": "This document describes Confluence's v2 APIs. This is intended to be an iteration on the existing Confluence Cloud REST API with improvements in both endpoint definitions and performance.",
+    "termsOfService": "https://developer.atlassian.com/platform/marketplace/atlassian-developer-terms/",
+    "version": "2.0.0"
+  },
+  "externalDocs": {
+    "description": "The online and complete version of the Confluence Cloud REST API docs.",
+    "url": "https://developer.atlassian.com/cloud/confluence/rest/v2"
+  },
+  "servers": [
+    {
+      "url": "https://{your-domain}/wiki/api/v2",
+      "variables": {
+        "your-domain": {
+          "default": "no-default",
+          "description": "Specific domain of the Confluence site being used. Must be provided."
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "Admin Key",
+      "description": "The [Admin Key feature](https://support.atlassian.com/confluence-cloud/docs/bypass-access-restrictions-on-a-page-with-admin-key/) is only offered with Confluence Cloud Premium and Enterprise to organization or site admins.\n\n**NOTE:** Users can only make calls to our public REST APIs using a valid Admin Key by adding the following HTTP header on their requests: `Atl-Confluence-With-Admin-Key: true`. Visit the [Confluence Cloud Changelog](https://developer.atlassian.com/cloud/confluence/changelog/#CHANGE-2480) for more details."
+    },
+    {
+      "name": "Attachment",
+      "description": ""
+    },
+    {
+      "name": "App Properties",
+      "description": ""
+    },
+    {
+      "name": "Ancestors",
+      "description": ""
+    },
+    {
+      "name": "Blog Post",
+      "description": ""
+    },
+    {
+      "name": "Children",
+      "description": ""
+    },
+    {
+      "name": "Classification Level",
+      "description": ""
+    },
+    {
+      "name": "Comment",
+      "description": ""
+    },
+    {
+      "name": "Content",
+      "description": ""
+    },
+    {
+      "name": "Content Properties",
+      "description": ""
+    },
+    {
+      "name": "Custom Content",
+      "description": ""
+    },
+    {
+      "name": "Database",
+      "description": ""
+    },
+    {
+      "name": "Data Policies",
+      "description": ""
+    },
+    {
+      "name": "Descendants",
+      "description": ""
+    },
+    {
+      "name": "Folder",
+      "description": ""
+    },
+    {
+      "name": "Label",
+      "description": ""
+    },
+    {
+      "name": "Like",
+      "description": ""
+    },
+    {
+      "name": "Operation",
+      "description": ""
+    },
+    {
+      "name": "Page",
+      "description": ""
+    },
+    {
+      "name": "Redactions",
+      "description": ""
+    },
+    {
+      "name": "Smart Link",
+      "description": ""
+    },
+    {
+      "name": "Space",
+      "description": ""
+    },
+    {
+      "name": "Space Permissions",
+      "description": ""
+    },
+    {
+      "name": "Space Permission Transition",
+      "description": ""
+    },
+    {
+      "name": "Space Properties",
+      "description": ""
+    },
+    {
+      "name": "Space Roles",
+      "description": ""
+    },
+    {
+      "name": "Task",
+      "description": ""
+    },
+    {
+      "name": "User",
+      "description": ""
+    },
+    {
+      "name": "Version",
+      "description": ""
+    },
+    {
+      "name": "Whiteboard",
+      "description": ""
+    }
+  ],
+  "paths": {
+    "/attachments": {
+      "get": {
+        "tags": [
+          "Attachment"
+        ],
+        "operationId": "getAttachments",
+        "summary": "Get attachments",
+        "description": "Returns all attachments. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the container of the attachment.",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/AttachmentSortOrder"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to attachments based on their status. By default, `current` and `archived` are used.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "archived",
+                  "trashed"
+                ]
+              }
+            }
+          },
+          {
+            "name": "mediaType",
+            "in": "query",
+            "required": false,
+            "description": "Filters on the mediaType of attachments. Only one may be specified.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filename",
+            "in": "query",
+            "required": false,
+            "description": "Filters on the file-name of attachments. Only one may be specified.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of attachments per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 50,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested attachments are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<Attachment>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AttachmentBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information.  Example response header format: `Link: </wiki/api/v2/attachments?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:attachment:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:attachment:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/blogposts": {
+      "get": {
+        "tags": [
+          "Blog Post"
+        ],
+        "operationId": "getBlogPosts",
+        "summary": "Get blog posts",
+        "description": "Returns all blog posts. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission).\nOnly blog posts that the user has permission to view will be returned.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results based on blog post ids. Multiple blog post ids can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "space-id",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/BlogPostSortOrder"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to blog posts based on their status. By default, `current` is used.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "deleted",
+                  "trashed"
+                ]
+              }
+            }
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to blog posts based on their title.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of blog posts per result to return. If more results exist, use the `Link` response header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested blog posts are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<BlogPost>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BlogPostBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/blogposts?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Blog Post"
+        ],
+        "operationId": "createBlogPost",
+        "summary": "Create blog post",
+        "description": "Creates a new blog post in the space specified by the spaceId.\n\nBy default this will create the blog post as a non-draft, unless the status is specified as draft.\nIf creating a non-draft, the title must not be empty.\n\nCurrently only supports the storage representation specified in the body.representation enums below",
+        "parameters": [
+          {
+            "name": "private",
+            "in": "query",
+            "description": "The blog post will be private. Only the user who creates this blog post will have permission to view and edit one.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/BlogPostCreateRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Returned if the blog post was created successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BlogPostSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if invalid values were passed in for any of the enums, a REQUIRED parameter was missing, or if the given title is a duplicate in the space",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing from the request",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The provided space does not exist\n- The user does not have permissions to view the space\n- The user does not have the needed permissions to create a blog post in the provided space",
+            "content": {}
+          },
+          "413": {
+            "description": "Returned if the request is too large in size (over 5 MB)",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/blogposts/{id}": {
+      "get": {
+        "tags": [
+          "Blog Post"
+        ],
+        "operationId": "getBlogPostById",
+        "summary": "Get blog post by id",
+        "description": "Returns a specific blog post.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the blog post and its corresponding space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the blog post to be returned. If you don't know the blog post ID, use Get blog posts and filter the results.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentationSingle"
+            }
+          },
+          {
+            "name": "get-draft",
+            "in": "query",
+            "description": "Retrieve the draft version of this blog post.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter the blog post being retrieved by its status.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "trashed",
+                  "deleted",
+                  "historical",
+                  "draft"
+                ]
+              }
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Allows you to retrieve a previously published version. Specify the previous version's number to retrieve its details.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "include-labels",
+            "in": "query",
+            "description": "Includes labels associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-properties",
+            "in": "query",
+            "description": "Includes content properties associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-operations",
+            "in": "query",
+            "description": "Includes operations associated with this blog post in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-likes",
+            "in": "query",
+            "description": "Includes likes associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-versions",
+            "in": "query",
+            "description": "Includes versions associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-version",
+            "in": "query",
+            "description": "Includes the current version associated with this blog post in the response.\nBy default this is included and can be omitted by setting the value to `false`.",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "include-favorited-by-current-user-status",
+            "in": "query",
+            "description": "Includes whether this blog post has been favorited by the current user.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-webresources",
+            "in": "query",
+            "description": "Includes web resources that can be used to render blog post content on a client.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-collaborators",
+            "in": "query",
+            "description": "Includes collaborators on the blog post.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested blog post is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BlogPostSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nrequested blog post or the blog post was not found.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Blog Post"
+        ],
+        "operationId": "updateBlogPost",
+        "summary": "Update blog post",
+        "description": "Update a blog post by id.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the blog post and its corresponding space. Permission to update blog posts in the space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the blog post to be updated. If you don't know the blog post ID, use Get Blog Posts and filter the results.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/BlogPostUpdateRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Returned if the requested blog post is successfully updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BlogPostSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The provided blog post does not exist\n- The user does not have permissions to view the blog post\n- The user does not have the needed permissions to update a blog post in the space"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Blog Post"
+        ],
+        "operationId": "deleteBlogPost",
+        "summary": "Delete blog post",
+        "description": "Delete a blog post by id.\n\nBy default this will delete blog posts that are non-drafts. To delete a blog post that is a draft, the endpoint must be called on a \ndraft with the following param `draft=true`. Discarded drafts are not sent to the trash and are permanently deleted.\n\nDeleting a blog post that is not a draft moves the blog post to the trash, where it can be restored later.\nTo permanently delete a blog post (or \"purge\" it), the endpoint must be called on a **trashed** blog post with the following param `purge=true`.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the blog post and its corresponding space.\nPermission to delete blog posts in the space.\nPermission to administer the space (if attempting to purge).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the blog post to be deleted.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "If attempting to purge the blog post.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "draft",
+            "in": "query",
+            "required": false,
+            "description": "If attempting to delete a blog post that is a draft.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Returned if the blog post was successfully deleted.",
+            "content": {}
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The provided blog post does not exist\n- The user does not have permissions to view the blog post\n- The user does not have the needed permissions to delete a blog post in the space"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "delete:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "delete:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "DELETE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/labels": {
+      "get": {
+        "tags": [
+          "Label"
+        ],
+        "operationId": "getLabels",
+        "summary": "Get labels",
+        "description": "Returns all labels. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission).\nOnly labels that the user has permission to view will be returned.",
+        "parameters": [
+          {
+            "name": "label-id",
+            "in": "query",
+            "required": false,
+            "description": "Filters on label ID. Multiple IDs can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "description": "Filters on label prefix. Multiple IDs can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "type": "string",
+              "items": {
+                "$ref": "#/components/schemas/LabelSortOrder"
+              }
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of labels per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested labels are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<Label>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Label"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/labels?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:label:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:label:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": true
+          }
+        ],
+        "x-atlassian-connect-scope": "READ"
+      }
+    },
+    "/labels/{id}/blogposts": {
+      "get": {
+        "tags": [
+          "Blog Post"
+        ],
+        "operationId": "getLabelBlogPosts",
+        "summary": "Get blog posts for label",
+        "description": "Returns the blogposts of specified label. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the content of the page and its corresponding space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the label for which blog posts should be returned.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "space-id",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/BlogPostSortOrder"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of blog posts per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested blog posts for specified label were successfully fetched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<BlogPost>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BlogPostBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/labels/<id>/blogposts?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nrequested label or label was not found.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/labels/{id}/pages": {
+      "get": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "getLabelPages",
+        "summary": "Get pages for label",
+        "description": "Returns the pages of specified label. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the content of the page and its corresponding space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the label for which pages should be returned.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "space-id",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/PageSortOrder"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of pages per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested pages for specified label were successfully fetched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<Page>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PageBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/labels/<id>/pages?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nrequested label or label was not found.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/pages": {
+      "get": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "getPages",
+        "summary": "Get pages",
+        "description": "Returns all pages. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission).\nOnly pages that the user has permission to view will be returned.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "space-id",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/PageSortOrder"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "archived",
+                  "deleted",
+                  "trashed"
+                ]
+              }
+            }
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to pages based on their title.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "name": "subtype",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to pages based on their subtype.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "page"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of pages per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested pages are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<Page>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PageBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/pages?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "createPage",
+        "summary": "Create page",
+        "description": "Creates a page in the space.\n\nPages are created as published by default unless specified as a draft in the status field. If creating a published page, the title must be specified.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the corresponding space. Permission to create a page in the space.",
+        "parameters": [
+          {
+            "name": "embedded",
+            "in": "query",
+            "description": "Tag the content as embedded and content will be created in NCS.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "private",
+            "in": "query",
+            "description": "The page will be private. Only the user who creates this page will have permission to view and edit one.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "root-level",
+            "in": "query",
+            "description": "The page will be created at the root level of the space (outside the space homepage tree). If true, then a \nvalue may not be supplied for the `parentId` body parameter.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/PageCreateRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Returned if the page was successfully created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PageSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing from the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The space does not exist\n- The user does not have permissions to view the space\n- The user does not have the needed permissions to create a page in the provided space"
+          },
+          "413": {
+            "description": "Returned if the request is too large in size (over 5 MB).",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/pages/{id}": {
+      "get": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "getPageById",
+        "summary": "Get page by id",
+        "description": "Returns a specific page.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the page and its corresponding space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentationSingle"
+            }
+          },
+          {
+            "name": "get-draft",
+            "in": "query",
+            "description": "Retrieve the draft version of this page.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter the page being retrieved by its status.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "archived",
+                  "trashed",
+                  "deleted",
+                  "historical",
+                  "draft"
+                ]
+              }
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Allows you to retrieve a previously published version. Specify the previous version's number to retrieve its details.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "include-labels",
+            "in": "query",
+            "description": "Includes labels associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-properties",
+            "in": "query",
+            "description": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-operations",
+            "in": "query",
+            "description": "Includes operations associated with this page in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-likes",
+            "in": "query",
+            "description": "Includes likes associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-versions",
+            "in": "query",
+            "description": "Includes versions associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-version",
+            "in": "query",
+            "description": "Includes the current version associated with this page in the response.\nBy default this is included and can be omitted by setting the value to `false`.",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "include-favorited-by-current-user-status",
+            "in": "query",
+            "description": "Includes whether this page has been favorited by the current user.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-webresources",
+            "in": "query",
+            "description": "Includes web resources that can be used to render page content on a client.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-collaborators",
+            "in": "query",
+            "description": "Includes collaborators on the page.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-direct-children",
+            "in": "query",
+            "description": "Includes direct children of the page, as defined in the `ChildrenResponse` object.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested page is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PageSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nrequested page or the page was not found.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "updatePage",
+        "summary": "Update page",
+        "description": "Update a page by id.\n\nWhen the \"current\" version is updated, the provided body content is considered as the latest version. This latest body content\nwill be attempted to be merged into the draft version through a content reconciliation algorithm. If two versions are significantly diverged, \nthe latest provided content may entirely override what was previously in the draft. \n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the page and its corresponding space. Permission to update pages in the space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the page to be updated. If you don't know the page ID, use Get Pages and filter the results.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/PageUpdateRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Returned if the requested page is successfully updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PageSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The provided page does not exist\n- The user does not have permissions to view the page\n- The user does not have the needed permissions to update a page in the space\n- The user provides a parentId for a page that does not exist or they do not have permission to view\n- There are no spaces associated with the given spaceId"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "deletePage",
+        "summary": "Delete page",
+        "description": "Delete a page by id.\n\nBy default this will delete pages that are non-drafts. To delete a page that is a draft, the endpoint must be called on a \ndraft with the following param `draft=true`. Discarded drafts are not sent to the trash and are permanently deleted.\n\nDeleting a page moves the page to the trash, where it can be restored later. To permanently delete a page (or \"purge\" it),\nthe endpoint must be called on a **trashed** page with the following param `purge=true`.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the page and its corresponding space.\nPermission to delete pages in the space.\nPermission to administer the space (if attempting to purge).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the page to be deleted.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "If attempting to purge the page.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "draft",
+            "in": "query",
+            "required": false,
+            "description": "If attempting to delete a page that is a draft.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Returned if the page was successfully deleted.",
+            "content": {}
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The provided page does not exist\n- The user does not have permissions to view the page\n- The user does not have the needed permissions to delete a page in the space"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "delete:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "delete:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "DELETE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/pages/{id}/title": {
+      "put": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "updatePageTitle",
+        "summary": "Update page title",
+        "description": "Updates the title of a specified page.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the page and its corresponding space. Permission to update pages in the space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the page to be updated. If you don't know the page ID, use Get Pages and filter the results",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/PageTitleUpdateRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Returned if the requested page is successfully updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PageSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The provided page does not exist\n- The user does not have permissions to view the page\n- The user does not have the needed permissions to update a page in the space\n- The user provides a parentId for a page that does not exist or they do not have permission to view\n- There are no spaces associated with the given spaceId"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/spaces": {
+      "get": {
+        "tags": [
+          "Space"
+        ],
+        "operationId": "getSpaces",
+        "summary": "Get spaces",
+        "description": "Returns all spaces. The results will be sorted by id ascending. The number of results is limited by the `limit` parameter and\nadditional results (if available) will be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission).\nOnly spaces that the user has permission to view will be returned.",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to spaces based on their IDs. Multiple IDs can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "keys",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to spaces based on their keys. Multiple keys can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to spaces based on their type.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "global",
+                "collaboration",
+                "knowledge_base",
+                "personal",
+                "system",
+                "onboarding",
+                "xflow_sample_space"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to spaces based on their status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "current",
+                "archived"
+              ]
+            }
+          },
+          {
+            "name": "labels",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to spaces based on their labels. Multiple labels can be specified as a comma-separated list.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "favorited-by",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to spaces favorited by the user with the specified account ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "not-favorited-by",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to spaces NOT favorited by the user with the specified account ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceSortOrder"
+            }
+          },
+          {
+            "name": "description-format",
+            "in": "query",
+            "required": false,
+            "description": "The content format type to be returned in the `description` field of the response. If available, the representation will be available under a response field of the same name under the `description` field.",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceDescriptionBodyRepresentation"
+            }
+          },
+          {
+            "name": "include-icon",
+            "in": "query",
+            "required": false,
+            "description": "If the icon for the space should be fetched or not.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of spaces per result to return. If more results exist, use the `Link` response header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested spaces are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<Space>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SpaceBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/spaces?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:space:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:space:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": true
+          }
+        ],
+        "x-atlassian-connect-scope": "READ"
+      }
+    },
+    "/spaces/{id}": {
+      "get": {
+        "tags": [
+          "Space"
+        ],
+        "operationId": "getSpaceById",
+        "summary": "Get space by id",
+        "description": "Returns a specific space.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the space to be returned.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "description-format",
+            "in": "query",
+            "required": false,
+            "description": "The content format type to be returned in the `description` field of the response. If available, the representation will be available under a response field of the same name under the `description` field.",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceDescriptionBodyRepresentation"
+            }
+          },
+          {
+            "name": "include-icon",
+            "in": "query",
+            "required": false,
+            "description": "If the icon for the space should be fetched or not.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-operations",
+            "in": "query",
+            "description": "Includes operations associated with this space in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-properties",
+            "in": "query",
+            "description": "Includes space properties associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-permissions",
+            "in": "query",
+            "description": "Includes space permissions associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-role-assignments",
+            "in": "query",
+            "description": "Includes role assignments associated with this space in the response. This parameter is only accepted for EAP sites.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include-labels",
+            "in": "query",
+            "description": "Includes labels associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested space is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SpaceSingle"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_links": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "string",
+                              "description": "Base url of the Confluence site."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nrequested space or the space was not found.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:space:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:space:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": true
+          }
+        ],
+        "x-atlassian-connect-scope": "READ"
+      }
+    },
+    "/spaces/{id}/blogposts": {
+      "get": {
+        "tags": [
+          "Blog Post"
+        ],
+        "operationId": "getBlogPostsInSpace",
+        "summary": "Get blog posts in space",
+        "description": "Returns all blog posts in a space. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission) and view the space.\nOnly blog posts that the user has permission to view will be returned.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the space for which blog posts should be returned.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/BlogPostSortOrder"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to blog posts based on their status. By default, `current` is used.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "deleted",
+                  "trashed"
+                ]
+              }
+            }
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to blog posts based on their title.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of blog posts per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested blog posts are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<BlogPost>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BlogPostBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/spaces/<id>/blogposts?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nspecified space or the space was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/spaces/{id}/pages": {
+      "get": {
+        "tags": [
+          "Page"
+        ],
+        "operationId": "getPagesInSpace",
+        "summary": "Get pages in space",
+        "description": "Returns all pages in a space. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission) and 'View' permission for the space.\nOnly pages that the user has permission to view will be returned.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the space for which pages should be returned.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to pages at the root level of the space or to all pages in the space.",
+            "schema": {
+              "type": "string",
+              "default": "all",
+              "enum": [
+                "all",
+                "root"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Used to sort the result by a particular field.",
+            "schema": {
+              "$ref": "#/components/schemas/PageSortOrder"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "archived",
+                  "deleted",
+                  "trashed"
+                ]
+              }
+            }
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "required": false,
+            "description": "Filter the results to pages based on their title.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of pages per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested pages are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<Page>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PageBulk"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/spaces/<id>/pages?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nspecified space or the space was not found.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/tasks": {
+      "get": {
+        "tags": [
+          "Task"
+        ],
+        "operationId": "getTasks",
+        "summary": "Get tasks",
+        "description": "Returns all tasks. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission).\nOnly tasks that the user has permission to view will be returned.",
+        "parameters": [
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "name": "include-blank-tasks",
+            "in": "query",
+            "description": "Specifies whether to include blank tasks in the response. Defaults to `true`.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filters on the status of the task.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "incomplete"
+              ]
+            }
+          },
+          {
+            "name": "task-id",
+            "in": "query",
+            "required": false,
+            "description": "Filters on task ID. Multiple IDs can be specified.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "space-id",
+            "in": "query",
+            "description": "Filters on the space ID of the task. Multiple IDs can be specified.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "page-id",
+            "in": "query",
+            "description": "Filters on the page ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "blogpost-id",
+            "in": "query",
+            "description": "Filters on the blog post ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "name": "created-by",
+            "in": "query",
+            "description": "Filters on the Account ID of the user who created this task. Multiple IDs can be specified.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "assigned-to",
+            "in": "query",
+            "description": "Filters on the Account ID of the user to whom this task is assigned. Multiple IDs can be specified.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "completed-by",
+            "in": "query",
+            "description": "Filters on the Account ID of the user who completed this task. Multiple IDs can be specified.",
+            "schema": {
+              "type": "array",
+              "maxItems": 250,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "created-at-from",
+            "in": "query",
+            "description": "Filters on start of date-time range of task based on creation date (inclusive). Input is epoch time in milliseconds.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "created-at-to",
+            "in": "query",
+            "description": "Filters on end of date-time range of task based on creation date (inclusive). Input is epoch time in milliseconds.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "due-at-from",
+            "in": "query",
+            "description": "Filters on start of date-time range of task based on due date (inclusive). Input is epoch time in milliseconds.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "due-at-to",
+            "in": "query",
+            "description": "Filters on end of date-time range of task based on due date (inclusive). Input is epoch time in milliseconds.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "completed-at-from",
+            "in": "query",
+            "description": "Filters on start of date-time range of task based on completion date (inclusive). Input is epoch time in milliseconds.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "completed-at-to",
+            "in": "query",
+            "description": "Filters on end of date-time range of task based on completion date (inclusive). Input is epoch time in milliseconds.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of tasks per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "schema": {
+              "format": "int32",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 250,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested tasks are returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "MultiEntityResult<Task>",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Task"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/tasks?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:task:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:task:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "tags": [
+          "Task"
+        ],
+        "operationId": "getTaskById",
+        "summary": "Get task by id",
+        "description": "Returns a specific task. \n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the containing page or blog post and its corresponding space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the task to be returned. If you don't know the task ID, use Get tasks and filter the results.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned if the requested task is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if the calling user does not have permission to view the\nrequested task or the task was not found.",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:task:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "read:task:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Task"
+        ],
+        "operationId": "updateTask",
+        "summary": "Update task",
+        "description": "Update a task by id. This endpoint currently only supports updating task status.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to edit the containing page or blog post and view its corresponding space.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the task to be updated. If you don't know the task ID, use Get tasks and filter the results.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "body-format",
+            "in": "query",
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/TaskUpdateRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Returned if the requested task is updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Returned if an invalid request is provided.",
+            "content": {}
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing from the request.",
+            "content": {}
+          },
+          "404": {
+            "description": "Returned if:\n- The provided task does not exist\n- The user does not have permissions to view the task\n- The user does not have the needed permissions to update the containing page or blog post in the corresponding space",
+            "content": {}
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "write:task:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "state": "Current",
+            "scopes": [
+              "write:task:confluence"
+            ]
+          }
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "requestBodies": {
+      "BlogPostCreateRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "spaceId"
+              ],
+              "properties": {
+                "spaceId": {
+                  "type": "string",
+                  "description": "ID of the space"
+                },
+                "status": {
+                  "enum": [
+                    "current",
+                    "draft"
+                  ],
+                  "type": "string",
+                  "description": "The status of the blog post, specifies if the blog post will be created as a new blog post or a draft"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Title of the blog post, required if creating non-draft."
+                },
+                "body": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BlogPostBodyWrite"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BlogPostNestedBodyWrite"
+                    }
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "Created date of the blog post in the format of \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
+                }
+              }
+            }
+          }
+        }
+      },
+      "BlogPostUpdateRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "id",
+                "status",
+                "title",
+                "body",
+                "version"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Id of the blog post."
+                },
+                "status": {
+                  "enum": [
+                    "current",
+                    "draft"
+                  ],
+                  "type": "string",
+                  "description": "The updated status of the blog post.\n\nNote, if you change the status of a blog post from 'current' to 'draft' and it has an existing draft, the existing draft will be deleted in favor of the updated draft.\nAdditionally, this endpoint can be used to restore a 'trashed' or 'deleted' blog post to 'current' status. For restoration, blog post contents will not be updated and only the blog post status will be changed."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Title of the blog post."
+                },
+                "spaceId": {
+                  "type": "string",
+                  "description": "ID of the containing space.\n\nThis currently **does not support moving the blog post to a different space**."
+                },
+                "body": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BlogPostBodyWrite"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BlogPostNestedBodyWrite"
+                    }
+                  ]
+                },
+                "version": {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "format": "int32",
+                      "type": "integer",
+                      "description": "The new version number of the updated blog post. \nSet this to the current version number plus one, unless you are updating the status to 'draft' which requires a version number of 1.\n\nIf you don't know the current version number, use Get blog post by id."
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "An optional message to be stored with the version."
+                    }
+                  }
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "Created date of the blog post in the format of \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
+                }
+              }
+            }
+          }
+        }
+      },
+      "PageCreateRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "spaceId"
+              ],
+              "properties": {
+                "spaceId": {
+                  "type": "string",
+                  "description": "ID of the space."
+                },
+                "status": {
+                  "enum": [
+                    "current",
+                    "draft"
+                  ],
+                  "type": "string",
+                  "description": "The status of the page, published or draft."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Title of the page, required if page status is not draft."
+                },
+                "parentId": {
+                  "type": "string",
+                  "description": "The parent content ID of the page. If the `root-level` query parameter is set to false and a value is \nnot supplied for this parameter, then the space homepage's ID will be used. If the `root-level` query \nparameter is set to true, then a value may not be supplied for this parameter."
+                },
+                "body": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PageBodyWrite"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PageNestedBodyWrite"
+                    }
+                  ]
+                },
+                "subtype": {
+                  "enum": [
+                    "live"
+                  ],
+                  "type": "string",
+                  "description": "The subtype of the page. Provide the subtype live to create a live doc or no subtype to create a page."
+                }
+              }
+            }
+          }
+        }
+      },
+      "PageUpdateRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "id",
+                "status",
+                "title",
+                "body",
+                "version"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Id of the page."
+                },
+                "status": {
+                  "enum": [
+                    "current",
+                    "draft"
+                  ],
+                  "type": "string",
+                  "description": "The updated status of the page.\n\nNote, if you change the status of a page from 'current' to 'draft' and it has an existing draft, the existing draft will be deleted in favor of the updated draft.\nAdditionally, this endpoint can be used to restore a 'trashed' or 'deleted' page to 'current' status. For restoration, page contents will not be updated and only the page status will be changed."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Title of the page."
+                },
+                "spaceId": {
+                  "format": "string",
+                  "description": "ID of the containing space.\n\nThis currently **does not support moving the page to a different space**."
+                },
+                "parentId": {
+                  "format": "string",
+                  "description": "ID of the parent content.\n\nThis allows the page to be moved under a different parent within the same space."
+                },
+                "ownerId": {
+                  "format": "string",
+                  "description": "Account ID of the page owner.\n\nThis allows page ownership to be transferred to another user."
+                },
+                "body": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PageBodyWrite"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PageNestedBodyWrite"
+                    }
+                  ]
+                },
+                "version": {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "format": "int32",
+                      "type": "integer",
+                      "description": "The new version of the updated page. \nSet this to the current version number plus one, unless you are updating the status to 'draft' which requires a version number of 1.\n\nIf you don't know the current version number, use Get page by id."
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "An optional message to be stored with the version."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "PageTitleUpdateRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "status",
+                "title"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "current",
+                    "draft"
+                  ],
+                  "type": "string",
+                  "description": "The status of the page, current or draft."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "The updated title for the page"
+                }
+              }
+            }
+          }
+        }
+      },
+      "TaskUpdateRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ID of the task."
+                },
+                "localId": {
+                  "type": "string",
+                  "description": "Local ID of the task. This ID is local to the corresponding page or blog post."
+                },
+                "spaceId": {
+                  "type": "string",
+                  "description": "ID of the space the task is in."
+                },
+                "pageId": {
+                  "type": "string",
+                  "description": "ID of the page the task is in."
+                },
+                "blogPostId": {
+                  "type": "string",
+                  "description": "ID of the blog post the task is in."
+                },
+                "status": {
+                  "enum": [
+                    "complete",
+                    "incomplete"
+                  ],
+                  "type": "string",
+                  "description": "Status of the task."
+                },
+                "createdBy": {
+                  "type": "string",
+                  "description": "Account ID of the user who created this task."
+                },
+                "assignedTo": {
+                  "type": "string",
+                  "description": "Account ID of the user to whom this task is assigned."
+                },
+                "completedBy": {
+                  "type": "string",
+                  "description": "Account ID of the user who completed this task."
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Date and time when the task was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Date and time when the task was updated. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+                },
+                "dueAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Date and time when the task is due. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+                },
+                "completedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Date and time when the task was completed. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "AttachmentBulk": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the attachment."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContentStatus"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the comment."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the attachment was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "pageId": {
+            "type": "string",
+            "description": "ID of the containing page.\n\nNote: This is only returned if the attachment has a container that is a page."
+          },
+          "blogPostId": {
+            "type": "string",
+            "description": "ID of the containing blog post.\n\nNote: This is only returned if the attachment has a container that is a blog post."
+          },
+          "customContentId": {
+            "type": "string",
+            "description": "ID of the containing custom content.\n\nNote: This is only returned if the attachment has a container that is custom content."
+          },
+          "mediaType": {
+            "type": "string",
+            "description": "Media Type for the attachment."
+          },
+          "mediaTypeDescription": {
+            "type": "string",
+            "description": "Media Type description for the attachment."
+          },
+          "comment": {
+            "type": "string",
+            "description": "Comment for the attachment."
+          },
+          "fileId": {
+            "type": "string",
+            "description": "File ID of the attachment. This is the ID referenced in `atlas_doc_format` bodies and is distinct from the attachment ID."
+          },
+          "fileSize": {
+            "format": "int64",
+            "type": "integer",
+            "description": "File size of the attachment."
+          },
+          "webuiLink": {
+            "type": "string",
+            "description": "WebUI link of the attachment."
+          },
+          "downloadLink": {
+            "type": "string",
+            "description": "Download link of the attachment."
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/AttachmentLinks"
+          }
+        }
+      },
+      "BlogPostSingle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the blog post."
+          },
+          "status": {
+            "$ref": "#/components/schemas/BlogPostContentStatus"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the blog post."
+          },
+          "spaceId": {
+            "type": "string",
+            "description": "ID of the space the blog post is in."
+          },
+          "authorId": {
+            "type": "string",
+            "description": "The account ID of the user who created this blog post originally."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the blog post was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "body": {
+            "$ref": "#/components/schemas/BodySingle"
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Label"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContentProperty"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "operations": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "likes": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Like"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "versions": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "isFavoritedByCurrentUser": {
+            "type": "boolean",
+            "description": "Whether the blog post has been favorited by the current user."
+          },
+          "_links": {
+            "$ref": "#/components/schemas/AbstractPageLinks"
+          }
+        }
+      },
+      "BlogPostBulk": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the blog post."
+          },
+          "status": {
+            "$ref": "#/components/schemas/BlogPostContentStatus"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the blog post."
+          },
+          "spaceId": {
+            "type": "string",
+            "description": "ID of the space the blog post is in."
+          },
+          "authorId": {
+            "type": "string",
+            "description": "The account ID of the user who created this blog post originally."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the blog post was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "body": {
+            "$ref": "#/components/schemas/BodyBulk"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/AbstractPageLinks"
+          }
+        }
+      },
+      "TaskBodySingle": {
+        "type": "object",
+        "description": "Contains fields for each representation type requested.",
+        "properties": {
+          "storage": {
+            "$ref": "#/components/schemas/BodyType"
+          },
+          "atlas_doc_format": {
+            "$ref": "#/components/schemas/BodyType"
+          }
+        }
+      },
+      "BodySingle": {
+        "type": "object",
+        "description": "Contains fields for each representation type requested.",
+        "properties": {
+          "storage": {
+            "$ref": "#/components/schemas/BodyType"
+          },
+          "atlas_doc_format": {
+            "$ref": "#/components/schemas/BodyType"
+          },
+          "view": {
+            "$ref": "#/components/schemas/BodyType"
+          }
+        }
+      },
+      "BodyBulk": {
+        "type": "object",
+        "description": "Contains fields for each representation type requested.",
+        "properties": {
+          "storage": {
+            "$ref": "#/components/schemas/BodyType"
+          },
+          "atlas_doc_format": {
+            "$ref": "#/components/schemas/BodyType"
+          }
+        }
+      },
+      "BodyType": {
+        "type": "object",
+        "properties": {
+          "representation": {
+            "type": "string",
+            "description": "Type of content representation used for the value field."
+          },
+          "value": {
+            "type": "string",
+            "description": "Body of the content, in the format found in the representation field."
+          }
+        }
+      },
+      "PrimaryBodyRepresentation": {
+        "enum": [
+          "storage",
+          "atlas_doc_format"
+        ],
+        "type": "string",
+        "description": "The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases."
+      },
+      "PrimaryBodyRepresentationSingle": {
+        "enum": [
+          "storage",
+          "atlas_doc_format",
+          "view",
+          "export_view",
+          "anonymous_export_view",
+          "styled_view",
+          "editor"
+        ],
+        "type": "string",
+        "description": "The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases."
+      },
+      "SpaceDescriptionBodyRepresentation": {
+        "enum": [
+          "plain",
+          "view"
+        ],
+        "type": "string",
+        "description": "The formats a space description can be represented as. A subset of BodyRepresentation."
+      },
+      "ContentStatus": {
+        "enum": [
+          "current",
+          "draft",
+          "archived",
+          "historical",
+          "trashed",
+          "deleted",
+          "any"
+        ],
+        "type": "string",
+        "description": "The status of the content."
+      },
+      "BlogPostContentStatus": {
+        "enum": [
+          "current",
+          "draft",
+          "historical",
+          "trashed",
+          "deleted",
+          "any"
+        ],
+        "type": "string",
+        "description": "The status of the content."
+      },
+      "ContentProperty": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the property"
+          },
+          "key": {
+            "type": "string",
+            "description": "Key of the property"
+          },
+          "value": {
+            "description": "Value of the property. Must be a valid JSON value."
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          }
+        }
+      },
+      "Label": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the label."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the label."
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Prefix of the label."
+          }
+        }
+      },
+      "Like": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "description": "Account ID."
+          }
+        }
+      },
+      "Operation": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "description": "The type of operation.",
+            "type": "string"
+          },
+          "targetType": {
+            "description": "The type of entity the operation type targets.",
+            "type": "string"
+          }
+        }
+      },
+      "PageSingle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the page."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContentStatus"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the page."
+          },
+          "spaceId": {
+            "type": "string",
+            "description": "ID of the space the page is in."
+          },
+          "parentId": {
+            "type": "string",
+            "description": "ID of the parent page, or null if there is no parent page."
+          },
+          "parentType": {
+            "$ref": "#/components/schemas/ParentContentType"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer",
+            "nullable": true,
+            "description": "Position of child page within the given parent page tree."
+          },
+          "authorId": {
+            "type": "string",
+            "description": "The account ID of the user who created this page originally."
+          },
+          "ownerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The account ID of the user who owns this page."
+          },
+          "lastOwnerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The account ID of the user who owned this page previously, or null if there is no previous owner."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the page was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "body": {
+            "$ref": "#/components/schemas/BodySingle"
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Label"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContentProperty"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "operations": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "likes": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Like"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "versions": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "isFavoritedByCurrentUser": {
+            "type": "boolean",
+            "description": "Whether the page has been favorited by the current user."
+          },
+          "_links": {
+            "$ref": "#/components/schemas/AbstractPageLinks"
+          }
+        }
+      },
+      "PageBulk": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the page."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContentStatus"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the page."
+          },
+          "spaceId": {
+            "type": "string",
+            "description": "ID of the space the page is in."
+          },
+          "parentId": {
+            "type": "string",
+            "description": "ID of the parent page, or null if there is no parent page."
+          },
+          "parentType": {
+            "$ref": "#/components/schemas/ParentContentType"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer",
+            "nullable": true,
+            "description": "Position of child page within the given parent page tree."
+          },
+          "authorId": {
+            "type": "string",
+            "description": "The account ID of the user who created this page originally."
+          },
+          "ownerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The account ID of the user who owns this page."
+          },
+          "lastOwnerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The account ID of the user who owned this page previously, or null if there is no previous owner."
+          },
+          "subtype": {
+            "type": "string",
+            "nullable": true,
+            "description": "The subtype of the page."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the page was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "body": {
+            "$ref": "#/components/schemas/BodyBulk"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/AbstractPageLinks"
+          }
+        }
+      },
+      "ParentContentType": {
+        "type": "string",
+        "enum": [
+          "page",
+          "whiteboard",
+          "database",
+          "embed",
+          "folder"
+        ],
+        "description": "Content type of the parent, or null if there is no parent."
+      },
+      "PageBodyWrite": {
+        "type": "object",
+        "properties": {
+          "representation": {
+            "enum": [
+              "storage",
+              "atlas_doc_format",
+              "wiki"
+            ],
+            "type": "string",
+            "description": "Type of content representation used for the value field."
+          },
+          "value": {
+            "type": "string",
+            "description": "Body of the page, in the format found in the representation field."
+          }
+        }
+      },
+      "PageNestedBodyWrite": {
+        "type": "object",
+        "description": "Body of the page. Only one body format should be specified as the property\nfor this object, e.g. `storage`.",
+        "properties": {
+          "storage": {
+            "$ref": "#/components/schemas/PageBodyWrite"
+          },
+          "atlas_doc_format": {
+            "$ref": "#/components/schemas/PageBodyWrite"
+          },
+          "wiki": {
+            "$ref": "#/components/schemas/PageBodyWrite"
+          }
+        }
+      },
+      "BlogPostBodyWrite": {
+        "type": "object",
+        "properties": {
+          "representation": {
+            "enum": [
+              "storage",
+              "atlas_doc_format",
+              "wiki"
+            ],
+            "type": "string",
+            "description": "Type of content representation used for the value field."
+          },
+          "value": {
+            "type": "string",
+            "description": "Body of the blog post, in the format found in the representation field."
+          }
+        }
+      },
+      "BlogPostNestedBodyWrite": {
+        "type": "object",
+        "description": "Body of the blog post. Only one body format should be specified as the property\nfor this object, e.g. `storage`.",
+        "properties": {
+          "storage": {
+            "$ref": "#/components/schemas/BlogPostBodyWrite"
+          },
+          "atlas_doc_format": {
+            "$ref": "#/components/schemas/BlogPostBodyWrite"
+          },
+          "wiki": {
+            "$ref": "#/components/schemas/BlogPostBodyWrite"
+          }
+        }
+      },
+      "SpaceSingle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the space."
+          },
+          "key": {
+            "type": "string",
+            "description": "Key of the space."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the space."
+          },
+          "type": {
+            "$ref": "#/components/schemas/SpaceType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SpaceStatus"
+          },
+          "authorId": {
+            "type": "string",
+            "description": "The account ID of the user who created this space originally."
+          },
+          "spaceOwnerId": {
+            "type": "string",
+            "description": "The account ID of the user who owns this space."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the space was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "homepageId": {
+            "type": "string",
+            "description": "ID of the space's homepage."
+          },
+          "description": {
+            "$ref": "#/components/schemas/SpaceDescription"
+          },
+          "icon": {
+            "$ref": "#/components/schemas/SpaceIcon"
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Label"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpaceProperty"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "operations": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "permissions": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpacePermissionAssignment"
+                }
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/SpaceLinks"
+          }
+        }
+      },
+      "SpaceBulk": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the space."
+          },
+          "key": {
+            "type": "string",
+            "description": "Key of the space."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the space."
+          },
+          "type": {
+            "$ref": "#/components/schemas/SpaceType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SpaceStatus"
+          },
+          "authorId": {
+            "type": "string",
+            "description": "The account ID of the user who created this space originally."
+          },
+          "spaceOwnerId": {
+            "type": "string",
+            "description": "The account ID of the user who owns this space."
+          },
+          "currentActiveAlias": {
+            "type": "string",
+            "description": "Currently active alias for a Confluence space."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the space was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "homepageId": {
+            "type": "string",
+            "description": "ID of the space's homepage."
+          },
+          "description": {
+            "$ref": "#/components/schemas/SpaceDescription"
+          },
+          "icon": {
+            "$ref": "#/components/schemas/SpaceIcon"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/SpaceLinks"
+          }
+        }
+      },
+      "SpaceDescription": {
+        "type": "object",
+        "description": "Contains fields for each representation type requested.",
+        "properties": {
+          "plain": {
+            "$ref": "#/components/schemas/BodyType"
+          },
+          "view": {
+            "$ref": "#/components/schemas/BodyType"
+          }
+        }
+      },
+      "SpaceIcon": {
+        "type": "object",
+        "description": "The icon of the space",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The path (relative to base URL) at which the space's icon can be retrieved. The format should be like `/wiki/download/...` or `/wiki/aa-avatar/...`"
+          },
+          "apiDownloadLink": {
+            "type": "string",
+            "description": "The path (relative to base URL) that can be used to retrieve a link to download the space icon. 3LO apps should use this link instead of the value provided\nin the `path` property to retrieve the icon.\n\nCurrently this field is only returned for `global` spaces and not `personal` spaces.\n"
+          }
+        }
+      },
+      "SpacePermissionAssignment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the space permission."
+          },
+          "principal": {
+            "type": "object",
+            "description": "The entity the space permissions corresponds to.",
+            "properties": {
+              "type": {
+                "enum": [
+                  "user",
+                  "group",
+                  "role"
+                ],
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "description": "ID of the entity."
+              }
+            }
+          },
+          "operation": {
+            "type": "object",
+            "description": "The operation the space permission corresponds to.",
+            "properties": {
+              "key": {
+                "enum": [
+                  "use",
+                  "create",
+                  "read",
+                  "update",
+                  "delete",
+                  "copy",
+                  "move",
+                  "export",
+                  "purge",
+                  "purge_version",
+                  "administer",
+                  "restore",
+                  "create_space",
+                  "restrict_content",
+                  "archive"
+                ],
+                "type": "string",
+                "description": "The type of operation."
+              },
+              "targetType": {
+                "enum": [
+                  "page",
+                  "blogpost",
+                  "comment",
+                  "attachment",
+                  "whiteboard",
+                  "database",
+                  "embed",
+                  "folder",
+                  "space",
+                  "application",
+                  "userProfile"
+                ],
+                "type": "string",
+                "description": "The type of entity the operation type targets."
+              }
+            }
+          }
+        }
+      },
+      "SpaceProperty": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the space property."
+          },
+          "key": {
+            "type": "string",
+            "description": "Key of the space property."
+          },
+          "value": {
+            "description": "Value of the space property."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "RFC3339 compliant date time at which the property was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Atlassian account ID of the user that created the space property."
+          },
+          "version": {
+            "type": "object",
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "RFC3339 compliant date time at which the property's current version was created."
+              },
+              "createdBy": {
+                "type": "string",
+                "description": "Atlassian account ID of the user that created the space property's current version."
+              },
+              "message": {
+                "type": "string",
+                "description": "Message associated with the current version."
+              },
+              "number": {
+                "type": "integer",
+                "format": "int32",
+                "description": "The space property's current version number."
+              }
+            }
+          }
+        }
+      },
+      "SpaceType": {
+        "enum": [
+          "global",
+          "collaboration",
+          "knowledge_base",
+          "personal",
+          "system",
+          "onboarding",
+          "xflow_sample_space"
+        ],
+        "type": "string",
+        "description": "The type of space."
+      },
+      "SpaceStatus": {
+        "enum": [
+          "current",
+          "archived"
+        ],
+        "type": "string",
+        "description": "The status of the space."
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the task."
+          },
+          "localId": {
+            "type": "string",
+            "description": "Local ID of the task. This ID is local to the corresponding page or blog post."
+          },
+          "spaceId": {
+            "type": "string",
+            "description": "ID of the space the task is in."
+          },
+          "pageId": {
+            "type": "string",
+            "description": "ID of the page the task is in."
+          },
+          "blogPostId": {
+            "type": "string",
+            "description": "ID of the blog post the task is in."
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "incomplete"
+            ],
+            "type": "string",
+            "description": "Status of the task."
+          },
+          "body": {
+            "$ref": "#/components/schemas/TaskBodySingle"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Account ID of the user who created this task."
+          },
+          "assignedTo": {
+            "type": "string",
+            "description": "Account ID of the user to whom this task is assigned."
+          },
+          "completedBy": {
+            "type": "string",
+            "description": "Account ID of the user who completed this task."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the task was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the task was updated. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the task is due. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the task was completed. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time when the version was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
+          },
+          "message": {
+            "type": "string",
+            "description": "Message associated with the current version."
+          },
+          "number": {
+            "format": "int32",
+            "type": "integer",
+            "description": "The version number."
+          },
+          "minorEdit": {
+            "type": "boolean",
+            "description": "Describes if this version is a minor version. Email notifications and activity stream updates are not created for minor versions."
+          },
+          "authorId": {
+            "type": "string",
+            "description": "The account ID of the user who created this version."
+          }
+        }
+      },
+      "AttachmentSortOrder": {
+        "enum": [
+          "created-date",
+          "-created-date",
+          "modified-date",
+          "-modified-date"
+        ],
+        "type": "string",
+        "description": "The sort fields for attachments. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`."
+      },
+      "BlogPostSortOrder": {
+        "enum": [
+          "id",
+          "-id",
+          "created-date",
+          "-created-date",
+          "modified-date",
+          "-modified-date"
+        ],
+        "type": "string",
+        "description": "The sort fields for blog posts. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`."
+      },
+      "LabelSortOrder": {
+        "enum": [
+          "created-date",
+          "-created-date",
+          "id",
+          "-id",
+          "name",
+          "-name"
+        ],
+        "type": "string",
+        "description": "The sort fields for labels. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`."
+      },
+      "PageSortOrder": {
+        "enum": [
+          "id",
+          "-id",
+          "created-date",
+          "-created-date",
+          "modified-date",
+          "-modified-date",
+          "title",
+          "-title"
+        ],
+        "type": "string",
+        "description": "The sort fields for pages. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`."
+      },
+      "SpaceSortOrder": {
+        "enum": [
+          "id",
+          "-id",
+          "key",
+          "-key",
+          "name",
+          "-name"
+        ],
+        "type": "string",
+        "description": "The sort fields for spaces. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`."
+      },
+      "AbstractPageLinks": {
+        "type": "object",
+        "properties": {
+          "webui": {
+            "type": "string",
+            "description": "Web UI link of the content."
+          },
+          "editui": {
+            "type": "string",
+            "description": "Edit UI link of the content."
+          },
+          "tinyui": {
+            "type": "string",
+            "description": "Web UI link of the content."
+          }
+        }
+      },
+      "AttachmentLinks": {
+        "type": "object",
+        "properties": {
+          "webui": {
+            "type": "string",
+            "description": "Web UI link of the content."
+          },
+          "download": {
+            "type": "string",
+            "description": "Download link of the content."
+          }
+        }
+      },
+      "SpaceLinks": {
+        "type": "object",
+        "properties": {
+          "webui": {
+            "type": "string",
+            "description": "Web UI link of the space."
+          }
+        }
+      },
+      "OptionalFieldMeta": {
+        "type": "object",
+        "properties": {
+          "hasMore": {
+            "type": "boolean",
+            "description": "Indicates if there are more available results that can be fetched."
+          },
+          "cursor": {
+            "type": "string",
+            "description": "A token that can be used in the query parameter of the endpoint returned in the `_links` property to retrieve the next set of results."
+          }
+        }
+      },
+      "OptionalFieldLinks": {
+        "type": "object",
+        "properties": {
+          "self": {
+            "type": "string",
+            "description": "A relative URL that can be used to fetch results beyond what this include parameter retrieves."
+          }
+        }
+      },
+      "MultiEntityLinks": {
+        "type": "object",
+        "properties": {
+          "next": {
+            "type": "string",
+            "description": "Used for pagination. Contains the relative URL for the next set of results, using a cursor query parameter.\nThis property will not be present if there is no additional data available."
+          },
+          "base": {
+            "type": "string",
+            "description": "Base url of the Confluence site."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "description": "You can access this resource via basic auth.",
+        "scheme": "basic"
+      },
+      "oAuthDefinitions": {
+        "type": "oauth2",
+        "description": "This API uses OAuth 2 with the authorizationCode grant flow.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://auth.atlassian.com/authorize",
+            "tokenUrl": "https://auth.atlassian.com/oauth/token",
+            "scopes": {
+              "read:page:confluence": "View pages and blogposts and their properties.",
+              "read:space:confluence": "View spaces and their properties.",
+              "read:attachment:confluence": "View attachments and their properties.",
+              "read:comment:confluence": "View comments and their properties.",
+              "read:custom-content:confluence": "View custom content and their properties.",
+              "read:task:confluence": "View tasks.",
+              "read:whiteboard:confluence": "View whiteboards and their properties.",
+              "read:database:confluence": "View databases and their properties.",
+              "read:embed:confluence": "View Smart Links in the content tree and their properties.",
+              "read:folder:confluence": "View folders and their properties.",
+              "read:hierarchical-content:confluence": "View children and descendants in the content tree.",
+              "write:space:confluence": "Create and update spaces and their properties.",
+              "write:page:confluence": "Create and update pages and blog posts and their properties.",
+              "write:comment:confluence": "Create and update comments and their properties.",
+              "write:custom-content:confluence": "Create and update custom content and their properties.",
+              "write:whiteboard:confluence": "Create and update whiteboards and their properties.",
+              "write:database:confluence": "Create and update databases and their properties.",
+              "write:embed:confluence": "Create and update Smart Links in the content tree and their properties.",
+              "write:folder:confluence": "Create and update folders and their properties.",
+              "write:app-data:confluence": "Create, update and delete app properties.",
+              "delete:custom-content:confluence": "Delete custom content.",
+              "delete:page:confluence": "Delete pages and blog posts.",
+              "delete:comment:confluence": "Delete comments.",
+              "delete:whiteboard:confluence": "Delete whiteboards.",
+              "delete:database:confluence": "Delete databases.",
+              "delete:embed:confluence": "Delete Smart Links in the content tree.",
+              "delete:folder:confluence": "Delete folders."
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-qore-normalized": [
+    {
+      "reason": "Confluence declares a page or blog post body as \"oneOf: [<Type>BodyWrite, <Type>NestedBodyWrite]\", but neither branch requires any property, so every body matches both and \"oneOf\" — which means exactly one — can never be satisfied. Every create and update was rejected before the request was sent. The branches are alternatives the API accepts, which is \"anyOf\"; Atlassian's own prose says as much (\"Only one body format should be specified as the property for this object\"), it is simply not what the document encodes.",
+      "operations": [],
+      "add_parameters": [],
+      "relax_oneof": [
+        "#/components/requestBodies/PageCreateRequest/content/application~1json/schema/properties/body",
+        "#/components/requestBodies/PageUpdateRequest/content/application~1json/schema/properties/body",
+        "#/components/requestBodies/BlogPostCreateRequest/content/application~1json/schema/properties/body",
+        "#/components/requestBodies/BlogPostUpdateRequest/content/application~1json/schema/properties/body"
+      ]
+    }
+  ]
+}

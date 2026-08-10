@@ -1,0 +1,522 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ConfluenceRestClient.qm Qore user module for calling Confluence Cloud REST API services
+
+/*  ConfluenceRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module ConfluenceRestClient {
+    version = "1.0";
+    desc = "User module for calling Confluence Cloud REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("confluence", ConfluenceRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ConfluenceRestClient Module
+
+    @tableofcontents
+
+    @section confluencerestclientintro ConfluenceRestClient Introduction
+
+    The %ConfluenceRestClient module provides an API for calling
+    [Confluence Cloud](https://www.atlassian.com/software/confluence)'s v2 REST API services.
+
+    To use this module, use \c "%requires ConfluenceRestClient" in your code.
+
+    All the public symbols in the module are defined in the ConfluenceRestClient namespace.
+
+    The main classes are:
+    - @ref ConfluenceRestClient::ConfluenceRestClient "ConfluenceRestClient": the REST client for the
+      Confluence API
+    - @ref ConfluenceRestClient::ConfluenceRestClientIo "ConfluenceRestClientIo": the same client on the
+      asynchronous I/O transport, which is what data providers use
+    - @ref ConfluenceRestClient::ConfluenceRestConnection "ConfluenceRestConnection": a connection object
+      to Confluence (based on the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section confluencerestclient_site The Site Is the Connection
+
+    Confluence Cloud is per-site, and there are two ways to reach one.  The connection takes whichever
+    matches the credential, and derives the URL from it in **both directions** so a stored URL cannot
+    silently retarget the connection at another site:
+
+    |!Option|!Reached at|!Used with
+    |\c cloud_id|\c https://api.atlassian.com/ex/confluence/\<cloud_id\>|the OAuth2 authorization code flow
+    |\c site|\c https://\<site\>|an API token, sent as basic authentication with the account email
+
+    A site is given as a host — \c "example.atlassian.net" — and \c cloud_id as the site's UUID.  Exactly
+    one of them is set; setting both is an error, because the two would name different sites.
+
+    @par Finding a cloud ID
+
+    @ref ConfluenceRestClient::ConfluenceRestClientBase::AccessibleResourcesUrl "the accessible-resources
+    endpoint" lists the sites an OAuth2 token can reach, with the \c id of each.  That is what the
+    superseded TypeScript application called after authorization to fill this in.
+
+    @section confluencerestclient_paths Paths Include the API Prefix
+
+    Confluence's own description puts \c /wiki/api/v2 in its server URL, so a path written by hand carries
+    it: \c "/wiki/api/v2/spaces", not \c "/spaces".  That prefix is the same in both connection modes,
+    which is why one schema serves both.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires ConfluenceRestClient
+
+ConfluenceRestClientIo conf({
+    "site": "example.atlassian.net",
+    "username": ENV.ATLASSIAN_EMAIL,
+    "password": ENV.ATLASSIAN_API_TOKEN,
+});
+hash<auto> result = conf.get("/wiki/api/v2/spaces?limit=1");
+printf("Spaces: %Y\n", result.body);
+    @endcode
+
+    @section confluencerestclient_pagination Pagination
+
+    A Confluence v2 collection returns \c {results, _links}, and \c _links.next is a **relative** URL for
+    the next page carrying an opaque cursor.  Page on the presence of \c _links.next; there is no total.
+
+    @section confluencerestclientrelnotes Release Notes
+
+    @subsection confluencerestclientv1_0 ConfluenceRestClient v1.0
+    - the initial version of the %ConfluenceRestClient module
+*/
+
+#! the ConfluenceRestClient namespace contains all the objects in the ConfluenceRestClient module
+public namespace ConfluenceRestClient {
+#! Common base class for ConfluenceRestClient functionality
+public class ConfluenceRestClientBase {
+    public {
+        #! The Atlassian API gateway, used with the OAuth2 authorization code flow
+        const GatewayUrl = "https://api.atlassian.com";
+
+        #! The gateway path prefix for a Confluence site, by cloud ID
+        const GatewayPrefix = "/ex/confluence/";
+
+        #! The API version prefix, as the schema's server URL declares it
+        const ApiPrefix = "/wiki/api/v2";
+
+        #! The endpoint listing the sites an OAuth2 token can reach, and their cloud IDs
+        const AccessibleResourcesUrl = GatewayUrl + "/oauth/token/accessible-resources";
+
+        #! Default OAuth2 authorization request URL
+        const DefaultAuthUrl = "https://auth.atlassian.com/authorize";
+
+        #! Default OAuth2 token request URL
+        const DefaultTokenUrl = "https://auth.atlassian.com/oauth/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes
+        /** \c offline_access is what makes a refresh token available, without which the connection stops
+            working when the access token expires.
+        */
+        const DefaultScopes = (
+            "offline_access",
+            "read:page:confluence",
+            "write:page:confluence",
+            "delete:page:confluence",
+            "read:blogpost:confluence",
+            "write:blogpost:confluence",
+            "delete:blogpost:confluence",
+            "read:space:confluence",
+            "read:task:confluence",
+            "write:task:confluence",
+            "read:label:confluence",
+            "read:attachment:confluence",
+        );
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default authorization token type
+        const DefaultTokenType = "Bearer";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** Reading one space is the cheapest call that proves both the credential and the site are
+            usable; the accessible-resources endpoint would prove only the credential, and lives outside
+            the site prefix.
+        */
+        const DefaultPingPath = ApiPrefix + "/spaces?limit=1";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Confluence's maximum page size for a collection
+        const MaxLimit = 250;
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "token_type": DefaultTokenType,
+        };
+    }
+
+    #! Returns the target URL for a Confluence site
+    /** @param cloud_id the site's cloud ID, when the OAuth2 flow is used
+        @param site the site host, ex: \c "example.atlassian.net"
+
+        @return the base URL of the site, with no trailing slash
+
+        @throw CONFLUENCE-SITE-ERROR neither or both were given, or the site is not usable
+    */
+    static string getUrlForSite(*string cloud_id, *string site) {
+        if (cloud_id.val() && site.val()) {
+            throw "CONFLUENCE-SITE-ERROR", sprintf("both \"cloud_id\" (%y) and \"site\" (%y) are set, but "
+                "they name the site in two different ways and could name two different sites; set the one "
+                "that matches the credential", cloud_id, site);
+        }
+        if (cloud_id.val()) {
+            string id = cloud_id;
+            trim id;
+            return GatewayUrl + GatewayPrefix + id;
+        }
+        if (!site.val()) {
+            throw "CONFLUENCE-SITE-ERROR", "the Confluence site is not set; give \"cloud_id\" for the "
+                "OAuth2 flow, or \"site\" (ex: \"example.atlassian.net\") for an API token";
+        }
+        string url = site;
+        trim url;
+        *list<*string> m = (url =~ x/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+        if (m) {
+            string scheme = m[0].lwr();
+            if (scheme != "http" && scheme != "https" && scheme != "confluence") {
+                throw "CONFLUENCE-SITE-ERROR", sprintf("Confluence site %y names scheme %y; expecting "
+                    "\"https\"", site, scheme);
+            }
+            url = regex_subst(url, "^confluence://", "https://");
+        } else {
+            url = "https://" + url;
+        }
+        while (url.size() > 1 && url.substr(-1) == "/") {
+            url = url.substr(0, url.size() - 1);
+        }
+        return url;
+    }
+
+    #! Returns the cloud ID a gateway URL names, if it is one
+    /** The inverse of @ref getUrlForSite() for the OAuth2 case; it exists so that a connection created
+        from a URL alone still has an option that agrees with it.
+    */
+    static *string getCloudIdForUrl(string url) {
+        *list<*string> m = (url =~ x/\/ex\/confluence\/([^\/?]+)/);
+        return m ? m[0] : NOTHING;
+    }
+
+    #! Returns the site a direct URL names, if it is one
+    static *string getSiteForUrl(string url) {
+        if (ConfluenceRestClientBase::getCloudIdForUrl(url)) {
+            return;
+        }
+        hash<UrlInfo> h = parse_url(regex_subst(url, "^confluence://", "https://"));
+        return h.host;
+    }
+
+    #! Returns options for the ConfluenceRestClient constructors
+    /** Consumes the Confluence-specific \c cloud_id and \c site options and derives the target URL from
+        them.
+
+        @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+
+        @throw CONFLUENCE-SITE-ERROR the site is not usable
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows to
+        # that type, and adding a hash-valued or list-valued default would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        *string cloud_id = remove opts.cloud_id;
+        *string site = remove opts.site;
+        # the site decides the URL, never the other way round; a URL is only used to recover the option
+        # when neither was given
+        if (!cloud_id.val() && !site.val() && opts.url.val()) {
+            cloud_id = ConfluenceRestClientBase::getCloudIdForUrl(opts.url);
+            if (!cloud_id.val()) {
+                site = ConfluenceRestClientBase::getSiteForUrl(opts.url);
+            }
+        }
+        opts.url = ConfluenceRestClientBase::getUrlForSite(cloud_id, site);
+
+        if (opts.oauth2_client_id.val()) {
+            if (!opts.oauth2_grant_type.val()) {
+                opts.oauth2_grant_type = DefaultGrantType;
+            }
+            if (!opts.oauth2_auth_url.val()) {
+                opts.oauth2_auth_url = DefaultAuthUrl;
+            }
+            if (!opts.oauth2_token_url.val()) {
+                opts.oauth2_token_url = DefaultTokenUrl;
+            }
+            if (!opts.oauth2_scopes) {
+                opts.oauth2_scopes = DefaultScopes;
+            }
+        }
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+}
+
+#! Confluence REST client
+public class ConfluenceRestClient inherits RestClient::RestClient, ConfluenceRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ConfluenceRestClientBase::getOptions(opts), do_not_connect) {
+    }
+}
+
+#! Confluence REST client for non-blocking I/O
+public class ConfluenceRestClientIo inherits RestClientIo::RestClientIo, ConfluenceRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ConfluenceRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Confluence REST connections
+public class ConfluenceRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Confluence connection URL
+        const DefaultConnectionUrl = "confluence://api.atlassian.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Confluence REST Connection",
+            "short_desc": "A connection to a Confluence Cloud site",
+            "desc": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) "
+                "site for pages, blog posts, spaces and tasks.\n\n"
+                "**The site is the connection.** Set `cloud_id` for the OAuth2 authorization code flow, "
+                "or `site` (ex: `example.atlassian.net`) with an API token; the target URL is derived "
+                "from whichever is set, and a stored URL that disagrees is ignored rather than allowed to "
+                "decide which site is reached.\n\n"
+                "**Authentication** is either:\n"
+                "- an **API token** in `password` with the account email in `username`, sent as basic "
+                "authentication — created at **id.atlassian.com > Security > API tokens**; or\n"
+                "- the **OAuth2 authorization code flow** with `oauth2_client_id` and "
+                "`oauth2_client_secret` from an app created in the Atlassian developer console.\n\n"
+                "This connection targets Confluence **Cloud**; Confluence Data Center has a different "
+                "API.\n\n"
+                "Confluence is a trademark of Atlassian Pty Ltd.",
+            "cls": Class::forName("ConfluenceRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "confluence": True,
+            },
+            "base_scheme_map": {
+                "https": "confluence",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "cloud_id": <ConnectionOptionInfo>{
+                    "display_name": "Cloud ID",
+                    "short_desc": "The site's cloud ID, used with the OAuth2 flow",
+                    "type": "string",
+                    "desc": "The Confluence site's cloud ID, used with the OAuth2 authorization code "
+                        "flow; the site is then reached through Atlassian's API gateway.\n\n"
+                        "The sites a token can reach, and their IDs, are listed by "
+                        "`https://api.atlassian.com/oauth/token/accessible-resources`.\n\n"
+                        "Set this **or** `site`, not both.",
+                    "preselected": True,
+                },
+                "site": <ConnectionOptionInfo>{
+                    "display_name": "Site",
+                    "short_desc": "The site host, ex: \"example.atlassian.net\"",
+                    "type": "string",
+                    "desc": "The Confluence site host, ex: `example.atlassian.net`, used with an API "
+                        "token.\n\n"
+                        "Set this **or** `cloud_id`, not both.",
+                    "preselected": True,
+                },
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultGrantType,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultTokenUrl,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultScopes,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultPingPath,
+                },
+                "username": RestConnection::ConnectionScheme.options."username"
+                + <ConnectionOptionInfo>{
+                    "desc": "The Atlassian account email address, used with an API token in `password`",
+                },
+                "password": RestConnection::ConnectionScheme.options."password"
+                + <ConnectionOptionInfo>{
+                    "desc": "An API token created at **id.atlassian.com > Security > API tokens**, used "
+                        "with the account email in `username`.\n\n"
+                        "This is not the account password, which Confluence Cloud does not accept.",
+                },
+                "token_type": RestConnection::ConnectionScheme.options."token_type"
+                + <ConnectionOptionInfo>{
+                    "default_value": ConfluenceRestClientBase::DefaultTokenType,
+                },
+            },
+            "required_options": "cloud_id|site",
+        };
+    }
+
+    #! Creates the ConfluenceRestConnection object
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description,
+                ConfluenceRestConnection::getConnectionUrl(ConfluenceRestConnection::getOpts(options, url)),
+                attributes, ConfluenceRestConnection::getOpts(options, url)) {
+    }
+
+    #! Creates the ConfluenceRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(ConfluenceRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the connection URL for the given options
+    static string getConnectionUrl(hash<auto> options) {
+        return regex_subst(ConfluenceRestClientBase::getUrlForSite(options.cloud_id, options.site),
+            "^https", "confluence");
+    }
+
+    #! Returns the options with the site derived from the URL when neither option is set
+    private static hash<auto> getOpts(hash<auto> options, *string url) {
+        if (options.cloud_id.val() || options.site.val() || !url.val()) {
+            return options;
+        }
+        if (*string cloud_id = ConfluenceRestClientBase::getCloudIdForUrl(url)) {
+            return options + {"cloud_id": cloud_id};
+        }
+        return options + {"site": ConfluenceRestClientBase::getSiteForUrl(url)};
+    }
+
+    #! Returns the config hash with the URL and the site option agreeing with each other
+    private static hash<auto> getConfig(hash<auto> config) {
+        hash<auto> opts = ConfluenceRestConnection::getOpts(config.opts ?? {}, config.url);
+        return config + {
+            "url": ConfluenceRestConnection::getConnectionUrl(opts),
+            "opts": opts,
+        };
+    }
+
+    #! Re-derives the URL when the options are updated
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            string target = ConfluenceRestConnection::getConnectionUrl(opts);
+            if (url != target) {
+                doUpdateOptions(self, {"url": target});
+            }
+        }
+    }
+
+    #! Returns the connection options with the URL withheld
+    /** The URL is derived from \c cloud_id or \c site; passing a stored one as well would let it decide
+        which site is reached when the two disagree.
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return (RestConnection::getConnectionOptions(rtopts) ?? {}) - "url";
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "confluence";
+    }
+
+    #! Returns the name of the application this connection serves
+    *string getAppName() {
+        return "Confluence";
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the Confluence data provider for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and pinged
+        # without it
+        load_module("ConfluenceDataProvider");
+        return create_object("ConfluenceDataProvider", getAsync());
+    }
+
+    #! Returns a ConfluenceRestClient object
+    private ConfluenceRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ConfluenceRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ConfluenceRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

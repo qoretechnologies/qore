@@ -111,7 +111,20 @@ public hashdecl RestSchemaNormalizationInfo {
     list<hash<SchemaOperationInfo>> operations;
 
     #! Parameters to add, each an OpenAPI parameter object
-    list<hash<auto>> add_parameters;
+    *list<hash<auto>> add_parameters;
+
+    #! JSON pointers to compositions whose \c "oneOf" is really an \c "anyOf"
+    /** \c oneOf means *exactly* one branch matches, and a document that writes it where the branches
+        overlap describes a value that can never be valid.  Confluence declares a page body as
+        \c "oneOf: [PageBodyWrite, PageNestedBodyWrite]" where neither branch requires anything, so
+        **every** body matches both and every create and update is rejected before it is sent.
+
+        Each pointer names the composition, ex:
+        \c "#/components/requestBodies/PageCreateRequest/content/application~1json/schema/properties/body".
+        A pointer that does not resolve, or resolves to something with no \c oneOf, is an error — so the
+        repair disappears by failing the next import once upstream corrects the document.
+    */
+    *list<string> relax_oneof;
 }
 
 #! Describes one document to import
@@ -306,7 +319,8 @@ public class RestSchemaImporter {
                 applied += {
                     "reason": n.reason,
                     "operations": (map sprintf("%s %s", $1.method.upr(), $1.path), n.operations),
-                    "add_parameters": (map $1.name, n.add_parameters),
+                    "add_parameters": (map $1.name, n.add_parameters ?? ()),
+                    "relax_oneof": n.relax_oneof ?? (),
                 };
             }
             out_schema{NormalizationMarker} = applied;
@@ -478,7 +492,60 @@ public class RestSchemaImporter {
                 rv.paths{op.path}{method} = operation;
                 ++operations_normalized;
             }
+            foreach string ptr in (n.relax_oneof) {
+                rv = RestSchemaImporter::relaxOneOf(rv, ptr, n.reason);
+                ++operations_normalized;
+            }
         }
+        return rv;
+    }
+
+    #! Turns a \c "oneOf" composition into an \c "anyOf" at the given JSON pointer
+    /** @param schema the document; not modified
+        @param ptr a \c "#/..." pointer naming the composition
+        @param reason the repair's reason, for error messages
+
+        @return a new document with the composition relaxed
+
+        @throw REST-SCHEMA-IMPORT-ERROR the pointer does not resolve, or names no \c "oneOf"
+    */
+    private static hash<auto> relaxOneOf(hash<auto> schema, string ptr, string reason) {
+        auto node = RestSchemaPruner::resolveRef(schema, ptr);
+        if (!exists node) {
+            throw "REST-SCHEMA-IMPORT-ERROR", sprintf("the repair %y names %y, which the document does "
+                "not declare", reason, ptr);
+        }
+        if (node.typeCode() != NT_HASH || !exists node.oneOf) {
+            throw "REST-SCHEMA-IMPORT-ERROR", sprintf("the repair %y relaxes the \"oneOf\" at %y, which "
+                "declares none; the document has been corrected upstream, so the repair must be removed",
+                reason, ptr);
+        }
+        # a pointer is a path of member names; rebuild the document along it, because %Qore hashes are
+        # values and a nested assignment through a temporary would be discarded
+        list<string> tokens = ();
+        foreach string raw in (split("/", ptr.substr(2), False, True)) {
+            string token = raw;
+            token =~ s/~1/\//g;
+            token =~ s/~0/~/g;
+            tokens += token;
+        }
+        hash<auto> replacement = node - "oneOf";
+        replacement.anyOf = node.oneOf;
+        return RestSchemaImporter::setAtPath(schema, tokens, replacement);
+    }
+
+    #! Returns a copy of a document with the value at a path of member names replaced
+    private static hash<auto> setAtPath(hash<auto> node, list<string> tokens, auto value) {
+        if (!tokens) {
+            return value;
+        }
+        string name = tokens[0];
+        hash<auto> rv = node;
+        if (tokens.size() == 1) {
+            rv{name} = value;
+            return rv;
+        }
+        rv{name} = RestSchemaImporter::setAtPath(node{name}, tokens[1..], value);
         return rv;
     }
 

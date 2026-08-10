@@ -165,6 +165,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("reference data", \referenceDataTest());
         addTestCase("scoped reference data", \scopedReferenceDataTest());
         addTestCase("nested reference data fields", \nestedReferenceDataTest());
+        addTestCase("a value that follows another option", \valueFromTest());
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider execution", \providerExecutionTest());
         addTestCase("provider paths", \providerPathTest());
@@ -746,6 +747,53 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         assertEq("u2", values[1].display_name);
         assertEq("u3", values[2].value);
         assertEq("Grace", values[2].display_name);
+    }
+
+    valueFromTest() {
+        # the shape of the real case: an API that wants the identity of the object being changed in both
+        # the URL and the body, where the two must always be equal
+        list<hash<RestSchemaActionInfo>> manifest = (
+            entry("update-widget", "PUT", "/widgets/{widget_id}", {
+                "response_code": "200",
+                "fields": {
+                    "body.name": <RestSchemaFieldOverlayInfo>{"value_from": "widget_id"},
+                },
+            }),
+        );
+        RestSchemaActionSet aset = makeSet(manifest);
+        RestSchemaActionOperation op = aset.getOperationEx("update-widget");
+
+        # the followed value is not something the user is asked for
+        hash<string, AbstractDataField> fields = op.getRequestFields();
+        assertTrue(exists fields.widget_id);
+        assertNothing(fields.name, "a value that follows another option is not published as one");
+
+        # ... but it is sent, carrying what the option it follows carries
+        hash<auto> wire = op.unflatten({"widget_id": "w1"});
+        assertEq({"widget_id": "w1"}, wire.path_vars);
+        assertEq("w1", wire.req.body.name);
+
+        # an unsupplied source sends nothing rather than an empty value
+        RestSchemaActionSet oset = makeSet((
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {
+                    "status": <RestSchemaFieldOverlayInfo>{"value_from": "name"},
+                },
+            }),
+        ));
+        RestSchemaActionOperation oop = oset.getOperationEx("create-widget");
+        assertNothing(oop.unflatten({}).req.body.status);
+        assertEq("thing", oop.unflatten({"name": "thing"}).req.body.status);
+
+        # following an option the action does not have could never be filled in
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which this action does not declare", \makeSet(), ((
+            entry("update-widget", "PUT", "/widgets/{widget_id}", {
+                "response_code": "200",
+                "fields": {
+                    "body.name": <RestSchemaFieldOverlayInfo>{"value_from": "no_such_option"},
+                },
+            }),
+        ),));
     }
 
     actionRegistrationTest() {

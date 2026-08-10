@@ -79,6 +79,11 @@ public class RestSchemaActionOperation {
         #! The flattened request type with the overlay applied
         *AbstractDataProviderType request_type;
 
+        #! Values sent but not asked for, each following another option
+        /** @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::value_from "value_from"
+        */
+        list<hash<RestSchemaDerivedValueInfo>> derived_values = ();
+
         #! The action output type: the success response body, unwrapped
         *AbstractDataProviderType response_type;
 
@@ -217,6 +222,32 @@ public class RestSchemaActionOperation {
                     break;
             }
         }
+        # a value that follows another option is filled in once every supplied option has been placed, so
+        # that it carries exactly what the request will send rather than what the caller typed
+        foreach hash<RestSchemaDerivedValueInfo> dv in (derived_values) {
+            *hash<RestSchemaFlatFieldInfo> src = flat_map{dv.source};
+            if (!src) {
+                continue;
+            }
+            auto value;
+            switch (src.loc) {
+                case RSAL_PATH: value = path_vars{src.wire_name}; break;
+                case RSAL_QUERY: value = req.query{src.wire_name}; break;
+                case RSAL_HEADER: value = req.header{src.wire_name}; break;
+                case RSAL_BODY: value = req.body{src.wire_name}; break;
+                case RSAL_BODY_ROOT: value = req.body; break;
+            }
+            if (!exists value) {
+                continue;
+            }
+            switch (dv.loc) {
+                case RSAL_PATH: path_vars{dv.wire_name} = value; break;
+                case RSAL_QUERY: req.query{dv.wire_name} = value; break;
+                case RSAL_HEADER: req.header{dv.wire_name} = value; break;
+                case RSAL_BODY: req.body{dv.wire_name} = value; break;
+            }
+        }
+
         # every path variable must resolve, or the request would be made against a URI path still containing
         # a literal "{name}" placeholder
         foreach string name in (path_var_names) {
@@ -381,6 +412,16 @@ public class RestSchemaActionOperation {
                 if (ov.ignore) {
                     continue;
                 }
+                if (ov.value_from.val()) {
+                    # not an option: the value follows another one and is filled in when the request is
+                    # built
+                    derived_values += <RestSchemaDerivedValueInfo>{
+                        "source": ov.value_from,
+                        "loc": loc,
+                        "wire_name": derived_name,
+                    };
+                    continue;
+                }
                 string name = ov.name ?? derived_name;
                 if (exists fields{name}) {
                     throw "REST-SCHEMA-ACTION-ERROR", sprintf("option %y is produced by both the %s and the %s "
@@ -406,6 +447,16 @@ public class RestSchemaActionOperation {
 
         # every overlay entry must resolve, so that an upstream rename cannot silently drop an override
         checkOverlayTargets(info.fields, derived, keys fields);
+
+        # a value that follows an option the action does not have could never be filled in, and the
+        # request would go out missing something the API requires
+        foreach hash<RestSchemaDerivedValueInfo> dv in (derived_values) {
+            if (!exists flat_map{dv.source}) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("the %s value %y takes its value from option %y, "
+                    "which this action does not declare; options: %y", dv.loc, dv.wire_name, dv.source,
+                    sort(keys flat_map));
+            }
+        }
 
         if (!fields) {
             return;

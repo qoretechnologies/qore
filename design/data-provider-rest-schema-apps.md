@@ -268,9 +268,15 @@ Three properties make this safe to do:
 - the provenance checksum still describes the *unmodified* upstream document, because that is the
   baseline the next import has to be diffed against.
 
-Repair is for what a vendor documents and omits. It is not for guessing at an API: a construct the vendor
-does not document belongs nowhere, and an operation the schema describes wrongly rather than incompletely
-is the hand-written case above.
+`relax_oneof` covers the other repair the ports have needed: a `oneOf` whose branches overlap. `oneOf`
+means *exactly* one branch matches, so a composition whose branches share every value describes something
+that can never be valid — Confluence declares a page body as `oneOf: [PageBodyWrite, PageNestedBodyWrite]`
+where neither branch requires any property, and every create and update was therefore rejected before the
+request was sent. Naming the pointer turns it into the `anyOf` the API actually accepts.
+
+Repair is for what a vendor documents and omits, or encodes in a way that cannot be satisfied. It is not
+for guessing at an API: a construct the vendor does not document belongs nowhere, and an operation the
+schema describes wrongly rather than incompletely is the hand-written case above.
 
 **Almost no identifier is global, so a dropdown usually needs scope.** A branch belongs to a repository, a
 page to a space, a member to a workspace. `RestSchemaReferenceDataInfo::options_from` forwards named options

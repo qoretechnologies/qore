@@ -1,0 +1,463 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** ConfluenceDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires ConfluenceDataProvider
+%requires ConfluenceRestClient
+%requires RestClientIo
+
+%requires json
+%requires yaml
+
+%exec-class ConfluenceDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A Confluence REST client that records requests instead of making them
+class FakeConfluenceRestClient inherits ConfluenceRestClient::ConfluenceRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : ConfluenceRestClientIo({"cloud_id": "test-cloud", "token": "fake"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Returns the last request body, decoded when the transport was handed a serialized one
+    auto lastBody() {
+        auto body = last().body;
+        if (body.typeCode() == NT_BINARY) {
+            body = binary_to_string(body, "UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            return parse_json(body);
+        }
+        return body;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+
+
+#! An event provider whose polling can be driven directly
+class TestConfluenceNewPageProvider inherits ConfluenceDataProvider::ConfluenceNewPageDataProvider {
+    public {
+        #! Events the provider reported to its observers
+        list<auto> notified = ();
+    }
+
+    constructor(*ConfluenceRestClient::ConfluenceRestClientIo rest, *hash<auto> options)
+            : ConfluenceNewPageDataProvider(rest, options) {
+    }
+
+    #! Runs one polling cycle, as the polling thread would
+    poll() {
+        pollOnce();
+    }
+
+    #! Records what would have been reported to observers
+    notifyObservers(string event_id, hash<auto> data) {
+        notified += data;
+    }
+
+    reset() {
+        notified = ();
+    }
+}
+
+public class ConfluenceDataProviderTest inherits QUnit::Test {
+    public {
+        #! The action IDs the TypeScript application this module replaces exported
+        const ExpectedTsActions = (
+            "getBlogPosts", "createBlogPost", "getBlogPostById", "updateBlogPost", "deleteBlogPost",
+            "getBlogPostsInSpace", "getLabelBlogPosts",
+            "getPages", "createPage", "getPageById", "updatePage", "deletePage", "updatePageTitle",
+            "getPagesInSpace", "getLabelPages",
+            "getSpaces", "getSpaceById",
+            "getTasks", "getTaskById", "updateTask",
+        );
+
+        #! The actions this application adds, each backing something the TypeScript app could not do
+        const ExpectedAddedActions = ("getLabels", "getAttachments");
+
+        #! The updates whose body carries the identity as well as the URL
+        const IdInBodyActions = ("updatePage", "updateBlogPost", "updateTask");
+
+        #! The event providers the application offers
+        const ExpectedEvents = ("new_page", "new_blogpost", "new_attachment");
+    }
+
+    private {
+        RestSchemaActionSet aset;
+    }
+
+    constructor() : Test("ConfluenceDataProviderTest", "1.0") {
+        aset = ConfluenceSchema::getActionSet();
+
+        addTestCase("provenance", \provenanceTest());
+        addTestCase("drift agreement", \driftTest());
+        addTestCase("action identity", \actionIdentityTest());
+        addTestCase("the id appears twice", \idFollowsPathTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("provider paths", \providerPathTest());
+        addTestCase("request construction", \requestConstructionTest());
+        addTestCase("connection", \connectionTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("event polling", \eventPollingTest());
+        set_return_value(main());
+    }
+
+    private provenanceTest() {
+        hash<ConfluenceSchemaProvenanceInfo> p = ConfluenceSchema::Provenance;
+        assertRegex("developer.atlassian.com", p.source_url);
+        assertRegex("^[0-9a-f]{64}$", p.source_sha256);
+        assertNeq("0000000000000000000000000000000000000000000000000000000000000000", p.source_sha256,
+            "the provenance record was filled in by an actual import");
+        assertGt(0, p.source_size);
+        assertGt(0, p.source_paths);
+        assertGt(0, p.source_schemas);
+        assertTrue(p.imported.absolute());
+        assertTrue(is_file(ConfluenceSchema::getSchemaPath()));
+        assertLt(p.source_size, hstat(ConfluenceSchema::getSchemaPath()).size,
+            "the pruned schema is smaller than the document it was pruned from");
+    }
+
+    private driftTest() {
+        list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset,
+            ConfluenceSchema::getSchema());
+        assertEq((), drift, "the manifest and the vendored schema agree");
+    }
+
+    private actionIdentityTest() {
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+
+        list<string> missing = ();
+        foreach string action in (ExpectedTsActions) {
+            if (!actions{action}) {
+                missing += action;
+            }
+        }
+        assertEq((), missing, "every action the TypeScript application exported is still exported");
+        map assertTrue(actions{$1}, sprintf("added action %y is exported", $1)), ExpectedAddedActions;
+        assertEq(ExpectedTsActions.size() + ExpectedAddedActions.size(), (keys actions).size(),
+            "two actions were added, and nothing else");
+
+        # Atlassian generates both of its documents from one source, so every action ID is also the
+        # operationId, and a rename upstream surfaces as drift rather than renaming an action
+        foreach hash<RestSchemaActionInfo> info in (ConfluenceManifest::Manifest) {
+            assertEq(info.action, info.operation_id,
+                sprintf("action %y records its own ID as the operationId", info.action));
+        }
+    }
+
+    private idFollowsPathTest() {
+        # Confluence wants the identity in the body as well as the URL, and the two must be equal
+        foreach string action in (IdInBodyActions) {
+            RestSchemaActionOperation op = aset.getOperationEx(action);
+            hash<string, AbstractDataField> fields = op.getRequestFields();
+            assertTrue(exists fields.id, sprintf("%y takes the identity once", action));
+
+            hash<auto> wire = op.unflatten({"id": "12345"} + (action == "updateTask"
+                ? {"status": "complete"}
+                : {
+                    "status": "current",
+                    "title": "a title",
+                    "body": {"representation": "storage", "value": "<p>x</p>"},
+                    "version": {"number": 2},
+                }));
+            assertEq({"id": "12345"}, wire.path_vars, sprintf("%y substitutes the path variable", action));
+            assertEq("12345", wire.req.body.id,
+                sprintf("%y sends the identity in the body as well, without asking twice", action));
+        }
+
+        # ... and renaming a page takes no identity in the body at all, because Confluence declares none
+        RestSchemaActionOperation rename = aset.getOperationEx("updatePageTitle");
+        hash<auto> wire = rename.unflatten({"id": "12345", "title": "new", "status": "current"});
+        assertEq({"id": "12345"}, wire.path_vars);
+        assertNothing(wire.req.body.id);
+        assertEq("new", wire.req.body.title);
+    }
+
+    private referenceDataTest() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = aset.getReferenceDataDecls();
+        assertEq(5, (keys refdata).size());
+
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+        foreach hash<auto> i in (refdata.pairIterator()) {
+            hash<RestSchemaReferenceDataInfo> rd = i.value;
+            assertEq(i.key, rd.name);
+            assertTrue(actions{rd.action}, sprintf("reference data %y names exported action %y", i.key,
+                rd.action));
+            assertEq(("results",), rd.records_path, "every v2 collection is the same envelope");
+        }
+        # the label dropdown is why the label listing was added
+        assertEq("getLabels", refdata{ConfluenceManifest::RefLabel}.action);
+
+        FakeConfluenceRestClient rest();
+        ConfluenceDataProvider dp(rest);
+        AbstractDataProvider create = dp.getChildProviderEx("createPage");
+        rest.push_response({"body": {"results": ({"id": "65537", "name": "Engineering"},)}});
+        *list<hash<AllowedValueInfo>> spaces = create.getReferenceData(ConfluenceManifest::RefSpace);
+        assertEq(1, spaces.size());
+        assertEq("65537", spaces[0].value);
+        assertEq("Engineering", spaces[0].display_name);
+        assertRegex("limit=250", rest.last().path, "a dropdown is filled in one request");
+    }
+
+    private providerPathTest() {
+        FakeConfluenceRestClient rest();
+        ConfluenceDataProvider dp(rest);
+        aset.validateActionPaths(dp);
+
+        hash<string, bool> children = {};
+        map children{$1} = True, dp.getChildProviderNames();
+        assertTrue(children{ConfluenceDataProvider::EventsChildName});
+        assertNothing(dp.getChildProvider("no-such-action"));
+
+        AbstractDataProvider events = dp.getChildProviderEx(ConfluenceDataProvider::EventsChildName);
+        hash<string, bool> event_children = {};
+        map event_children{$1} = True, events.getChildProviderNames();
+        map assertTrue(event_children{$1}, sprintf("event %y resolves", $1)), ExpectedEvents;
+    }
+
+    private requestConstructionTest() {
+        FakeConfluenceRestClient rest();
+        ConfluenceDataProvider dp(rest);
+
+        # the API prefix comes from the schema's server URL, so it is in the path the client is given
+        AbstractDataProvider get_page = dp.getChildProviderEx("getPageById");
+        rest.push_response({"body": {"id": "123", "title": "a page"}});
+        auto res = get_page.doRequest({"id": "123", "body-format": "storage"});
+        assertEq("GET", rest.last().method);
+        assertRegex("^/wiki/api/v2/pages/123", rest.last().path);
+        assertRegex("body-format=storage", rest.last().path);
+        assertEq("123", res.id);
+
+        AbstractDataProvider create = dp.getChildProviderEx("createPage");
+        rest.push_response({"body": {"id": "456"}});
+        create.doRequest({
+            "spaceId": "65537",
+            "title": "Release notes",
+            "body": {"representation": "storage", "value": "<p>Shipped.</p>"},
+        });
+        auto sent = rest.lastBody();
+        assertEq("POST", rest.last().method);
+        assertEq("/wiki/api/v2/pages", rest.last().path);
+        assertEq("65537", sent.spaceId);
+        assertEq("storage", sent.body.representation);
+
+        rest.push_response({"throw_status": 404, "body": {"errors": ({"title": "Not Found"},)}});
+        assertThrows("REST-RESPONSE-ERROR", \get_page.doRequest(), {"id": "nope"});
+    }
+
+    private connectionTest() {
+        # the site decides the URL, in whichever of the two ways it is named
+        assertEq("https://api.atlassian.com/ex/confluence/abc-123",
+            ConfluenceRestClientBase::getUrlForSite("abc-123", NOTHING));
+        assertEq("https://example.atlassian.net",
+            ConfluenceRestClientBase::getUrlForSite(NOTHING, "example.atlassian.net"));
+        assertEq("https://example.atlassian.net",
+            ConfluenceRestClientBase::getUrlForSite(NOTHING, "https://example.atlassian.net/"),
+            "a trailing slash is removed, or every request path would start \"//\"");
+
+        # naming the site twice could name two different sites
+        assertThrows("CONFLUENCE-SITE-ERROR", "both",
+            \ConfluenceRestClientBase::getUrlForSite(), ("abc-123", "example.atlassian.net"));
+        assertThrows("CONFLUENCE-SITE-ERROR", "is not set",
+            \ConfluenceRestClientBase::getUrlForSite(), (NOTHING, NOTHING));
+
+        # ... and it is recovered from a URL, so a connection built from one alone still has the option
+        assertEq("abc-123", ConfluenceRestClientBase::getCloudIdForUrl(
+            "https://api.atlassian.com/ex/confluence/abc-123"));
+        assertNothing(ConfluenceRestClientBase::getCloudIdForUrl("https://example.atlassian.net"));
+        assertEq("example.atlassian.net",
+            ConfluenceRestClientBase::getSiteForUrl("https://example.atlassian.net"));
+
+        ConfluenceRestConnection conn("confluence-test", "test", "confluence://example.atlassian.net", {},
+            {"username": "a@example.com", "password": "token"});
+        assertEq("confluence", conn.getType());
+        assertEq("Confluence", conn.getAppName());
+        assertTrue(conn.hasDataProvider());
+        assertEq("example.atlassian.net", conn.getInfo().opts.site);
+        assertNothing(conn.getConnectionOptions().url,
+            "the stored URL is withheld, so it cannot decide which site is reached");
+
+        # the gateway URL plus the schema's own base path is what the superseded application called its
+        # "swagger_base_path"
+        hash<auto> opts = ConfluenceRestClientBase::getOptions({"cloud_id": "abc-123"});
+        assertEq("https://api.atlassian.com/ex/confluence/abc-123", opts.url);
+        assertEq("/wiki/api/v2", ConfluenceRestClientBase::ApiPrefix);
+        assertEq("/wiki/api/v2/spaces?limit=1", opts.ping_path);
+
+        hash<auto> oopts = ConfluenceRestClientBase::getOptions({
+            "cloud_id": "abc-123",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://auth.atlassian.com/authorize", oopts.oauth2_auth_url);
+        assertEq("https://auth.atlassian.com/oauth/token", oopts.oauth2_token_url);
+        assertTrue(inlist("offline_access", oopts.oauth2_scopes),
+            "without offline_access the connection stops working when the token expires");
+    }
+
+    private eventProviderTest() {
+        FakeConfluenceRestClient rest();
+        ConfluenceEventsDataProvider events(rest);
+        hash<string, bool> names = {};
+        map names{$1} = True, events.getChildProviderNames();
+        map assertTrue(names{$1}, sprintf("event %y is offered", $1)), ExpectedEvents;
+        assertNothing(events.getChildProvider("no-such-event"));
+
+        AbstractDataProvider tmpl = events.getChildProviderEx("new_page");
+        hash<DataProviderInfo> info = tmpl.getInfo();
+        assertEq(ConfluenceManifest::RefSpace, info.constructor_options.space_id.ref_data);
+        assertFalse(info.constructor_options.space_id.required,
+            "a page event watches the whole site unless a space is chosen");
+
+        # an attachment listing is not scoped by space, so the option is not offered
+        AbstractDataProvider att = events.getChildProviderEx("new_attachment");
+        assertNothing(att.getInfo().constructor_options.space_id);
+    }
+
+    private eventPollingTest() {
+        FakeConfluenceRestClient rest();
+        TestConfluenceNewPageProvider p(rest, {"space_id": "65537", "since": 2026-01-01});
+
+        rest.push_response({"body": {"results": (
+            {"id": "1", "title": "first", "createdAt": "2026-01-02T10:00:00.000Z"},
+            {"id": "2", "title": "second", "createdAt": "2026-01-03T10:00:00.000Z"},
+        )}});
+        p.poll();
+        assertEq(2, p.notified.size());
+        assertEq("first", p.notified[0].title, "dispatched oldest-first");
+        assertEq("second", p.notified[1].title);
+        assertRegex("^/wiki/api/v2/pages", rest.last().path);
+        assertRegex("space-id=65537", rest.last().path, "the space scopes the poll");
+        assertRegex("sort=-created-date", rest.last().path, "newest first, so one page is enough");
+
+        # the second cycle re-reads the boundary record and discards it
+        p.reset();
+        rest.push_response({"body": {"results": (
+            {"id": "2", "title": "second", "createdAt": "2026-01-03T10:00:00.000Z"},
+            {"id": "3", "title": "third", "createdAt": "2026-01-04T10:00:00.000Z"},
+        )}});
+        p.poll();
+        assertEq(1, p.notified.size());
+        assertEq("third", p.notified[0].title);
+
+        # the space scopes the cursor: watching another space must not resume this one's position
+        ConfluenceNewPageDataProvider other(rest, {"space_id": "99", "since": 2026-01-01});
+        assertNeq(p.getWatchStreamIdentity(), other.getWatchStreamIdentity());
+    }
+}
