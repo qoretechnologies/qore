@@ -108,11 +108,57 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
     #! Makes the API call and returns the response body
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> wire = op.unflatten(req);
+        wire.req = addConnectionHeaders(wire.req);
         # path variables travel as a request option, not as part of the request body
         *hash<auto> resp = req_dp.doRequest(wire.req, request_options + {
             "path_vars": wire.path_vars,
         });
         return op.processResponse(resp.body);
+    }
+
+    #! Fills in the headers the connection owns
+    /** A header the overlay dropped with
+        @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore" is one the connection supplies,
+        not one the action asks for — an API key, or the tenant a Xero connection works in.  The schema may
+        still declare it required, and the client adds its own default headers only when the request is
+        actually sent, so a request validated against the schema in between would be rejected for a value
+        the action was never supposed to carry.
+
+        Taking it from the client's default headers is what makes \c ignore mean what it says.  A header
+        the client does not supply is left out, so the schema reports it missing — which is the truth: the
+        connection was supposed to provide it and did not.
+
+        @param wire_req the transport request
+
+        @return the request with any connection-owned headers filled in
+    */
+    private hash<auto> addConnectionHeaders(hash<auto> wire_req) {
+        list<string> names = op.getConnectionHeaders();
+        if (!names || !rest) {
+            return wire_req;
+        }
+        *hash<auto> defaults = rest.getDefaultHeaders();
+        if (!defaults) {
+            return wire_req;
+        }
+        # HTTP header names are case-insensitive, and a schema and a client need not spell one the same way
+        hash<string, auto> lower = {};
+        map lower{$1.key.lwr()} = $1.value, defaults.pairIterator();
+        # "auto!" because the header values are not all of one type once a caller's own are merged in
+        hash<auto!> hdr = wire_req.header ?? {};
+        foreach string name in (names) {
+            if (exists hdr{name}) {
+                continue;
+            }
+            auto value = lower{name.lwr()};
+            if (exists value) {
+                hdr{name} = value;
+            }
+        }
+        if (hdr) {
+            wire_req.header = hdr;
+        }
+        return wire_req;
     }
 
     #! Returns the reference data this action's options can offer
@@ -124,8 +170,11 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
 
     #! Populates a dropdown by executing the action that lists its values
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
-        *hash<RestSchemaReferenceDataInfo> rd = action_set.getReferenceDataDecls(){type};
-        if (!rd) {
+        # an application split across documents declares a dropdown once, in the set whose schema describes
+        # the listing, and other sets reach it as a peer
+        *hash<RestSchemaReferenceDataInfo> rd = action_set.getReferenceDataDecl(type);
+        *RestSchemaActionSet owner = action_set.getReferenceDataSet(type);
+        if (!rd || !owner) {
             return;
         }
         on_error rethrow $1.err, sprintf("%s (while retrieving reference data %y for action %y via action %y)",
@@ -145,8 +194,10 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
             opts{i.key} = val;
         }
 
-        RestSchemaActionDataProvider lister = new RestSchemaActionDataProvider(action_set,
-            action_set.getOperationEx(rd.action), rest);
+        # the listing runs against the schema that declares it, because the request URI takes its prefix
+        # from that schema's base path
+        RestSchemaActionDataProvider lister = new RestSchemaActionDataProvider(owner,
+            owner.getOperationEx(rd.action), rest);
         auto resp = lister.doRequest(opts);
         foreach string name in (rd.records_path) {
             if (!exists resp) {
@@ -166,6 +217,10 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
                 "%y)", resp.type(), rd.records_path);
         }
         list<hash<AllowedValueInfo>> rv = ();
+        # a listing often carries the same value on many records -- the owner of each of a user's
+        # repositories, say -- and two dropdown entries with the same value are indistinguishable to
+        # whoever is choosing one, so the first occurrence wins and the rest are dropped
+        hash<string, bool> seen = {};
         foreach auto record in (resp) {
             if (record.typeCode() != NT_HASH) {
                 throw "REFERENCE-DATA-ERROR", sprintf("expected every record to be a hash, but element %d has "
@@ -175,6 +230,11 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
             if (!exists value) {
                 continue;
             }
+            string key = sprintf("%y", value);
+            if (seen{key}) {
+                continue;
+            }
+            seen{key} = True;
             # many APIs allow an object's human-readable name to be unset; showing the ID is better than
             # showing an empty row
             auto display = rd.display_field.val()

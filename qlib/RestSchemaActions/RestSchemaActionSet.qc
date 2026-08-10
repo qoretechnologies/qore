@@ -105,20 +105,36 @@ public class RestSchemaActionSet {
 
         #! Reference data declarations, keyed by reference data name
         hash<string, hash<RestSchemaReferenceDataInfo>> refdata;
+
+        #! Other sets in the same application whose reference data this one may use
+        list<RestSchemaActionSet> peers = ();
     }
 
     #! Resolves and validates an application's manifest against a schema
     /** @param schema the schema the actions are derived from
         @param manifest the operations the application exports
         @param refdata reference data declarations, keyed by reference data name
+        @param peers other sets in the same application whose reference data this one may use
+
+        An application whose API is split across documents needs one set per document, because a set binds
+        one schema and the request URI takes its prefix from that schema's base path.  Its dropdowns do not
+        split the same way: a Xero project names a **contact**, and contacts are declared in the accounting
+        document while projects are declared in the projects one.  Naming the peer sets lets a field in this
+        set declare reference data another set produces, and the listing then runs against the schema that
+        actually declares it.
+
+        Peers are given at construction rather than added later so that every declaration is still checked
+        once, in one place.  That means they have to be built in dependency order, which is what makes a
+        cycle between two sets impossible to express.
 
         @throw REST-SCHEMA-ACTION-ERROR the manifest is inconsistent, or an entry does not resolve
     */
     constructor(AbstractRestSchemaValidator schema, list<hash<RestSchemaActionInfo>> manifest,
-            *hash<string, hash<RestSchemaReferenceDataInfo>> refdata) {
+            *hash<string, hash<RestSchemaReferenceDataInfo>> refdata, *softlist<RestSchemaActionSet> peers) {
         self.schema = schema;
         self.manifest = manifest;
         self.refdata = refdata ?? {};
+        self.peers = peers ?? ();
 
         hash<string, string> seen_ops = {};
         # manifest entries by action ID, for resolving "variant_of" against what came before
@@ -273,6 +289,51 @@ public class RestSchemaActionSet {
         }
     }
 
+    #! Returns every reference data declaration reachable from this set, including its peers'
+    hash<string, hash<RestSchemaReferenceDataInfo>> getAllReferenceDataDecls() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> rv = {};
+        foreach RestSchemaActionSet peer in (peers) {
+            rv += peer.getAllReferenceDataDecls();
+        }
+        # this set's own declarations win, so a peer cannot shadow one
+        return rv + refdata;
+    }
+
+    #! Returns the reference data declaration of the given name, from this set or a peer
+    /** @param name the reference data name
+
+        @return the declaration, or @ref nothing if no set in the application declares it
+    */
+    *hash<RestSchemaReferenceDataInfo> getReferenceDataDecl(string name) {
+        if (*hash<RestSchemaReferenceDataInfo> rv = refdata{name}) {
+            return rv;
+        }
+        foreach RestSchemaActionSet peer in (peers) {
+            if (*hash<RestSchemaReferenceDataInfo> rv = peer.getReferenceDataDecl(name)) {
+                return rv;
+            }
+        }
+    }
+
+    #! Returns the set that produces the given reference data, from this set or a peer
+    /** The listing has to run against the schema that declares it, because the request URI takes its prefix
+        from that schema's base path.
+
+        @param name the reference data name
+
+        @return the set, or @ref nothing if no set in the application declares it
+    */
+    *RestSchemaActionSet getReferenceDataSet(string name) {
+        if (exists refdata{name}) {
+            return self;
+        }
+        foreach RestSchemaActionSet peer in (peers) {
+            if (*RestSchemaActionSet rv = peer.getReferenceDataSet(name)) {
+                return rv;
+            }
+        }
+    }
+
     #! Validates the reference data declarations against the manifest and the overlays
     private checkReferenceData() {
         foreach hash<auto> i in (refdata.pairIterator()) {
@@ -317,11 +378,12 @@ public class RestSchemaActionSet {
                     if (!attr{key}.val()) {
                         continue;
                     }
-                    *hash<RestSchemaReferenceDataInfo> rd = refdata{attr{key}};
+                    *hash<RestSchemaReferenceDataInfo> rd = getReferenceDataDecl(attr{key});
                     if (!rd) {
                         throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y option %y declares %s %y, which is "
-                            "not declared in the reference data of this action set; declared reference data: "
-                            "%y", i.key, f.key, key, attr{key}, sort(keys refdata));
+                            "not declared in the reference data of this action set or any of its peers; "
+                            "declared reference data: %y", i.key, f.key, key, attr{key},
+                            sort(keys getAllReferenceDataDecls()));
                     }
                     # a forwarded value has to come from somewhere: an action offering a dropdown scoped by
                     # a value it does not itself have would show an empty list and no reason for it

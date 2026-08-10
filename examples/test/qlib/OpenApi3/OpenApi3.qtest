@@ -420,6 +420,9 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test multiple object-valued query parameters", \testMultipleObjectQueryParams());
         addTestCase("Test server URL scheme", \testServerUrlScheme());
         addTestCase("Test form-encoded request body encoding", \testFormUrlEncodedBody());
+        addTestCase("Test response header references", \testResponseHeaderReference());
+        addTestCase("Test constraint-only compositions", \testConstraintOnlyComposition());
+        addTestCase("Test reference siblings", \testReferenceSiblings());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -494,6 +497,149 @@ public class OpenApi3Test inherits QUnit::Test {
         remove soh.servers;
         assertEq("http://api.example.com",
             OpenApi3::OpenApi3Loader::fromString(my_make_json(soh), True).getTargetUrl());
+    }
+
+    testResponseHeaderReference() {
+        checkModules();
+
+        # a response declares each of its headers as either a Header Object or a Reference Object, and a
+        # description that keeps its headers in "#/components/headers" -- as GitHub's does for the "Link"
+        # pagination header -- is unparseable unless the reference is followed
+        OpenApi3Schema schema = loadWithResponseHeader({"$ref": "#/components/headers/link"}, True);
+        assertTrue(exists schema.components.headers.link, "the header component is parsed");
+        assertEq("string", schema.components.headers.link.getSchema().type);
+        assertEq(("get",), schema.getPathOperationHash(){"preview"},
+            "the operation whose response header is a reference is reachable; before the reference was "
+            "followed the whole document failed to parse");
+
+        # an inline header still works, and is the case that always worked
+        OpenApi3Schema inline = loadWithResponseHeader({"schema": {"type": "string"}}, False);
+        assertEq(("get",), inline.getPathOperationHash(){"preview"},
+            "a header declared inline needs no component to resolve against");
+
+        # a reference that names nothing has to say so, rather than yielding an empty header
+        assertThrows("INVALID-REFERENCE", "cannot resolve", \loadWithResponseHeader(),
+            ({"$ref": "#/components/headers/nope"}, True));
+    }
+
+    #! Builds a one-operation schema whose 200 response declares one "Link" header
+    private OpenApi3Schema loadWithResponseHeader(hash<auto> header, bool declare_component) {
+        hash<auto!> soh = ValidOpenApi3Schema + {
+            "paths": {
+                "/preview": {
+                    "get": {
+                        "operationId": "preview",
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "headers": {"Link": header},
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        if (declare_component) {
+            soh.components = soh.components + {
+                "headers": {"link": {"description": "pagination", "schema": {"type": "string"}}},
+            };
+        }
+        return OpenApi3::OpenApi3Loader::fromString(my_make_json(soh), True);
+    }
+
+    testReferenceSiblings() {
+        checkModules();
+
+        # OpenAPI 3.0 says a sibling of "$ref" is ignored, because a Reference Object is a JSON Reference.
+        # Real descriptions rely on it: Xero's accounting document declares "$ref" beside "type" at 28
+        # sites, and rejecting them made the whole document unloadable.
+        hash<auto> base = ValidOpenApi3Schema + {
+            "paths": {
+                "/preview": {
+                    "get": {
+                        "operationId": "preview",
+                        "parameters": ({"$ref": "#/components/parameters/a", "type": "string"},),
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromString(my_make_json(base), True);
+        assertEq(("get",), schema.getPathOperationHash(){"preview"},
+            "a parameter reference with a sibling loads");
+
+        # a schema reference has always ignored its siblings; this is the case that already worked
+        OpenApi3::OpenApi3Schema sibling_schema("", ValidOpenApi3Schema + {
+            "components": ValidOpenApi3Schema.components + {
+                "schemas": {
+                    "Currency": {"type": "string"},
+                    "Holder": {
+                        "type": "object",
+                        "properties": {
+                            "code": {"$ref": "#/components/schemas/Currency", "type": "string"},
+                        },
+                    },
+                },
+            },
+        });
+        assertEq("string", sibling_schema.components.schemas.Holder.properties.code.type,
+            "the sibling is ignored and the reference decides the type");
+
+        # ... but a reference that names nothing is still an error, whatever it is written beside
+        hash<auto> bad = base;
+        bad.paths."/preview".get.parameters = ({"$ref": "#/components/parameters/nope", "type": "string"},);
+        assertThrows("INVALID-REFERENCE", "cannot resolve", \OpenApi3::OpenApi3Loader::fromString(),
+            (my_make_json(bad), True));
+    }
+
+    testConstraintOnlyComposition() {
+        checkModules();
+
+        # an object that declares its properties and then adds "anyOf: [{required: [a]}, {required: [b]}]"
+        # is saying "at least one of these two", not "one of two different shapes"; exposing that as a union
+        # would replace a typed object by an opaque one.  GitHub's "request reviewers" body is this.
+        OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi3Schema + {
+            "components": ValidOpenApi3Schema.components + {
+                "schemas": {
+                    "Reviewers": {
+                        "type": "object",
+                        "properties": {
+                            "reviewers": {"type": "array", "items": {"type": "string"}},
+                            "team_reviewers": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "anyOf": ({"required": ("reviewers",)}, {"required": ("team_reviewers",)}),
+                    },
+                    "Union": {"anyOf": ({"type": "string"}, {"type": "integer"})},
+                    "Alternatives": {
+                        "type": "object",
+                        "properties": {"a": {"type": "string"}},
+                        "oneOf": (
+                            {"type": "object", "properties": {"b": {"type": "string"}}},
+                            {"type": "object", "properties": {"c": {"type": "string"}}},
+                        ),
+                    },
+                },
+            },
+        });
+
+        OpenApi3::SchemaObject reviewers = so.components.schemas.Reviewers;
+        assertTrue(reviewers.isConstraintOnlyComposition());
+        AbstractDataProviderType t = reviewers.getDataType();
+        assertEq(NT_HASH, t.getBaseTypeCode(), "the object keeps its own type");
+        *hash<string, AbstractDataField> fields = t.getFields();
+        assertTrue(exists fields.reviewers, "the properties are still published as fields");
+        assertTrue(exists fields.team_reviewers);
+
+        # a composition whose members are real alternatives is still a union
+        OpenApi3::SchemaObject u = so.components.schemas.Union;
+        assertFalse(u.isConstraintOnlyComposition());
+        assertNeq(NT_HASH, u.getDataType().getBaseTypeCode(),
+            "alternatives of different types stay a union");
+
+        # ... and so is one whose members carry properties of their own
+        OpenApi3::SchemaObject alt = so.components.schemas.Alternatives;
+        assertFalse(alt.isConstraintOnlyComposition(),
+            "a member with properties of its own describes a shape, not a constraint");
     }
 
     testFormUrlEncodedBody() {

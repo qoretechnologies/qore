@@ -1,0 +1,759 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** GitHubDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires GitHubDataProvider
+%requires GitHubRestClient
+%requires RestClientIo
+
+%requires json
+
+%exec-class GitHubDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A GitHub REST client that records requests instead of making them
+class FakeGitHubRestClient inherits GitHubRestClient::GitHubRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : GitHubRestClientIo({"token": "fake"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Returns the last request body, decoded when the transport was handed a serialized one
+    auto lastBody() {
+        auto body = last().body;
+        if (body.typeCode() == NT_BINARY) {
+            body = binary_to_string(body, "UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            return parse_json(body);
+        }
+        return body;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+#! An issue event provider whose deliveries can be driven directly
+class TestGitHubIssueEventProvider inherits GitHubDataProvider::GitHubNewIssueDataProvider {
+    public {
+        #! Payloads the provider reported to its observers
+        list<auto> notified = ();
+    }
+
+    constructor(*GitHubRestClient::GitHubRestClientIo rest, *hash<auto> options)
+            : GitHubNewIssueDataProvider(rest, options) {
+    }
+
+    #! Delivers a webhook request, as the webhook endpoint would
+    deliver(hash<auto> request) {
+        handleWebhookEvent(request);
+    }
+
+    #! Returns the secret the hook was registered with
+    *string secret() {
+        return webhook_secret;
+    }
+
+    #! Returns the ID of the hook created on the repository
+    *int hookId() {
+        return hook_id;
+    }
+
+    #! Records what would have been reported to observers
+    notifyObservers(string event_id, hash<auto> data) {
+        notified += data;
+    }
+
+    reset() {
+        notified = ();
+    }
+}
+
+#! A branch event provider whose deliveries can be driven directly
+class TestGitHubBranchEventProvider inherits GitHubDataProvider::GitHubNewBranchDataProvider {
+    public {
+        #! Payloads the provider reported to its observers
+        list<auto> notified = ();
+    }
+
+    constructor(*GitHubRestClient::GitHubRestClientIo rest, *hash<auto> options)
+            : GitHubNewBranchDataProvider(rest, options) {
+        # the deliveries under test are built with a known secret rather than registered with GitHub
+        webhook_secret = "branch-secret";
+    }
+
+    deliver(hash<auto> request) {
+        handleWebhookEvent(request);
+    }
+
+    notifyObservers(string event_id, hash<auto> data) {
+        notified += data;
+    }
+
+    reset() {
+        notified = ();
+    }
+}
+
+public class GitHubDataProviderTest inherits QUnit::Test {
+    public {
+        #! The action IDs the TypeScript application this module replaces exported
+        /** Taken from its i18n catalog, which is keyed by the registered action name: the GitHub
+            \c operationId with the slash replaced by a hyphen, because the action catalog accepts only
+            \c A-Za-z0-9_- in a name.
+        */
+        const ExpectedTsActions = (
+            "actions-create-or-update-repo-secret", "actions-delete-repo-secret",
+            "actions-get-repo-public-key", "actions-get-repo-secret", "actions-list-repo-workflows",
+            "git-create-ref",
+            "issues-add-assignees", "issues-create", "issues-get", "issues-list", "issues-list-for-repo",
+            "issues-remove-assignees", "issues-update",
+            "orgs-list-members",
+            "pulls-create", "pulls-get", "pulls-list", "pulls-list-requested-reviewers",
+            "pulls-remove-requested-reviewers", "pulls-request-reviewers", "pulls-update",
+            "repos-create-for-authenticated-user", "repos-create-in-org",
+            "repos-create-or-update-file-contents", "repos-create-release", "repos-delete",
+            "repos-delete-file", "repos-get", "repos-get-branch", "repos-get-content",
+            "repos-list-branches", "repos-list-collaborators", "repos-list-commits",
+            "repos-list-contributors", "repos-list-for-authenticated-user", "repos-list-for-org",
+            "repos-list-releases", "repos-update",
+            "search-issues-and-pull-requests", "search-repos",
+        );
+
+        #! The actions this application adds, each backing a dropdown the TypeScript app could not fill
+        const ExpectedAddedActions = (
+            "orgs-list-for-authenticated-user",
+            "issues-list-labels-for-repo",
+            "repos-list-for-user",
+        );
+
+        #! The event providers the application offers, with the IDs the TypeScript app registered
+        const ExpectedEvents = (
+            "new_repository_issue", "new_pull_request", "new_review_request", "new_commit",
+            "new_repository_branch", "new_release", "new_commit_comment",
+        );
+
+        #! The record-based tables the application offers
+        const ExpectedTables = ("issues", "pulls", "releases");
+
+        #! The dropdowns scoped to a repository
+        const ScopedReferenceData = (
+            GitHubManifest::RefBranch, GitHubManifest::RefIssue, GitHubManifest::RefPull,
+            GitHubManifest::RefCollaborator, GitHubManifest::RefLabel,
+        );
+    }
+
+    private {
+        RestSchemaActionSet aset;
+    }
+
+    constructor() : Test("GitHubDataProviderTest", "1.0") {
+        aset = GitHubSchema::getActionSet();
+
+        addTestCase("provenance", \provenanceTest());
+        addTestCase("drift agreement", \driftTest());
+        addTestCase("action identity", \actionIdentityTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("reference data execution", \referenceDataExecutionTest());
+        addTestCase("provider paths", \providerPathTest());
+        addTestCase("request construction", \requestConstructionTest());
+        addTestCase("connection", \connectionTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("webhook registration", \webhookRegistrationTest());
+        addTestCase("webhook verification", \webhookVerificationTest());
+        addTestCase("webhook action filtering", \webhookFilteringTest());
+        addTestCase("record tables", \recordTableTest());
+        addTestCase("record search", \recordSearchTest());
+        addTestCase("record create", \recordCreateTest());
+        set_return_value(main());
+    }
+
+    private provenanceTest() {
+        hash<GitHubSchemaProvenanceInfo> p = GitHubSchema::Provenance;
+        assertRegex("github/rest-api-description", p.source_url);
+        assertRegex("^[0-9a-f]{64}$", p.source_sha256);
+        assertGt(0, p.source_size);
+        assertGt(0, p.source_paths);
+        assertGt(0, p.source_schemas);
+        assertTrue(p.imported.absolute());
+        assertEq(GitHubRestClient::GitHubRestClientBase::ApiVersion, p.api_version,
+            "the pinned description and the version the requests declare move together");
+        assertTrue(is_file(GitHubSchema::getSchemaPath()));
+        assertLt(p.source_size, hstat(GitHubSchema::getSchemaPath()).size,
+            "the pruned schema is smaller than the document it was pruned from");
+        assertLt(p.source_size / 10, hstat(GitHubSchema::getSchemaPath()).size,
+            "pruning a 12.9 MB description is what makes this module loadable");
+    }
+
+    private driftTest() {
+        list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset, GitHubSchema::getSchema());
+        assertEq((), drift, "the manifest and the vendored schema agree");
+    }
+
+    private actionIdentityTest() {
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+
+        list<string> missing = ();
+        foreach string action in (ExpectedTsActions) {
+            if (!actions{action}) {
+                missing += action;
+            }
+        }
+        assertEq((), missing, "every action the TypeScript application exported is still exported");
+        map assertTrue(actions{$1}, sprintf("added action %y is exported", $1)), ExpectedAddedActions;
+        assertEq(ExpectedTsActions.size() + ExpectedAddedActions.size(), (keys actions).size(),
+            "three actions were added, and nothing else");
+
+        # the action ID is the operationId with the slash replaced, because the action catalog accepts
+        # only "A-Za-z0-9_-"; an upstream rename has to surface as drift rather than rename an action
+        foreach hash<RestSchemaActionInfo> info in (GitHubManifest::Manifest) {
+            assertEq(info.action, replace(info.operation_id, "/", "-"),
+                sprintf("action %y is its operationId, hyphenated", info.action));
+            assertFalse(info.action =~ /[^A-Za-z0-9_-]/,
+                sprintf("action %y can be registered in the action catalog", info.action));
+        }
+    }
+
+    private referenceDataTest() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = aset.getReferenceDataDecls();
+        assertEq(8, (keys refdata).size());
+
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+        foreach hash<auto> i in (refdata.pairIterator()) {
+            hash<RestSchemaReferenceDataInfo> rd = i.value;
+            assertEq(i.key, rd.name);
+            assertTrue(actions{rd.action}, sprintf("reference data %y names exported action %y", i.key,
+                rd.action));
+            assertNothing(rd.records_path, "a GitHub collection is a bare array");
+        }
+
+        # a branch belongs to a repository and a repository to an owner, so those dropdowns are scoped
+        map assertEq({"owner": "owner", "repo": "repo"}, refdata{$1}.options_from,
+            sprintf("%y is scoped to the chosen repository", $1)), ScopedReferenceData;
+        assertEq({"username": "owner"}, refdata{GitHubManifest::RefRepository}.options_from);
+        assertNothing(refdata{GitHubManifest::RefOwner}.options_from,
+            "the owner dropdown is the one with no scope");
+
+        # the three listings added to this manifest exist so that three dropdowns can be filled
+        assertEq("orgs-list-for-authenticated-user", refdata{GitHubManifest::RefOrganization}.action);
+        assertEq("issues-list-labels-for-repo", refdata{GitHubManifest::RefLabel}.action);
+        assertEq("repos-list-for-user", refdata{GitHubManifest::RefRepository}.action);
+
+        # GitHub only accepts an assignee with push access, so the dropdown lists collaborators
+        assertEq("repos-list-collaborators", refdata{GitHubManifest::RefCollaborator}.action);
+
+        # the owner is nested inside each repository record
+        assertEq("owner.login", refdata{GitHubManifest::RefOwner}.value_field);
+    }
+
+    private referenceDataExecutionTest() {
+        FakeGitHubRestClient rest();
+        GitHubDataProvider dp(rest);
+
+        # every repository the credential can see carries its owner, and the same owner appears on many of
+        # them; a dropdown offering the same value twice is offering the user a choice that is not one
+        AbstractDataProvider create_issue = dp.getChildProviderEx("issues-create");
+        rest.push_response({"body": (
+            {"name": "qorus", "owner": {"login": "qoretechnologies"}},
+            {"name": "qore", "owner": {"login": "qoretechnologies"}},
+            {"name": "dotfiles", "owner": {"login": "octocat"}},
+        )});
+        *list<hash<AllowedValueInfo>> owners = create_issue.getReferenceData(GitHubManifest::RefOwner);
+        assertEq(2, owners.size(), "the same owner is offered once, however many repositories it owns");
+        assertEq("qoretechnologies", owners[0].value);
+        assertEq("octocat", owners[1].value);
+        assertRegex("per_page=100", rest.last().path, "a dropdown is filled in one request");
+
+        # a scoped dropdown cannot be listed until the option it is scoped by has a value: listing every
+        # branch the credential can see would offer branches of some other repository
+        rest.reset();
+        assertNothing(create_issue.getReferenceData(GitHubManifest::RefLabel, {"owner": "qoretechnologies"}),
+            "a repository-scoped dropdown stays empty until the repository is chosen");
+        assertEq(0, rest.requests.size(), "and makes no request at all");
+
+        rest.push_response({"body": ({"name": "bug"}, {"name": "documentation"})});
+        *list<hash<AllowedValueInfo>> labels = create_issue.getReferenceData(GitHubManifest::RefLabel,
+            {"owner": "qoretechnologies", "repo": "qorus"});
+        assertEq(2, labels.size());
+        assertEq("bug", labels[0].value);
+        assertRegex("/repos/qoretechnologies/qorus/labels", rest.last().path,
+            "the chosen repository scopes the listing");
+    }
+
+    private providerPathTest() {
+        FakeGitHubRestClient rest();
+        GitHubDataProvider dp(rest);
+        aset.validateActionPaths(dp);
+
+        hash<string, bool> children = {};
+        map children{$1} = True, dp.getChildProviderNames();
+        assertTrue(children{GitHubDataProvider::EventsChildName});
+        assertTrue(children{GitHubDataProvider::TablesChildName});
+        assertNothing(dp.getChildProvider("no-such-action"));
+
+        AbstractDataProvider events = dp.getChildProviderEx(GitHubDataProvider::EventsChildName);
+        hash<string, bool> event_children = {};
+        map event_children{$1} = True, events.getChildProviderNames();
+        map assertTrue(event_children{$1}, sprintf("event %y resolves", $1)), ExpectedEvents;
+
+        AbstractDataProvider tables = dp.getChildProviderEx(GitHubDataProvider::TablesChildName);
+        hash<string, bool> table_children = {};
+        map table_children{$1} = True, tables.getChildProviderNames();
+        map assertTrue(table_children{$1}, sprintf("table %y resolves", $1)), ExpectedTables;
+    }
+
+    private requestConstructionTest() {
+        FakeGitHubRestClient rest();
+        GitHubDataProvider dp(rest);
+
+        AbstractDataProvider get_repo = dp.getChildProviderEx("repos-get");
+        rest.push_response({"body": {"id": 1, "name": "qorus", "default_branch": "develop"}});
+        auto res = get_repo.doRequest({"owner": "qoretechnologies", "repo": "qorus"});
+        assertEq("GET", rest.last().method);
+        assertRegex("^/repos/qoretechnologies/qorus", rest.last().path);
+        assertEq("develop", res.default_branch);
+
+        AbstractDataProvider list_issues = dp.getChildProviderEx("issues-list-for-repo");
+        rest.push_response({"body": ({"number": 1, "title": "an issue"},)});
+        list_issues.doRequest({"owner": "qoretechnologies", "repo": "qorus", "state": "all",
+            "per_page": 100});
+        assertRegex("state=all", rest.last().path);
+        assertRegex("per_page=100", rest.last().path);
+
+        AbstractDataProvider create_issue = dp.getChildProviderEx("issues-create");
+        rest.push_response({"body": {"number": 7, "title": "Release notes are out of date"}});
+        create_issue.doRequest({
+            "owner": "qoretechnologies",
+            "repo": "qorus",
+            "title": "Release notes are out of date",
+            "labels": ("documentation",),
+        });
+        auto sent = rest.lastBody();
+        assertEq("POST", rest.last().method);
+        assertEq("/repos/qoretechnologies/qorus/issues", rest.last().path);
+        assertEq("Release notes are out of date", sent.title);
+        assertEq(("documentation",), sent.labels);
+        assertNothing(sent.owner, "the owner travels in the path, not in the body");
+
+        # the reviewer request body is an object with an "anyOf" that only says one of two properties is
+        # required; the properties themselves are still options
+        RestSchemaActionOperation req_rev = aset.getOperationEx("pulls-request-reviewers");
+        hash<string, AbstractDataField> fields = req_rev.getRequestFields();
+        assertTrue(exists fields.reviewers, "a constraint-only composition does not hide the properties");
+        assertTrue(exists fields.team_reviewers);
+        hash<auto> wire = req_rev.unflatten({"owner": "o", "repo": "r", "pull_number": 3,
+            "reviewers": ("octocat",)});
+        assertEq({"owner": "o", "repo": "r", "pull_number": 3}, wire.path_vars);
+        assertEq(("octocat",), wire.req.body.reviewers);
+
+        rest.push_response({"throw_status": 404, "body": {"message": "Not Found"}});
+        assertThrows("REST-RESPONSE-ERROR", \get_repo.doRequest(), {"owner": "nope", "repo": "nope"});
+    }
+
+    private connectionTest() {
+        assertEq("2022-11-28", GitHubRestClientBase::ApiVersion);
+
+        hash<auto> opts = GitHubRestClientBase::getOptions({"token": "abc"});
+        assertEq("https://api.github.com", opts.url);
+        assertEq("Bearer", opts.token_type);
+        assertEq("/user", opts.ping_path);
+        assertEq(GitHubRestClientBase::ApiVersion, opts.headers{GitHubRestClientBase::ApiVersionHeader});
+
+        # a caller adding a header of its own must not drop the version pin
+        hash<auto> hopts = GitHubRestClientBase::getOptions({"token": "abc", "headers": {"X-Trace": "1"}});
+        assertEq(GitHubRestClientBase::ApiVersion, hopts.headers{GitHubRestClientBase::ApiVersionHeader});
+        assertEq("1", hopts.headers."X-Trace");
+
+        hash<auto> oopts = GitHubRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://github.com/login/oauth/authorize", oopts.oauth2_auth_url);
+        assertEq("https://github.com/login/oauth/access_token", oopts.oauth2_token_url);
+        assertEq("authorization_code", oopts.oauth2_grant_type);
+
+        GitHubRestConnection conn("github-test", "test", "github://api.github.com", {}, {"token": "abc"});
+        assertEq("github", conn.getType());
+        assertEq("Github", conn.getAppName());
+        assertTrue(conn.hasDataProvider());
+        assertTrue(GitHubRestConnection::ConnectionScheme.options."token".sensitive,
+            "a personal access token is a credential");
+    }
+
+    private eventProviderTest() {
+        FakeGitHubRestClient rest();
+        GitHubEventsDataProvider events(rest);
+        hash<string, bool> names = {};
+        map names{$1} = True, events.getChildProviderNames();
+        map assertTrue(names{$1}, sprintf("event %y is offered", $1)), ExpectedEvents;
+        assertNothing(events.getChildProvider("no-such-event"));
+
+        # a webhook is registered on one repository, so the repository is required -- but the provider is
+        # built as a template when the children are enumerated, so constructing it must not throw
+        AbstractDataProvider tmpl = events.getChildProviderEx("new_repository_issue");
+        hash<DataProviderInfo> info = tmpl.getInfo();
+        assertTrue(info.constructor_options.owner.required);
+        assertTrue(info.constructor_options.repo.required);
+        assertEq(GitHubManifest::RefOwner, info.constructor_options.owner.ref_data);
+        assertEq(GitHubManifest::RefRepository, info.constructor_options.repo.ref_data);
+        assertTrue(info.supports_observable);
+
+        # the event type is composed from the pinned schema's own component types
+        hash<string, hash<DataProviderMessageInfo>> types = tmpl.getEventTypes();
+        AbstractDataProviderType t = types."new_repository_issue"."type";
+        hash<string, AbstractDataField> fields = t.getFields();
+        assertTrue(exists fields.issue);
+        assertTrue(exists fields.repository);
+        assertTrue(exists fields.sender);
+        assertGt(10, fields.issue.getType().getFields().size(),
+            "the issue is GitHub's own declared shape, not a hand-written summary of it");
+    }
+
+    private webhookRegistrationTest() {
+        FakeGitHubRestClient rest();
+        list<hash<auto>> created = ();
+        list<hash<auto>> deleted = ();
+        DataProviderWebhook::registerWebhookApis(
+            hash<auto> sub (hash<auto> config) {
+                created += config;
+                return {"url": "https://qorus.example.com/webhook/1", "ctx": "ctx-1"};
+            },
+            sub (hash<auto> info) {
+                deleted += info;
+            },
+        );
+
+        TestGitHubIssueEventProvider p(rest, {"owner": "qoretechnologies", "repo": "qorus"});
+        rest.push_response({"body": {"id": 4242}});
+        p.observersReady();
+
+        assertEq(1, created.size());
+        assertEq("POST", rest.last().method);
+        assertEq("/repos/qoretechnologies/qorus/hooks", rest.last().path);
+        auto sent = rest.lastBody();
+        assertEq("web", sent.name);
+        assertEq(("issues",), sent.events);
+        assertEq("https://qorus.example.com/webhook/1", sent.config.url);
+        assertEq("json", sent.config.content_type);
+        # the superseded application registered its hooks with no secret at all, so nothing it received
+        # could be verified
+        assertRegex("^[0-9a-f]{64}$", sent.config.secret, "a hook is registered with a generated secret");
+        assertEq(sent.config.secret, p.secret());
+        assertEq(4242, p.hookId());
+
+        p.stopEvents();
+        assertEq("DELETE", rest.last().method);
+        assertEq("/repos/qoretechnologies/qorus/hooks/4242", rest.last().path);
+        assertEq(1, deleted.size(), "the local endpoint is removed with the hook");
+
+        # the repository is what a hook is registered on, so it cannot be left out
+        TestGitHubIssueEventProvider bare(rest, {});
+        assertThrows("GITHUB-EVENT-ERROR", "owner", \bare.observersReady());
+    }
+
+    private webhookVerificationTest() {
+        FakeGitHubRestClient rest();
+        TestGitHubIssueEventProvider p(rest, {"owner": "o", "repo": "r"});
+        rest.push_response({"body": {"id": 1}});
+        p.observersReady();
+        string secret = p.secret();
+
+        string body = make_json({"action": "opened", "issue": {"number": 7, "title": "a new issue"}});
+        string sig = "sha256=" + WebhookSignature::sign(secret, body);
+
+        p.deliver({"body": body, "hdr": {"X-Hub-Signature-256": sig, "X-GitHub-Event": "issues"}});
+        assertEq(1, p.notified.size(), "a correctly signed delivery is raised");
+        assertEq(7, p.notified[0].issue.number);
+
+        # anyone on the internet can post to a webhook URL; a delivery that does not verify is dropped
+        p.reset();
+        p.deliver({"body": body, "hdr": {"X-Hub-Signature-256": "sha256=" + WebhookSignature::sign("wrong",
+            body), "X-GitHub-Event": "issues"}});
+        assertEq(0, p.notified.size(), "a delivery signed with the wrong secret is dropped");
+
+        p.reset();
+        p.deliver({"body": body, "hdr": {"X-GitHub-Event": "issues"}});
+        assertEq(0, p.notified.size(), "a delivery with no signature is dropped");
+
+        p.reset();
+        p.deliver({"body": body, "hdr": {"X-Hub-Signature-256": WebhookSignature::sign(secret, body),
+            "X-GitHub-Event": "issues"}});
+        assertEq(0, p.notified.size(), "a signature with no \"sha256=\" prefix is dropped");
+
+        # the signature covers the bytes as sent, so a body that arrives already parsed cannot be checked
+        p.reset();
+        p.deliver({"body": {"action": "opened"}, "hdr": {"X-Hub-Signature-256": sig,
+            "X-GitHub-Event": "issues"}});
+        assertEq(0, p.notified.size(), "a delivery whose raw body is not available is dropped");
+
+        # GitHub posts a "ping" once when a hook is created; it is protocol noise, not an event
+        p.reset();
+        string ping = make_json({"zen": "Design for failure.", "hook_id": 1});
+        p.deliver({"body": ping, "hdr": {"X-Hub-Signature-256": "sha256="
+            + WebhookSignature::sign(secret, ping), "X-GitHub-Event": "ping"}});
+        assertEq(0, p.notified.size(), "GitHub's \"ping\" delivery is not an event");
+
+        # a hook can be edited in the GitHub UI to send more than it was created for
+        p.reset();
+        string other = make_json({"action": "created", "comment": {"id": 1}});
+        p.deliver({"body": other, "hdr": {"X-Hub-Signature-256": "sha256="
+            + WebhookSignature::sign(secret, other), "X-GitHub-Event": "commit_comment"}});
+        assertEq(0, p.notified.size(), "a delivery for another GitHub event is dropped");
+
+        p.stopEvents();
+    }
+
+    private webhookFilteringTest() {
+        FakeGitHubRestClient rest();
+        TestGitHubIssueEventProvider p(rest, {"owner": "o", "repo": "r"});
+        rest.push_response({"body": {"id": 1}});
+        p.observersReady();
+        string secret = p.secret();
+
+        # "New Issue" means opened, not edited or closed
+        foreach string action in (("edited", "closed", "labeled")) {
+            string body = make_json({"action": action, "issue": {"number": 7}});
+            p.deliver({"body": body, "hdr": {"X-Hub-Signature-256": "sha256="
+                + WebhookSignature::sign(secret, body), "X-GitHub-Event": "issues"}});
+        }
+        assertEq(0, p.notified.size(), "only the change the event is named for is raised");
+        p.stopEvents();
+
+        # ... unless the whole family is asked for, which is what the superseded application delivered
+        FakeGitHubRestClient rest2();
+        TestGitHubIssueEventProvider all(rest2, {"owner": "o", "repo": "r", "all_actions": True});
+        rest2.push_response({"body": {"id": 2}});
+        all.observersReady();
+        string body = make_json({"action": "closed", "issue": {"number": 7}});
+        all.deliver({"body": body, "hdr": {"X-Hub-Signature-256": "sha256="
+            + WebhookSignature::sign(all.secret(), body), "X-GitHub-Event": "issues"}});
+        assertEq(1, all.notified.size(), "\"all_actions\" restores the whole family");
+        all.stopEvents();
+
+        # GitHub's "create" event covers branches and tags alike, and only one of them is a new branch
+        TestGitHubBranchEventProvider b(rest, {"owner": "o", "repo": "r"});
+        string branch = make_json({"ref": "feature/x", "ref_type": "branch"});
+        b.deliver({"body": branch, "hdr": {"X-Hub-Signature-256": "sha256="
+            + WebhookSignature::sign("branch-secret", branch), "X-GitHub-Event": "create"}});
+        string tag = make_json({"ref": "v1.0", "ref_type": "tag"});
+        b.deliver({"body": tag, "hdr": {"X-Hub-Signature-256": "sha256="
+            + WebhookSignature::sign("branch-secret", tag), "X-GitHub-Event": "create"}});
+        assertEq(1, b.notified.size(), "a new tag is not a new branch");
+        assertEq("feature/x", b.notified[0].ref);
+    }
+
+    private recordTableTest() {
+        FakeGitHubRestClient rest();
+        GitHubIssuesDataProvider issues(rest);
+        hash<DataProviderInfo> info = issues.getInfo();
+        assertTrue(info.supports_read);
+        assertTrue(info.supports_create);
+        assertTrue(info.supports_native_search);
+        assertTrue(info.search_options.owner.required);
+        assertTrue(info.create_options.repo.required);
+
+        # the table is a flattened, writable projection, not GitHub's response shape
+        *hash<string, AbstractDataField> fields = issues.getRecordType();
+        assertTrue(exists fields.labels);
+        assertTrue(exists fields.assignees);
+        assertTrue(exists fields.milestone);
+        assertEq(NT_LIST, fields.labels.getType().getBaseTypeCode(),
+            "labels are names, not the objects GitHub returns");
+
+        # GitHub's releases collection accepts no state, sort or direction, so none is offered
+        GitHubReleasesDataProvider releases(rest);
+        assertNothing(releases.getInfo().search_options.state);
+        assertNothing(releases.getInfo().search_options.sort);
+        assertTrue(exists releases.getInfo().search_options.limit);
+    }
+
+    private recordSearchTest() {
+        FakeGitHubRestClient rest();
+        GitHubIssuesDataProvider issues(rest);
+
+        rest.push_response({"body": (
+            {
+                "id": 1, "number": 7, "state": "open", "title": "an issue",
+                "labels": ({"name": "bug"}, {"name": "documentation"}),
+                "assignee": {"login": "octocat"},
+                "assignees": ({"login": "octocat"},),
+                "milestone": {"title": "6.1"},
+            },
+        )});
+        AbstractDataProviderRecordIterator<hash<auto>> i = issues.searchRecords(NOTHING, {
+            "owner": "qoretechnologies", "repo": "qorus", "state": "all",
+        });
+        list<hash<auto>> recs = map $1, i;
+        assertEq(1, recs.size());
+        assertEq(("bug", "documentation"), recs[0].labels, "labels are flattened to names");
+        assertEq("octocat", recs[0].assignee, "the assignee is flattened to a login");
+        assertEq(("octocat",), recs[0].assignees);
+        assertEq("6.1", recs[0].milestone);
+        assertRegex("^/repos/qoretechnologies/qorus/issues", rest.last().path);
+        assertRegex("state=all", rest.last().path);
+        assertRegex("per_page=100", rest.last().path);
+        assertEq(1, rest.requests.size(), "a page shorter than the size asked for is the last page");
+
+        # a table is scoped to one repository, and there is no default for it
+        assertThrows("SEARCH-OPTION-ERROR", "owner", \issues.searchRecords(), (NOTHING, {"repo": "qorus"}));
+
+        # a pull request's base and head arrive as objects and are presented as branch names
+        GitHubPullsDataProvider pulls(rest);
+        rest.reset();
+        rest.push_response({"body": (
+            {
+                "id": 2, "number": 3, "title": "a pull request",
+                "base": {"ref": "develop"},
+                "head": {"ref": "feature/x", "repo": {"full_name": "octocat/qorus"}},
+            },
+        )});
+        list<hash<auto>> pull_recs = map $1, pulls.searchRecords(NOTHING, {"owner": "q", "repo": "qorus"});
+        assertEq("develop", pull_recs[0].base);
+        assertEq("feature/x", pull_recs[0].head);
+        assertEq("octocat/qorus", pull_recs[0].head_repo);
+    }
+
+    private recordCreateTest() {
+        FakeGitHubRestClient rest();
+        GitHubIssuesDataProvider issues(rest);
+
+        rest.push_response({"body": {"id": 9, "number": 12, "title": "from a record",
+            "labels": ({"name": "bug"},)}});
+        *hash<auto> rec = issues.createRecord({
+            "title": "from a record",
+            "body": "a description",
+            "labels": ("bug",),
+            "assignees": (),
+            "milestone": NOTHING,
+        }, {"owner": "qoretechnologies", "repo": "qorus"});
+
+        assertEq("POST", rest.last().method);
+        assertEq("/repos/qoretechnologies/qorus/issues", rest.last().path);
+        auto sent = rest.lastBody();
+        assertEq("from a record", sent.title);
+        assertEq(("bug",), sent.labels);
+        assertNothing(sent.assignees, "an empty column is not sent; GitHub rejects a null where it wants "
+            "a value");
+        assertNothing(sent.milestone);
+        assertNothing(sent.id, "the identity is GitHub's to assign");
+        assertEq(12, rec.number);
+        assertEq(("bug",), rec.labels, "the created record comes back in the table's shape");
+
+        assertThrows("CREATE-RECORD-ERROR", "repo", \issues.createRecord(), ({"title": "x"},
+            {"owner": "qoretechnologies"}));
+    }
+}

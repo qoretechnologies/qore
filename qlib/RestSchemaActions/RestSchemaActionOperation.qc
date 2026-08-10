@@ -84,6 +84,13 @@ public class RestSchemaActionOperation {
         */
         list<hash<RestSchemaDerivedValueInfo>> derived_values = ();
 
+        #! Header values dropped by the overlay, which the connection is expected to supply
+        /** An ignored header is one the connection owns — an API key, the tenant a Xero connection works
+            in — so the action must not ask for it, and the request must still carry it.  These names are
+            filled in from the REST client's own default headers when the request is built.
+        */
+        list<string> connection_headers = ();
+
         #! The action output type: the success response body, unwrapped
         *AbstractDataProviderType response_type;
 
@@ -169,6 +176,18 @@ public class RestSchemaActionOperation {
     #! Returns the HTTP status code of the response published as the output type, if any
     *string getResponseCode() {
         return response_code;
+    }
+
+    #! Returns the header values the connection is expected to supply
+    /** These are the headers the overlay dropped with
+        @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore".  Dropping one hides it from the
+        action, which is the point, but the schema may still declare it required — so the request is filled
+        in from the REST client's own default headers rather than being sent without it.
+
+        @see @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider"
+    */
+    list<string> getConnectionHeaders() {
+        return connection_headers;
     }
 
     #! Returns the reverse map from action option name to transport location
@@ -410,6 +429,12 @@ public class RestSchemaActionOperation {
                 string derived_name = entry.wire_name;
                 hash<RestSchemaFieldOverlayInfo> ov = getFieldOverlay(info.fields, loc, derived_name);
                 if (ov.ignore) {
+                    # a header the action does not ask for is one the connection supplies; the schema may
+                    # still require it, and dropping it from the action must not produce a request the
+                    # schema rejects
+                    if (loc == RSAL_HEADER) {
+                        connection_headers += derived_name;
+                    }
                     continue;
                 }
                 if (ov.value_from.val()) {
