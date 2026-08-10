@@ -223,6 +223,19 @@ the pruner to preserve that section first.
 `RestSchemaActionCodecs::UnixSeconds`; Paddle's are RFC 3339 strings and need nothing. A codec applied
 where the schema is already honest is a conversion nobody asked for.
 
+**Check that the document declares paging before choosing this path.** An action can only offer what the
+schema declares, and an overlay cannot add a parameter — that is structural, not presentational. Bitbucket
+documents `page` and `pagelen` on a shared *Pagination* page rather than per endpoint, and its published
+OpenAPI 3 description declares them on **6 of 331 operations**: every collection accepts them and almost
+none says so. A generated listing action therefore cannot ask for page 2 or for more than Bitbucket's
+default page of 10, which is a regression against any application that paged by hand — and it is invisible
+until somebody opens a dropdown against a workspace with more than ten repositories in it.
+
+Measure this the same way as operation coverage: count the collection operations that declare a paging
+parameter, not just the ones that exist. Where the count is low the document needs an import-time
+normalization step before the path is usable, which is a decision to take before the port starts rather
+than after the manifest is written.
+
 **Almost no identifier is global, so a dropdown usually needs scope.** A branch belongs to a repository, a
 page to a space, a member to a workspace. `RestSchemaReferenceDataInfo::options_from` forwards named options
 of the action being filled in into the listing action, and leaves the dropdown empty until they have values.
