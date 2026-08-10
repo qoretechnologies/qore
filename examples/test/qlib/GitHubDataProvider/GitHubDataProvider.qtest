@@ -427,6 +427,15 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         assertRegex("^/repos/qoretechnologies/qorus", rest.last().path);
         assertEq("develop", res.default_branch);
 
+        # every reserved character in a query value has to be escaped, or the value changes the request
+        # rather than travelling in it: an unescaped space ends the HTTP request line outright, which is
+        # what a GitHub search query is full of
+        AbstractDataProvider search = dp.getChildProviderEx("search-repos");
+        rest.push_response({"body": {"total_count": 0, "items": ()}});
+        search.doRequest({"q": "qore language:qore", "per_page": 5});
+        assertRegex("q=qore%20language%3Aqore", rest.last().path, "a query value is percent-encoded");
+        assertFalse(rest.last().path =~ / /, "and carries no space, which would end the request line");
+
         AbstractDataProvider list_issues = dp.getChildProviderEx("issues-list-for-repo");
         rest.push_response({"body": ({"number": 1, "title": "an issue"},)});
         list_issues.doRequest({"owner": "qoretechnologies", "repo": "qorus", "state": "all",

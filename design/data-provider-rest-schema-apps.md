@@ -374,6 +374,20 @@ hooks without `config.secret`, so GitHub sent no signature and none could be che
 fire on anything posted to its endpoint by whoever learned the URL. A generated per-subscription secret and
 a `X-Hub-Signature-256` check are the minimum, and are cheap.
 
+**An option is a value, not a URL fragment — the transport escapes it.** `RestSchemaDataProvider` used to
+place query values and path variables into the URI verbatim. That works only while no value contains a
+reserved character, and the first live GitHub search broke it outright: an unescaped space ends the HTTP
+request line, and the response came back without headers at all. A Xero filter (`Type=="BANK"`) and a file
+called `a file with spaces.md` are the same problem in a query argument and a path segment. Both are now
+percent-encoded, with a list's separating commas left literal because they are the separator rather than
+part of any element.
+
+This settled an open question in the GitLab port, which had documented the opposite contract — that the
+user supplies an *already*-encoded project path (`group%2Fproject`). That cannot be right: a value the
+caller pre-escapes is a value the framework cannot escape, so the moment one contains a space there is no
+correct answer. The option now takes the path as it reads and the transport escapes it, which is what
+GitLab's single `{id}` path segment needs and what every other option already did.
+
 **Compose an event's payload type from the pinned schema's components.** The pruner drops a document's
 webhook section, and GitHub's payloads are under an `x-webhooks` extension the pruner would have to learn.
 But the *objects* those payloads carry — an issue, a repository, a user — are component schemas the exported

@@ -434,10 +434,12 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         assertEq(1, slugs.size());
         assertEq("home", slugs[0].value);
         assertEq("Home", slugs[0].display_name);
-        # the value the user chose reaches the listing as given; GitLab takes a numeric ID or an
-        # already-encoded path, so the transport must not encode it a second time
-        assertRegex("/api/v4/projects/my-group/my-project/wikis", rest.last().path,
-            "the chosen project scoped the listing");
+        # GitLab identifies a project by a numeric ID or by its path, and the path has to survive as one
+        # path segment -- so the transport escapes it.  The option takes the path as it reads, like every
+        # other option takes a value rather than a pre-escaped URL fragment; sending "my-group/my-project"
+        # unescaped would address a different route entirely.
+        assertRegex("/api/v4/projects/my-group%2Fmy-project/wikis", rest.last().path,
+            "the chosen project scoped the listing, escaped into one path segment");
     }
 
     private overlayTest() {

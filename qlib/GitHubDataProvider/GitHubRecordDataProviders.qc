@@ -42,6 +42,18 @@ public namespace GitHubDataProvider {
 
     A table is scoped to one repository, and \c owner and \c repo are therefore required search and create
     options rather than connection settings — exactly as in the application this module replaces.
+
+    @section githubrecord_lag A New Record Is Not Immediately Listed
+
+    GitHub's collection endpoints lag its writes by a few seconds: an issue created through
+    @ref createRecord() — or through the \c "issues-create" action — is readable straight away by number,
+    and is **not** yet in what the listing returns.  Verified against the live API: creating an issue and
+    searching the table in the same breath returns the records that existed before it.
+
+    So a workflow that creates a record and then searches for it will not find it, and should use what
+    @ref createRecord() returned rather than reading it back.  This is GitHub's behaviour, not this
+    module's; there is nothing to poll or retry that would make it appear sooner, and the record is not
+    lost.
 */
 public class GitHubTableDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {

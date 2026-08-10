@@ -323,8 +323,10 @@ public class GitLabManifest {
         const ProjectOverlay = <RestSchemaFieldOverlayInfo>{
             "display_name": "Project",
             "short_desc": "The project to work on",
-            "desc": "The project this action works on, given as its numeric ID or as its URL-encoded path "
-                "(`group%2Fproject`).\n\n"
+            "desc": "The project this action works on, given as its numeric ID or as its path "
+                "(`group/project`).\n\n"
+                "Give the path as it reads; the transport escapes it into the single path segment GitLab "
+                "expects. A path escaped by hand would be escaped a second time and would not resolve.\n\n"
                 "Every other option scoped by a project — branches, issues, members, variables — is listed "
                 "from this project, so changing it re-reads them.",
             "ref_data": RefProject,
@@ -345,8 +347,10 @@ public class GitLabManifest {
         const GroupOverlay = <RestSchemaFieldOverlayInfo>{
             "display_name": "Group",
             "short_desc": "The group to work on",
-            "desc": "The group this action works on, given as its numeric ID or as its URL-encoded path "
-                "(`parent%2Fgroup`).\n\n"
+            "desc": "The group this action works on, given as its numeric ID or as its path "
+                "(`parent/group`).\n\n"
+                "Give the path as it reads; the transport escapes it into the single path segment GitLab "
+                "expects. A path escaped by hand would be escaped a second time and would not resolve.\n\n"
                 "Every other option scoped by a group — members, variables — is listed from this group, so "
                 "changing it re-reads them.",
             "ref_data": RefGroup,

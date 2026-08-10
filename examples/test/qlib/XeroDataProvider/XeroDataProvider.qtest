@@ -394,7 +394,9 @@ public class XeroDataProviderTest inherits QUnit::Test {
         rest.push_response({"body": {"Contacts": ({"ContactID": "3e6ba1e5-b5a6-4b28-b06a-4e5c2ffb8e51", "Name": "Acme"},)}});
         auto res = find_contacts.doRequest({"where": "IsCustomer==true", "page": 2, "pageSize": 100});
         assertEq("GET", rest.last().method);
-        assertRegex("where=", rest.last().path);
+        # a Xero filter is full of characters that would otherwise corrupt the query it travels in
+        assertRegex("where=IsCustomer%3D%3Dtrue", rest.last().path,
+            "a filter expression is percent-encoded");
         assertRegex("page=2", rest.last().path);
         assertEq("Acme", res.Contacts[0].Name);
 
