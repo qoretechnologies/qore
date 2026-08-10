@@ -240,6 +240,7 @@ separates cleanly:
 | GitLab | all of them (`page`, `per_page`) |
 | Confluence | all of them (`limit`, `cursor`) |
 | GitHub | all of them (`page`, `per_page`) |
+| Xero | all of them (`page`, `pageSize`), except the four settings listings that have no paging at all |
 | Bitbucket | **3 of 16** — only the three code-search endpoints |
 
 So this is not a general property of published descriptions; it is one vendor's description being wrong in
@@ -317,6 +318,68 @@ copy of that shape would drift from the schema the actions use.
 one method/path pair twice, which catches a copy-and-paste slip. When two actions genuinely share an
 operation — Paddle's `archive_product` and `update_product` are both `PATCH /products/{product_id}` —
 declare the second with `variant_of` rather than relaxing the guard.
+
+## What the GitHub and Xero ports added
+
+**Read the superseded application's action IDs out of its i18n catalog, not out of the schema.** The
+TypeScript loader derives an action ID from the vendored `operationId`, but the action catalog accepts only
+`A-Za-z0-9_-`, so a slash-bearing `operationId` was registered with the slash replaced. GitHub's IDs are
+`pulls-list` and `repos-get`, **not** `pulls/list` — and the only place that is written down is
+`ts/src/i18n/en/apps/<App>/index.ts`, which is keyed by the registered name. Getting this wrong renames
+every action in the application while looking like it preserved them.
+
+**A connection-owned value still has to be sent.** `RestSchemaFieldOverlayInfo::ignore` exists for exactly
+the value a connection owns — an API key, Xero's `Xero-Tenant-Id` — but dropping it from the action left a
+request the schema rejected as incomplete, because the client only merges its own default headers when the
+request is finally sent. An ignored **header** is now filled in from the client's default headers when the
+request is built, which is what makes `ignore` mean what it documents. A header the client does not supply
+is still reported missing, because that is the truth.
+
+**A multi-document application needs peer reference data.** One action set per document routes itself, but
+dropdowns do not split along the same lines: a Xero project names a *contact*, and contacts are declared in
+the accounting document. `RestSchemaActionSet` therefore takes optional **peer sets** whose reference data
+it may use, and the listing runs against the set that declares it — the only way its URI prefix can be
+right. Peers are given at construction, so the sets are built in dependency order and a cycle cannot be
+expressed.
+
+**Deduplicate a dropdown's values.** GitHub's owner dropdown is the `owner` of each repository the
+credential can see, and the same owner appears on every repository it owns. Two entries with the same value
+are indistinguishable to whoever is choosing one, so `RestSchemaActionDataProvider` now keeps the first and
+drops the rest.
+
+**A watch provider needs the record's ID field, not just its timestamp.** `AbstractTimestampWatchDataProvider`
+breaks a tie between records sharing a timestamp with `getIdField()`, whose default is `"id"`. Xero names
+every identity after its type — `ContactID`, `InvoiceID` — so without the override **nothing was ever
+delivered**, and the symptom was an empty feed rather than an error.
+
+**When three schemas describe one action differently, hand-write it.** This is the `variant_of` problem one
+level up. Xero publishes a payroll description per region, and Australia's is a different API version from
+New Zealand's and the United Kingdom's — the create takes an array in one and a single object in the other
+two. A registered action has exactly one option shape, so generating from any one region would publish that
+region's contract to everybody. The two employee actions are written by hand, take the region from the
+connection, and normalise the response envelope; they keep their action IDs. The rule from GitLab's
+create-commit generalises: *the schema must be able to describe the action the application means*, and three
+schemas that disagree cannot.
+
+**Measure a webhook trigger against what it actually subscribes to.** GitHub's `create` event covers
+branches *and tags*, and its `issues` event covers `opened`, `edited`, `closed` and a dozen more — so a
+trigger called "New Branch" or "New Issue" that forwards every delivery is reporting something other than
+what it says. Each event now raises only the change its name describes, with an `all_actions` option that
+restores the old firehose for anyone who depended on it. The same measurement found that the superseded
+GitHub application's `new_review_request` trigger subscribes to reviews being *given*, not requested; the
+payload is the commitment, so the behaviour was kept and the presentation corrected.
+
+**A webhook with no secret is not a webhook worth having.** The superseded GitHub application registered its
+hooks without `config.secret`, so GitHub sent no signature and none could be checked: every trigger would
+fire on anything posted to its endpoint by whoever learned the URL. A generated per-subscription secret and
+a `X-Hub-Signature-256` check are the minimum, and are cheap.
+
+**Compose an event's payload type from the pinned schema's components.** The pruner drops a document's
+webhook section, and GitHub's payloads are under an `x-webhooks` extension the pruner would have to learn.
+But the *objects* those payloads carry — an issue, a repository, a user — are component schemas the exported
+operations already reference, so an event type can be composed from them. Only the few shapes a vendor does
+not publish as reusable components stay open hashes. That keeps the event and the actions describing the
+same record the same way.
 
 ## Where per-application detail belongs
 

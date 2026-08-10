@@ -1,0 +1,622 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** XeroDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires XeroDataProvider
+%requires XeroRestClient
+%requires RestClientIo
+
+%requires json
+
+%exec-class XeroDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A Xero REST client that records requests instead of making them
+class FakeXeroRestClient inherits XeroRestClient::XeroRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor(*hash<auto> opts) : XeroRestClientIo({"token": "fake", "tenant_id": "test-tenant"}
+            + (opts ?? {})) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Returns the last request body, decoded when the transport was handed a serialized one
+    auto lastBody() {
+        auto body = last().body;
+        if (body.typeCode() == NT_BINARY) {
+            body = binary_to_string(body, "UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            return parse_json(body);
+        }
+        return body;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+#! A contact event provider whose polling can be driven directly
+class TestXeroNewContactProvider inherits XeroDataProvider::XeroNewContactDataProvider {
+    public {
+        #! Records the provider reported to its observers
+        list<auto> notified = ();
+    }
+
+    constructor(*XeroRestClient::XeroRestClientIo rest, *hash<auto> options)
+            : XeroNewContactDataProvider(rest, options) {
+    }
+
+    #! Runs one polling cycle, as the polling thread would
+    poll() {
+        pollOnce();
+    }
+
+    #! Records what would have been reported to observers
+    notifyObservers(string event_id, hash<auto> data) {
+        notified += data;
+    }
+
+    reset() {
+        notified = ();
+    }
+}
+
+public class XeroDataProviderTest inherits QUnit::Test {
+    public {
+        #! The action IDs the TypeScript application this module replaces exported and still resolve
+        /** \c getEmployees and \c updateOrCreateEmployees are here too, but they are hand-written rather
+            than generated: the accounting endpoint they were read through no longer exists.
+        */
+        const ExpectedTsActions = (
+            "getContacts", "updateOrCreateContacts",
+            "getInvoices", "updateOrCreateInvoices", "getInvoiceHistory", "createInvoiceHistory",
+            "emailInvoice", "updateOrCreateQuotes", "updateOrCreateRepeatingInvoices",
+            "createPayment", "createCreditNoteAllocation", "updateOrCreateBankTransactions",
+            "getItems", "updateOrCreateItems", "getPurchaseOrders",
+            "getProjects", "createProject", "getProjectUsers", "getTasks", "createTask",
+        );
+
+        #! The actions this application adds, each backing something the TypeScript app could not do
+        const ExpectedAddedActions = (
+            "getAccounts", "getTaxRates", "getCreditNotes", "getBankTransactions", "getPayments",
+        );
+
+        #! The hand-written employee actions, whose endpoint moved out of the accounting API
+        const ExpectedEmployeeActions = ("getEmployees", "updateOrCreateEmployees");
+
+        #! The event providers the application offers
+        const ExpectedEvents = (
+            "new_contact", "new_bill", "new_credit_note", "new_bank_transaction", "new_payment",
+            "new_purchase_order", "new_employee",
+        );
+    }
+
+    private {
+        RestSchemaActionSet accounting;
+        RestSchemaActionSet projects;
+    }
+
+    constructor() : Test("XeroDataProviderTest", "1.0") {
+        accounting = XeroSchema::getAccountingActionSet();
+        projects = XeroSchema::getProjectsActionSet();
+
+        addTestCase("provenance", \provenanceTest());
+        addTestCase("drift agreement", \driftTest());
+        addTestCase("action identity", \actionIdentityTest());
+        addTestCase("two documents route themselves", \routingTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("cross-document reference data", \peerReferenceDataTest());
+        addTestCase("provider paths", \providerPathTest());
+        addTestCase("request construction", \requestConstructionTest());
+        addTestCase("query date codec", \queryDateCodecTest());
+        addTestCase("connection", \connectionTest());
+        addTestCase("employees by region", \employeeRegionTest());
+        addTestCase("employee envelopes", \employeeEnvelopeTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("xero timestamps", \timestampTest());
+        addTestCase("event polling", \eventPollingTest());
+        set_return_value(main());
+    }
+
+    private provenanceTest() {
+        foreach hash<auto> i in ((
+            {"p": XeroSchema::AccountingProvenance, "file": XeroSchema::AccountingSchemaFileName},
+            {"p": XeroSchema::ProjectsProvenance, "file": XeroSchema::ProjectsSchemaFileName},
+        )) {
+            hash<XeroSchemaProvenanceInfo> p = i.p;
+            assertRegex("XeroAPI/Xero-OpenAPI", p.source_url);
+            assertRegex("^[0-9a-f]{64}$", p.source_sha256);
+            assertGt(0, p.source_size);
+            assertGt(0, p.source_paths);
+            assertGt(0, p.source_schemas);
+            assertTrue(p.imported.absolute());
+            string path = XeroSchema::getSchemaPath(i.file);
+            assertTrue(is_file(path));
+            assertLt(p.source_size, hstat(path).size,
+                sprintf("the pruned %y is smaller than the document it was pruned from", i.file));
+        }
+        # two documents means two provenance records, because the next import has to be diffed against the
+        # baseline each one started from
+        assertNeq(XeroSchema::AccountingProvenance.source_sha256,
+            XeroSchema::ProjectsProvenance.source_sha256);
+    }
+
+    private driftTest() {
+        # drift runs per document, because each manifest is resolved against its own schema
+        assertEq((), RestSchemaDrift::compare(accounting, XeroSchema::getAccountingSchema()),
+            "the accounting manifest and its vendored schema agree");
+        assertEq((), RestSchemaDrift::compare(projects, XeroSchema::getProjectsSchema()),
+            "the projects manifest and its vendored schema agree");
+    }
+
+    private actionIdentityTest() {
+        hash<string, bool> actions = {};
+        map actions{$1} = True, accounting.getActionNames();
+        map actions{$1} = True, projects.getActionNames();
+
+        list<string> missing = ();
+        foreach string action in (ExpectedTsActions) {
+            if (!actions{action}) {
+                missing += action;
+            }
+        }
+        assertEq((), missing, "every action the TypeScript application exported is still exported");
+        map assertTrue(actions{$1}, sprintf("added action %y is exported", $1)), ExpectedAddedActions;
+        assertEq(ExpectedTsActions.size() + ExpectedAddedActions.size(), (keys actions).size(),
+            "five listings were added, and nothing else");
+
+        # the employees actions are not generated: their accounting endpoint no longer exists
+        map assertNothing(actions{$1}, sprintf("employee action %y is not generated from a schema", $1)),
+            ExpectedEmployeeActions;
+
+        # Xero generates both of its documents from one source, so every action ID is also the operationId
+        foreach hash<RestSchemaActionInfo> info in (XeroManifest::AccountingManifest
+                + XeroManifest::ProjectsManifest) {
+            assertEq(info.action, info.operation_id,
+                sprintf("action %y records its own ID as the operationId", info.action));
+        }
+    }
+
+    private routingTest() {
+        # this is what makes one action set per document correct with no special case: the request URI
+        # prefix comes from the base path of the schema the action was generated from
+        assertEq(XeroRestClientBase::AccountingPrefix,
+            XeroSchema::getAccountingSchema().getBasePath());
+        assertEq(XeroRestClientBase::ProjectsPrefix, XeroSchema::getProjectsSchema().getBasePath());
+
+        FakeXeroRestClient rest();
+        XeroDataProvider dp(rest);
+
+        rest.push_response({"body": {"Contacts": ()}});
+        dp.getChildProviderEx("getContacts").doRequest({});
+        assertRegex("^" + XeroRestClientBase::AccountingPrefix + "/Contacts",
+            rest.last().path, "an accounting action reaches the accounting API");
+
+        rest.push_response({"body": {"items": ()}});
+        dp.getChildProviderEx("getProjects").doRequest({});
+        assertRegex("^" + XeroRestClientBase::ProjectsPrefix + "/Projects",
+            rest.last().path, "a projects action reaches the projects API");
+    }
+
+    private referenceDataTest() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> acc = accounting.getReferenceDataDecls();
+        assertEq(10, (keys acc).size());
+
+        hash<string, bool> actions = {};
+        map actions{$1} = True, accounting.getActionNames();
+        foreach hash<auto> i in (acc.pairIterator()) {
+            hash<RestSchemaReferenceDataInfo> rd = i.value;
+            assertEq(i.key, rd.name);
+            assertTrue(actions{rd.action}, sprintf("reference data %y names exported action %y", i.key,
+                rd.action));
+            assertTrue(rd.records_path.val(), "a Xero accounting collection is an envelope");
+        }
+
+        # the five listings added to this manifest exist so that these dropdowns can be filled at all
+        assertEq("getAccounts", acc{XeroManifest::RefAccount}.action);
+        assertEq("getAccounts", acc{XeroManifest::RefAccountCode}.action);
+        assertEq("getAccounts", acc{XeroManifest::RefBankAccount}.action);
+        assertEq("getTaxRates", acc{XeroManifest::RefTaxType}.action);
+        assertEq("getCreditNotes", acc{XeroManifest::RefCreditNote}.action);
+        assertEq("getBankTransactions", acc{XeroManifest::RefBankTransaction}.action);
+
+        # the same listing read two ways: a line item names an account by ID or by code, and which one it
+        # names decides what Xero accepts
+        assertEq("AccountID", acc{XeroManifest::RefAccount}.value_field);
+        assertEq("Code", acc{XeroManifest::RefAccountCode}.value_field);
+        # a bank transaction can only be posted to a bank account
+        assertEq({"where": "Type==\"BANK\""}, acc{XeroManifest::RefBankAccount}.options);
+
+        # the projects envelope is camelCase where the accounting one is PascalCase
+        assertEq(("items",), projects.getReferenceDataDecls(){XeroManifest::RefProject}.records_path);
+    }
+
+    private peerReferenceDataTest() {
+        # a project names a contact, and contacts are declared in the accounting document; the projects set
+        # reaches it as a peer rather than declaring a second listing to keep in step with the first
+        assertNothing(projects.getReferenceDataDecls(){XeroManifest::RefContact},
+            "the projects set does not declare the contact dropdown itself");
+        assertEq("getContacts", projects.getReferenceDataDecl(XeroManifest::RefContact).action,
+            "but it resolves it through its peer");
+        assertEq(accounting, projects.getReferenceDataSet(XeroManifest::RefContact),
+            "and the listing belongs to the accounting set");
+        assertNothing(accounting.getReferenceDataDecl(XeroManifest::RefProject),
+            "the peer relationship is one-directional, so it cannot cycle");
+
+        # ... and the listing runs against the accounting schema, which is the only way its prefix is right
+        FakeXeroRestClient rest();
+        XeroDataProvider dp(rest);
+        AbstractDataProvider create = dp.getChildProviderEx("createProject");
+        rest.push_response({"body": {"Contacts": ({"ContactID": "3e6ba1e5-b5a6-4b28-b06a-4e5c2ffb8e51", "Name": "Acme"},)}});
+        *list<hash<AllowedValueInfo>> contacts = create.getReferenceData(XeroManifest::RefContact);
+        assertEq(1, contacts.size());
+        assertEq("3e6ba1e5-b5a6-4b28-b06a-4e5c2ffb8e51", contacts[0].value);
+        assertEq("Acme", contacts[0].display_name);
+        assertRegex("^" + XeroRestClientBase::AccountingPrefix + "/Contacts", rest.last().path,
+            "a dropdown a projects action offers is listed from the accounting API");
+    }
+
+    private providerPathTest() {
+        FakeXeroRestClient rest();
+        XeroDataProvider dp(rest);
+        # every set is validated against the one composing root
+        map $1.validateActionPaths(dp), XeroSchema::getActionSets();
+
+        hash<string, bool> children = {};
+        map children{$1} = True, dp.getChildProviderNames();
+        map assertTrue(children{$1}, sprintf("action %y resolves", $1)), ExpectedTsActions;
+        map assertTrue(children{$1}, sprintf("employee action %y resolves", $1)), ExpectedEmployeeActions;
+        assertTrue(children{XeroDataProvider::EventsChildName});
+        assertNothing(dp.getChildProvider("no-such-action"));
+
+        AbstractDataProvider events = dp.getChildProviderEx(XeroDataProvider::EventsChildName);
+        hash<string, bool> event_children = {};
+        map event_children{$1} = True, events.getChildProviderNames();
+        map assertTrue(event_children{$1}, sprintf("event %y resolves", $1)), ExpectedEvents;
+    }
+
+    private requestConstructionTest() {
+        FakeXeroRestClient rest();
+        XeroDataProvider dp(rest);
+
+        AbstractDataProvider find_contacts = dp.getChildProviderEx("getContacts");
+        rest.push_response({"body": {"Contacts": ({"ContactID": "3e6ba1e5-b5a6-4b28-b06a-4e5c2ffb8e51", "Name": "Acme"},)}});
+        auto res = find_contacts.doRequest({"where": "IsCustomer==true", "page": 2, "pageSize": 100});
+        assertEq("GET", rest.last().method);
+        assertRegex("where=", rest.last().path);
+        assertRegex("page=2", rest.last().path);
+        assertEq("Acme", res.Contacts[0].Name);
+
+        # the tenant is the connection's, so it is not an action option and never appears in a request type
+        RestSchemaActionOperation op = accounting.getOperationEx("getContacts");
+        hash<string, AbstractDataField> fields = op.getRequestFields();
+        assertNothing(fields{"xero-tenant-id"}, "the tenant is dropped from every action");
+        RestSchemaActionOperation proj_op = projects.getOperationEx("getProjects");
+        hash<string, AbstractDataField> pfields = proj_op.getRequestFields();
+        assertNothing(pfields{"Xero-Tenant-Id"},
+            "including where the other document spells it differently");
+
+        # ... and the client sends it with every request instead
+        hash<auto> copts = XeroRestClientBase::getOptions({"tenant_id": "test-tenant"});
+        assertEq("test-tenant", copts.headers{"Xero-Tenant-Id"});
+
+        # one invoice is a one-element array; that is Xero's envelope, not a presentation choice
+        AbstractDataProvider create = dp.getChildProviderEx("updateOrCreateInvoices");
+        rest.push_response({"body": {"Invoices": ({"InvoiceID": "i-1", "InvoiceNumber": "INV-001"},)}});
+        create.doRequest({
+            "Invoices": ({
+                "Type": "ACCREC",
+                "Contact": {"ContactID": "3e6ba1e5-b5a6-4b28-b06a-4e5c2ffb8e51"},
+                "LineItems": ({"Description": "Consulting", "Quantity": 1, "UnitAmount": 100},),
+            },),
+        });
+        auto sent = rest.lastBody();
+        assertEq("POST", rest.last().method);
+        assertEq(1, sent.Invoices.size());
+        assertEq("ACCREC", sent.Invoices[0].Type);
+        assertEq("3e6ba1e5-b5a6-4b28-b06a-4e5c2ffb8e51", sent.Invoices[0].Contact.ContactID);
+
+        rest.push_response({"throw_status": 401, "body": {"Detail": "unauthorised"}});
+        hash<auto> no_args = {};
+        assertThrows("REST-RESPONSE-ERROR", \find_contacts.doRequest(), no_args);
+    }
+
+    private queryDateCodecTest() {
+        # Xero declares DateFrom and DateTo as plain strings and reads them as YYYY-MM-DD, so the action
+        # takes a date and the codec writes the format Xero reads
+        RestSchemaActionOperation op = accounting.getOperationEx("getPurchaseOrders");
+        hash<string, AbstractDataField> fields = op.getRequestFields();
+        assertEq(NT_DATE, fields.DateFrom.getType().getBaseTypeCode(),
+            "a date-valued query argument is presented as a date");
+
+        hash<auto> wire = op.unflatten({"DateFrom": 2026-01-15, "DateTo": 2026-02-01});
+        assertEq("2026-01-15", wire.req.query.DateFrom);
+        assertEq("2026-02-01", wire.req.query.DateTo);
+
+        # the codec is registered under the application's own name, not a shared one
+        assertEq("xero-query-date", XeroCodecs::QueryDate);
+    }
+
+    private connectionTest() {
+        hash<auto> opts = XeroRestClientBase::getOptions({"token": "abc", "tenant_id": "t-1"});
+        assertEq("https://api.xero.com", opts.url);
+        assertEq("Bearer", opts.token_type);
+        assertEq("/connections", opts.ping_path, "the one call that needs no tenant is the ping");
+        assertEq("t-1", opts.headers{XeroRestClientBase::TenantHeader});
+        assertNothing(opts.tenant_id, "the tenant is the connection's, not a client option");
+        assertNothing(opts.payroll_region);
+
+        # a caller adding a header of its own must not drop the tenant
+        hash<auto> hopts = XeroRestClientBase::getOptions({"tenant_id": "t-1",
+            "headers": {"X-Trace": "1"}});
+        assertEq("t-1", hopts.headers{XeroRestClientBase::TenantHeader});
+        assertEq("1", hopts.headers."X-Trace");
+
+        hash<auto> oopts = XeroRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://login.xero.com/identity/connect/authorize", oopts.oauth2_auth_url);
+        assertEq("https://identity.xero.com/connect/token", oopts.oauth2_token_url);
+        assertTrue(inlist("offline_access", oopts.oauth2_scopes),
+            "without offline_access the connection stops working when the token expires");
+        assertTrue(inlist("payroll.employees", oopts.oauth2_scopes),
+            "the employee actions need the payroll scope");
+
+        # the region names an API version, so a typo has to be reported when the connection is made
+        assertThrows("XERO-REGION-ERROR", "unknown",
+            \XeroRestClientBase::getOptions(), {"payroll_region": "ie"});
+
+        XeroRestConnection conn("xero-test", "test", "xero://api.xero.com", {},
+            {"oauth2_client_id": "id", "oauth2_client_secret": "secret", "tenant_id": "t-1"});
+        assertEq("xero", conn.getType());
+        assertEq("Xero", conn.getAppName());
+        assertTrue(conn.hasDataProvider());
+        assertEq("t-1", conn.getInfo().opts.tenant_id);
+    }
+
+    private employeeRegionTest() {
+        # Australia is a different API version from the other two, so the region selects a document rather
+        # than a parameter
+        assertEq("/payroll.xro/1.0", XeroRestClientBase::getPayrollPrefix("au"));
+        assertEq("/payroll.xro/2.0", XeroRestClientBase::getPayrollPrefix("nz"));
+        assertEq("/payroll.xro/2.0", XeroRestClientBase::getPayrollPrefix("uk"));
+        assertThrows("XERO-REGION-ERROR", "unknown", \XeroRestClientBase::getPayrollPrefix(), "ie");
+
+        # a connection that names no region says so rather than guessing one
+        FakeXeroRestClient no_region();
+        XeroDataProvider bare(no_region);
+        AbstractDataProvider emp = bare.getChildProviderEx("getEmployees");
+        hash<auto> no_args = {};
+        assertThrows("XERO-REGION-ERROR", "names no payroll region", \emp.doRequest(), no_args);
+
+        # the United Kingdom's 2.0 API takes one employee per call ...
+        FakeXeroRestClient uk({"payroll_region": "uk"});
+        XeroDataProvider dp_uk(uk);
+        uk.push_response({"body": {"employee": {"employeeID": "e-1", "firstName": "Ada"}}});
+        uk.push_response({"body": {"employee": {"employeeID": "e-2", "firstName": "Grace"}}});
+        auto created = dp_uk.getChildProviderEx("updateOrCreateEmployees").doRequest({
+            "Employees": ({"firstName": "Ada"}, {"firstName": "Grace"}),
+        });
+        assertEq(2, created.size(), "two employees, sent one at a time");
+        assertEq(2, uk.requests.size());
+        assertEq("/payroll.xro/2.0/Employees", uk.last().path);
+        assertEq("Grace", uk.lastBody().firstName, "a 2.0 create sends one employee, not an array");
+
+        # ... and Australia's 1.0 API takes the whole list in one
+        FakeXeroRestClient au({"payroll_region": "au"});
+        XeroDataProvider dp_au(au);
+        au.push_response({"body": {"Employees": ({"EmployeeID": "e-1"}, {"EmployeeID": "e-2"})}});
+        auto au_created = dp_au.getChildProviderEx("updateOrCreateEmployees").doRequest({
+            "Employees": ({"FirstName": "Ada"}, {"FirstName": "Grace"}),
+        });
+        assertEq(2, au_created.size());
+        assertEq(1, au.requests.size(), "one call for the whole list");
+        assertEq("/payroll.xro/1.0/Employees", au.last().path);
+        assertEq(2, au.lastBody().size(), "a 1.0 create sends an array");
+
+        # the listing filter argument is named differently in the two versions
+        au.reset();
+        au.push_response({"body": {"Employees": ()}});
+        dp_au.getChildProviderEx("getEmployees").doRequest({"filter": "Status==\"ACTIVE\""});
+        assertRegex("where=", au.last().path, "the 1.0 API calls the filter \"where\"");
+
+        uk.reset();
+        uk.push_response({"body": {"employees": ()}});
+        dp_uk.getChildProviderEx("getEmployees").doRequest({"filter": "firstName==\"Ada\""});
+        assertRegex("filter=", uk.last().path, "the 2.0 APIs call it \"filter\"");
+    }
+
+    private employeeEnvelopeTest() {
+        # every region wraps employees differently, and a caller should not have to know which
+        assertEq(("a",), XeroEmployeesDataProvider::getEmployeeList({"Employees": ("a",)}));
+        assertEq(("a",), XeroEmployeesDataProvider::getEmployeeList({"employees": ("a",)}));
+        assertEq(({"id": 1},), XeroEmployeesDataProvider::getEmployeeList({"employee": {"id": 1}}));
+        assertEq(({"id": 1},), XeroEmployeesDataProvider::getEmployeeList({"Employee": {"id": 1}}));
+        assertEq(("a",), XeroEmployeesDataProvider::getEmployeeList(("a",)));
+        assertEq((), XeroEmployeesDataProvider::getEmployeeList({"pagination": {"page": 1}}));
+        assertEq((), XeroEmployeesDataProvider::getEmployeeList(NOTHING));
+    }
+
+    private eventProviderTest() {
+        FakeXeroRestClient rest();
+        XeroEventsDataProvider events(rest);
+        hash<string, bool> names = {};
+        map names{$1} = True, events.getChildProviderNames();
+        map assertTrue(names{$1}, sprintf("event %y is offered", $1)), ExpectedEvents;
+        assertNothing(events.getChildProvider("no-such-event"));
+
+        AbstractDataProvider tmpl = events.getChildProviderEx("new_contact");
+        hash<DataProviderInfo> info = tmpl.getInfo();
+        assertTrue(info.supports_observable);
+        assertEq(XeroDefaultPollInterval, info.constructor_options.poll_interval.default_value);
+
+        # the event type is the record type of the listing the event polls, taken from the action set the
+        # application ships rather than written a second time
+        hash<string, hash<DataProviderMessageInfo>> types = tmpl.getEventTypes();
+        AbstractDataProviderType t = types."new_contact"."type";
+        assertEq(NT_HASH, t.getBaseTypeCode());
+        assertTrue(exists t.getFields().ContactID, "the event carries Xero's own contact shape");
+    }
+
+    private timestampTest() {
+        # Xero's accounting API answers JSON with .NET timestamps while its description declares RFC 3339
+        # strings; a cursor that read only one form would either never advance or advance wrongly
+        assertEq(1970-01-01Z + 1573755038s + 314ms,
+            XeroWatchDataProviderBase::parseXeroDate("/Date(1573755038314)/"));
+        assertEq(1970-01-01Z + 1573755038s + 314ms,
+            XeroWatchDataProviderBase::parseXeroDate("/Date(1573755038314+0000)/"),
+            "the offset describes the same instant and does not move it");
+        assertEq(2026-01-15T10:00:00Z, XeroWatchDataProviderBase::parseXeroDate("2026-01-15T10:00:00Z"));
+        assertEq(2026-01-15T10:00:00Z, XeroWatchDataProviderBase::parseXeroDate(2026-01-15T10:00:00Z));
+
+        # an unusable value skips one record rather than aborting the cycle, so it must not throw
+        assertNothing(XeroWatchDataProviderBase::parseXeroDate("not a date"));
+        assertNothing(XeroWatchDataProviderBase::parseXeroDate(""));
+        assertNothing(XeroWatchDataProviderBase::parseXeroDate(NOTHING));
+        assertNothing(XeroWatchDataProviderBase::parseXeroDate(5m), "a duration is not a position");
+    }
+
+    private eventPollingTest() {
+        FakeXeroRestClient rest();
+        TestXeroNewContactProvider p(rest, {"since": 2026-01-01Z});
+
+        rest.push_response({"body": {"Contacts": (
+            {"ContactID": "3e6ba1e5-b5a6-4b28-b06a-4e5c2ffb8e51", "Name": "first", "UpdatedDateUTC": "/Date(1767261600000)/"},
+            {"ContactID": "6a19f1de-0a37-4b0e-a5f0-0b1a2a1b0c9d", "Name": "second", "UpdatedDateUTC": "/Date(1767348000000)/"},
+        )}});
+        rest.push_response({"body": {"Contacts": ()}});
+        p.poll();
+        assertEq(2, p.notified.size());
+        assertEq("first", p.notified[0].Name, "dispatched oldest-first");
+        assertEq("second", p.notified[1].Name);
+        assertRegex("^" + XeroRestClientBase::AccountingPrefix + "/Contacts", rest.requests[0].path);
+        assertRegex("order=", rest.requests[0].path, "newest first, so one page is usually enough");
+        # the cursor is sent upstream, so a cycle reads what has changed rather than the whole collection
+        assertTrue(exists rest.requests[0].headers{"If-Modified-Since"},
+            "the cursor bounds the read at Xero rather than in this process");
+
+        # the second cycle re-reads the boundary record and discards it
+        p.reset();
+        rest.reset();
+        rest.push_response({"body": {"Contacts": (
+            {"ContactID": "6a19f1de-0a37-4b0e-a5f0-0b1a2a1b0c9d", "Name": "second", "UpdatedDateUTC": "/Date(1767348000000)/"},
+            {"ContactID": "c-3", "Name": "third", "UpdatedDateUTC": "/Date(1767434400000)/"},
+        )}});
+        rest.push_response({"body": {"Contacts": ()}});
+        p.poll();
+        assertEq(1, p.notified.size());
+        assertEq("third", p.notified[0].Name);
+    }
+}
