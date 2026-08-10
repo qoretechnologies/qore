@@ -131,9 +131,23 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         on_error rethrow $1.err, sprintf("%s (while retrieving reference data %y for action %y via action %y)",
             $1.desc, type, getName(), rd.action);
 
+        # a dropdown scoped by another option -- the branches of the selected project -- cannot be listed
+        # until that option has a value.  An empty list is the honest answer then: listing everything would
+        # offer values that do not belong to the chosen scope
+        # "auto!" because the fixed options are typically all of one type -- a page size, say -- and a
+        # narrowed hash would reject the forwarded value
+        hash<auto!> opts = rd.options ?? {};
+        foreach hash<auto> i in (rd.options_from.pairIterator()) {
+            auto val = action_opts{i.value};
+            if (!exists val) {
+                return;
+            }
+            opts{i.key} = val;
+        }
+
         RestSchemaActionDataProvider lister = new RestSchemaActionDataProvider(action_set,
             action_set.getOperationEx(rd.action), rest);
-        auto resp = lister.doRequest(rd.options);
+        auto resp = lister.doRequest(opts);
         foreach string name in (rd.records_path) {
             if (!exists resp) {
                 break;

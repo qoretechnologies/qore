@@ -46,6 +46,21 @@ public hashdecl RestSchemaReferenceDataInfo {
     */
     *hash<auto> options;
 
+    #! Options taken from the action being filled in, keyed by the listing action's option name
+    /** Turns a dropdown that can only list globally into one scoped by what the user has already chosen:
+        the branches of the selected project, the pages of the selected space.  Each entry names an option
+        of the listing action, and the value names the option of the **calling** action supplying it.
+
+        Every named value is required: until the user has filled in the option it depends on, the listing
+        cannot be made at all, so the dropdown is empty rather than listing the wrong thing.  Pair this with
+        @ref RestSchemaActions::RestSchemaFieldOverlayInfo::depends_on "depends_on" on the field, so that the
+        UI knows to re-read the dropdown when the value it is scoped by changes.
+
+        Both sides are validated when the action set is built: the key must be an option of the listing
+        action, and the value must be an option of every action whose overlay names this reference data.
+    */
+    *hash<string, string> options_from;
+
     #! A path of field names leading from the action's output to the list of records
     /** Not needed when the action's output is itself the list.
     */
@@ -275,6 +290,17 @@ public class RestSchemaActionSet {
                         "which does not declare it; options: %y", i.key, opt, rd.action, sort(keys flat));
                 }
             }
+            foreach string opt in (keys rd.options_from) {
+                if (!exists flat{opt}) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("reference data %y forwards a value into option "
+                        "%y of action %y, which does not declare it; options: %y", i.key, opt, rd.action,
+                        sort(keys flat));
+                }
+                if (exists rd.options{opt}) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("reference data %y both fixes option %y and "
+                        "forwards a value into it; one of the two would silently win", i.key, opt);
+                }
+            }
         }
 
         # every ref_data named by an overlay must be declared, or the dropdown would silently stay empty
@@ -283,10 +309,24 @@ public class RestSchemaActionSet {
             foreach hash<auto> f in (fields.pairIterator()) {
                 *hash<auto> attr = f.value.getAttributes();
                 foreach string key in (("ref_data", "element_ref_data")) {
-                    if (attr{key}.val() && !exists refdata{attr{key}}) {
+                    if (!attr{key}.val()) {
+                        continue;
+                    }
+                    *hash<RestSchemaReferenceDataInfo> rd = refdata{attr{key}};
+                    if (!rd) {
                         throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y option %y declares %s %y, which is "
                             "not declared in the reference data of this action set; declared reference data: "
                             "%y", i.key, f.key, key, attr{key}, sort(keys refdata));
+                    }
+                    # a forwarded value has to come from somewhere: an action offering a dropdown scoped by
+                    # a value it does not itself have would show an empty list and no reason for it
+                    foreach string from in (rd.options_from.iterator()) {
+                        if (!exists fields{from}) {
+                            throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y option %y declares %s %y, "
+                                "which is scoped by option %y; action %y does not declare that option, so the "
+                                "dropdown could never be populated; options: %y", i.key, f.key, key,
+                                attr{key}, from, i.key, sort(keys fields));
+                        }
                     }
                 }
             }

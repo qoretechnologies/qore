@@ -1,0 +1,435 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** RestSchemaImporter.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+
+%requires json
+%requires yaml
+
+%exec-class RestSchemaImporterTest
+
+public class RestSchemaImporterTest inherits QUnit::Test {
+    public {
+        #! A document exercising normalization, path-level parameters and unreachable components
+        /** \c "/boards/" carries a trailing slash and \c "/contacts/{contact_id}" a path-parameter name
+            that a manifest would plausibly write differently; both are the traps that made real
+            candidate applications look as though they had withdrawn operations.
+        */
+        const Schema = {
+            "openapi": "3.0.0",
+            "info": {"title": "test", "version": "1.0"},
+            "servers": ({"url": "https://api.example.com/v1"},),
+            "paths": {
+                "/boards/": {
+                    "get": {"operationId": "listBoards", "responses": {"200": {"description": "ok",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Board"}}}}}},
+                },
+                "/contacts/{contact_id}": {
+                    "parameters": (
+                        {"name": "contact_id", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ),
+                    "get": {"operationId": "getContact", "responses": {"200": {"description": "ok",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Contact"}}}}}},
+                    "delete": {"operationId": "deleteContact", "responses": {"204":
+                        {"description": "gone"}}},
+                },
+                "/unused": {
+                    "get": {"operationId": "unused", "responses": {"200": {"description": "ok",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Orphan"}}}}}},
+                },
+            },
+            "components": {
+                "schemas": {
+                    "Board": {"type": "object", "properties": {"id": {"type": "string"}}},
+                    "Contact": {"type": "object", "properties": {
+                        "id": {"type": "string"},
+                        "board": {"$ref": "#/components/schemas/Board"},
+                    }},
+                    "Orphan": {"type": "object", "properties": {"id": {"type": "string"}}},
+                },
+            },
+            "webhooks": {
+                "contact.created": {"post": {"responses": {"200": {"description": "ok"}}}},
+            },
+        };
+
+        #! A provenance record in the shape every schema-driven application uses
+        const ProvenanceSource = '#! contains all public definitions
+public namespace TestDataProvider {
+public class TestSchema {
+    public {
+        #! Where the vendored schema came from
+        const Provenance = <TestSchemaProvenanceInfo>{
+            "source_url": "https://example.com/old.yaml",
+            "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "source_size": 1,
+            "source_updated": 2026-01-01,
+            "imported": 2026-01-02,
+            "source_paths": 1,
+            "source_operations": 1,
+            "source_schemas": 1,
+            "source_webhooks": 1,
+            "api_version": "2020-01-01",
+            "nested": {
+                "inner": 1,
+            },
+        };
+
+        #! The name of the vendored schema file
+        const SchemaFileName = "test-openapi.yaml";
+    }
+}
+}
+';
+    }
+
+    constructor() : Test("RestSchemaImporterTest", "1.0") {
+        addTestCase("normalizePath", \normalizePathTest());
+        addTestCase("parseOperations", \parseOperationsTest());
+        addTestCase("operationsFromManifest", \operationsFromManifestTest());
+        addTestCase("resolveOperations", \resolveOperationsTest());
+        addTestCase("fetch", \fetchTest());
+        addTestCase("serialize", \serializeTest());
+        addTestCase("import", \importTest());
+        addTestCase("importAll", \importAllTest());
+        addTestCase("provenance", \provenanceTest());
+        addTestCase("report", \reportTest());
+        set_return_value(main());
+    }
+
+    private normalizePathTest() {
+        assertEq("/boards", RestSchemaImporter::normalizePath("/boards/"));
+        assertEq("/boards", RestSchemaImporter::normalizePath("/boards"));
+        # "/" is a path in its own right, not a trailing slash
+        assertEq("/", RestSchemaImporter::normalizePath("/"));
+        assertEq("/contacts/{}", RestSchemaImporter::normalizePath("/contacts/{contact_id}"));
+        assertEq("/contacts/{}", RestSchemaImporter::normalizePath("/contacts/{id}/"));
+        assertEq("/a/{}/b/{}", RestSchemaImporter::normalizePath("/a/{x}/b/{y}"));
+        # a parameter name is only normalized inside braces
+        assertEq("/id/{}", RestSchemaImporter::normalizePath("/id/{id}"));
+    }
+
+    private parseOperationsTest() {
+        list<hash<SchemaOperationInfo>> ops = RestSchemaImporter::parseOperations((
+            "# a comment line",
+            "",
+            "GET /boards/    # trailing comment",
+            "  DELETE /contacts/{id}  ",
+        ));
+        assertEq(2, ops.size());
+        assertEq(<SchemaOperationInfo>{"method": "GET", "path": "/boards/"}, ops[0]);
+        assertEq(<SchemaOperationInfo>{"method": "DELETE", "path": "/contacts/{id}"}, ops[1]);
+
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "METHOD /path",
+            \RestSchemaImporter::parseOperations(), ("/no-method",));
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "METHOD /path",
+            \RestSchemaImporter::parseOperations(), ("GET no-leading-slash",));
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "no operations",
+            \RestSchemaImporter::parseOperations(), ("# nothing but a comment",));
+    }
+
+    private operationsFromManifestTest() {
+        list<hash<RestSchemaActionInfo>> manifest = (
+            <RestSchemaActionInfo>{
+                "action": "get_contact", "method": "GET", "path": "/contacts/{contact_id}",
+                "display_name": "Get Contact", "short_desc": "d", "desc": "d",
+            },
+            # a variant shares its operation with the action it narrows, so it must not be pruned twice
+            <RestSchemaActionInfo>{
+                "action": "archive_contact", "method": "DELETE", "path": "/contacts/{contact_id}",
+                "display_name": "Archive Contact", "short_desc": "d", "desc": "d",
+            },
+            <RestSchemaActionInfo>{
+                "action": "get_contact_again", "method": "get", "path": "/contacts/{contact_id}",
+                "variant_of": "get_contact", "display_name": "Get Contact", "short_desc": "d", "desc": "d",
+            },
+        );
+        list<hash<SchemaOperationInfo>> ops = RestSchemaImporter::operationsFromManifest(manifest);
+        assertEq(2, ops.size(), "a variant does not add an operation");
+        assertEq("GET", ops[0].method);
+        assertEq("DELETE", ops[1].method);
+    }
+
+    private resolveOperationsTest() {
+        # an exact match is used as given
+        list<hash<RestSchemaOperationMatchInfo>> m = RestSchemaImporter::resolveOperations(Schema, (
+            <SchemaOperationInfo>{"method": "GET", "path": "/boards/"},
+        ));
+        assertEq(1, m.size());
+        assertEq("/boards/", m[0].path);
+        assertFalse(m[0].normalized);
+
+        # a trailing slash the manifest does not write
+        m = RestSchemaImporter::resolveOperations(Schema, (
+            <SchemaOperationInfo>{"method": "get", "path": "/boards"},
+        ));
+        assertEq("/boards/", m[0].path);
+        assertEq("/boards", m[0].requested_path);
+        assertTrue(m[0].normalized);
+        assertEq("GET", m[0].method, "the method is normalized to upper case");
+
+        # a path-parameter name the manifest spells differently
+        m = RestSchemaImporter::resolveOperations(Schema, (
+            <SchemaOperationInfo>{"method": "GET", "path": "/contacts/{id}"},
+        ));
+        assertEq("/contacts/{contact_id}", m[0].path);
+        assertTrue(m[0].normalized);
+
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares no such path",
+            \RestSchemaImporter::resolveOperations(), (Schema,
+                (<SchemaOperationInfo>{"method": "GET", "path": "/nope"},)));
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares only",
+            \RestSchemaImporter::resolveOperations(), (Schema,
+                (<SchemaOperationInfo>{"method": "PUT", "path": "/boards/"},)));
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "no operations were selected",
+            \RestSchemaImporter::resolveOperations(), (Schema, ()));
+
+        # two declared paths with the same normal form cannot be resolved by normalizing, so a request
+        # that matches neither literally is rejected rather than sent to whichever came first
+        hash<auto> ambiguous = Schema + {
+            "paths": Schema.paths + {
+                "/x/{a}": Schema.paths."/boards/",
+                "/x/{b}": Schema.paths."/boards/",
+            },
+        };
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "matches 2 declared paths",
+            \RestSchemaImporter::resolveOperations(), (ambiguous,
+                (<SchemaOperationInfo>{"method": "GET", "path": "/x/{c}"},)));
+        # an exact match still wins over an ambiguous normal form
+        assertEq("/x/{a}", RestSchemaImporter::resolveOperations(ambiguous,
+            (<SchemaOperationInfo>{"method": "GET", "path": "/x/{a}"},))[0].path);
+    }
+
+    private fetchTest() {
+        TmpDir tmp("rest-schema-importer-");
+        string json_path = tmp.path + DirSep + "src.json";
+        string yaml_path = tmp.path + DirSep + "src.yaml";
+        string json_text = make_json(Schema, JGF_ADD_FORMATTING);
+        FileLocationHandler::writeFileToLocation(json_path, json_text);
+        FileLocationHandler::writeFileToLocation(yaml_path, make_yaml(Schema, YAML::BlockStyle));
+
+        hash<RestSchemaSourceInfo> src = RestSchemaImporter::fetch(json_path);
+        assertTrue(src.json, "the format is sniffed from the content");
+        assertEq(SHA256(json_text), src.sha256);
+        assertEq(json_text.size(), src.size);
+        assertEq(3, src.paths);
+        assertEq(4, src.operations, "every method of every path item is counted");
+        assertEq(3, src.schemas);
+        assertEq(1, src.webhooks);
+
+        # the same document served as YAML describes the same API, but is a different file
+        hash<RestSchemaSourceInfo> ysrc = RestSchemaImporter::fetch(yaml_path);
+        assertFalse(ysrc.json);
+        assertEq(src.paths, ysrc.paths);
+        assertEq(src.operations, ysrc.operations);
+        assertNeq(src.sha256, ysrc.sha256);
+
+        string bad = tmp.path + DirSep + "bad.json";
+        FileLocationHandler::writeFileToLocation(bad, "{\"openapi\": \"3.0.0\"}");
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares no paths", \RestSchemaImporter::fetch(), bad);
+
+        string scalar = tmp.path + DirSep + "scalar.json";
+        FileLocationHandler::writeFileToLocation(scalar, "[1, 2]");
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "not as a schema document",
+            \RestSchemaImporter::fetch(), scalar);
+    }
+
+    private serializeTest() {
+        string json_text = RestSchemaImporter::serialize(Schema, True);
+        assertEq("\n", json_text.substr(-1), "a serialized document ends in a newline");
+        assertEq(Schema, parse_json(json_text));
+
+        string yaml_text = RestSchemaImporter::serialize(Schema, False);
+        assertEq(Schema.paths.keys(), parse_yaml(yaml_text).paths.keys(), "member order is preserved");
+
+        # determinism: the same input always produces byte-identical output, so a re-import that
+        # changed nothing produces no diff
+        assertEq(json_text, RestSchemaImporter::serialize(Schema, True));
+    }
+
+    private importTest() {
+        TmpDir tmp("rest-schema-importer-");
+        string src_path = tmp.path + DirSep + "src.json";
+        string out_path = tmp.path + DirSep + "out.json";
+        FileLocationHandler::writeFileToLocation(src_path, make_json(Schema, JGF_ADD_FORMATTING));
+
+        hash<RestSchemaImportInfo> doc = <RestSchemaImportInfo>{
+            "name": "test",
+            "source": src_path,
+            "output": out_path,
+            # written as a manifest would write them, so normalization has to do its job
+            "operations": RestSchemaImporter::parseOperations((
+                "GET /boards",
+                "GET /contacts/{id}",
+            )),
+        };
+
+        hash<RestSchemaImportResultInfo> res = RestSchemaImporter::import(doc);
+        assertEq("test", res.name);
+        assertEq(3, res.source_paths);
+        assertEq(4, res.source_operations);
+        assertEq(2, res.paths_kept);
+        assertEq(2, res.operations_kept);
+        assertEq(2, res.matches.size());
+        assertTrue(res.matches[0].normalized);
+        assertTrue(res.matches[1].normalized);
+        assertEq(out_path, res.output);
+        assertEq(date(now().format("YYYYMMDD")), res.imported);
+        assertTrue(is_file(out_path));
+
+        # the artifact is a valid schema in its own right and carries only what was selected
+        hash<auto> written = parse_json(File::readTextFile(out_path));
+        assertEq(("/boards/", "/contacts/{contact_id}"), written.paths.keys());
+        assertEq(("Board", "Contact"), written.components.schemas.keys(),
+            "the reference closure is kept and nothing else");
+        assertEq(Schema.servers, written.servers, "document metadata is kept wholesale");
+        assertFalse(written.hasKey("webhooks"), "the pruner drops webhooks, which are not operations");
+        # loading it is what the application will do
+        assertEq("3.0.0", OpenApi3::OpenApi3Loader::fromFile(out_path).openapi3Spec);
+
+        # a dry run reports everything and writes nothing
+        string dry_path = tmp.path + DirSep + "dry.json";
+        hash<RestSchemaImportResultInfo> dry = RestSchemaImporter::import(
+            cast<hash<RestSchemaImportInfo>>(doc + {"output": dry_path}), {"dry_run": True});
+        assertNothing(dry.output);
+        assertEq(res.paths_kept, dry.paths_kept);
+        assertFalse(is_file(dry_path));
+
+        # the source format decides the output format unless the document says otherwise
+        string yaml_out = tmp.path + DirSep + "out.yaml";
+        RestSchemaImporter::import(cast<hash<RestSchemaImportInfo>>(doc + {"output": yaml_out,
+            "json": False}));
+        assertEq(("/boards/", "/contacts/{contact_id}"),
+            parse_yaml(File::readTextFile(yaml_out)).paths.keys());
+
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares no such path", \RestSchemaImporter::import(),
+            cast<hash<RestSchemaImportInfo>>(doc + {"operations":
+                RestSchemaImporter::parseOperations(("GET /nope",))}));
+    }
+
+    private importAllTest() {
+        TmpDir tmp("rest-schema-importer-");
+        string src_path = tmp.path + DirSep + "src.json";
+        FileLocationHandler::writeFileToLocation(src_path, make_json(Schema, JGF_ADD_FORMATTING));
+
+        # a multi-document application imports each document separately; here the same document twice,
+        # pruned to different operations, which is the shape Xero needs
+        list<hash<RestSchemaImportResultInfo>> res = RestSchemaImporter::importAll((
+            <RestSchemaImportInfo>{
+                "name": "boards", "source": src_path, "output": tmp.path + DirSep + "boards.json",
+                "operations": RestSchemaImporter::parseOperations(("GET /boards/",)),
+            },
+            <RestSchemaImportInfo>{
+                "name": "contacts", "source": src_path, "output": tmp.path + DirSep + "contacts.json",
+                "operations": RestSchemaImporter::parseOperations(("GET /contacts/{contact_id}",
+                    "DELETE /contacts/{contact_id}")),
+            },
+        ));
+        assertEq(2, res.size());
+        assertEq(("boards", "contacts"), (map $1.name, res));
+        assertEq(1, res[0].operations_kept);
+        assertEq(2, res[1].operations_kept);
+        assertEq(1, res[1].paths_kept, "two methods on one path are one path");
+    }
+
+    private provenanceTest() {
+        hash<RestSchemaImportResultInfo> res = <RestSchemaImportResultInfo>{
+            "name": "test",
+            "source": "https://example.com/new.yaml",
+            "source_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "source_size": 4242,
+            "imported": 2026-08-10,
+            "source_paths": 7,
+            "source_operations": 11,
+            "source_schemas": 13,
+            "source_webhooks": 17,
+            "paths_kept": 2,
+            "operations_kept": 2,
+            "refs_kept": 2,
+            "output_size": 1,
+            "matches": (),
+            "schema": {},
+        };
+        hash<auto> values = RestSchemaImporter::getProvenance(res);
+        assertEq(sort(RestSchemaImporter::ProvenanceFields), sort(values.keys()));
+        assertEq("https://example.com/new.yaml", values.source_url);
+        assertFalse(values.hasKey("source_updated"),
+            "when the vendor last changed the document is not a property of the document");
+
+        string updated = RestSchemaImporter::updateProvenanceSource(ProvenanceSource, values);
+        assertRegex("\"source_url\": \"https://example.com/new.yaml\",", updated);
+        assertRegex("\"source_sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\",",
+            updated);
+        assertRegex("\"source_size\": 4242,", updated);
+        assertRegex("\"imported\": 2026-08-10,", updated);
+        assertRegex("\"source_paths\": 7,", updated);
+        assertRegex("\"source_webhooks\": 17,", updated);
+        # a member this class does not own has to survive untouched: Stripe's api_version moves with its
+        # schema and is not something an import can know
+        assertRegex("\"api_version\": \"2020-01-01\",", updated);
+        assertRegex("\"source_updated\": 2026-01-01,", updated);
+        assertRegex("const SchemaFileName = \"test-openapi.yaml\";", updated);
+        # the scan must not stop at a nested hash's closing brace
+        assertRegex("\"inner\": 1,", updated);
+
+        # rewriting is idempotent
+        assertEq(updated, RestSchemaImporter::updateProvenanceSource(updated, values));
+
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "no .* constant was found",
+            \RestSchemaImporter::updateProvenanceSource(), ("const Other = 1;\n", values));
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "does not declare member",
+            \RestSchemaImporter::updateProvenanceSource(), (ProvenanceSource, {"not_declared": 1}));
+
+        TmpDir tmp("rest-schema-importer-");
+        string path = tmp.path + DirSep + "TestSchema.qc";
+        FileLocationHandler::writeFileToLocation(path, ProvenanceSource);
+        RestSchemaImporter::updateProvenanceFile(path, values);
+        assertEq(updated, File::readTextFile(path));
+    }
+
+    private reportTest() {
+        TmpDir tmp("rest-schema-importer-");
+        string src_path = tmp.path + DirSep + "src.json";
+        FileLocationHandler::writeFileToLocation(src_path, make_json(Schema, JGF_ADD_FORMATTING));
+        hash<RestSchemaImportResultInfo> res = RestSchemaImporter::import(<RestSchemaImportInfo>{
+            "name": "test",
+            "source": src_path,
+            "output": tmp.path + DirSep + "out.json",
+            "operations": RestSchemaImporter::parseOperations(("GET /boards", "GET /contacts/{contact_id}")),
+        });
+        string report = RestSchemaImporter::getReport(res);
+        assertRegex("upstream: ", report);
+        assertRegex("sha-256: ", report);
+        # the manifest would not resolve "/boards" at run time, so the report has to say so
+        assertRegex("GET /boards -> /boards/", report);
+        assertRegex("1 operation\\(s\\) matched only after normalizing", report);
+    }
+}

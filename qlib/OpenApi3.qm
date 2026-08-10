@@ -1780,10 +1780,14 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                     : new QoreSoftBoolOrNothingDataType(type_options);
 
             case "array":
-                if (!arrayItems) {
-                    throw "OPENAPI3-SCHEMA-ERROR", sprintf("no item definition for array path %y", path);
-                }
-                return new SoftListDataType(arrayItems.getDataType(True), !required);
+                # an array with no "items" is a legal, if lax, declaration: JSON Schema leaves the
+                # elements unconstrained rather than making the array invalid.  GitLab's description uses
+                # it for a parameter that accepts either a scalar or a list of them.  Rejecting it would
+                # fail the whole document over a construct that is simply permissive, so it produces a
+                # list of "auto"
+                return new SoftListDataType(arrayItems
+                    ? arrayItems.getDataType(True)
+                    : AbstractDataProviderType::get(AutoType), !required);
 
             case "object":
                 return new HashDataType(required ? AutoHashType : AutoHashOrNothingType);

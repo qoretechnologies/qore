@@ -120,6 +120,23 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
                 "desc": "widget categories",
             },
         };
+
+        #! Reference data scoped by a value the calling action supplies
+        /** Most identifiers are not global: a widget belongs to a category, so listing widgets without
+            one would offer values from a scope the user did not choose.
+        */
+        const ScopedRefData = {
+            "widget": <RestSchemaReferenceDataInfo>{
+                "name": "widget",
+                "action": "list-widgets",
+                "options": {"limit": 100},
+                "options_from": {"category": "category"},
+                "records_path": "data",
+                "value_field": "id",
+                "display_field": "name",
+                "desc": "widgets in the chosen category",
+            },
+        };
     }
 
     private {
@@ -146,6 +163,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("narrowed operation variants", \variantTest());
         addTestCase("operation id drift", \driftTest());
         addTestCase("reference data", \referenceDataTest());
+        addTestCase("scoped reference data", \scopedReferenceDataTest());
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider execution", \providerExecutionTest());
         addTestCase("provider paths", \providerPathTest());
@@ -634,6 +652,58 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         # ... and the declaration has to agree with the key it is registered under
         assertThrows("REST-SCHEMA-ACTION-ERROR", "names itself", \makeSet(),
             (manifest, {"cat": RefData.category}));
+    }
+
+    scopedReferenceDataTest() {
+        list<hash<RestSchemaActionInfo>> manifest = (
+            entry("list-widgets", "GET", "/widgets"),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"tags": <RestSchemaFieldOverlayInfo>{
+                    "element_ref_data": "widget",
+                    "depends_on": ("category",),
+                }},
+            }),
+        );
+        RestSchemaActionSet aset = makeSet(manifest, ScopedRefData);
+        assertEq(("list-widgets", "create-widget"), aset.getActionNames());
+
+        FakeRestClient rest();
+        RestSchemaActionSetDataProvider root(aset, rest);
+        AbstractDataProvider create = root.getChildProviderEx("create-widget");
+
+        # the value the dropdown is scoped by reaches the listing action
+        rest.push_response({"body": {"data": ({"id": "w1", "name": "Hammer"},)}});
+        *list<hash<AllowedValueInfo>> values = create.getReferenceData("widget", {"category": "tools"});
+        assertEq(1, values.size());
+        assertEq("w1", values[0].value);
+        assertEq("Hammer", values[0].display_name);
+        assertRegex("category=tools", rest.last().path);
+        assertRegex("limit=100", rest.last().path, "fixed options are sent as well");
+
+        # until it has one, the dropdown is empty rather than listing widgets from every category
+        rest.reset();
+        assertNothing(create.getReferenceData("widget", {}));
+        assertNothing(create.getReferenceData("widget"));
+        assertThrows("TEST-ERROR", "no requests were recorded", \rest.last());
+
+        # the listing action has to declare the option a value is forwarded into
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "forwards a value into option", \makeSet(),
+            (manifest, {"widget": cast<hash<RestSchemaReferenceDataInfo>>(ScopedRefData.widget
+                + {"options_from": {"no_such_option": "category"}})}));
+
+        # fixing an option and forwarding a value into it would let one silently win
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "both fixes option", \makeSet(),
+            (manifest, {"widget": cast<hash<RestSchemaReferenceDataInfo>>(ScopedRefData.widget
+                + {"options": {"category": "tools"}})}));
+
+        # an action offering a dropdown scoped by a value it does not have would show an empty list and
+        # no reason for it, so it is rejected when the set is built
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "could never be populated", \makeSet(), ((
+            entry("list-widgets", "GET", "/widgets"),
+            entry("get-widget", "GET", "/widgets/{widget_id}", {
+                "fields": {"widget_id": <RestSchemaFieldOverlayInfo>{"ref_data": "widget"}},
+            }),
+        ), ScopedRefData));
     }
 
     actionRegistrationTest() {

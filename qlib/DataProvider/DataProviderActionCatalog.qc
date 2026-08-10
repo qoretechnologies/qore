@@ -2359,6 +2359,9 @@ public class DataProviderActionCatalog {
                 if (exists info.attr.on_change) {
                     i.value.on_change = info.attr.on_change;
                 }
+                if (info.attr.has_dependents) {
+                    i.value.has_dependents = info.attr.has_dependents;
+                }
                 if (info.attr.metadata) {
                     i.value.metadata = info.attr.metadata;
                 }
@@ -2390,7 +2393,7 @@ public class DataProviderActionCatalog {
                     i.value += raw_info{"required", "sensitive", "ref_data", "element_ref_data",
                         "default_ref_data", "preselected", "required_groups", "exclusive_with",
                         "validation_regex", "depends_on", "on_change", "metadata", "messages",
-                        "icon", "image", "disabled", "readonly", "supports_custom_values",
+                        "icon", "image", "disabled", "readonly", "has_dependents", "supports_custom_values",
                         "supports_templates", "supports_expressions", "server_expression_handling",
                         "option_type_name", "ui_type"};
                 }
@@ -2435,14 +2438,15 @@ public class DataProviderActionCatalog {
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
-                    "on_change", "metadata", "messages", "icon", "image", "server_expression_handling",
-                    "ui_type"}
+                    "depends_on", "has_dependents", "on_change", "metadata", "messages", "icon", "image",
+                    "server_expression_handling", "ui_type"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
-                    "validation_regex", "depends_on", "on_change", "metadata", "icon", "image", "supports_templates",
-                    "supports_custom_values", "supports_expressions", "server_expression_handling", "ui_type"} +
+                    "validation_regex", "depends_on", "has_dependents", "on_change", "metadata", "icon",
+                    "image", "supports_templates", "supports_custom_values", "supports_expressions",
+                    "server_expression_handling", "ui_type"} +
                     additional_fields;
                 if (i.value.option_type_name
                     && info.type.getTag("qore.external_name") != i.value.option_type_name) {

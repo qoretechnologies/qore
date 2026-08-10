@@ -30,6 +30,10 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) RestSchemaDataProvider
+%requires FileLocationHandler
+
+%requires json
+%requires yaml
 
 module RestSchemaActions {
     version = "1.0";
@@ -146,6 +150,27 @@ module RestSchemaActions {
     the value and the label; no application code is involved.  Dropdowns are then served through
     @ref DataProvider::AbstractDataProvider::getSupportedReferenceData() "getSupportedReferenceData()"
     and @ref DataProvider::AbstractDataProvider::getReferenceData() "getReferenceData()".
+
+    Most identifiers are not global.  A branch belongs to a project, a page to a space, a variable to a
+    group — so listing them requires the value the user has already chosen elsewhere in the same form.
+    @ref RestSchemaActions::RestSchemaReferenceDataInfo::options_from "options_from" declares that:
+    it forwards named options of the action being filled in into the listing action, and the dropdown
+    stays empty until they have values, rather than offering identifiers from some other scope.
+
+    @section restschemaactions_import Importing a Schema
+
+    @ref RestSchemaActions::RestSchemaImporter "RestSchemaImporter" produces the committed artifact:
+    download a named upstream revision, prune it to the manifest's operations, write it, and update the
+    application's provenance record.  \c tools/rest-schema-import.qr is its command-line front end and
+    also runs the drift report below, so that an update is one reproducible command rather than an ad-hoc
+    program written once per application.
+
+    It normalizes a trailing slash and a path-parameter **name** when resolving a manifest entry against a
+    document, because neither changes the operation, and comparing paths as strings therefore reports
+    operations as withdrawn when they are merely spelled differently.  Every match that needed normalizing
+    is reported and fails the import: the manifest still has to name the path exactly as the document
+    declares it, or @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" will not resolve it
+    at run time.
 
     @section restschemaactions_execution Execution
 

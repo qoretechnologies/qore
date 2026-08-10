@@ -120,13 +120,33 @@ Three properties of the pinned schema are load-bearing:
   installs and loads, and then throws when the first action is opened. Add both files at the same time
   the module is registered.
 
-### There is no committed importer
+### The importer
 
-The pruning step for both applications was performed by an ad-hoc program calling
-`RestSchemaPruner::prune()`. Nothing in the repository automates *download → prune → write → update
-provenance*; the pruner is exercised only by
-`examples/test/qlib/RestSchemaActions/RestSchemaPruner.qtest`. A third schema-driven application is the
-point at which that program should be committed rather than written a third time.
+`RestSchemaActions::RestSchemaImporter` performs *download → prune → write → update provenance*, and
+`tools/rest-schema-import.qr` is its command line. A fresh import selects operations from a file; a
+re-import takes them from the manifest itself, so the two cannot drift:
+
+```sh
+QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+    --source=https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/openapi/openapi_v3.yaml \
+    --output=qlib/GitLabDataProvider/gitlab-openapi.yaml \
+    --manifest=GitLabDataProvider:GitLabManifest::Manifest \
+    --provenance=qlib/GitLabDataProvider/GitLabSchema.qc \
+    --drift=GitLabDataProvider:GitLabSchema::getActionSet()
+```
+
+It rewrites only the provenance members it owns, so an application-specific one — Stripe's `api_version`,
+GitLab's `gitlab_version` — survives untouched and stays the importer's caller's responsibility. It
+re-parses what it wrote, so an artifact that cannot be loaded is caught during the import rather than at
+the next build. A multi-document application imports each document from one `--spec` file.
+
+**Match manifest paths to the document with normalisation, not string equality.** A trailing slash and a
+path-parameter *name* are not differences — a parameter name is scoped to its own operation — but comparing
+paths literally reports the operation as withdrawn. Evaluating candidates this way produced false
+rejections: Trello scored 19/21 until `/boards/` was normalised, Intercom 10/13 until `{contact_id}` was
+matched against `{id}`; both are in fact 100%. The importer normalises both, and **fails** on a match that
+needed it, because the manifest still has to name the path as the document spells it or the action set will
+not resolve it at run time.
 
 ## Keeping a pinned schema current
 
@@ -202,6 +222,41 @@ the pruner to preserve that section first.
 **Add a codec only where the wire type lies.** Stripe's timestamps are unix seconds and need
 `RestSchemaActionCodecs::UnixSeconds`; Paddle's are RFC 3339 strings and need nothing. A codec applied
 where the schema is already honest is a conversion nobody asked for.
+
+**Almost no identifier is global, so a dropdown usually needs scope.** A branch belongs to a repository, a
+page to a space, a member to a workspace. `RestSchemaReferenceDataInfo::options_from` forwards named options
+of the action being filled in into the listing action, and leaves the dropdown empty until they have values.
+Without it a scoped dropdown either lists the wrong scope or cannot exist, which is a regression against any
+TypeScript application being replaced — every one of them passed the enclosing option to its
+`get_allowed_values` function.
+
+**A dropdown can only name an action the manifest exports, so exporting one is sometimes the point.** The
+GitLab application offered milestone, topic and user dropdowns whose endpoints it never exported, so they
+returned nothing or the authenticated user alone. Three read-only listings were added to the manifest for no
+other reason than to fill them. Check every `get_allowed_values` helper against the exported set before
+deciding a port is at parity.
+
+**When the schema cannot describe an operation, hand-write that one action — do not repair the schema.**
+GitLab's own description declares `POST /projects/{id}/repository/commits` with a `multipart/form-data` body
+whose only property is `file`; the real request carries `branch`, `commit_message` and an `actions` array.
+15 of that document's 656 request bodies carry the same generated placeholder. An overlay must not invent a
+request contract — that hides an upstream defect behind something that looks like presentation — so the
+action is written by hand, keeps its action ID, and is registered alongside the generated ones. The two
+paths are not exclusive, and this is the case that proves it.
+
+**Measure such a defect before reacting to it.** One placeholder body in 24 exported operations is a
+hand-written action; a document where most bodies are placeholders is not a candidate for this path at all.
+
+**A watch provider must inherit the watch base first.** `AbstractDataProvider` and
+`AbstractWatchDataProviderBase` both implement `observersReady()`, %Qore resolves a method to the first
+`inherits` branch that declares it, and `AbstractDataProvider`'s implementation reports the operation as
+unsupported — so listing the data provider base first leaves every subscription failing with `UNIMPLEMENTED`
+at run time, not at build time.
+
+**Publish the event type from the schema.** A polling event provider that declares `supports_observable`
+must implement `getEventTypesImpl()`, and the type is already available: it is the record type of the
+listing action the provider polls, taken from the action set the application ships. A hand-written second
+copy of that shape would drift from the schema the actions use.
 
 **A deliberate duplicate operation is declared, not permitted.** `RestSchemaActionSet` refuses to export
 one method/path pair twice, which catches a copy-and-paste slip. When two actions genuinely share an
