@@ -8,7 +8,7 @@ can observe — and, at defined admission points, reject — storage mutations i
 datasource, without the core performing any classification of SQL text, database error text, or
 command tags.
 
-The motivating consumer is a managed multi-tenant storage admission policy (Qorus), but the
+The motivating consumer is a managed multi-tenant storage admission policy, but the
 mechanism is policy-neutral: the core supplies identity, boundaries, and outcomes only.  No quota,
 pricing, threshold, or retention semantics exist anywhere in this design.
 

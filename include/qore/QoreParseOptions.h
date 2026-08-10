@@ -198,8 +198,11 @@ public:
 
     //! extended option: disallow %prepend-module-path / %append-module-path directives (bit 70)
     /** Enforced at parse time: when set, either directive raises a parse error.  Intended for
-        embedders that want to prevent programs from extending their own module search path
-        (see design/parse-directive-prepend-module-path.md "Sandboxing").  Not included in
+        embedders that want to prevent programs from extending their own module search path.
+        The directives are parse-time-only and perform no I/O themselves, and the \c %requires
+        or runtime load that later uses the path still goes through the standard sandbox gates
+        (\c PO_NO_FILESYSTEM etc.), so this option restricts path declaration rather than
+        closing an attack surface that \c %requires does not already imply.  Not included in
         \c PO_MODERN — modern scripts that legitimately vendor modules should be able to do so.
         @since %Qore 3.0
     */

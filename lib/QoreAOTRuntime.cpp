@@ -12332,7 +12332,7 @@ static std::string stripRequiresDirectives(const char* source, int source_len,
         } else if (p + 17 <= end && strncmp(p, "%try-child-module", 17) == 0) {
             // Child module declarations are delivered by the module description function
             // (qore_aot_fill_module_children()), so the directive must not be processed again when the
-            // embedded source is parsed; see design/parse-directive-try-child-module.md
+            // embedded source is parsed; see design/qore-module-structure.md "Child Modules"
             p += 17;
             const char* child_start = p;
             while (p < end && *p != '\n') {
@@ -12507,8 +12507,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         // Re-apply %prepend-module-path / %append-module-path lists to the
         // freshly-created Program BEFORE loading dependency modules, so that
         // the blob's declared search paths take effect during runTimeLoadModule
-        // below.  See design/parse-directive-prepend-module-path.md
-        // "AOT integration".
+        // below.  See design/qore-module-structure.md "Module Search Path".
         {
             std::vector<std::string> prepended, appended;
             std::string mp_error;
@@ -14908,7 +14907,7 @@ extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
 /** Called after qore_aot_fill_module_desc() and only when the module declares child modules; artifacts
     compiled before child modules were supported never call this function.
 
-    @see design/parse-directive-try-child-module.md
+    @see design/qore-module-structure.md "Child Modules"
 */
 extern "C" DLLEXPORT void qore_aot_fill_module_children(QoreModuleInfo* mod_info, const char** children,
         int num_children) {

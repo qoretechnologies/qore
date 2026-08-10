@@ -60,9 +60,9 @@ Debian unstable / Ubuntu (`libjsoncons-dev`); it is absent from Fedora, Alpine, 
 MacPorts, and no CI deps image installs it. A "fallback" would therefore be the path taken on
 essentially every build, making a GitHub round-trip at configure time a hard dependency of the
 core language build on 3 of 4 CI targets — a strictly worse failure mode than the metadata gate
-being deleted. It would also fire twice per image, since `qore-test-base/prep-*-build.sh` and
-`qorus/docker/*/prep_base*.sh` both configure qore twice; the `QORE_JEMALLOC_URL` local-tarball
-override in qore-test-base exists precisely because of that pain.
+being deleted. It would also fire twice per image, since `qore-test-base/prep-*-build.sh` and the
+downstream product's own base-image scripts both configure qore twice; the `QORE_JEMALLOC_URL`
+local-tarball override in qore-test-base exists precisely because of that pain.
 
 **Why not system discovery.** module-json's `find_path(JSONCONS_INCLUDE_DIR ...)` has no version
 guard, so on a modern Ubuntu box it silently picks up system headers of a different major version.
@@ -216,38 +216,28 @@ Each phase must build and test green before the next starts.
   `prep-ubuntu-build.sh:35,135` and `build-macos.sh:69,144` claiming pass 1 disables metadata
   because json isn't loadable become false: pass 1 will now produce metadata. Rewrite them.
 - `package-docs.sh` needs no change; json tags simply arrive under `qore-module-docs/qore/`
-  instead of `qore-module-docs/json/`. That fact drives the qorus Doxyfile edits below.
+  instead of `qore-module-docs/json/`. Any downstream product cross-referencing those tags in its
+  own Doxyfile has to move them to the `qore/` block to match.
 
-### qorus
+### Downstream products
 
-- `CMakeLists.txt:359` — remove `json` from `QORE_CMAKE_MODS` (also removes it from the
-  doc-symlink loop at 3567 automatically).
-- `CMakeLists.txt:2299` — `FOREACH (it ${QORE_CMAKE_MODS} ${QORE_AUTOTOOLS_MODS} reflection
-  astparser)` generates Java bindings for binary modules; `json` must be added to the trailing
-  explicit list or the Java API classes silently disappear.
-- `QORUS_QO_LOAD_MODULES` at 2632 / 2735 / 2846 / 2924 / 2971 — **no change**; module names and
-  install paths are unchanged.
-- `build-config.qembed:38-41` — delete the `"json"` entry.
-- `docker/ubuntu/prep_base.sh`, `prep_base_debug.sh`, `prep_base_go.sh`,
-  `docker/alpine/prep_base.sh`, `prep_base_minimal.sh` — remove `json` from `CMAKE_MODULES` and
-  `QORE_AOT_BOOTSTRAP_MODULES` (10 lines).
-- `docker/common/verify_aot_qmods.sh` — its sentinel is `A2aServerHandler`, justified by
-  "ships in module-json/qlib/... and module-json is in every prep_base.sh CMAKE_MODULES list".
-  That premise dies; repoint the sentinel or pick a still-external module. Must not be left
-  silently passing.
-- `tools/copy-libs.sh:3` — drop `module-json`.
-- `doxygen/Doxyfile.cmake:2087-2099` — move the 13 tags out of the `qorus/json/` block:
-  `qore/modules/json/json.tag=../qore/modules/json/html` for the binary module and
-  `qore/<Module>.tag=../qore/modules/<Module>/html` for each user module, inserted alphabetically
-  into the existing `qore/` block. The current block lists only 13 — `FhirRestClient`,
-  `FhirRestDataProvider`, `JsonFileDataProvider` and `JsonRpcClientIo` are missing today and
-  should be added while there.
-- `doxygen/Makefile:98` — remove `json` from `DOC_MODULES`.
-- `doxygen/doxyfile.tmpl:1463-1465` — legacy autotools doxyfile, same treatment.
-- `distrib/qorus.spec.tmpl:33,49` — drop `BuildRequires`/`Requires` on `%{name}-qore-json-module`.
-- `bin/qdb` — the one qorus file carrying a json guard.
-- `test/lsp-websocket.qtest:10797` asserts completion results contain no json-module symbols;
-  verify that still holds once json is builtin.
+A product that builds `module-json` as an external module has its own removal pass to make. The
+categories, which are what generalize:
+
+- **Module build lists** — any list naming `json` as an external CMake/autotools module, plus any
+  Java-binding generation loop that iterated those lists (`json` must move to the explicit
+  builtin list there, or the generated Java API classes silently disappear).
+- **Base-image scripts** — `json` in `CMAKE_MODULES` and AOT bootstrap module lists.
+- **AOT verification sentinels** — a check keyed on a module that "ships in `module-json/qlib/`
+  and is therefore always present" loses its premise. Repoint it at a still-external module
+  rather than leaving it silently passing.
+- **Doc tag references** — json tags move from a `json/` block to the `qore/` block.
+- **Packaging** — drop `BuildRequires`/`Requires` on a `qore-json-module` package.
+- **Feature guards** — any `%try-module json` or equivalent guard becomes dead.
+- **Negative assertions** — a test asserting that completion results contain no json-module
+  symbols needs re-verification once json is builtin.
+
+Load-time module lists need **no** change: the module names and install paths are unchanged.
 
 ### module-json: `develop` only, repository stays live
 
@@ -255,7 +245,7 @@ Issue #5366 calls for retiring the repository outright -- archiving it on GitHub
 GitLab mirror, CI pipeline and `github-ci-helper` branch. **That is wrong and must not be done.**
 module-json branches are named after the **Qore** release line they support, not the module
 version, and the branches for earlier lines are still built and released from there because Qore
-and Qorus versions on those lines depend on them:
+and downstream product versions on those lines depend on them:
 
 | Branch | Qore release line | json module version |
 | --- | --- | --- |
@@ -276,10 +266,10 @@ not retired.
 
 ## Sequencing risk
 
-The three repos cannot merge independently. qorus CI clones modules from `build-config.qembed`
-against qore `develop`; the moment qore `develop` ships builtin json, a qorus image that still
-clones and installs `module-json` gets two json modules. Harmless at runtime given the module
-search order, but the AOT bootstrap loop and `verify_aot_qmods.sh` will misbehave.
+The repos cannot merge independently. A downstream product's CI clones its external modules
+against qore `develop`; the moment qore `develop` ships builtin json, an image that still clones
+and installs `module-json` gets two json modules. Harmless at runtime given the module search
+order, but the AOT bootstrap loop and any AOT-qmod verification step will misbehave.
 
-Land qore first, then qore-test-base and qorus within the same window, and rebuild the deps images
-before the next qorus pipeline runs.
+Land qore first, then qore-test-base and each downstream product within the same window, and
+rebuild the deps images before the next downstream pipeline runs.

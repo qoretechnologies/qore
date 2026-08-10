@@ -87,7 +87,7 @@ public:
 };
 
 //! attach status of a child module declared with the %try-child-module parse directive
-/** @see design/parse-directive-try-child-module.md
+/** @see design/qore-module-structure.md "Child Modules"
 */
 enum ChildModuleStatus : unsigned char {
     CMS_PENDING = 0,    //!< the attach has not been attempted yet
@@ -697,7 +697,7 @@ public:
     //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
     /** Must be called with the mutex held and only after \a mi has been registered in the module map; the
         mutex is released and reacquired while each child is loaded.  See
-        design/parse-directive-try-child-module.md for the contract implemented here.
+        design/qore-module-structure.md "Child Modules" for the contract implemented here.
 
         A child declaration is optional, so no child status fails the parent; a child that is present but
         cannot be loaded is reported and skipped.

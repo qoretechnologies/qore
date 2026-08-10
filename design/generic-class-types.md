@@ -13,7 +13,7 @@ Related operational checklists:
 
 - `design/generic-builtin-class-conversion-checklist.md`
 - `design/generic-phase4-static-and-hashdecl-checklist.md`
-- `design/generic-future-work-checklist.md`
+- `design-pending/generic-api-rollout.md` — the work that has not been done
 
 User-facing documentation lives in:
 
@@ -402,7 +402,14 @@ still require rollout work:
   extra code size and metadata complexity: after caching source-stripped AOT
   hashdecl path resolution per receiver type context, AOT is at or faster than
   IR/JIT/tiered execution on the focused generic dispatch and hashdecl-heavy
-  kernels in `bench/generic-aot-specialization.qr`.
+  kernels in `bench/generic-aot-specialization.qr`. The decision was taken
+  against a stated threshold, and only new data crossing it reopens the
+  question: implement native specialization only if source-stripped AOT is at
+  least 15% slower than **both** JIT/tiered and source-included AOT on at least
+  two generic call kernels, or if a real qlib or module workload shows at least
+  15% generic-dispatch overhead attributable to missing source-stripped
+  specialization once allocation and I/O costs are excluded. Reproduce with
+  `bench/run_generic_aot_specialization.sh`.
 - Static factory receiver inference remains conservative when there is no
   assignment target or return context. Calls such as `Factory<int>::make(...)`
   are fully typed, and target/return contexts can infer the receiver type, but a
@@ -428,8 +435,9 @@ generic calls can infer call-local type arguments from supplied arguments, and
 generic classes can infer class type arguments from constructor arguments,
 assignment targets, and return contexts where the expected type is reliable.
 
-The follow-on work checklist is tracked in
-`design/generic-future-work-checklist.md`.
+The remaining rollout work — external `module-*` repositories, and the deferred
+AOT specialization design should its threshold ever be crossed — is tracked in
+`design-pending/generic-api-rollout.md`.
 
 ## Test Coverage
 

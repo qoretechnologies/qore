@@ -6,8 +6,9 @@ Status: in development (2026-07)
 
 LLVM backend cost (SelectionDAG, regalloc, O3 function passes) scales
 super-linearly with function size. A single pathological Qore function —
-the motivating case is `QorusSchema::checkUpgrade(string)` with ~1,994 IR
-blocks / ~18,428 IR instructions — dominates AOT module compile time
+the motivating case is a generated schema-upgrade method in a downstream
+application, ~1,994 IR blocks / ~18,428 IR instructions — dominates AOT
+module compile time
 (~3 minutes, >12 GiB peak RSS) even when `OptimizeNone` skips the
 function-level optimization pipeline, because instruction selection and
 register allocation still process one enormous function. A manual source
@@ -15,7 +16,8 @@ split of the same method into seven helpers compiles in ~20 s / ~3.3 GiB,
 establishing function granularity as the important boundary.
 
 The fix must be transparent: users must not have to refactor giant
-functions (see also the large `Qonsole*.qc` static methods in Qorus).
+functions. Large generated static methods in downstream applications hit
+the same wall.
 
 ## Approach
 
@@ -143,8 +145,8 @@ This generalizes the existing Phase 1.5 init-expression outliner
    Approach-B fast entry is skipped: fast-entry mode passes params as
    LLVM arguments (not TLS), which helpers cannot see, and a
    pathological function does not benefit from the fast entry anyway.
-9. **In-region `return` token.** Giant loop bodies (the
-   `driveDesignAgentLoop` shape) are full of early `return` statements;
+9. **In-region `return` token.** Giant loop bodies (the agent-loop
+   shape below) are full of early `return` statements;
    regions may contain them.  Each return moved into a helper is marked
    with a transient `outline_signal` flag: its lowering calls
    `qore_rt_outline_signal_return()` (a thread-local flag) immediately
@@ -201,9 +203,9 @@ This generalizes the existing Phase 1.5 init-expression outliner
 - Parallel per-helper backend compilation (separate work; helpers being
   whole functions makes them natural units for it).
 
-## Measured result (2026-07-18, original unsplit QorusSchema.qm)
+## Measured result (2026-07-18, the original unsplit module)
 
-`checkUpgrade(string)` (2,422 IR blocks / 18,840 instructions; 2,850
+The motivating method (2,422 IR blocks / 18,840 instructions; 2,850
 blocks after splits) partitions into 10 helper regions (coordinator: 80
 blocks).  Full module compile with `qcc -m -O3`, same machine and tree:
 
@@ -216,12 +218,12 @@ blocks).  Full module compile with `qcc -m -O3`, same machine and tree:
 The manual seven-way source split of the same method (the performance
 oracle) measured ~19.7 s / ~3.3 GiB / 12.6 MB.
 
-### Giant-loop shape (return token; synthetic `driveDesignAgentLoop` analog)
+### Giant-loop shape (return token; synthetic agent-loop analog)
 
 A synthetic agent-loop function (one `while` over 700 guarded statement
 groups with early returns and fused int counters; 11,206 IR blocks /
-63,733 instructions — modeled on the Qorus
-`QorusQonsoleCore::_static_driveDesignAgentLoop` build pathology):
+63,733 instructions — modeled on a real agent-loop build pathology
+observed in a downstream application):
 
 | configuration                      | compile wall | peak RSS  |
 |------------------------------------|--------------|-----------|
@@ -248,6 +250,6 @@ the one giant function regardless of the optimization level.
   (`QORE_AOT_OUTLINE_FN_MIN_INSTS=60`).
 - valgrind (Debug build): compile with forced outlining and execution of
   the outlined binary are error- and leak-clean.
-- Remaining production validation (tracked separately): full Qorus AOT
-  build including the large `Qonsole*.qc` static methods, Qorus
-  regression tests against the outlined `QorusSchema.qmod`.
+- Remaining production validation (tracked separately): a full downstream
+  AOT build including its large generated static methods, and that
+  product's regression tests run against the outlined module.

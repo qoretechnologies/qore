@@ -388,13 +388,13 @@ and field descriptions in `@info`, `@subscribe`, and `@publish` blocks).
 
 | Source | Generated Output |
 |--------|------------------|
-| `@ref OMQ::ES_Fatal "FATAL"` | `FATAL` |
-| `@ref OMQ::StatError "ERROR"` | `ERROR` |
-| `@ref OMQ::BatchMode` (no display text) | `BatchMode` |
+| `@ref Events::ES_Fatal "FATAL"` | `FATAL` |
+| `@ref Events::StatError "ERROR"` | `ERROR` |
+| `@ref Events::BatchMode` (no display text) | `BatchMode` |
 
 Example:
 ```
-- severity (string): error severity (@ref OMQ::ES_Fatal "FATAL", @ref OMQ::ES_Major "MAJOR")
+- severity (string): error severity (@ref Events::ES_Fatal "FATAL", @ref Events::ES_Major "MAJOR")
 ```
 Produces a field with description: `error severity (FATAL, MAJOR)`
 
@@ -424,7 +424,7 @@ qore-asyncapi-gen [options] <source-files...>
 
 Generate schema from event definition files:
 ```bash
-qore-asyncapi-gen -t "Qorus Events" -V "7.2.0" -o events.yaml src/events/*.qc
+qore-asyncapi-gen -t "Platform Events" -V "7.2.0" -o events.yaml src/events/*.qc
 ```
 
 Generate JSON with server URLs:
@@ -738,7 +738,7 @@ qore-asyncapi-gen \
     -t "Workflow Event API" \
     -V "7.2.0" \
     -d "Real-time event streaming for workflow management" \
-    -s "wss://qorus.example.com/events" \
+    -s "wss://events.example.com/events" \
     -o workflow-events.yaml \
     EventDefinitions.qc
 ```
@@ -757,7 +757,7 @@ defaultContentType: "application/json"
 
 servers:
   production:
-    host: "qorus.example.com"
+    host: "events.example.com"
     protocol: "wss"
 
 channels:

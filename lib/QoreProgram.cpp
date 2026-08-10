@@ -1045,7 +1045,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 
     // inherit parent's %prepend-module-path / %append-module-path lists so subprograms
     // see the same module search surface their parent established (design:
-    // design/parse-directive-prepend-module-path.md, "Subprogram propagation")
+    // design/qore-module-structure.md, "Module Search Path")
     prepended_module_paths = p_pgm->priv->prepended_module_paths;
     appended_module_paths = p_pgm->priv->appended_module_paths;
 

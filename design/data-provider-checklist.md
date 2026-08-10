@@ -2,7 +2,10 @@
 
 Comprehensive checklist combining structural verification and quality validation for data provider modules. Run this checklist before marking any data provider work complete.
 
-See also: [data-provider-development-guide.md](data-provider-development-guide.md) for patterns and examples.
+See also: [data-provider-development-guide.md](data-provider-development-guide.md) for patterns and examples,
+and [data-provider-rest-schema-apps.md](data-provider-rest-schema-apps.md) when actions are generated from a
+vendored OpenAPI 3 schema rather than written by hand (sections 3-8 and 12 are then owned by the manifest and
+its overlay, not by module code).
 
 ---
 

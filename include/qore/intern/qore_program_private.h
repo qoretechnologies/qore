@@ -3096,7 +3096,7 @@ public:
         The AOT deserialization path already does the equivalent via
         \c inheritAOTModulePathLists() in QoreAOTRuntime.cpp; this is the
         same fix for the source/interpreted module-loading path.  See
-        design/parse-directive-prepend-module-path.md, "Search-path layering".
+        design/qore-module-structure.md, "Module Search Path".
 
         @since %Qore 3.0
      */

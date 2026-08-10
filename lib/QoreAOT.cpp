@@ -23673,7 +23673,7 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
             // loaded after this module is published, so they must NOT become module dependencies (which are
             // mandatory and are loaded before the module's init function runs).  The declarations are
             // emitted in the module description function instead; see
-            // design/parse-directive-try-child-module.md
+            // design/qore-module-structure.md "Child Modules"
             if (p + 17 <= end && strncmp(p, "%try-child-module", 17) == 0) {
                 p += 17;
                 while (p < end && (*p == ' ' || *p == '\t')) {

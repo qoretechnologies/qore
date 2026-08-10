@@ -990,6 +990,5 @@ class MyProcessorTest inherits QUnit::Test {
 
 ## Further Reading
 
-- [Pipeline Processor Design](pipeline-processors.md) — Full architecture, class hierarchy, API reference, design decisions
 - [ML Architecture](ml-architecture.md) — C++ ML module and DataProviderML processor layer
 - [Data Provider Development Guide](data-provider-development-guide.md) — General data provider patterns

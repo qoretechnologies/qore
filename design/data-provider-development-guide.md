@@ -6,6 +6,12 @@ A typical integration consists of:
 1. **REST Client Module** (`*RestClient.qm`) - HTTP communication and authentication
 2. **Data Provider Module** (`*DataProvider/`) - Data provider API and action catalog
 
+This guide covers **hand-written** actions. When the vendor publishes a maintained OpenAPI 3 description,
+actions can instead be generated from it with the `RestSchemaActions` module — see
+[data-provider-rest-schema-apps.md](data-provider-rest-schema-apps.md) for how to choose, and for the
+layout and schema-pinning conventions that path uses. The REST client module, `registerApp()` and every
+event provider are hand-written either way, so most of this guide still applies.
+
 ## File Structure
 
 ```

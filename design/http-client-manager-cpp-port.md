@@ -669,7 +669,7 @@ HTTPClient dispatch), which is fine but must not drag on indefinitely.
 ### Regression risk in HttpClientIo
 Phase P6 rewires `HttpClientConnectionManager.qc` to inherit from
 the C++ base. HttpClientIo is used by `RestClientIo`, `WebSocketClient`,
-`DataProvider`, `Qorus`, etc. A bug in the C++ base is a bug for
+`DataProvider`, and downstream products. A bug in the C++ base is a bug for
 every downstream user. Mitigation: P2–P5 land with aggressive
 unit tests exercising each protocol's lifecycle before P6 touches
 production code.

@@ -2,7 +2,7 @@
 
 ## Implemented baseline
 
-The Qorus archive raw-SQL audit no longer identifies a missing generic primitive for the common
+A downstream archive raw-SQL audit no longer identifies a missing generic primitive for the common
 set-wise and aggregate cases:
 
 - create-as-select supports generic SQL, SQL Server `SELECT INTO`, commit/no-commit execution,

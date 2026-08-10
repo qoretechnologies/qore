@@ -6,7 +6,7 @@
 # Tests the %try-child-module parse directive: a base module declares optional child modules that extend it,
 # and the module loader attaches them once the base module has been fully loaded and published.
 #
-# See design/parse-directive-try-child-module.md and issue #5364.
+# See design/qore-module-structure.md "Child Modules" and issue #5364.
 #
 # NOTE: module registration is global and permanent in a process, so each test case uses its own set of
 # fixture modules; a module can only be loaded (or fail to load) once per process.

@@ -343,7 +343,7 @@ See `module-v8/design/generic-api-call-action.md` for the module-v8 side.
 
 ## UI form layout
 
-Option ordering in the form is bucket-sorted by Qorus by required-ness then
+The consuming platform bucket-sorts form options by required-ness, then
 preselected-ness. To keep `body_type` and `body` adjacent, the action builder
 registers them in the same preselected-optional bucket (neither marked
 `required` at the action level — `body_type` carries `default_value: "auto"`
@@ -351,33 +351,33 @@ so the form is pre-filled). Both fields also carry the same
 `groups: ("Body",)` tag, surfacing a `Body` section in UIs that render
 grouped sections.
 
-Order in the registration hash (the Qorus `sort` field follows this order
-within each bucket): method, path, body_type, body, path_vars, query_args,
-hdr, expected_status, error_passthru, include_debug. Qorus assigns
-sort=1 to the synthetic `qorus_app_connection` field, then sort=2..N to
-preselected options, then sort=999999 to non-preselected options.
+Order in the registration hash, which the platform's sort order follows within
+each bucket: method, path, body_type, body, path_vars, query_args, hdr,
+expected_status, error_passthru, include_debug. Preselected options sort ahead
+of non-preselected ones, behind any synthetic connection field the platform
+injects.
 
-## Qorus UI `{type, value}` encoding boundary
+## The UI `{type, value}` encoding boundary
 
-The `{type, value}` wrapping seen in Qorus UI request/response payloads is a
-Qorus UI transport convention, not a DataProvider API shape. qorus-ide uses
-typed editor values (see its `TTypedValue` representation) so it can preserve
-editor type, template-vs-literal intent, and widget selection.
+A consuming UI may wrap values as `{type, value}` in its request and response
+payloads, so that it can preserve editor type, template-vs-literal intent, and
+widget selection. That is a **UI transport convention, not a DataProvider API
+shape**, and the distinction has to be enforced from the Qore side because
+nothing in the payload marks it.
 
-The Qore DataProvider contract remains plain Qore values: providers,
-`getRequestTypeWithOptionsImpl()`, `getRequestTypeWithDataImpl()`, and
-`doRequestImpl()` should receive normal hashes/lists/scalars. When
-`context=ui` is used, Qorus owns both directions of the encoding boundary:
-it UI-encodes option/field responses and must decode incoming `{type, value}`
-payloads before invoking DataProvider APIs. This is documented in Qorus'
-`design/ui-data-encoding.md`.
+The DataProvider contract remains plain %Qore values: providers,
+`getRequestTypeWithOptionsImpl()`, `getRequestTypeWithDataImpl()` and
+`doRequestImpl()` receive ordinary hashes, lists and scalars. When
+`context=ui` is in use, the platform owns **both** directions of that boundary
+— it UI-encodes option and field responses, and it must decode incoming
+wrapped payloads before invoking any DataProvider API.
 
-`GenericApiCallProvider::extractBodyType()` currently accepts both plain
-`body_type` values and leaked `{value: ...}` values as a narrow compatibility
-guard for existing callers. It should not become the pattern for new providers,
-and Qore should not add a generic `unwrapTypedValue()` helper to the
-DataProvider module; that would mix a Qorus UI transport concern into reusable
-qlib provider code.
+`GenericApiCallProvider::extractBodyType()` accepts both a plain `body_type`
+value and a leaked `{value: ...}` wrapper, as a narrow compatibility guard for
+existing callers. It must not become the pattern for new providers, and %Qore
+must not grow a generic `unwrapTypedValue()` helper in the DataProvider module:
+that would pull a UI transport concern into reusable qlib provider code, where
+every provider would then have to decide whether a wrapper is data or encoding.
 
 ## Testing
 
@@ -413,8 +413,8 @@ the framework's reflective discovery — no per-app test code needed).
 
 ## Open issues
 
-- **Qorus-side `context=ui` decode before DataProvider calls.** Qorus should
-  decode incoming UI-encoded option and request payloads at the REST/API
+- **`context=ui` decode before DataProvider calls.** The consuming platform
+  should decode UI-encoded option and request payloads at its REST/API
   boundary, before invoking DataProvider dynamic-option resolution or action
   execution. Once that boundary is consistently enforced,
   `GenericApiCallProvider::extractBodyType()` can drop its compatibility

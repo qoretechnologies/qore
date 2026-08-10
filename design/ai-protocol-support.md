@@ -166,33 +166,3 @@ The diff compares arrays positionally and emits removals highest-index-first so 
 earlier operations stay valid as the patch is applied in order. It does not search for moved
 elements: that costs O(n·m) to find, and the common case in a streamed state delta is appends
 and in-place edits, where positional comparison is already minimal.
-
-## Qorus-side bindings — outstanding
-
-Two integrations live in the Qorus repository and are not done:
-
-- **MCP Apps on the OpenAPI gateway.** `QorusOpenApiGateway` already registers every terminal
-  REST operation as an MCP tool, and Qorus already has a `ui_component` ContentPart with a real
-  component registry that renders only in the Qorus front end. Attaching `_meta.ui` to those
-  gateway tools makes Qorus panels render inside Claude Desktop, VS Code Copilot and M365
-  Copilot — a new distribution channel, not a reimplementation.
-- **`/api/v9/qonsole/agui`.** A *projection*, not a fork: `QorusQonsoleCore` keeps emitting its
-  existing internal events and a new adapter renders them as AG-UI instead of `exec-*`.
-
-  | ContentPart | AG-UI |
-  |---|---|
-  | `text`, `markdown` | `TEXT_MESSAGE_START` / `_CONTENT` / `_END` |
-  | `code` | `TEXT_MESSAGE_CONTENT` with a fenced block |
-  | `json`, `yaml`, `table` | `TOOL_CALL_RESULT.content` |
-  | `image`/`audio`/`video`/`document`/`file` | `TOOL_CALL_RESULT.content` with the URL |
-  | `ui_component` | `CUSTOM`, or an MCP App |
-  | design artifact state | `STATE_SNAPSHOT` on run start, `STATE_DELTA` per turn |
-  | wizard `step`/`confirmAck` | `TOOL_CALL_START`/`_ARGS`/`_END` + approval round trip |
-  | `exec-start` / `exec-complete` / errors | `RUN_STARTED` / `RUN_FINISHED` / `RUN_ERROR` |
-
-  **This is not a performance fix.** `design/qonsole-design-loop-io-scalability.md` establishes
-  that the design-loop ceiling is CPU-bound in qorus-core, and that persistence batching
-  measured 3-6% *slower* and was reverted. Delta streaming cuts client-refresh round trips and
-  payload size; it does not touch the per-turn CPU that is the actual lever.
-
-  The ncurses CLI gains nothing from this and should stay on the existing binding.

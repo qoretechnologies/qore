@@ -190,7 +190,7 @@ public:
         * del_loc = nullptr;
 
     //! child module specifications declared with %try-child-module, in declaration order
-    /** @see design/parse-directive-try-child-module.md
+    /** @see design/qore-module-structure.md "Child Modules"
     */
     std::vector<std::string> child_vec;
 

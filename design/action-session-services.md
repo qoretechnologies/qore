@@ -1,162 +1,94 @@
-# Action-Based Session Services for Creator WebSocket
+# Action-Based Session Services
 
-This document defines action-first session APIs in Qore so Qorus can expose a unified
-Creator WebSocket interface while preserving the existing "action" pattern.
+Several %Qore modules expose interactive, stateful services — DPQL editing, the REPL, LLM response
+streaming — that a consuming platform reaches over a WebSocket. Rather than each module defining its own
+wire protocol, the behaviour lives in a transport-agnostic **action session** class, and the WebSocket
+handler is a thin adapter over it.
 
-## Goals
+The point is that the same session object serves a %Qore WebSocket module and an embedding platform's
+own handler without either duplicating protocol logic, and that the interesting behaviour is unit
+testable without a socket.
 
-- Keep Creator WS client contract based on `action`.
-- Make REPL, DPQL, and OpenAI response streaming transport-agnostic in Qore.
-- Share behavior between Qore WS modules and Qorus without protocol duplication.
-- Provide consistent request/response payloads for the frontend.
+## The session shape
 
-## Non-Goals
+A session class is not derived from a common base — the three implementations have genuinely different
+lifecycles — but they share a convention:
 
-- Changing existing action names in Qorus Creator WS.
-- Breaking the existing Qore WebSocket modules.
+| Member | Contract |
+|---|---|
+| `handleAction(string action, *hash<auto> args)` | dispatch one action by name and return its response |
+| `setEmitter(*code cb)` | register a callback for asynchronous events, where the service has any |
+| `close()` | release resources, where the service holds any |
 
-## Architecture Overview
+`handleAction()`'s return type is per-service and is **not** uniform: `DpqlActionSession` and
+`OpenAiResponseActionSession` return `hash<auto>`, while `QoreReplActionSession` returns
+`list<hash<auto>>` because one evaluation can produce several ordered payloads. An adapter must not
+assume a single response hash.
 
-Introduce Qore session classes that consume `action` + args and emit structured responses
-and events. Existing WebSocketConnection classes delegate to these sessions.
+Actions are named `<service>-<verb>` so that one flat namespace can carry every service on a shared
+connection.
 
-### Session API Shape
+## The implementations
 
-All sessions should expose a minimal common surface:
+| Class | Module | Actions |
+|---|---|---|
+| `DpqlActionSession` | `qlib/DataProvider/` | `dpql-set-context`, `dpql-parse`, `dpql-get-completions`, `dpql-get-tokens`, `dpql-format`, `dpql-validate`, `dpql-eval`, `dpql-serialize`, `dpql-get-signature-help` |
+| `QoreReplActionSession` | `qlib/QoreRepl/` | `repl-eval`, `repl-command`, `repl-interrupt`, `repl-complete`, `repl-close`; emits `repl-output`, `repl-result`, `repl-prompt`, `repl-completion`, `repl-error`, `repl-exit` |
+| `OpenAiResponseActionSession` | `qlib/OpenAiDataProvider/` | `openai-response-create`, `openai-response-start`, `openai-response-stop`; emits `openai-response-event`. Inherits `DataProvider::Observer` and manages the response stream provider's lifecycle |
 
-- `handleAction(string action, hash<auto> args)` -> `hash<auto>` response
-- Optional `setEmitter(code cb)` or constructor option to receive events
-- Optional `close()` for cleanup
+`DpqlWebSocketConnection` (`qlib/DpqlWebSocket/`) is the reference adapter: it constructs a
+`DpqlActionSession` and translates its message types into action calls.
 
-`handleAction()` returns a response hash suitable for Qorus `sendResponse()` payloads.
+`dpql-set-context` exists because schema-aware completion needs resolved field types, including nested
+hash and list structure — that is what makes `@record{` able to suggest hash keys. The session caches
+that context so later actions carry a small payload; see [dpql-integration.md](dpql-integration.md) for
+callback setup and field-metadata construction.
 
-## DPQL Session
+## Token spans
 
-For detailed callback setup, field metadata construction, and expression evaluation,
-see [DPQL Integration Guide](dpql-integration.md).
+`dpql-get-tokens` and `dpql-parse` return editor tokens in one of two formats, selected by the session's
+`token_format` option: `"dpql"` returns raw `DpqlTokenInfo` records, and `"token-span"` (the default)
+returns a **language-neutral** span designed to suit a tree-sitter capture stream as readily as the DPQL
+tokenizer, so a client renders one shape regardless of source:
 
-### New Session Class (Qore)
+```
+TokenSpan:
+- type (string)          category, from the fixed set below
+- start (hash)           row (int, 0-based), column (int, 0-based)
+- end (hash)             row (int, 0-based), column (int, 0-based)
+- text (*string)         raw token text
+```
 
-Suggested name: `DpqlActionSession`.
+Two details are easy to get wrong. The rows and columns are **0-based**, while `DpqlTokenInfo` is
+1-based — `toTokenSpan()` converts. And whitespace, newline and EOF tokens are dropped from the span
+stream but present in the raw one, so span offsets are not positional indices into the token list.
 
-Responsibilities:
-- Track context (provider, record type, expressions).
-- Provide parse, tokenize, completion, validation, serialization.
-- Keep payload size minimal via context caching.
+The categories are deliberately few, and several DPQL token types collapse into one:
 
-### Actions
+| Category | Source token types |
+|---|---|
+| `field` | `DPQL_TOK_FIELD` |
+| `identifier` | `DPQL_TOK_IDENTIFIER`, and any unmapped type |
+| `keyword` | `DPQL_TOK_BOOLEAN`, `DPQL_TOK_NULL` |
+| `string` | `DPQL_TOK_STRING`, `DPQL_TOK_REGEX` |
+| `number` | `DPQL_TOK_NUMBER` |
+| `constant` | `DPQL_TOK_DATE`, `DPQL_TOK_BINARY`, `DPQL_TOK_LIST`, `DPQL_TOK_HASH` |
+| `operator` | every `DPQL_TOK_OP_*` |
+| `punctuation` | `DPQL_TOK_LPAREN`, `DPQL_TOK_RPAREN`, `DPQL_TOK_COMMA` |
+| `variable` | `DPQL_TOK_TEMPLATE` |
+| `error` | `DPQL_TOK_ERROR` |
 
-- `dpql-set-context`
-  - args: `provider`, `subtype`, `options`, `recordOptions`, `recordType`
-  - response: context summary (fields, expressions)
-  - note: Required for schema-aware key completions. The provider resolves full field
-    type information including nested hash/list structures, which enables suggesting
-    hash keys when the cursor is inside `{...}` accessors.
-- `dpql-parse`
-  - args: `text`
-  - response: diagnostics + tokens
-- `dpql-get-completions`
-  - args: `text`, `position`, optional `fields` override
-  - response: completions list
-  - note: Uses cached context from `dpql-set-context` if available. Schema-aware key
-    completions (e.g., `@record{` suggesting hash keys) require provider-backed context.
-- `dpql-get-tokens`
-  - args: `text`
-  - response: tokens list
-- `dpql-format`
-  - args: `text`
-  - response: formatted text
-- `dpql-validate`
-  - args: `text`
-  - response: diagnostics list
-- `dpql-serialize`
-  - args: `expression`
-  - response: serialized string
+Collapsing is the design, not a shortcut: a client themes a small fixed vocabulary, and a new DPQL token
+type maps into an existing category rather than forcing every client to learn it. `mapTokenType()`
+returns `identifier` for anything unmapped, so an unrecognised token renders plainly instead of
+throwing.
 
-### Compatibility
+Adding a DPQL token type therefore means adding a `mapTokenType()` case — otherwise it silently renders
+as an identifier.
 
-`DpqlWebSocketConnection` should instantiate `DpqlActionSession` and translate `type`
-messages to action calls. Qorus should call actions directly.
+## Documenting the WebSocket surface
 
-## REPL Session
-
-### New Session Class (Qore)
-
-Suggested name: `QoreReplActionSession`.
-
-Responsibilities:
-- Provide REPL execution and command handling.
-- Emit streaming output and prompt updates for UX.
-
-### Actions
-
-- `repl-eval` (args: `code`)
-- `repl-command` (args: `command`)
-- `repl-interrupt` (args: `id`)
-- `repl-close`
-
-### Events
-
-Emitted via session emitter:
-- `repl-output` (stdout/stderr stream + text)
-- `repl-result` (value + metadata)
-- `repl-prompt` (prompt state)
-- `repl-exit` (session termination)
-
-### Compatibility
-
-`QoreReplWebSocketConnection` should delegate to this session. Qorus uses it directly.
-
-## OpenAI Response Streaming Session
-
-### New Session Class (Qore)
-
-Suggested name: `OpenAiResponseActionSession`.
-
-Responsibilities:
-- Provide non-streaming and streaming response actions.
-- Manage `OpenAiResponseStreamDataProvider` lifecycle.
-- Persist conversation state via `OpenAiConversationContextStore`.
-
-### Actions
-
-- `openai-response-create` (non-streaming)
-  - args: `model`, `input`, `metadata`, `conversation_key`, `conversation_context`, `previous_response_id`
-  - response: normalized output with rich parts
-
-- `openai-response-start` (streaming)
-  - args: same as create + `stream_options`
-  - response: `status: streaming`
-
-- `openai-response-stop`
-  - response: `status: stopped`
-
-### Events
-
-Emitted via session emitter:
-- `openai-response-event`
-  - `event_type` (simplified category)
-  - `openai_type` (raw OpenAI `type` string)
-  - `data` (normalized payload)
-  - `content` (*list<ContentPart>) when output is available
-
-## Qorus Creator WS Integration
-
-Qorus maintains action-based handlers in `QorusCreatorWebSocketHandler`.
-Integration plan:
-- Add per-connection session instances for DPQL, REPL, OpenAI.
-- Route action to session `handleAction()` and map response to `sendResponse()`.
-- Use session emitter to publish stream events via `send()` with action payload.
-
-## AsyncAPI Schema Requirements
-
-All Creator WS actions and events must be documented in the `/creator` `@WEBSOCKET`
-block using `@subscribe` / `@publish` message schemas per
-`design/asyncapi-schema-generation.md`.
-
-## Testing Requirements
-
-- Unit tests for new session classes.
-- Integration tests for existing WS modules (ensuring behavior unchanged).
-- Qorus Creator WS tests for new actions and event streams.
-- Corner cases and negative tests for malformed payloads and missing context.
+Every action and event carried over a WebSocket must appear in that handler's `@WEBSOCKET` block as
+`@subscribe` / `@publish` message schemas — see
+[asyncapi-schema-generation.md](asyncapi-schema-generation.md). The session class is the source of
+truth for what those schemas describe.

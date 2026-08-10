@@ -31,7 +31,7 @@ architecture:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                Qorus / Applications                      │
+│                    Applications                          │
 ├──────────────────────────────────────────────────────────┤
 │       DataProviderML (Qore)        QoreOnnxTools (Qore)  │
 │  Algorithm processors + preprocessing + metrics +        │
@@ -309,6 +309,39 @@ Device-upload and device-binding entry points are in the
 `PO_NO_UNCONTROLLED_APIS` cannot call them.
 
 ## ONNX Integration
+
+### Scope And Guarantees
+
+The target is production inference: safe model management, predictable
+execution, strong diagnostics, columnar and zero-copy data paths, and
+performance measurable against Python ONNX Runtime workflows. Four commitments
+shape the API surface and should be preserved by any change to it:
+
+- **ONNX Runtime behaviour is explicit.** Providers, options, fallback,
+  profiling, optimization level and model format are all visible through Qore
+  APIs rather than decided silently inside a session.
+- **A requested provider is never silently downgraded to CPU.** An unavailable
+  provider is a reported condition, not an invisible fallback — this is why
+  `getRequestedProviders()`, `getEffectiveProviderReport()` and the
+  `provider_host_resolutions` counter exist.
+- **Performance-relevant copies are never hidden.** Transfers between
+  DataFrame, Arrow, tensor and ONNX Runtime layers are observable through
+  transfer counters and inference statistics; dense and columnar paths are
+  preferred over row-hash materialization.
+- **Model artifacts stay safe and portable** through QoreModelRegistry
+  metadata, validation, checksums and execution plans.
+
+Qore does not reimplement the PyTorch, HuggingFace or scikit-learn ONNX
+exporters, and training is not a focus. Python ecosystem tools remain the source
+of truth for export and quantization; Qore owns orchestration, validation,
+deployment and execution, and `QoreOnnxTools::OnnxQuantizer` drives the Python
+tooling rather than replacing it (`checkPythonDependencies()` reports when that
+environment is missing instead of failing obscurely).
+
+The supported enterprise inference tasks are raw tensor inference,
+classification/regression, embeddings, reranking, and transformer pipelines.
+
+### Runtime Detection And Surface
 
 - CMake detects ONNX Runtime via pkg-config or find_library.
 - `HAVE_ONNXRUNTIME` gates ONNX implementation code while stub classes keep the

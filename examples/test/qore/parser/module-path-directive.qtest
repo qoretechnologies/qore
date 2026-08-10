@@ -9,8 +9,9 @@
 %exec-class ModulePathDirectiveTest
 
 # Regression coverage for the %prepend-module-path / %append-module-path parse
-# directives introduced in Qore 3.0.  See
-# design/parse-directive-prepend-module-path.md for the specification.
+# directives introduced in Qore 3.0.  User documentation is in
+# doxygen/lang/245_parse_directives.dox.tmpl; the resolution model is in
+# design/qore-module-structure.md "Module Search Path".
 class ModulePathDirectiveTest inherits QUnit::Test {
     private {
         # module source used to verify the search-path plumbing end-to-end:

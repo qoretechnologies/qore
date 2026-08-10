@@ -453,6 +453,191 @@ and raise a clear error.
 - `qore/lib/qc_errno.qpp` — always-exported `errno` constants with `#ifndef` sentinel
   fallbacks
 
+## Module Search Path
+
+Usage of `%prepend-module-path` / `%append-module-path` is documented for users
+in `doxygen/lang/245_parse_directives.dox.tmpl` — syntax, the `${NAME}` macro
+table, escaping, and examples. What follows is the resolution model those
+directives plug into, which several places in the runtime depend on.
+
+### Layering
+
+The effective search path at any point, highest precedence first:
+
+1. **Per-Program prepended paths** — most-recently-added first, so the last
+   `%prepend-module-path` parsed sits at the head
+2. **Process `QORE_MODULE_DIR`** entries, plus legacy `%append-module-path`
+   additions, which write to the process-global list
+3. **Compiled-in defaults** — `${PREFIX}/share/qore-modules/<ver>` and
+   `${PREFIX}/lib*/qore-modules/<ver>`
+4. **Per-Program appended paths**, in the order added
+
+`ModuleManager` builds this order directly; the per-Program lists live on
+`qore_program_private` as `prepended_module_paths` / `appended_module_paths`.
+
+### The same order applies at run time
+
+`Program::loadModule()`, `loadApplyToUserModule()` and the `load_module()`
+builtin consult the per-Program lists too, in exactly the parse-time order.
+Without that, a program could `%prepend-module-path` for its `%requires` and
+still have a runtime load resolve against the system path — the same module name
+resolving two different ways within one Program.
+
+### Subprogram inheritance
+
+A subprogram inherits its parent's prepend and append lists, appended uniquely,
+matching how parse options inherit. A subprogram's own directives extend the
+inherited lists rather than replacing them. There is no opt-out.
+
+### Persistence into AOT artifacts
+
+Macro and environment expansion happens **at parse time on the parsing host**,
+so the expanded strings — not the directives — are what persist. The AOT writer
+emits them as `MODULE_PATH_PREPEND` and `MODULE_PATH_APPEND` sections, gated by
+the `QORE_AOT_FEAT_MODULE_PATH_LISTS` feature flag so that older blobs without
+the bit simply deserialize to empty lists.
+
+The reader re-applies both lists to the target Program **before any of the blob's
+dependency loads run**; for multi-blob batches the per-blob lists are merged and
+de-duplicated before `resolveAll()`. This ordering is the whole point: it is what
+lets an AOT-compiled binary find its own vendored modules with no host-side
+`MM.addModuleDir()` call and no `QORE_MODULE_DIR` set by the launcher.
+
+The consequence for deployment is that an AOT binary whose paths came from an
+environment variable needs that variable set at **compile** time, not at run
+time.
+
+## Child Modules
+
+`%try-child-module` lets a user module declare an optional extension that the
+loader activates automatically. Syntax, version comparison, the three outcomes
+(absent / failed / skipped), warning names and `get_module_hash()` introspection
+are documented for users in `doxygen/lang/245_parse_directives.dox.tmpl` and
+`doxygen/lang/120_modules.dox.tmpl` (`user_module_children`). What follows is why
+the mechanism is shaped the way it is.
+
+### Why a parent cannot just load its own extension
+
+Every simpler approach fails, and the reason is specific:
+
+| Attempt | Outcome |
+|---|---|
+| `%try-module Ext` in the parent | parse time — far too early |
+| `load_module("Ext")` in the parent's `init` closure | `PARSE-EXCEPTION: cannot find any namespace or class 'Base'` |
+| `load_module("Ext")` lazily on first use | works, but ties activation to a call, cannot tell absent from broken, and needs boilerplate in every extensible base |
+
+The middle row is the one that matters. While a user module's `init` closure
+runs, its feature is reserved in `QoreModuleManager::module_load_map` as
+`MLS_INITIALIZING` owned by the current thread. When the child then parses
+`%requires(reexport) Base`, `loadModuleIntern()` matches `e.owner_tid ==
+q_gettid()` and returns `nullptr` **with no exception** — so the parent's
+namespace is never merged into the child's `QoreProgram`, and every `Base::`
+reference fails to resolve. The parent is published into the module map by
+`setupUserModule()` strictly after both the parse-phase and init-phase
+reservations are released.
+
+Children can therefore only be attached **after the parent's load has returned**.
+
+### Attach point
+
+Attachment happens at the outermost module-load boundary on the current thread
+(`module_load_depth == 0`), not at the end of the parent's own load.
+
+If the parent `P` is loaded from inside another module `X`'s parse, attaching
+`P`'s children immediately would run a child's parse while `X` is still reserved
+`MLS_INITIALIZING` on this thread — reproducing the failure above one level up
+for any child that requires `X`. Deferring to the outermost boundary removes
+that class of failure by construction.
+
+Within one drain, children attach in declaration order, depth-first. The drain
+runs **before** the parent is merged into the requesting `QoreProgram`, so a
+caller sees a complete extension set as soon as the parent is available.
+
+### The child gets the parent's context, not the caller's
+
+A child loads with `pgm = nullptr`: it registers globally and its `init` runs,
+but its namespace is **not** merged into any `QoreProgram`. A base module must
+not gain symbols from an optional extension, or its API surface would depend on
+which extensions happen to be installed. Code wanting the child's classes
+`%requires` the child.
+
+Parse options and the module search path come from the **parent module's**
+`QoreProgram` (`path_pgm`), not from whichever program triggered the load. This
+keeps child resolution deterministic, and lets a parent loaded from a
+non-standard search path find its children in that same path.
+
+### A broken child never fails the parent
+
+An earlier implementation raised the child's error and failed the parent's load,
+arguing this keeps `%requires Parent` deterministic. **That reasoning was
+rejected.** Determinism was never in question — the outcome is already a pure
+function of what is installed — and it does not justify the blast radius: one
+incompatible optional extension takes down every consumer of the base module,
+including all those that never use the extension.
+
+The failure mode was not hypothetical. A stale out-of-tree
+`SalesforcePubSubDataProvider` on a single CI runner broke three unrelated
+`SalesforceRestDataProvider` test suites this way.
+
+So `failed` joins `absent` and `skipped`: reported, skipped, parent fully usable.
+Nothing is added to the caller's exception sink and the parent's load return code
+is unaffected. A broken child is always reported, though — unlike `skipped`,
+which reflects a deliberate restriction in the container `Program`.
+
+### Teardown, cycles, and concurrency
+
+A child holds references to the parent's classes and registers data into the
+parent's structures, so the parent must be destroyed after the child. A child
+declaring `%requires(reexport) Parent` records that edge automatically; for those
+that do not, the attach step records it explicitly with
+`setUserModuleDependency(parent, child)` — but only when both are user modules,
+since binary modules are not torn down by `delUser()` and must not be tracked.
+
+Three re-entrancy cases are handled without new locking:
+
+- **Mutual child declarations** — the second attach re-enters for a parent
+  already attaching on this thread and is skipped via a thread-local in-progress
+  set; both modules load, neither recurses.
+- **A child loaded explicitly that pulls in its parent** — when the parent then
+  attaches that child, the loader sees the child's own in-progress reservation
+  owned by this thread and returns without error; the in-flight load completes
+  and the child is recorded as attached.
+- **Concurrent loads of one parent on two threads** — both run the attach loop
+  and serialize per child on the existing `module_load_map` reservation; status
+  bookkeeping is idempotent under the module-manager mutex.
+
+### Surviving AOT compilation
+
+`QORE_BUILD_AOT_MODULES` defaults to `ON` and a `.qmod` wins over `.qm` in the
+search order, so a qlib module normally reaches deployments as an AOT binary
+module. If child declarations did not survive AOT, the feature would be silently
+inert exactly where it matters.
+
+- `QoreAOTModuleInfo` carries a `child_modules` list, populated by the same raw
+  source scan that collects `%requires` dependencies. Children are **not** emitted
+  as module dependencies: a dependency is mandatory and loads before `init`, a
+  child is optional and loads after.
+- The generated description function calls `qore_aot_fill_module_children()`, a
+  separate entry point from `qore_aot_fill_module_desc()` so that previously
+  compiled artifacts — which never call it — keep working unchanged.
+- `QoreModuleInfo` has a matching field; the loader copies it onto the module
+  object, after which binary and user modules share one attach implementation.
+- The Program supplying parse options and search path comes from
+  `qore_aot_get_module_pgm()`, since an AOT-compiled user module has no
+  `QoreUserModule` but does register a module Program with the AOT runtime.
+  Without this, a child installed beside its AOT parent outside the standard
+  search path is reported absent.
+- An AOT child loaded with `pgm = nullptr` is initialized in its private module
+  Program after registration, so its `init` runs as it would from source while
+  its namespace still stays out of the parent. Init side effects execute only
+  during the first shared AOT initialization; importing the child explicitly
+  later does not repeat registrations. An exception from that initializer keeps
+  its original error code and detail, marks the attachment failed, and is
+  reported and skipped exactly as a source child's `init` exception is.
+- The directive is stripped from embedded source before it is re-parsed at
+  runtime (`stripRequiresDirectives()`), because by then the declaration has
+  already arrived through the description function.
+
 ## %include Deprecation (Modules)
 
 The `%include` parse directive is deprecated for Qore user modules in this

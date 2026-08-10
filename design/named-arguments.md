@@ -30,8 +30,8 @@ Core landing commits (anchors below are starting points and will drift):
 - A long series of `feat: enable named ...` commits through `d05c0eb97`
   rolled out the audited builtin opt-in allowlist.
 
-The builtin opt-in process is operational, not part of this design; it lives
-in [`design/named-argument-builtin-review-checklist.md`](named-argument-builtin-review-checklist.md).
+The rules governing which builtin variants may be opted in, and how their
+parameters must be named, are in [Builtin Opt-In](#builtin-opt-in) below.
 
 User-facing documentation: `@ref function_named_arguments` (functions),
 `@ref overloading_named_arguments` (overloading), `@ref NAMED_ARGS` (code
@@ -290,14 +290,65 @@ Builtins are named-callable **only** when the variant opts in:
   flag set and `hasNamedArgsFlag()` emits `QCF_NAMED_ARGS`. Hand-written
   registrations pass `QCF_NAMED_ARGS` directly.
 
-Builtin parameter names were never previously a calling-interface contract,
-so opt-in is gated behind an audit. The audit/sanitize/allowlist process —
-parameter-name conventions, exclusions (varargs, dynamic forwarding,
-option-hash keys, deprecated/NOOP, ambiguous overload sets), tests, and the
-core/binary-module migration record — is maintained separately in
-[`design/named-argument-builtin-review-checklist.md`](named-argument-builtin-review-checklist.md).
-That checklist is the authoritative operational reference; this design does
-not duplicate it.
+Builtin parameter names were never previously a calling-interface contract, so
+opting a variant in makes its parameter names public API. The rules below govern
+every builtin added or changed from here on; the core migration itself is
+complete (the `feat: enable named ...` series through `d05c0eb97`).
+
+### When a variant may be opted in
+
+Enable `NAMED_ARGS` only when **all** of these hold:
+
+- every non-varargs parameter has a reviewed public name;
+- the variant can be resolved at parse time from the supplied names and types;
+- the parameter surface is fixed — free-form positional forwarding stays positional;
+- error messages, documentation and reflection will expose the reviewed names;
+- newly touched C++ passes the sandboxing and cooperative-cancellation audits.
+
+Do **not** enable it for:
+
+- varargs-only variants (`print(...)`, `exists(...)`, `min(...)`, `max(...)`);
+- dynamic forwarding helpers (`call_function()`, `call_object_method()`, `create_object()`);
+- deprecated, `NOOP` or `RUNTIME_NOOP` compatibility variants;
+- APIs whose meaningful names are option-hash keys rather than formal parameters;
+- ambiguous overload sets where a named call cannot pick one variant at parse time.
+
+Fixed parameters ahead of varargs are a case-by-case decision, allowed only when
+qpp and parser semantics make the fixed names unambiguous and the varargs tail
+stays positional.
+
+### Parameter naming
+
+A public name should describe the caller's intent, not the implementation:
+
+| Avoid | Prefer | Notes |
+|-------|--------|-------|
+| `arg`, `value1`, `value2` | domain-specific names | generic names are acceptable only for true converters like `type(value)` |
+| `l`, `h`, `strd`, `opts` | `values`, `hash_value`, `standard_fds`, `options` | expand abbreviations unless they are established public terms |
+| `fmt`, `alg`, `sig` | `format`, `algorithm`, `signal` | full nouns for public calls |
+| `key_len` | `key_length` | no internal abbreviations or underscore fragments |
+| `old_path`, `new_path` | `source_path`, `target_path` | semantic direction, especially for mutating filesystem/process APIs |
+| `uid`, `gid` | `owner`, `group` | prefer the documented role over the system type name |
+| `usecs` | `microseconds` | full units |
+| `timeout_ms` | `timeout` | when the type is `timeout`, the unit belongs in the value type |
+
+Names must stay consistent across related APIs. The established sets:
+
+- **data** — `data`, `compressed_data`, `base64_string`, `hex_string`
+- **containers** — `values`, `hash_value`, `container`, `key`
+- **paths** — `path`, `source_path`, `target_path`, `link_path`
+- **crypto** — `algorithm`, `digest`, `key`, `iv`, `mac`, `mac_size`, `aad`
+- **time** — `date_value`, `seconds`, `milliseconds`, `microseconds`
+- **objects** — `object_value`, `class_name`, `method`, `arguments`
+- **command line** — `options` for the specification hash, `arguments` for the argument list (not `opts`/`pgm_args`)
+- **regex** — `pattern`, `replacement`, `options`, `callback`, `subject` (not `str`)
+- **iterators** — `source`, `list_value`, `hash_value`, `object_value`, `position`, `value`, and `start`/`stop`/`step`; keep overlapping range value-override overloads positional-only, since marking both would make named calls ambiguous
+- **streams** — `input_stream`, `output_stream`, `source_encoding`, `target_encoding`, `transform`, `sync_close`, `buffer_size`, `line_separator`, `trim_line` (not `is`, `os`, `t`, `eol`, `bufsize`)
+- **parse options** — `parse_options` for `PO_*` masks, `name`/`names` for option names, `other` for another `ParseOptions` (not `po`)
+- **scanners** — `source`, `literal`, `count`, `char_offset`, `byte_offset`, `byte_length`
+
+A rename must update the QPP signature, the doxygen `@param`, any error message
+naming the argument, and the tests and reflection assertions — all in one commit.
 
 ## Reflection And API Metadata
 

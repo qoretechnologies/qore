@@ -106,9 +106,9 @@ hashdecl reflection, so either works interchangeably.
 Return types are declared with the format `(type): description`. **Both the
 parentheses and the description are required** — including for named hash
 types such as `hash<OrderResponse>` or `hash OrderResponse`. Omitting either
-one causes the schema block to fail to parse (`parseReturnLine` falls back to
-`any`, and in Qorus the `doxygen-api-filter` throws
-`SCHEMA-ERROR: invalid schema type declaration`).
+one causes the schema block to fail to parse: `parseReturnLine` falls back to
+`any`, and a downstream doc filter that treats an unparseable declaration as
+fatal throws `SCHEMA-ERROR: invalid schema type declaration`.
 
 Specify return types with optional nested field descriptions:
 
@@ -591,7 +591,7 @@ semantic search without changing the public API docs:
     @SCHEMA
     @summary Returns system information
 
-    @x-ai-summary Returns Qorus system health, cluster status, resource counts, \
+    @x-ai-summary Returns system health, cluster status, resource counts, \
     instance key, version, and node information for monitoring and diagnostics
 
     @ENDSCHEMA
@@ -601,8 +601,8 @@ semantic search without changing the public API docs:
 ### @x-ai-tool-name
 
 Override the LLM-facing tool name that MCP / agent gateways derive from the
-operation.  Gateways consuming the generated schema (e.g., Qorus's
-`QorusOpenApiGateway`) build default tool names from the HTTP verb + path — the
+operation.  An MCP gateway consuming the generated schema builds default tool
+names from the HTTP verb + path — the
 default transform produces readable names for most endpoints (`list-services`,
 `create-apikeys`, `enable-services-by-id`) but some operations benefit from a
 hand-picked alias: to resolve a name collision the default can't auto-fix, to

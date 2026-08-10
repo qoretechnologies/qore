@@ -474,7 +474,7 @@ The flag split is intentional:
 | `QCF_RET_VALUE_ONLY` | functions, static methods, instance methods | No side effects other than possible exceptions; return value depends only on arguments. | Does not imply const-method metadata; audit case by case. |
 | const-method metadata (`MethodVariantBase::isConstMethod()`, qpp `[const]`, or equivalent builder option) | const-qualifiable non-static instance method variants only | Receiver contract: the method does not mutate `self` through statically self-rooted writable paths. | May throw, perform I/O, mutate non-self state, acquire locks, or write through non-self reference arguments. |
 
-Because Qore core, binary module, and Qorus declared methods are under project
+Because Qore core and binary module declared methods are under project
 control, an eligible instance method that remains `QCF_CONSTANT` but is not
 marked const should be exceptional and documented. Valid
 `QCF_CONSTANT`-without-const-method cases are non-instance functions, static
@@ -622,7 +622,7 @@ Scope and approach:
   value is not receiver-rooted, but their `QCF_CONSTANT` tag should be reviewed
   under the existing effect semantics. Do not infer receiver constness from
   `QCF_RET_VALUE_ONLY`.
-- Because the relevant declarations in Qore core, binary modules, and Qorus are
+- Because the relevant declarations in Qore core and binary modules are
   under project control, the normal policy is that an eligible instance method
   tagged `QCF_CONSTANT` should also be marked const after audit. Exceptions must
   be documented at the declaration site or in the annotation audit notes.

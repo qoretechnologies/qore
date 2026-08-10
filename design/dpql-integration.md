@@ -1,6 +1,6 @@
 # DPQL Integration Guide
 
-This guide is for host applications (such as Qorus) that embed DPQL — the Data Provider
+This guide is for host applications that embed DPQL — the Data Provider
 Query Language. It covers callback registration, session lifecycle, field metadata
 construction, WebSocket exposure, and expression evaluation at runtime.
 
@@ -140,8 +140,8 @@ expand(tmpl_context, tmpl_value, template_context)
 | `template_context` | Opaque per-query hash threaded from `DefaultRecordIterator` |
 
 The `template_context` parameter allows per-request state to flow from the iterator
-constructor through to the callback. For example, a Qorus workflow step might pass the
-current order ID so that `$static:order_id` resolves to the correct value.
+constructor through to the callback. For example, a workflow step in a host application might
+pass the current order ID so that `$static:order_id` resolves to the correct value.
 
 If no `expand` callback is registered and a template reference is evaluated, a
 `TEMPLATE-RESOLUTION-ERROR` exception is thrown with the raw template text.
@@ -278,7 +278,7 @@ DpqlActionSession session({"token_format": "token-span", "field_format": "map"})
 
 # 1. Set context — establishes provider and field schema
 hash<auto> ctx = session.handleAction("dpql-set-context", {
-    "provider": "datasource/omq/table/orders",
+    "provider": "datasource/appdb/table/orders",
     "recordType": "record",
 });
 

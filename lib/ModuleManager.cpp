@@ -84,7 +84,7 @@ ModuleManager MM;
 static thread_local int module_load_depth = 0;
 
 // parent modules queued for %try-child-module attachment when the outermost module load in this thread
-// completes; see design/parse-directive-try-child-module.md
+// completes; see design/qore-module-structure.md "Child Modules"
 static thread_local std::vector<std::string> child_attach_queue;
 
 // modules whose children are currently being attached in this thread; prevents unbounded recursion when
@@ -1569,7 +1569,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     // Build the effective search path: per-Program prepended paths FIRST (most-recently-added at
     // index 0 per design doc), then the process-global moduleDirList, then per-Program appended
     // paths LAST.  We collect raw pointers to avoid copying strings.  See
-    // design/parse-directive-prepend-module-path.md "Search-path layering".
+    // design/qore-module-structure.md "Module Search Path".
     std::vector<const std::string*> search_paths;
     const qore_program_private* priv_pgm = ctx_pgm ? qore_program_private::get(*ctx_pgm) : nullptr;
     if (priv_pgm) {
@@ -2282,7 +2282,7 @@ int QoreModuleManager::queueChildModules(QoreAbstractModule& mi, ExceptionSink& 
     // Child modules are attached at the outermost module load boundary in this thread: a child parsed while
     // an enclosing module load is still in progress cannot resolve that module's symbols, since the loader
     // returns silently for a feature already reserved by this thread.  See
-    // design/parse-directive-try-child-module.md
+    // design/qore-module-structure.md "Child Modules"
     if (module_load_depth > 0 || child_attach_queue.empty()) {
         return 0;
     }
@@ -3077,7 +3077,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         dlh ? dlh->release() : nullptr, info.release(), load_opt));
     // record any child modules declared with %try-child-module; for AOT-compiled modules these are
     // delivered by the module description function, since the directive cannot be processed again when the
-    // embedded source is parsed (see design/parse-directive-try-child-module.md)
+    // embedded source is parsed (see design/qore-module-structure.md "Child Modules")
     if (!mod_info.child_modules.empty()) {
         bmi->setChildModules(mod_info.child_modules);
     }

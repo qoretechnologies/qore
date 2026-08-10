@@ -324,7 +324,7 @@ private *hash<HttpResponseInfo> processNegotiateAuthorizationHeader(
         HttpListenerInterface listener, hash<auto> hdr,
         reference<hash<auto>> cx, reference<bool> authenticated) {
     # Default: empty stub (same pattern as processDigestAuthorizationHeader)
-    # Concrete implementation provided by application (e.g., Qorus)
+    # Concrete implementation provided by the embedding application
 }
 ```
 

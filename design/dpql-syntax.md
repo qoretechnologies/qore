@@ -390,7 +390,7 @@ Hex-encoded:
 Unquoted identifiers on the right-hand side of an expression are treated as string values:
 
 ```dpql
-@domain == omq             # Equivalent to @domain == "omq"
+@domain == billing         # Equivalent to @domain == "billing"
 @status == active          # Equivalent to @status == "active"
 ```
 

@@ -418,14 +418,10 @@ other builtin modules are:
 - `doxygen/lang/900_release_notes.dox.tmpl`: the 3.0.0 "new builtin modules" summary line and a
   detail block in `qore_3_0_0_new_builtin_modules`, alphabetically first (before `dataframe`).
 
-**Qorus**
-- `doxygen/Doxyfile.cmake`: `qore/modules/avro/avro.tag=../qore/modules/avro/html`, alphabetically
-  in the `qore/modules/` block.
-- `CMakeLists.txt`: the Java-binding `FOREACH (it … reflection astparser json)` list, so the Java
-  API classes are generated.
-
 There is no `module-avro` repository to sequence against, so unlike the `json` migration this can
-land in qore independently; the Qorus change is additive and can follow at any time.
+land in qore independently. A downstream product that cross-references the Qore module docs or
+generates Java bindings per module needs a matching additive entry of its own, but that change is
+not sequenced against this one and can follow at any time.
 
 ## Checked before building
 
