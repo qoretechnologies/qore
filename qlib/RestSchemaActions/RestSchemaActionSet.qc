@@ -67,11 +67,16 @@ public hashdecl RestSchemaReferenceDataInfo {
     *softlist<string> records_path;
 
     #! The record field supplying the value
+    /** A \c "." separated path reaches into a nested record: a Bitbucket workspace membership carries the
+        identity as \c "user.uuid", not at the top level, and a dropdown that could only read top-level
+        fields would have nothing to offer.
+    */
     string value_field;
 
     #! The record field supplying the display name
     /** Falls back to @ref value_field when absent, or when a record does not carry it — many APIs allow the
-        human-readable name of an object to be unset.
+        human-readable name of an object to be unset.  A \c "." separated path reaches into a nested record,
+        as for @ref value_field.
     */
     *string display_field;
 

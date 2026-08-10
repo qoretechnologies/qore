@@ -171,19 +171,45 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
                 throw "REFERENCE-DATA-ERROR", sprintf("expected every record to be a hash, but element %d has "
                     "type %y", $#, record.type());
             }
-            if (!exists record{rd.value_field}) {
+            auto value = RestSchemaActionDataProvider::getRecordValue(record, rd.value_field);
+            if (!exists value) {
                 continue;
             }
             # many APIs allow an object's human-readable name to be unset; showing the ID is better than
             # showing an empty row
-            auto display = rd.display_field.val() ? record{rd.display_field} : NOTHING;
+            auto display = rd.display_field.val()
+                ? RestSchemaActionDataProvider::getRecordValue(record, rd.display_field)
+                : NOTHING;
             rv += <AllowedValueInfo>{
-                "value": record{rd.value_field},
-                "display_name": (display ?? record{rd.value_field}).toString(),
+                "value": value,
+                "display_name": (display ?? value).toString(),
                 "desc": rd.desc,
             };
         }
         return rv ?: NOTHING;
+    }
+
+    #! Returns a record value named by a possibly-nested field path
+    /** @param record the record
+        @param path the field name, or a \c "." separated path into a nested record
+
+        @return the value, or @ref nothing if the path does not resolve
+
+        @note A path that runs into a non-hash returns @ref nothing rather than throwing: a record that
+        does not carry the field is skipped, which is the same treatment as one that carries it unset.
+    */
+    private static auto getRecordValue(hash<auto> record, string path) {
+        if (path.find(".") == -1) {
+            return record{path};
+        }
+        auto node = record;
+        foreach string name in (split(".", path)) {
+            if (node.typeCode() != NT_HASH) {
+                return;
+            }
+            node = node{name};
+        }
+        return node;
     }
 
     #! Returns the names of the reference data referenced by this action's options

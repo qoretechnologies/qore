@@ -164,6 +164,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("operation id drift", \driftTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("scoped reference data", \scopedReferenceDataTest());
+        addTestCase("nested reference data fields", \nestedReferenceDataTest());
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider execution", \providerExecutionTest());
         addTestCase("provider paths", \providerPathTest());
@@ -704,6 +705,47 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
                 "fields": {"widget_id": <RestSchemaFieldOverlayInfo>{"ref_data": "widget"}},
             }),
         ), ScopedRefData));
+    }
+
+    nestedReferenceDataTest() {
+        # a record that carries its identity below the top level: a Bitbucket workspace membership is
+        # {user: {uuid, display_name}}, and a dropdown that could only read top-level fields would have
+        # nothing to offer
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = {
+            "category": <RestSchemaReferenceDataInfo>{
+                "name": "category",
+                "action": "list-categories",
+                "records_path": "data",
+                "value_field": "owner.id",
+                "display_field": "owner.name",
+                "desc": "categories by owner",
+            },
+        };
+        RestSchemaActionSet aset = makeSet((
+            entry("list-categories", "GET", "/categories"),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"category": <RestSchemaFieldOverlayInfo>{"ref_data": "category"}},
+            }),
+        ), refdata);
+
+        FakeRestClient rest();
+        RestSchemaActionSetDataProvider root(aset, rest);
+        AbstractDataProvider create = root.getChildProviderEx("create-widget");
+        rest.push_response({"body": {"data": (
+            {"owner": {"id": "u1", "name": "Ada"}},
+            {"owner": {"id": "u2"}},
+            {"owner": {"id": "u3", "name": "Grace"}},
+            # a record that does not carry the path at all is skipped, not reported as an empty row
+            {"other": {"id": "u4"}},
+        )}});
+        *list<hash<AllowedValueInfo>> values = create.getReferenceData("category");
+        assertEq(3, values.size());
+        assertEq("u1", values[0].value);
+        assertEq("Ada", values[0].display_name);
+        # a missing display falls back to the value, as it does for a top-level field
+        assertEq("u2", values[1].display_name);
+        assertEq("u3", values[2].value);
+        assertEq("Grace", values[2].display_name);
     }
 
     actionRegistrationTest() {
