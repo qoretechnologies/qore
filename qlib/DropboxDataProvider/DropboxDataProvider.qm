@@ -50,6 +50,7 @@ module DropboxDataProvider {
             "name": DropboxDataProvider::AppName,
             "display_name": "Dropbox",
             "short_desc": "Dropbox cloud file storage",
+            "presentation_source_locale": "en",
             "desc": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and "
                 "sharing.\n\n"
                 "Files are addressed by path from the account root, and paths are case-insensitive; the "

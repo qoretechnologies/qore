@@ -428,6 +428,8 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
     actionCatalogTest() {
         hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(App);
         assertEq("AmazonS3", app.name);
+        assertEq("en", app.presentation_source_locale,
+            "the app declares the producer language for presentation catalogs");
         assertEq("s3", app.scheme);
         assertEq(MimeTypeSvg, app.logo_mime_type);
         assertTrue(app.logo.val(), "the logo was loaded from its file");

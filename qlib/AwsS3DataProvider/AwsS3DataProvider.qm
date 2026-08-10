@@ -58,6 +58,7 @@ module AwsS3DataProvider {
             "name": AwsS3DataProvider::AppName,
             "display_name": "Amazon S3",
             "short_desc": "Amazon S3 object storage",
+            "presentation_source_locale": "en",
             "desc": "Provides access to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\n"
                 "S3 stores objects in buckets addressed by a flat key rather than by a directory tree; a `/` in "
                 "a key is an ordinary character, though listing with a prefix and a delimiter makes a bucket "

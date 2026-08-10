@@ -409,6 +409,8 @@ public class DropboxDataProviderTest inherits QUnit::Test {
     actionCatalogTest() {
         hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(App);
         assertEq("Dropbox", app.name);
+        assertEq("en", app.presentation_source_locale,
+            "the app declares the producer language for presentation catalogs");
         assertEq("dropbox", app.scheme);
         # the group must come from the enum, not from a raw string that no picker would match
         assertEq(1, app.groups.size());

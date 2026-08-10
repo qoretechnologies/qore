@@ -50,6 +50,7 @@ module GoogleDriveDataProvider {
             "name": GoogleDriveDataProvider::AppName,
             "display_name": "Google Drive",
             "short_desc": "Google Drive cloud file storage",
+            "presentation_source_locale": "en",
             "desc": "Provides access to [Google Drive](https://www.google.com/drive/) for cloud file storage "
                 "and sharing.\n\n"
                 "Drive addresses files by an immutable ID rather than by path, so two files in the same folder "
