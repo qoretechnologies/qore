@@ -102,6 +102,77 @@ public class DataProviderPresentation {
             : appSourceLocale(app);
     }
 
+    #! Reports missing or invalid producer presentation locales
+    /** This is the shared validation boundary used by source-catalog checks
+        and runtime provider-index consumers.  Stable issue codes and exact
+        technical identities let callers fail comprehensively without parsing
+        localized exception prose.
+
+        @param app provider application metadata
+        @param actions registered action metadata for @p app
+        @param include_app if @ref True "True", validate the app presentation
+            as well as every action
+        @return ordered issues containing @c scope, @c app, optional
+            @c action, and stable @c reason; an empty list means that every
+            requested presentation has a valid, non-@c und BCP-47 locale
+
+        @par Example
+        An English application with actions inheriting its declared @c en
+        locale returns no issues.  An undeclared application and action return
+        @c source_locale_required issues for both exact identities.
+
+        @note This method never infers a locale from presentation text,
+            identifiers, scripts, or cognates.
+    */
+    static list<hash<auto>> inspectSourceLocales(hash<auto> app,
+            list<hash<auto>> actions, bool include_app = True) {
+        list<hash<auto>> issues = ();
+        if (include_app) {
+            try {
+                string locale = appSourceLocale(app);
+                if (locale == UnknownLocale) {
+                    issues += {
+                        "scope": "app",
+                        "app": app.name,
+                        "reason": "source_locale_required",
+                    };
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                issues += {
+                    "scope": "app",
+                    "app": app.name,
+                    "reason": "invalid_source_locale",
+                    "error": ex.err,
+                    "detail": ex.desc,
+                };
+            }
+        }
+
+        foreach hash<auto> action in (actions) {
+            try {
+                string locale = actionSourceLocale(app, action);
+                if (locale == UnknownLocale) {
+                    issues += {
+                        "scope": "action",
+                        "app": app.name,
+                        "action": action.action,
+                        "reason": "source_locale_required",
+                    };
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                issues += {
+                    "scope": "action",
+                    "app": app.name,
+                    "action": action.action,
+                    "reason": "invalid_source_locale",
+                    "error": ex.err,
+                    "detail": ex.desc,
+                };
+            }
+        }
+        return issues;
+    }
+
     #! Returns a stable app presentation message id
     /** @param app exact technical app identifier
         @param field presentation field name

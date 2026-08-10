@@ -52,6 +52,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \ownerFragmentConflictTest());
         addTestCase("source catalogs cover provider presentation metadata",
             \sourceCatalogTest());
+        addTestCase("producer locale validation is metadata-only and comprehensive",
+            \sourceLocaleInspectionTest());
         addTestCase("the checked-in Qore source catalog is synchronized",
             \sourceCatalogSyncTest());
         addTestCase("the checked-in provider locale projects exact identities",
@@ -131,6 +133,51 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 Option, AllowedValue, "desc"):
                 {"source": "Zpráva bude doručena.", "message": "メッセージが配信されます。"},
         };
+    }
+
+    private sourceLocaleInspectionTest() {
+        assertEq((), DataProviderPresentation::inspectSourceLocales(app(),
+                (action(),)),
+            "actions inherit a valid app source locale");
+
+        hash<auto> missing_app = app();
+        remove missing_app.presentation_source_locale;
+        list<hash<auto>> missing =
+            DataProviderPresentation::inspectSourceLocales(missing_app,
+                (action(),));
+        assertEq(2, missing.size(),
+            "missing app metadata reports both affected presentations");
+        assertEq(("app", "action"), map $1.scope, missing,
+            "issues retain deterministic app-before-action order");
+        assertEq(("source_locale_required", "source_locale_required"),
+            map $1.reason, missing,
+            "missing locale issues use stable reason codes");
+        assertEq(Action, missing[1].action,
+            "the action issue preserves its exact technical identity");
+
+        hash<auto> invalid_app = app()
+            + {"presentation_source_locale": "not a locale!"};
+        hash<auto> explicit_action = action()
+            + {"presentation_source_locale": "ja"};
+        list<hash<auto>> invalid =
+            DataProviderPresentation::inspectSourceLocales(invalid_app,
+                (explicit_action,));
+        assertEq(1, invalid.size(),
+            "a valid action override is independent of an invalid app locale");
+        assertEq("app", invalid[0].scope);
+        assertEq("invalid_source_locale", invalid[0].reason);
+        assertTrue(invalid[0].error.val(),
+            "invalid locale diagnostics retain the structured exception code");
+
+        hash<auto> invalid_action = action()
+            + {"presentation_source_locale": "cs_looks_localized"};
+        list<hash<auto>> action_issue =
+            DataProviderPresentation::inspectSourceLocales(app(),
+                (invalid_action,), False);
+        assertEq(1, action_issue.size());
+        assertEq("action", action_issue[0].scope);
+        assertEq("invalid_source_locale", action_issue[0].reason,
+            "locale validity never depends on lexical resemblance");
     }
 
     private string writeCatalog() {
@@ -517,6 +564,17 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 ("DataProvider",)),
             "source-tree verification discovers an owner before its first catalog exists");
         remove_tree(uncataloged_owner_dir);
+
+        string unlocalized_owner = "PresentationUnlocalizedOwner";
+        string unlocalized_owner_dir = output + DirSep
+            + unlocalized_owner;
+        mkdir(unlocalized_owner_dir);
+        copy_file(get_script_dir() + DirSep + unlocalized_owner + ".qm",
+            unlocalized_owner_dir + DirSep + unlocalized_owner + ".qm");
+        assertEq(1, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",)),
+            "source-tree verification rejects provider prose without a producer locale");
+        remove_tree(unlocalized_owner_dir);
 
         string orphan_domain =
             DataProviderPresentation::defaultCatalogDomain("RemovedApp");

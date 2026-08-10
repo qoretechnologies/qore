@@ -118,6 +118,8 @@ class QoreDataProviderI18nCmd {
                 foreach hash<auto> contribution in (
                         DataProviderActionCatalog::getPresentationContributionsForModule(
                             owner)) {
+                    requireSourceLocales(contribution.app,
+                        contribution.actions, owner);
                     app_names{contribution.app.name} = True;
                     mergeCatalogs(\catalogs,
                         DataProviderPresentation::buildSourceCatalogs(
@@ -143,6 +145,7 @@ class QoreDataProviderI18nCmd {
                 hash<auto> app = app_map{app_name};
                 list<hash<auto>> actions =
                     DataProviderActionCatalog::getActions(app_name, False);
+                requireSourceLocales(app, actions);
                 mergeCatalogs(\catalogs,
                     DataProviderPresentation::buildSourceCatalogs(app,
                         actions));
@@ -427,12 +430,37 @@ class QoreDataProviderI18nCmd {
         foreach hash<auto> contribution in (
                 DataProviderActionCatalog::getPresentationContributionsForModule(
                     owner)) {
+            requireSourceLocales(contribution.app, contribution.actions,
+                owner);
             mergeCatalogs(\catalogs,
                 DataProviderPresentation::buildSourceCatalogs(
                     contribution.app, contribution.actions,
                     contribution.include_app));
         }
         return catalogs;
+    }
+
+    #! Rejects provider presentation whose producer locale is not explicit
+    /** Catalog extraction must not silently turn unknown-language prose into
+        an unlabelled source catalog.  The native metadata inspector owns
+        locale validation; this command only formats exact identities for a
+        source-tree diagnostic.
+    */
+    private requireSourceLocales(hash<auto> app,
+            list<hash<auto>> actions, *string owner = NOTHING) {
+        list<hash<auto>> issues =
+            DataProviderPresentation::inspectSourceLocales(app, actions);
+        if (!issues) {
+            return;
+        }
+        list<string> labels = map sprintf("%s %s (%s)", $1.scope,
+            $1.scope == "action"
+                ? $1.app.toString() + "/" + $1.action.toString()
+                : $1.app.toString(), $1.reason), issues;
+        throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+            "%sprovider presentation source locale validation failed: %s",
+            owner.val() ? sprintf("owner module %y: ", owner) : "",
+            labels.join(", "));
     }
 
     private int checkOrphanedCatalogs(string output,

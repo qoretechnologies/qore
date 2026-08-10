@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# PresentationUncatalogedOwner.qm - missing provider catalog fixture
+# PresentationUnlocalizedOwner.qm - missing provider source-locale fixture
 
 /*  Copyright 2026 Qore Technologies, s.r.o.
 
@@ -25,22 +25,21 @@
 %modern
 %requires DataProvider
 
-module PresentationUncatalogedOwner {
+module PresentationUnlocalizedOwner {
     version = "1.0";
-    desc = "missing provider catalog fixture";
+    desc = "missing provider source locale fixture";
     author = "Qore Technologies";
     license = "MIT";
     init = sub () {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
-            "name": "QoreTestUncatalogedProvider",
-            "display_name": "Uncataloged Provider",
-            "short_desc": "Provider whose source catalog is absent",
-            "desc": "Provider whose source catalog is absent",
-            "presentation_source_locale": "en",
+            "name": "QoreTestUnlocalizedProvider",
+            "display_name": "Unlocalized Provider",
+            "short_desc": "Provider without producer locale metadata",
+            "desc": "Provider without producer locale metadata",
             "groups": (AppGroup::DataTransformation,),
             "logo": "data",
             "logo_mime_type": MimeTypeSvg,
-            "logo_file_name": "uncataloged-provider.svg",
+            "logo_file_name": "unlocalized-provider.svg",
         });
     };
 }
