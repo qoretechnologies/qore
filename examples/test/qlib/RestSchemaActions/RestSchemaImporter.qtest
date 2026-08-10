@@ -119,6 +119,7 @@ public class TestSchema {
         addTestCase("fetch", \fetchTest());
         addTestCase("serialize", \serializeTest());
         addTestCase("import", \importTest());
+        addTestCase("normalization", \normalizationTest());
         addTestCase("importAll", \importAllTest());
         addTestCase("provenance", \provenanceTest());
         addTestCase("report", \reportTest());
@@ -333,6 +334,104 @@ public class TestSchema {
         assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares no such path", \RestSchemaImporter::import(),
             cast<hash<RestSchemaImportInfo>>(doc + {"operations":
                 RestSchemaImporter::parseOperations(("GET /nope",))}));
+    }
+
+    private normalizationTest() {
+        TmpDir tmp("rest-schema-importer-");
+        string src_path = tmp.path + DirSep + "src.json";
+        string out_path = tmp.path + DirSep + "out.json";
+        FileLocationHandler::writeFileToLocation(src_path, make_json(Schema, JGF_ADD_FORMATTING));
+
+        # the shape of the real case: a vendor documents a paging parameter on a shared page and declares
+        # it on almost no operation, so the generated action cannot ask for the second page of anything
+        hash<auto> pagelen = {
+            "name": "pagelen",
+            "in": "query",
+            "required": False,
+            "description": "how many records to return",
+            "schema": {"type": "integer", "maximum": 100},
+        };
+        list<hash<RestSchemaNormalizationInfo>> norm = (
+            <RestSchemaNormalizationInfo>{
+                "reason": "the vendor documents pagelen on every collection but declares it on none",
+                "operations": RestSchemaImporter::parseOperations(("GET /boards/",)),
+                "add_parameters": (pagelen,),
+            },
+        );
+        hash<RestSchemaImportInfo> doc = <RestSchemaImportInfo>{
+            "name": "test",
+            "source": src_path,
+            "output": out_path,
+            "operations": RestSchemaImporter::parseOperations(("GET /boards/", "GET /contacts/{contact_id}")),
+            "normalize": norm,
+        };
+
+        hash<RestSchemaImportResultInfo> res = RestSchemaImporter::import(doc);
+        assertEq(1, res.normalized_operations);
+
+        hash<auto> written = parse_json(File::readTextFile(out_path));
+        assertEq(("pagelen",), (map $1.name, written.paths."/boards/".get.parameters),
+            "the repaired operation declares the parameter the vendor omitted");
+        # the untouched operation is untouched
+        assertNothing(written.paths."/contacts/{contact_id}".get.parameters);
+
+        # the artifact says how it differs from the document it came from
+        list<auto> applied = written{RestSchemaImporter::NormalizationMarker};
+        assertEq(1, applied.size());
+        assertRegex("declares it on none", applied[0].reason);
+        assertEq(("GET /boards/",), applied[0].operations);
+        assertEq(("pagelen",), applied[0].add_parameters);
+        # ... and it is still a schema that loads
+        assertEq("3.0.0", OpenApi3::OpenApi3Loader::fromFile(out_path).openapi3Spec);
+
+        # an unrepaired import writes no marker at all
+        string plain = tmp.path + DirSep + "plain.json";
+        hash<RestSchemaImportResultInfo> pres = RestSchemaImporter::import(
+            cast<hash<RestSchemaImportInfo>>(doc - "normalize" + {"output": plain}));
+        assertEq(0, pres.normalized_operations);
+        assertFalse(parse_json(File::readTextFile(plain)).hasKey(RestSchemaImporter::NormalizationMarker));
+
+        # a repair that names an operation the document does not declare is a stale repair
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares no such path", \RestSchemaImporter::import(),
+            cast<hash<RestSchemaImportInfo>>(doc + {"normalize": (
+                <RestSchemaNormalizationInfo>{
+                    "reason": "r",
+                    "operations": RestSchemaImporter::parseOperations(("GET /nope",)),
+                    "add_parameters": (pagelen,),
+                },
+            )}));
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "declares only", \RestSchemaImporter::import(),
+            cast<hash<RestSchemaImportInfo>>(doc + {"normalize": (
+                <RestSchemaNormalizationInfo>{
+                    "reason": "r",
+                    "operations": RestSchemaImporter::parseOperations(("PUT /boards/",)),
+                    "add_parameters": (pagelen,),
+                },
+            )}));
+
+        # ... and so is one that adds a parameter upstream has since declared: the repair has done its
+        # job and must be removed, rather than staying forever as a silent local edit
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "already declares it", \RestSchemaImporter::import(),
+            cast<hash<RestSchemaImportInfo>>(doc + {"normalize": (
+                <RestSchemaNormalizationInfo>{
+                    "reason": "r",
+                    "operations": RestSchemaImporter::parseOperations(("GET /contacts/{contact_id}",)),
+                    # the document declares "contact_id" as a path-level parameter of that path
+                    "add_parameters": ({"name": "contact_id", "in": "query"},),
+                },
+            )}));
+
+        # a repair with no reason cannot be recorded usefully, so it is refused
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "must say why", \RestSchemaImporter::import(),
+            cast<hash<RestSchemaImportInfo>>(doc + {"normalize": (
+                <RestSchemaNormalizationInfo>{
+                    "reason": "",
+                    "operations": RestSchemaImporter::parseOperations(("GET /boards/",)),
+                    "add_parameters": (pagelen,),
+                },
+            )}));
+
+        assertRegex("repaired: 1 operation", RestSchemaImporter::getReport(res));
     }
 
     private importAllTest() {

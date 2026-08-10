@@ -219,6 +219,7 @@ class RestSchemaImport {
                 "output": resolvePath(dir, d.output),
                 "operations": getOperations(d.ops.val() ? resolvePath(dir, d.ops) : NOTHING, d.op,
                     d.manifest),
+                "normalize": getNormalizations(d.normalize, path),
                 "json": d.json,
             };
             prov += d.provenance.val()
@@ -226,6 +227,47 @@ class RestSchemaImport {
                 : NOTHING;
         }
         return (docs, prov);
+    }
+
+    #! Returns the declared repairs described by a spec file
+    /** @param normalize the \c "normalize" member of a document entry
+        @param path the spec file, for error messages
+
+        @return the repairs, or @ref nothing when none were declared
+    */
+    private *list<hash<RestSchemaNormalizationInfo>> getNormalizations(auto normalize, string path) {
+        if (!exists normalize) {
+            return;
+        }
+        if (normalize.typeCode() != NT_LIST) {
+            error("\"normalize\" in %y must be a list of repairs", path);
+        }
+        list<hash<RestSchemaNormalizationInfo>> rv = ();
+        foreach auto n in (normalize) {
+            if (n.typeCode() != NT_HASH) {
+                error("every entry of \"normalize\" in %y must be a hash", path);
+            }
+            if (!n.reason.val()) {
+                error("every entry of \"normalize\" in %y needs a \"reason\"", path);
+            }
+            if (!n.operations) {
+                error("the repair %y in %y names no operations", n.reason, path);
+            }
+            list<hash<auto>> params = ();
+            foreach auto p in (n.add_parameters ?? ()) {
+                if (p.typeCode() != NT_HASH) {
+                    error("every entry of \"add_parameters\" in the repair %y must be an OpenAPI "
+                        "parameter object", n.reason);
+                }
+                params += p;
+            }
+            rv += <RestSchemaNormalizationInfo>{
+                "reason": n.reason,
+                "operations": RestSchemaImporter::parseOperations(n.operations),
+                "add_parameters": params,
+            };
+        }
+        return rv;
     }
 
     #! Returns the operations to keep, from whichever source was given
@@ -315,6 +357,8 @@ class RestSchemaImport {
 "  --yaml               write YAML; the default is the format of the source document\n\n"
 "The operations to keep:\n"
 "  --ops FILE           a file of \"METHOD /path\" lines; \"#\" comments are ignored\n"
+"                       a spec file may also declare \"normalize\" repairs, which add\n"
+"                       parameters a vendor documents but omits; see the module docs\n"
 "  --op \"METHOD /path\"  a single operation; may be repeated\n"
 "  -m,--manifest MOD:EXPR  take them from a manifest, ex:\n"
 "                       \"PaddleDataProvider:PaddleManifest::Manifest\"\n\n"

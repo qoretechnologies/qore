@@ -5801,6 +5801,13 @@ namespace Priv {
             }
         } else if (typeCode == OpenApi3ListToAnySet) {
             foreach auto v in (val) {
+                # a null member of an "enum" says that null is an allowed value, which is what "nullable"
+                # already carries; it is not an allowed value with a name, so it is skipped rather than
+                # rejected.  Bitbucket's description uses this form, and refusing it would fail the whole
+                # document over a construct that is merely saying the field is optional
+                if (!exists v) {
+                    continue;
+                }
                 if (!v.strp())
                     throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d in list value has type %y which "
                         "cannot be converted to a string; the OpenApi3 module only supports types that can be "

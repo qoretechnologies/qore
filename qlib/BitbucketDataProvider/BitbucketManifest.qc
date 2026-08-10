@@ -298,6 +298,43 @@ public class BitbucketManifest {
             "ignore": True,
         };
 
+        #! Overlay for an entity's \c type discriminator
+        /** Bitbucket composes every entity on a base that declares \c type, and declares it **required**,
+            so it cannot be dropped from a request the way the other server-owned fields are: the schema
+            would reject the request before it was sent.  It is given the entity's own discriminator as a
+            default instead, so it is always correct and nobody has to fill it in.
+        */
+        const PullRequestTypeOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "Type",
+            "short_desc": "Bitbucket's object discriminator; always \"pullrequest\"",
+            "default_value": "pullrequest",
+            "allowed_values": ("pullrequest",),
+        };
+
+        #! Overlay for the \c type discriminator of a pull request comment
+        const PullRequestCommentTypeOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "Type",
+            "short_desc": "Bitbucket's object discriminator; always \"pullrequest_comment\"",
+            "default_value": "pullrequest_comment",
+            "allowed_values": ("pullrequest_comment",),
+        };
+
+        #! Overlay for the \c type discriminator of a commit comment
+        const CommitCommentTypeOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "Type",
+            "short_desc": "Bitbucket's object discriminator; always \"commit_comment\"",
+            "default_value": "commit_comment",
+            "allowed_values": ("commit_comment",),
+        };
+
+        #! Overlay for the \c type discriminator of a repository
+        const RepositoryTypeOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "Type",
+            "short_desc": "Bitbucket's object discriminator; always \"repository\"",
+            "default_value": "repository",
+            "allowed_values": ("repository",),
+        };
+
         #! Overlay shared by the \c pagelen option of every listing action
         const PageLenOverlay = <RestSchemaFieldOverlayInfo>{
             "display_name": "Page Length",
@@ -332,6 +369,654 @@ public class BitbucketManifest {
             "short_desc": "A field to sort by; prefix with \"-\" to reverse",
             "example_value": "-updated_on",
         };
+
+        #! Overlay applied to the paging options of every listing action
+        const PagingOverlay = {
+            "page": PageOverlay,
+            "pagelen": PageLenOverlay,
+        };
+
+        #! Overlay applied to the workspace and repository a repository action works on
+        const RepoScopeOverlay = {
+            "workspace": WorkspaceOverlay,
+            "repo_slug": RepositoryOverlay,
+        };
+
+        #! The fields of an entity that a create or update request must not set
+        /** Bitbucket declares its create and update bodies as the entity itself, so these would otherwise
+            be offered as things to fill in.  @see @ref ServerOwnedOverlay
+        */
+        const ServerOwnedEntityFields = ("type", "links", "created_on", "updated_on", "id", "uuid");
+
+        #! The operations the application exports
+        const Manifest = (
+            # --- Repositories ---
+            <RestSchemaActionInfo>{
+                "action": "repositories_get",
+                "method": "GET",
+                "path": "/repositories",
+                "display_name": "List Public Repositories",
+                "short_desc": "List public repositories across Bitbucket",
+                "desc": "Lists **public** repositories across all of Bitbucket, newest first.\n\n"
+                    "This is not the way to list your own repositories — use **List Workspace "
+                    "Repositories** for that. Paging here uses `after` rather than `page`, because the "
+                    "collection is far too large to number.",
+                "groups": (GroupRepositories,),
+                "field_order": ("q", "role", "sort", "after", "pagelen"),
+                "fields": PagingOverlay + {
+                    "q": QueryOverlay,
+                    "sort": SortOverlay,
+                    "after": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "After",
+                        "short_desc": "Return repositories created after this ISO-8601 timestamp",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}",
+                "display_name": "List Workspace Repositories",
+                "short_desc": "List the repositories in a workspace",
+                "desc": "Lists the repositories in a workspace.\n\n"
+                    "`role` restricts the listing to repositories the credential has a given relationship "
+                    "with — `member`, `contributor`, `admin` or `owner` — which is how a listing is kept "
+                    "to what the user actually works on.",
+                "groups": (GroupRepositories,),
+                "field_order": ("workspace", "q", "role", "sort", "page", "pagelen"),
+                "fields": PagingOverlay + {
+                    "workspace": WorkspaceOverlay,
+                    "q": QueryOverlay,
+                    "sort": SortOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}",
+                "display_name": "Get Repository",
+                "short_desc": "Retrieve one repository",
+                "desc": "Retrieves a repository, including its main branch, project, size and visibility.",
+                "groups": (GroupRepositories,),
+                "field_order": ("workspace", "repo_slug"),
+                "fields": RepoScopeOverlay,
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_post",
+                "method": "POST",
+                "path": "/repositories/{workspace}/{repo_slug}",
+                "display_name": "Create Repository",
+                "short_desc": "Create a repository",
+                "desc": "Creates a repository at the given workspace and slug.\n\n"
+                    "Unusually, the **URL decides the name**: the repository is created at the slug in the "
+                    "path, so there is no name to supply in the body. It is private unless `is_private` "
+                    "says otherwise.",
+                "groups": (GroupRepositories,),
+                "field_order": ("workspace", "repo_slug", "description", "is_private", "fork_policy",
+                    "language", "has_issues", "has_wiki", "project"),
+                "fields": {
+                    "workspace": WorkspaceOverlay,
+                    "repo_slug": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Repository Slug",
+                        "short_desc": "The slug to create the repository at",
+                        "desc": "The slug the repository is created at, which also decides its name",
+                        "preselected": True,
+                    },
+                    "is_private": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Private",
+                        "preselected": True,
+                    },
+                    "type": RepositoryTypeOverlay,
+                    "links": ServerOwnedOverlay,
+                    "created_on": ServerOwnedOverlay,
+                    "updated_on": ServerOwnedOverlay,
+                    "uuid": ServerOwnedOverlay,
+                    "size": ServerOwnedOverlay,
+                    "owner": ServerOwnedOverlay,
+                    "full_name": ServerOwnedOverlay,
+                    "parent": ServerOwnedOverlay,
+                    "scm": ServerOwnedOverlay,
+                    "mainbranch": ServerOwnedOverlay,
+                    "name": ServerOwnedOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_put",
+                "method": "PUT",
+                "path": "/repositories/{workspace}/{repo_slug}",
+                "display_name": "Update Repository",
+                "short_desc": "Update a repository's settings",
+                # Bitbucket declares both 200 and 201 with a body here, because the same endpoint creates
+                # the repository when it does not exist; the updated repository is the output either way
+                "response_code": "200",
+                "desc": "Updates a repository's description, visibility, fork policy, language and the "
+                    "features it has enabled.\n\n"
+                    "Only the fields supplied are changed.",
+                "groups": (GroupRepositories,),
+                "field_order": ("workspace", "repo_slug", "description", "is_private", "fork_policy",
+                    "language", "has_issues", "has_wiki", "project"),
+                "fields": RepoScopeOverlay + {
+                    "type": RepositoryTypeOverlay,
+                    "links": ServerOwnedOverlay,
+                    "created_on": ServerOwnedOverlay,
+                    "updated_on": ServerOwnedOverlay,
+                    "uuid": ServerOwnedOverlay,
+                    "size": ServerOwnedOverlay,
+                    "owner": ServerOwnedOverlay,
+                    "full_name": ServerOwnedOverlay,
+                    "parent": ServerOwnedOverlay,
+                    "scm": ServerOwnedOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_delete",
+                "method": "DELETE",
+                "path": "/repositories/{workspace}/{repo_slug}",
+                "display_name": "Delete Repository",
+                "short_desc": "Delete a repository permanently",
+                "desc": "Deletes a repository, its pull requests and its issues.\n\n"
+                    "**This is immediate and permanent**; Bitbucket has no retention window for a deleted "
+                    "repository. `redirect_to` names a repository to redirect the old URL to.",
+                "groups": (GroupRepositories,),
+                "field_order": ("workspace", "repo_slug", "redirect_to"),
+                "fields": RepoScopeOverlay,
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_refs_branches_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/refs/branches",
+                "display_name": "List Branches",
+                "short_desc": "List a repository's branches",
+                "desc": "Lists the branches of a repository with the commit each one points at.\n\n"
+                    "This is what backs the branch dropdowns on the pull request actions; the application "
+                    "this module replaces offered those dropdowns without exporting the endpoint that "
+                    "fills them.",
+                "groups": (GroupRepositories,),
+                "field_order": ("workspace", "repo_slug", "q", "sort", "page", "pagelen"),
+                "fields": PagingOverlay + RepoScopeOverlay + {
+                    "q": QueryOverlay,
+                    "sort": SortOverlay,
+                },
+            },
+
+            # --- Commits ---
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_commits_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/commits",
+                "display_name": "List Commits",
+                "short_desc": "List a repository's commits",
+                "desc": "Lists commits, newest first, across every branch of the repository.",
+                "groups": (GroupCommits,),
+                "field_order": ("workspace", "repo_slug", "page", "pagelen"),
+                "fields": PagingOverlay + RepoScopeOverlay,
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_commit_commit_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}",
+                "display_name": "Get Commit",
+                "short_desc": "Retrieve one commit",
+                "desc": "Retrieves a commit by hash, with its message, author, parents and participants.",
+                "groups": (GroupCommits,),
+                "field_order": ("workspace", "repo_slug", "commit"),
+                "fields": RepoScopeOverlay + {
+                    "commit": CommitOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "getReportsForCommit",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/reports",
+                "operation_id": "getReportsForCommit",
+                "display_name": "List Commit Reports",
+                "short_desc": "List the code insights reports on a commit",
+                "desc": "Lists the Code Insights reports attached to a commit — the results a linter, a "
+                    "test run or a security scan posted against it.",
+                "groups": (GroupCommits,),
+                "field_order": ("workspace", "repo_slug", "commit", "page", "pagelen"),
+                "fields": PagingOverlay + RepoScopeOverlay + {
+                    "commit": CommitOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_commit_commit_comments_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/comments",
+                "display_name": "List Commit Comments",
+                "short_desc": "List the comments on a commit",
+                "desc": "Lists the comments made on a commit, both standalone notes and those attached to "
+                    "a line of a diff.",
+                "groups": (GroupCommits,),
+                "field_order": ("workspace", "repo_slug", "commit", "q", "sort", "page", "pagelen"),
+                "fields": PagingOverlay + RepoScopeOverlay + {
+                    "commit": CommitOverlay,
+                    "q": QueryOverlay,
+                    "sort": SortOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_commit_commit_comments_post",
+                "method": "POST",
+                "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/comments",
+                "display_name": "Comment on Commit",
+                "short_desc": "Add a comment to a commit",
+                "desc": "Adds a comment to a commit.\n\n"
+                    "`content.raw` is the comment text in Bitbucket-flavored Markdown. Supplying `inline` "
+                    "attaches the comment to a line of the diff instead of the commit as a whole.",
+                "groups": (GroupCommits,),
+                "field_order": ("workspace", "repo_slug", "commit", "content", "inline"),
+                "fields": RepoScopeOverlay + {
+                    # the path already carries the commit; the body's copy of it would collide with it
+                    "body.commit": <RestSchemaFieldOverlayInfo>{"ignore": True},
+                    "commit": CommitOverlay,
+                    "content": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Comment",
+                        "short_desc": "The comment; put the text in \"raw\"",
+                        "preselected": True,
+                    },
+                    "type": CommitCommentTypeOverlay,
+                    "links": ServerOwnedOverlay,
+                    "created_on": ServerOwnedOverlay,
+                    "updated_on": ServerOwnedOverlay,
+                    "id": ServerOwnedOverlay,
+                    "user": ServerOwnedOverlay,
+                    "deleted": ServerOwnedOverlay,
+                    "parent": ServerOwnedOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_commit_commit_approve_post",
+                "method": "POST",
+                "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/approve",
+                "display_name": "Approve Commit",
+                "short_desc": "Approve a commit as the authenticated user",
+                "desc": "Records the authenticated user's approval of a commit.",
+                "groups": (GroupCommits,),
+                "field_order": ("workspace", "repo_slug", "commit"),
+                "fields": RepoScopeOverlay + {
+                    "commit": CommitOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_commit_commit_approve_delete",
+                "method": "DELETE",
+                "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/approve",
+                "display_name": "Unapprove Commit",
+                "short_desc": "Withdraw the authenticated user's approval of a commit",
+                "desc": "Withdraws the authenticated user's approval of a commit. Another user's approval "
+                    "is untouched.",
+                "groups": (GroupCommits,),
+                "field_order": ("workspace", "repo_slug", "commit"),
+                "fields": RepoScopeOverlay + {
+                    "commit": CommitOverlay,
+                },
+            },
+
+            # --- Deployments ---
+            <RestSchemaActionInfo>{
+                "action": "getDeploymentsForRepository",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/deployments",
+                "operation_id": "getDeploymentsForRepository",
+                "display_name": "List Deployments",
+                "short_desc": "List a repository's deployments",
+                "desc": "Lists deployments, newest first, with the environment each went to, the state it "
+                    "reached and the commit it deployed.",
+                "groups": (GroupDeployments,),
+                "field_order": ("workspace", "repo_slug", "page", "pagelen"),
+                "fields": PagingOverlay + RepoScopeOverlay,
+            },
+
+            # --- Pull Requests ---
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_pullrequests_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/pullrequests",
+                "display_name": "List Pull Requests",
+                "short_desc": "List a repository's pull requests",
+                "desc": "Lists pull requests.\n\n"
+                    "`state` selects which — `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` — and defaults "
+                    "to `OPEN`. It may be given more than once to include several states.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "state", "page", "pagelen"),
+                "fields": PagingOverlay + RepoScopeOverlay + {
+                    "state": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "State",
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_pullrequests_post",
+                "method": "POST",
+                "path": "/repositories/{workspace}/{repo_slug}/pullrequests",
+                "display_name": "Create Pull Request",
+                "short_desc": "Open a pull request",
+                "desc": "Opens a pull request from one branch into another.\n\n"
+                    "The repository in the URL is the **destination**. `destination` defaults to the "
+                    "repository's main branch when unset. Setting `close_source_branch` deletes the "
+                    "source branch when the pull request is merged.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "title", "source", "destination",
+                    "reviewers", "close_source_branch", "draft"),
+                "fields": RepoScopeOverlay + {
+                    "source": SourceBranchOverlay,
+                    "destination": DestinationBranchOverlay,
+                    "reviewers": ReviewersOverlay,
+                    "title": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Title",
+                        "required": True,
+                        "preselected": True,
+                    },
+                    "type": PullRequestTypeOverlay,
+                    "links": ServerOwnedOverlay,
+                    "created_on": ServerOwnedOverlay,
+                    "updated_on": ServerOwnedOverlay,
+                    "id": ServerOwnedOverlay,
+                    "author": ServerOwnedOverlay,
+                    "closed_by": ServerOwnedOverlay,
+                    "comment_count": ServerOwnedOverlay,
+                    "task_count": ServerOwnedOverlay,
+                    "merge_commit": ServerOwnedOverlay,
+                    "participants": ServerOwnedOverlay,
+                    "reason": ServerOwnedOverlay,
+                    "rendered": ServerOwnedOverlay,
+                    "state": ServerOwnedOverlay,
+                    "summary": ServerOwnedOverlay,
+                    "queued": ServerOwnedOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}",
+                "display_name": "Get Pull Request",
+                "short_desc": "Retrieve one pull request",
+                "desc": "Retrieves a pull request with its state, participants and merge commit.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "pull_request_id"),
+                "fields": RepoScopeOverlay + {
+                    "pull_request_id": PullRequestOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_put",
+                "method": "PUT",
+                "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}",
+                "display_name": "Update Pull Request",
+                "short_desc": "Update a pull request",
+                "desc": "Updates a pull request's title, description, destination branch or reviewers.\n\n"
+                    "Only the fields supplied are changed. This does not merge, decline or approve the "
+                    "pull request; those are separate operations.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "pull_request_id", "title", "destination",
+                    "reviewers", "close_source_branch"),
+                "fields": RepoScopeOverlay + {
+                    "pull_request_id": PullRequestOverlay,
+                    "source": SourceBranchOverlay,
+                    "destination": DestinationBranchOverlay,
+                    "reviewers": ReviewersOverlay,
+                    "type": PullRequestTypeOverlay,
+                    "links": ServerOwnedOverlay,
+                    "created_on": ServerOwnedOverlay,
+                    "updated_on": ServerOwnedOverlay,
+                    "id": ServerOwnedOverlay,
+                    "author": ServerOwnedOverlay,
+                    "closed_by": ServerOwnedOverlay,
+                    "comment_count": ServerOwnedOverlay,
+                    "task_count": ServerOwnedOverlay,
+                    "merge_commit": ServerOwnedOverlay,
+                    "participants": ServerOwnedOverlay,
+                    "reason": ServerOwnedOverlay,
+                    "rendered": ServerOwnedOverlay,
+                    "state": ServerOwnedOverlay,
+                    "summary": ServerOwnedOverlay,
+                    "queued": ServerOwnedOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_get",
+                "method": "GET",
+                "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments",
+                "display_name": "List Pull Request Comments",
+                "short_desc": "List the comments on a pull request",
+                "desc": "Lists the comments on a pull request, including the ones attached to a line of "
+                    "the diff and the ones Bitbucket marks as deleted.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "pull_request_id", "page", "pagelen"),
+                "fields": PagingOverlay + RepoScopeOverlay + {
+                    "pull_request_id": PullRequestOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_post",
+                "method": "POST",
+                "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments",
+                "display_name": "Comment on Pull Request",
+                "short_desc": "Add a comment to a pull request",
+                "desc": "Adds a comment to a pull request.\n\n"
+                    "`content.raw` is the comment text. Supplying `inline` with a `path` and a line number "
+                    "attaches it to that line of the diff; supplying `parent` makes it a reply.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "pull_request_id", "content", "inline",
+                    "parent"),
+                "fields": RepoScopeOverlay + {
+                    "pull_request_id": PullRequestOverlay,
+                    "content": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Comment",
+                        "short_desc": "The comment; put the text in \"raw\"",
+                        "preselected": True,
+                    },
+                    "type": PullRequestCommentTypeOverlay,
+                    "links": ServerOwnedOverlay,
+                    "created_on": ServerOwnedOverlay,
+                    "updated_on": ServerOwnedOverlay,
+                    "id": ServerOwnedOverlay,
+                    "user": ServerOwnedOverlay,
+                    "deleted": ServerOwnedOverlay,
+                    "pending": ServerOwnedOverlay,
+                    "pullrequest": ServerOwnedOverlay,
+                    "resolution": ServerOwnedOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action":
+                    "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_get",
+                "method": "GET",
+                "path":
+                    "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments/{comment_id}",
+                "display_name": "Get Pull Request Comment",
+                "short_desc": "Retrieve one comment on a pull request",
+                "desc": "Retrieves a single comment on a pull request.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "pull_request_id", "comment_id"),
+                "fields": RepoScopeOverlay + {
+                    "pull_request_id": PullRequestOverlay,
+                    "comment_id": PullRequestCommentOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action":
+                    "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_put",
+                "method": "PUT",
+                "path":
+                    "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments/{comment_id}",
+                "display_name": "Update Pull Request Comment",
+                "short_desc": "Update a comment on a pull request",
+                "desc": "Replaces the text of a comment. Only the comment's author may change it.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "pull_request_id", "comment_id", "content"),
+                "fields": RepoScopeOverlay + {
+                    "pull_request_id": PullRequestOverlay,
+                    "comment_id": PullRequestCommentOverlay,
+                    "content": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Comment",
+                        "short_desc": "The replacement comment; put the text in \"raw\"",
+                        "preselected": True,
+                    },
+                    "type": PullRequestCommentTypeOverlay,
+                    "links": ServerOwnedOverlay,
+                    "created_on": ServerOwnedOverlay,
+                    "updated_on": ServerOwnedOverlay,
+                    "id": ServerOwnedOverlay,
+                    "user": ServerOwnedOverlay,
+                    "deleted": ServerOwnedOverlay,
+                    "pending": ServerOwnedOverlay,
+                    "pullrequest": ServerOwnedOverlay,
+                    "parent": ServerOwnedOverlay,
+                    "resolution": ServerOwnedOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action":
+                    "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_delete",
+                "method": "DELETE",
+                "path":
+                    "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments/{comment_id}",
+                "display_name": "Delete Pull Request Comment",
+                "short_desc": "Delete a comment on a pull request",
+                "desc": "Deletes a comment. Bitbucket keeps the comment and marks it deleted rather than "
+                    "removing it, so it still appears in a listing with `deleted` set.",
+                "groups": (GroupPullRequests,),
+                "field_order": ("workspace", "repo_slug", "pull_request_id", "comment_id"),
+                "fields": RepoScopeOverlay + {
+                    "pull_request_id": PullRequestOverlay,
+                    "comment_id": PullRequestCommentOverlay,
+                },
+            },
+
+            # --- Search ---
+            <RestSchemaActionInfo>{
+                "action": "searchWorkspace",
+                "method": "GET",
+                "path": "/workspaces/{workspace}/search/code",
+                "operation_id": "searchWorkspace",
+                "display_name": "Search Code in a Workspace",
+                "short_desc": "Search the code in a workspace's repositories",
+                "desc": "Searches the code in every repository of a workspace.\n\n"
+                    "`search_query` takes Bitbucket's code search syntax, ex: `foo lang:python` or "
+                    "`\"exact phrase\" repo:my-repo`.",
+                "groups": (GroupSearch,),
+                "field_order": ("workspace", "search_query", "page", "pagelen"),
+                "fields": PagingOverlay + {
+                    "workspace": WorkspaceOverlay,
+                    "search_query": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Search Query",
+                        "short_desc": "Bitbucket code search syntax, ex: \"foo lang:python\"",
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "searchAccount",
+                "method": "GET",
+                "path": "/users/{selected_user}/search/code",
+                "operation_id": "searchAccount",
+                "display_name": "Search Code in a User's Repositories",
+                "short_desc": "Search the code in one user's repositories",
+                "desc": "Searches the code in the repositories of one user account.",
+                "groups": (GroupSearch,),
+                "field_order": ("selected_user", "search_query", "page", "pagelen"),
+                "fields": PagingOverlay + {
+                    "selected_user": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "User",
+                        "short_desc": "The account UUID in braces, or the account ID",
+                        "preselected": True,
+                    },
+                    "search_query": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Search Query",
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "searchTeam",
+                "method": "GET",
+                "path": "/teams/{username}/search/code",
+                "operation_id": "searchTeam",
+                "display_name": "Search Code in a Team's Repositories",
+                "short_desc": "Search the code in a team's repositories (deprecated by Bitbucket)",
+                "desc": "Searches the code in a team's repositories.\n\n"
+                    "**Bitbucket has replaced teams with workspaces**, and this endpoint is deprecated; "
+                    "use **Search Code in a Workspace** instead. It is exported because the application "
+                    "this module replaces exported it, and removing an action silently breaks whatever "
+                    "still calls it.",
+                "groups": (GroupSearch,),
+                "field_order": ("username", "search_query", "page", "pagelen"),
+                "fields": PagingOverlay + {
+                    "username": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Team",
+                        "short_desc": "The team name; teams are Bitbucket's superseded name for workspaces",
+                        "preselected": True,
+                    },
+                    "search_query": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Search Query",
+                        "preselected": True,
+                    },
+                },
+            },
+
+            # --- Workspaces ---
+            <RestSchemaActionInfo>{
+                "action": "workspaces_get",
+                "method": "GET",
+                "path": "/workspaces",
+                "display_name": "List Workspaces",
+                "short_desc": "List the workspaces the credential can see",
+                "desc": "Lists the workspaces the authenticated user is a member of.\n\n"
+                    "`role` restricts the listing to workspaces with a given relationship — `owner`, "
+                    "`collaborator` or `member`.",
+                "groups": (GroupWorkspaces,),
+                "field_order": ("q", "role", "sort", "page", "pagelen"),
+                "fields": PagingOverlay + {
+                    "q": QueryOverlay,
+                    "sort": SortOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "workspaces_workspace_get",
+                "method": "GET",
+                "path": "/workspaces/{workspace}",
+                "display_name": "Get Workspace",
+                "short_desc": "Retrieve one workspace",
+                "desc": "Retrieves a workspace with its slug, name and whether it is private.",
+                "groups": (GroupWorkspaces,),
+                "field_order": ("workspace",),
+                "fields": {
+                    "workspace": WorkspaceOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "workspaces_workspace_members_get",
+                "method": "GET",
+                "path": "/workspaces/{workspace}/members",
+                "display_name": "List Workspace Members",
+                "short_desc": "List the members of a workspace",
+                "desc": "Lists the members of a workspace.\n\n"
+                    "Each record is a **membership**, so the member is under `user` rather than at the top "
+                    "level: the account UUID is `user.uuid`.",
+                "groups": (GroupWorkspaces,),
+                "field_order": ("workspace", "page", "pagelen"),
+                "fields": PagingOverlay + {
+                    "workspace": WorkspaceOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "workspaces_workspace_projects_get",
+                "method": "GET",
+                "path": "/workspaces/{workspace}/projects",
+                "display_name": "List Workspace Projects",
+                "short_desc": "List the projects in a workspace",
+                "desc": "Lists the projects in a workspace. A project groups repositories; it is not a "
+                    "Jira project.",
+                "groups": (GroupWorkspaces,),
+                "field_order": ("workspace", "page", "pagelen"),
+                "fields": PagingOverlay + {
+                    "workspace": WorkspaceOverlay,
+                },
+            },
+        );
     }
 }
 }

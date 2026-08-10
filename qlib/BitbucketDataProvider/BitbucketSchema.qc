@@ -83,12 +83,12 @@ public class BitbucketSchema {
         #! Where the vendored schema came from
         const Provenance = <BitbucketSchemaProvenanceInfo>{
             "source_url": "https://developer.atlassian.com/cloud/bitbucket/swagger.v3.json",
-            "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-            "source_size": 0,
+            "source_sha256": "8c7911c0a9109be263a3528b0307f1f3418bf0fabac26bdd50d7f3841af94f89",
+            "source_size": 1485729,
             "imported": 2026-08-10,
-            "source_paths": 0,
-            "source_operations": 0,
-            "source_schemas": 0,
+            "source_paths": 193,
+            "source_operations": 331,
+            "source_schemas": 211,
             "source_webhooks": 0,
         };
 
@@ -117,6 +117,9 @@ public class BitbucketSchema {
     static RestSchemaActionSet getActionSet() {
         AutoLock al(lck);
         if (!action_set) {
+            # the manifest names codecs, and a codec is resolved from a process-wide registry when the
+            # set is built, so they have to be there first
+            BitbucketCodecs::register();
             action_set = new RestSchemaActionSet(BitbucketSchema::getSchemaIntern(),
                 BitbucketManifest::Manifest, BitbucketManifest::ReferenceData);
         }

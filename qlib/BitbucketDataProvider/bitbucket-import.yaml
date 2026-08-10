@@ -1,0 +1,57 @@
+# Import spec for the vendored Bitbucket schema.
+#
+#   QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+#       --spec qlib/BitbucketDataProvider/bitbucket-import.yaml
+#
+# Paths are resolved against this file.  The operations come from the manifest itself, so the selection
+# and what the application exports cannot drift apart.
+documents:
+  - name: Bitbucket
+    source: https://developer.atlassian.com/cloud/bitbucket/swagger.v3.json
+    output: bitbucket-openapi.json
+    manifest: BitbucketDataProvider:BitbucketManifest::Manifest
+    provenance: BitbucketSchema.qc
+
+    # Repairs applied to the document before it is pruned.  Each is checked: naming an operation the
+    # document does not declare, or a parameter it already declares, fails the import — so a repair that
+    # upstream has since made unnecessary is removed rather than left here forever.
+    normalize:
+      - reason: >-
+          Bitbucket documents "page" and "pagelen" on its shared pagination page
+          (developer.atlassian.com/cloud/bitbucket/rest/intro/#pagination) rather than per endpoint, and
+          declares them on 3 of the 331 operations in this document — the three code-search endpoints.
+          Every collection here accepts them. Without this repair a generated listing cannot ask for the
+          second page of anything, and every dropdown is stuck on Bitbucket's default page of 10.
+        operations:
+          - GET /repositories
+          - GET /repositories/{workspace}
+          - GET /repositories/{workspace}/{repo_slug}/commits
+          - GET /repositories/{workspace}/{repo_slug}/commit/{commit}/reports
+          - GET /repositories/{workspace}/{repo_slug}/commit/{commit}/comments
+          - GET /repositories/{workspace}/{repo_slug}/deployments
+          - GET /repositories/{workspace}/{repo_slug}/pullrequests
+          - GET /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments
+          - GET /repositories/{workspace}/{repo_slug}/refs/branches
+          - GET /workspaces
+          - GET /workspaces/{workspace}/members
+          - GET /workspaces/{workspace}/projects
+        add_parameters:
+          - name: page
+            in: query
+            required: false
+            description: >-
+              Which page of results to return, starting at 1. Bitbucket documents this for every
+              collection but declares it on almost none of them.
+            schema:
+              type: integer
+              minimum: 1
+          - name: pagelen
+            in: query
+            required: false
+            description: >-
+              How many records to return in one page, up to 100. Bitbucket documents this for every
+              collection but declares it on almost none of them.
+            schema:
+              type: integer
+              minimum: 1
+              maximum: 100

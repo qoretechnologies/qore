@@ -1,0 +1,584 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** BitbucketDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires BitbucketDataProvider
+%requires BitbucketRestClient
+%requires RestClientIo
+
+%requires json
+%requires yaml
+
+%exec-class BitbucketDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A Bitbucket REST client that records requests instead of making them
+class FakeBitbucketRestClient inherits BitbucketRestClient::BitbucketRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : BitbucketRestClientIo({"token": "bbt-fake"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Returns the last request body, decoded when the transport was handed a serialized one
+    auto lastBody() {
+        auto body = last().body;
+        if (body.typeCode() == NT_BINARY) {
+            body = binary_to_string(body, "UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            return parse_json(body);
+        }
+        return body;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+
+#! An event provider whose polling can be driven directly
+class TestBitbucketNewPullRequestProvider inherits BitbucketDataProvider::BitbucketNewPullRequestDataProvider {
+    public {
+        #! Events the provider reported to its observers
+        list<auto> notified = ();
+    }
+
+    constructor(*BitbucketRestClient::BitbucketRestClientIo rest, *hash<auto> options)
+            : BitbucketNewPullRequestDataProvider(rest, options) {
+    }
+
+    #! Runs one polling cycle, as the polling thread would
+    poll() {
+        pollOnce();
+    }
+
+    #! Records what would have been reported to observers
+    notifyObservers(string event_id, hash<auto> data) {
+        notified += data;
+    }
+
+    reset() {
+        notified = ();
+    }
+}
+
+public class BitbucketDataProviderTest inherits QUnit::Test {
+    public {
+        #! The action IDs the TypeScript application this module replaces exported
+        /** These are what existing workflows call, so every one of them must still exist.  They are the
+            \c operationId of the vendored Swagger 2.0 document where it declared one, and the mangling of
+            the path and method that application fell back to where it did not.
+        */
+        const ExpectedTsActions = (
+            "repositories_workspace_repo_slug_commits_get",
+            "repositories_workspace_repo_slug_commit_commit_get",
+            "getReportsForCommit",
+            "repositories_workspace_repo_slug_commit_commit_comments_get",
+            "repositories_workspace_repo_slug_commit_commit_comments_post",
+            "repositories_workspace_repo_slug_commit_commit_approve_post",
+            "repositories_workspace_repo_slug_commit_commit_approve_delete",
+            "getDeploymentsForRepository",
+            "repositories_workspace_repo_slug_pullrequests_get",
+            "repositories_workspace_repo_slug_pullrequests_post",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_get",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_put",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_get",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_post",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_get",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_put",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_delete",
+            "repositories_get",
+            "repositories_workspace_get",
+            "repositories_workspace_repo_slug_get",
+            "repositories_workspace_repo_slug_put",
+            "repositories_workspace_repo_slug_post",
+            "repositories_workspace_repo_slug_delete",
+            "searchTeam",
+            "searchAccount",
+            "searchWorkspace",
+            "workspaces_get",
+            "workspaces_workspace_get",
+            "workspaces_workspace_members_get",
+            "workspaces_workspace_projects_get",
+        );
+
+        #! The action this application adds, to fill the branch dropdowns
+        const ExpectedAddedAction = "repositories_workspace_repo_slug_refs_branches_get";
+
+        #! The collections the import repairs, because the document omits their paging parameters
+        const RepairedCollections = (
+            "repositories_get",
+            "repositories_workspace_get",
+            "repositories_workspace_repo_slug_commits_get",
+            "getReportsForCommit",
+            "repositories_workspace_repo_slug_commit_commit_comments_get",
+            "getDeploymentsForRepository",
+            "repositories_workspace_repo_slug_pullrequests_get",
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_get",
+            "repositories_workspace_repo_slug_refs_branches_get",
+            "workspaces_get",
+            "workspaces_workspace_members_get",
+            "workspaces_workspace_projects_get",
+        );
+
+        #! The event providers the application offers
+        const ExpectedEvents = ("new_commit", "new_deployment", "new_pull_request");
+    }
+
+    private {
+        RestSchemaActionSet aset;
+    }
+
+    constructor() : Test("BitbucketDataProviderTest", "1.0") {
+        aset = BitbucketSchema::getActionSet();
+
+        addTestCase("provenance", \provenanceTest());
+        addTestCase("drift agreement", \driftTest());
+        addTestCase("action identity", \actionIdentityTest());
+        addTestCase("schema repair", \schemaRepairTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("scoped dropdowns", \scopedDropdownTest());
+        addTestCase("wire codecs", \codecTest());
+        addTestCase("provider paths", \providerPathTest());
+        addTestCase("request construction", \requestConstructionTest());
+        addTestCase("connection", \connectionTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("event polling", \eventPollingTest());
+        set_return_value(main());
+    }
+
+    private provenanceTest() {
+        hash<BitbucketSchemaProvenanceInfo> p = BitbucketSchema::Provenance;
+        assertRegex("developer.atlassian.com", p.source_url);
+        assertRegex("^[0-9a-f]{64}$", p.source_sha256);
+        assertNeq("0000000000000000000000000000000000000000000000000000000000000000", p.source_sha256,
+            "the provenance record was filled in by an actual import");
+        assertGt(0, p.source_size);
+        assertGt(0, p.source_paths);
+        assertGt(p.source_paths, p.source_operations);
+        assertGt(0, p.source_schemas);
+        assertTrue(p.imported.absolute());
+        assertTrue(is_file(BitbucketSchema::getSchemaPath()));
+        assertLt(p.source_size, hstat(BitbucketSchema::getSchemaPath()).size,
+            "the pruned schema is smaller than the document it was pruned from");
+    }
+
+    private driftTest() {
+        list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset, BitbucketSchema::getSchema());
+        assertEq((), drift, "the manifest and the vendored schema agree");
+    }
+
+    private actionIdentityTest() {
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+
+        # losing an action ID silently breaks whatever calls it, however good the replacement is
+        list<string> missing = ();
+        foreach string action in (ExpectedTsActions) {
+            if (!actions{action}) {
+                missing += action;
+            }
+        }
+        assertEq((), missing, "every action the TypeScript application exported is still exported");
+        assertTrue(actions{ExpectedAddedAction}, "the branch listing was added");
+        assertEq(ExpectedTsActions.size() + 1, (keys actions).size(),
+            "one action was added, and nothing else");
+
+        # the five IDs Bitbucket's document actually names are checked for drift; the mangled ones have
+        # no operationId to check against, and must not claim one
+        hash<string, *string> opids = {};
+        map opids{$1.action} = $1.operation_id, BitbucketManifest::Manifest;
+        assertEq("getReportsForCommit", opids.getReportsForCommit);
+        assertEq("searchWorkspace", opids.searchWorkspace);
+        assertNothing(opids.repositories_get,
+            "an action whose operation the document does not name records no operationId");
+    }
+
+    private schemaRepairTest() {
+        # the artifact says how it differs from the document it came from
+        hash<auto> doc = parse_json(File::readTextFile(BitbucketSchema::getSchemaPath()));
+        list<auto> repairs = doc{RestSchemaImporter::NormalizationMarker};
+        assertEq(1, repairs.size(), "the committed document records the repair applied to it");
+        assertRegex("pagelen", repairs[0].reason);
+        assertEq(("page", "pagelen"), repairs[0].add_parameters);
+        assertEq(RepairedCollections.size(), repairs[0].operations.size());
+
+        # ... and the repair is what makes paging reachable at all: without it Bitbucket's description
+        # declares these parameters on the code-search endpoints alone
+        foreach string action in (RepairedCollections) {
+            hash<DataProviderActionInfo> info = aset.getActionInfo("Bitbucket", action);
+            assertTrue(exists info.options.page, sprintf("%y can ask for a page", action));
+            assertTrue(exists info.options.pagelen, sprintf("%y can set the page size", action));
+        }
+
+        # an operation that is not a collection is left alone
+        hash<DataProviderActionInfo> one = aset.getActionInfo("Bitbucket", "workspaces_workspace_get");
+        assertNothing(one.options.pagelen, "a single-entity read has nothing to page");
+    }
+
+    private referenceDataTest() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = aset.getReferenceDataDecls();
+        assertEq(7, (keys refdata).size());
+
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+        foreach hash<auto> i in (refdata.pairIterator()) {
+            hash<RestSchemaReferenceDataInfo> rd = i.value;
+            assertEq(i.key, rd.name);
+            assertTrue(actions{rd.action}, sprintf("reference data %y names exported action %y", i.key,
+                rd.action));
+            assertEq(("values",), rd.records_path, "every Bitbucket collection is the same envelope");
+            assertTrue(rd.value_field.val());
+        }
+
+        # the branch dropdown is why the branch listing was added
+        assertEq(ExpectedAddedAction, refdata{BitbucketManifest::RefBranch}.action);
+        # a membership record carries the member below "user"
+        assertEq("user.uuid", refdata{BitbucketManifest::RefWorkspaceMember}.value_field);
+        assertEq("user.display_name", refdata{BitbucketManifest::RefWorkspaceMember}.display_field);
+    }
+
+    private scopedDropdownTest() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = aset.getReferenceDataDecls();
+        assertNothing(refdata{BitbucketManifest::RefWorkspace}.options_from,
+            "workspaces are listed across the account");
+        assertEq({"workspace": "workspace"}, refdata{BitbucketManifest::RefRepository}.options_from);
+        assertEq({"workspace": "workspace", "repo_slug": "repo_slug"},
+            refdata{BitbucketManifest::RefBranch}.options_from);
+        assertEq({"workspace": "workspace", "repo_slug": "repo_slug", "pull_request_id": "pull_request_id"},
+            refdata{BitbucketManifest::RefPullRequestComment}.options_from);
+
+        FakeBitbucketRestClient rest();
+        BitbucketDataProvider dp(rest);
+        AbstractDataProvider get_pr = dp.getChildProviderEx(
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_get");
+
+        # a repository dropdown is empty until a workspace is chosen, and calls nothing
+        assertNothing(get_pr.getReferenceData(BitbucketManifest::RefRepository, {}));
+        assertThrows("TEST-ERROR", "no requests were recorded", \rest.last());
+
+        rest.push_response({"body": {"values": ({"slug": "my-repo", "full_name": "my-team/my-repo"},)}});
+        *list<hash<AllowedValueInfo>> repos = get_pr.getReferenceData(BitbucketManifest::RefRepository,
+            {"workspace": "my-team"});
+        assertEq(1, repos.size());
+        assertEq("my-repo", repos[0].value);
+        assertEq("my-team/my-repo", repos[0].display_name);
+        assertRegex("/2.0/repositories/my-team", rest.last().path);
+
+        # a workspace member is read from below "user"
+        rest.reset();
+        AbstractDataProvider create_pr = dp.getChildProviderEx(
+            "repositories_workspace_repo_slug_pullrequests_post");
+        rest.push_response({"body": {"values": (
+            {"user": {"uuid": "{abc}", "display_name": "Ada Lovelace"}},
+            {"nickname": "no user member"},
+        )}});
+        *list<hash<AllowedValueInfo>> members = create_pr.getReferenceData(
+            BitbucketManifest::RefWorkspaceMember, {"workspace": "my-team"});
+        assertEq(1, members.size(), "a record that does not carry the path is skipped");
+        assertEq("{abc}", members[0].value);
+        assertEq("Ada Lovelace", members[0].display_name);
+    }
+
+    private codecTest() {
+        # a branch is presented as a plain name, not as Bitbucket's nested reference
+        hash<DataProviderActionInfo> create = aset.getActionInfo("Bitbucket",
+            "repositories_workspace_repo_slug_pullrequests_post");
+        assertEq("*string", create.options.source.type.getName());
+        assertEq(BitbucketManifest::RefBranch, create.options.source.ref_data);
+        assertEq(BitbucketManifest::RefWorkspaceMember, create.options.reviewers.element_ref_data);
+
+        # ... and the codec converts in both directions, so a response reads back as what was sent
+        hash<RestSchemaWireCodecInfo> branch = RestSchemaActionCodecs::getCodecEx(
+            BitbucketCodecs::BranchRef);
+        assertEq({"branch": {"name": "main"}}, branch.to_wire("main"));
+        assertEq("main", branch.from_wire({"branch": {"name": "main"}}));
+        # an unset value stays unset, so an optional branch is not sent as an empty object
+        assertNothing(branch.to_wire(NOTHING));
+        assertNothing(branch.from_wire(NOTHING));
+
+        hash<RestSchemaWireCodecInfo> reviewers = RestSchemaActionCodecs::getCodecEx(
+            BitbucketCodecs::ReviewerIds);
+        # the account type declares "type" as required, so it is sent as well
+        assertEq(({"type": "user", "uuid": "{a}"}, {"type": "user", "uuid": "{b}"}),
+            reviewers.to_wire(("{a}", "{b}")));
+        assertEq(("{a}", "{b}"), reviewers.from_wire(({"uuid": "{a}"}, {"uuid": "{b}"})));
+        assertNothing(reviewers.to_wire(NOTHING));
+    }
+
+    private providerPathTest() {
+        FakeBitbucketRestClient rest();
+        BitbucketDataProvider dp(rest);
+        aset.validateActionPaths(dp);
+
+        hash<string, bool> children = {};
+        map children{$1} = True, dp.getChildProviderNames();
+        assertTrue(children{BitbucketDataProvider::EventsChildName});
+        assertNothing(dp.getChildProvider("no-such-action"));
+
+        AbstractDataProvider events = dp.getChildProviderEx(BitbucketDataProvider::EventsChildName);
+        hash<string, bool> event_children = {};
+        map event_children{$1} = True, events.getChildProviderNames();
+        map assertTrue(event_children{$1}, sprintf("event %y resolves", $1)), ExpectedEvents;
+    }
+
+    private requestConstructionTest() {
+        FakeBitbucketRestClient rest();
+        BitbucketDataProvider dp(rest);
+
+        # the API version comes from the schema's server URL, so it is in the path the client is given
+        AbstractDataProvider get_pr = dp.getChildProviderEx(
+            "repositories_workspace_repo_slug_pullrequests_pull_request_id_get");
+        rest.push_response({"body": {"id": 7, "title": "a change"}});
+        auto res = get_pr.doRequest({"workspace": "my-team", "repo_slug": "my-repo", "pull_request_id": 7});
+        assertEq("GET", rest.last().method);
+        assertRegex("^/2.0/repositories/my-team/my-repo/pullrequests/7", rest.last().path);
+        assertEq(7, res.id);
+
+        # a flat branch name reaches the wire in Bitbucket's nested shape
+        AbstractDataProvider create_pr = dp.getChildProviderEx(
+            "repositories_workspace_repo_slug_pullrequests_post");
+        rest.push_response({"body": {"id": 8}});
+        create_pr.doRequest({
+            "workspace": "my-team",
+            "repo_slug": "my-repo",
+            "title": "Bump the pinned schema",
+            "source": "chore/bump",
+            "destination": "main",
+            "reviewers": ("{abc}",),
+        });
+        auto sent = rest.lastBody();
+        assertEq("POST", rest.last().method);
+        assertEq({"branch": {"name": "chore/bump"}}, sent.source);
+        assertEq({"branch": {"name": "main"}}, sent.destination);
+        assertEq(({"type": "user", "uuid": "{abc}"},), sent.reviewers);
+        assertEq("Bump the pinned schema", sent.title);
+        # the workspace and repository are path variables, so they must not also be in the body
+        assertNothing(sent.workspace);
+        assertNothing(sent.repo_slug);
+        # a server-owned field is not offered and so is never sent
+        assertNothing(sent.author);
+        assertNothing(sent.state);
+
+        # the repaired paging parameters travel as query arguments
+        AbstractDataProvider list_ws = dp.getChildProviderEx("workspaces_get");
+        rest.push_response({"body": {"values": ()}});
+        list_ws.doRequest({"pagelen": 100, "page": 2});
+        assertRegex("pagelen=100", rest.last().path);
+        assertRegex("page=2", rest.last().path);
+
+        rest.push_response({"throw_status": 404, "body": {"error": {"message": "Not found"}}});
+        assertThrows("REST-RESPONSE-ERROR", \list_ws.doRequest(), {"pagelen": 1});
+    }
+
+    private connectionTest() {
+        BitbucketRestConnection conn("bitbucket-test", "test", "bitbucket://api.bitbucket.org", {},
+            {"token": "bbt-fake"});
+        assertEq("bitbucket", conn.getType());
+        assertEq("Bitbucket", conn.getAppName());
+        assertTrue(conn.hasDataProvider());
+
+        # the defaults these were checked against are the live connection's own
+        hash<auto> opts = BitbucketRestClientBase::getOptions({"token": "x"});
+        assertEq("https://api.bitbucket.org", opts.url);
+        assertEq("/2.0/user", opts.ping_path);
+        assertEq("Bearer", opts.token_type);
+        # a token-only client asks for no OAuth2 endpoints
+        assertNothing(opts.oauth2_auth_url);
+
+        hash<auto> oopts = BitbucketRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://bitbucket.org/site/oauth2/authorize", oopts.oauth2_auth_url);
+        assertEq("https://bitbucket.org/site/oauth2/access_token", oopts.oauth2_token_url);
+        assertEq("authorization_code", oopts.oauth2_grant_type);
+
+        # an app password authenticates without any OAuth consumer, which the superseded application
+        # could not do
+        hash<auto> bopts = BitbucketRestClientBase::getOptions({"username": "ada", "password": "app-pw"});
+        assertEq("ada", bopts.username);
+        assertEq("app-pw", bopts.password);
+    }
+
+    private eventProviderTest() {
+        FakeBitbucketRestClient rest();
+        BitbucketEventsDataProvider events(rest);
+        hash<string, bool> names = {};
+        map names{$1} = True, events.getChildProviderNames();
+        map assertTrue(names{$1}, sprintf("event %y is offered", $1)), ExpectedEvents;
+        assertNothing(events.getChildProvider("no-such-event"));
+
+        # a child enumerated from the container is a template, constructible without the options a
+        # subscription supplies
+        AbstractDataProvider tmpl = events.getChildProviderEx("new_pull_request");
+        hash<DataProviderInfo> info = tmpl.getInfo();
+        assertTrue(info.constructor_options.workspace.required);
+        assertTrue(info.constructor_options.repo_slug.required);
+        assertEq(("workspace",), info.constructor_options.repo_slug.depends_on);
+        assertEq(BitbucketManifest::RefRepository, info.constructor_options.repo_slug.ref_data);
+
+        # ... but subscribing without them is an error rather than polling something arbitrary
+        assertThrows("BITBUCKET-EVENT-ERROR", "\"workspace\" option is required",
+            \cast<DelayedObservable>(tmpl).observersReady());
+        BitbucketNewCommitDataProvider partial(rest, {"workspace": "my-team"});
+        assertThrows("BITBUCKET-EVENT-ERROR", "\"repo_slug\" option is required",
+            \partial.observersReady());
+    }
+
+    private eventPollingTest() {
+        FakeBitbucketRestClient rest();
+        TestBitbucketNewPullRequestProvider p(rest, {
+            "workspace": "my-team",
+            "repo_slug": "my-repo",
+            "since": 2026-01-01,
+        });
+
+        rest.push_response({"body": {"values": (
+            {"id": 1, "title": "first", "created_on": "2026-01-02T10:00:00+00:00"},
+            {"id": 2, "title": "second", "created_on": "2026-01-03T10:00:00+00:00"},
+        )}});
+        p.poll();
+        assertEq(2, p.notified.size());
+        # dispatched oldest-first, so a cursor cannot advance past an undelivered item
+        assertEq("first", p.notified[0].title);
+        assertEq("second", p.notified[1].title);
+        assertRegex("^/2.0/repositories/my-team/my-repo/pullrequests", rest.last().path);
+        assertRegex("pagelen=100", rest.last().path,
+            "the repair is what lets a poll read a full page");
+
+        # the second cycle re-reads the boundary record and discards it: at-least-once, never twice
+        p.reset();
+        rest.push_response({"body": {"values": (
+            {"id": 2, "title": "second", "created_on": "2026-01-03T10:00:00+00:00"},
+            {"id": 3, "title": "third", "created_on": "2026-01-04T10:00:00+00:00"},
+        )}});
+        p.poll();
+        assertEq(1, p.notified.size());
+        assertEq("third", p.notified[0].title);
+
+        # the repository scopes the cursor: watching another must not resume this one's position
+        BitbucketNewPullRequestDataProvider other(rest, {
+            "workspace": "my-team",
+            "repo_slug": "other-repo",
+            "since": 2026-01-01,
+        });
+        assertNeq(p.getWatchStreamIdentity(), other.getWatchStreamIdentity());
+
+        # a commit is positioned by "date" and identified by "hash", not by the defaults
+        FakeBitbucketRestClient crest();
+        BitbucketNewCommitDataProvider commits(crest, {"workspace": "w", "repo_slug": "r"});
+        assertEq("new_commit", commits.getName());
+    }
+}

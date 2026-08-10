@@ -80,6 +80,40 @@ public hashdecl RestSchemaOperationMatchInfo {
     bool normalized;
 }
 
+#! One declared repair applied to a source document before it is pruned
+/** A vendor's description is sometimes **incomplete** rather than merely unhelpful: it omits something the
+    API accepts and the vendor documents elsewhere.  Bitbucket describes \c page and \c pagelen on a shared
+    pagination page rather than per endpoint, and declares them on 3 of its 331 operations — so an action
+    generated from it cannot ask for the second page of anything.
+
+    That cannot be fixed in a UX overlay: an overlay expresses presentation, and adding a parameter is
+    structural.  It is fixed here instead, before pruning, so that:
+
+    - the repair is **declared**, with a reason, in the application's import spec rather than buried in
+      code;
+    - it is **checked**: naming an operation the document does not declare, or a parameter it already
+      declares, is an error — so a normalization that upstream has since fixed fails the next import
+      instead of quietly staying forever;
+    - it is **recorded** in the committed artifact under \c "x-qore-normalized", so that a reviewer diffing
+      the artifact against the upstream document is told why they differ.
+
+    The provenance checksum still describes the unmodified upstream document, because that is the baseline
+    the next import has to be diffed against.
+*/
+public hashdecl RestSchemaNormalizationInfo {
+    #! Why the document has to be repaired
+    /** Recorded in the artifact; write what the vendor documents and where, so the next person can check
+        whether it is still true.
+    */
+    string reason;
+
+    #! The operations to repair
+    list<hash<SchemaOperationInfo>> operations;
+
+    #! Parameters to add, each an OpenAPI parameter object
+    list<hash<auto>> add_parameters;
+}
+
 #! Describes one document to import
 public hashdecl RestSchemaImportInfo {
     #! A label for the document, used in messages and in the summary
@@ -93,6 +127,11 @@ public hashdecl RestSchemaImportInfo {
 
     #! The operations to keep
     list<hash<SchemaOperationInfo>> operations;
+
+    #! Repairs applied to the document before it is pruned
+    /** @see @ref RestSchemaActions::RestSchemaNormalizationInfo "RestSchemaNormalizationInfo"
+    */
+    *list<hash<RestSchemaNormalizationInfo>> normalize;
 
     #! Write JSON rather than YAML; defaults to the format of the source document
     *bool json;
@@ -149,6 +188,9 @@ public hashdecl RestSchemaImportResultInfo {
     #! Every requested operation, with the path the document actually declares
     list<hash<RestSchemaOperationMatchInfo>> matches;
 
+    #! The number of operations repaired before pruning
+    int normalized_operations = 0;
+
     #! The pruned document
     hash<auto> schema;
 }
@@ -194,6 +236,12 @@ public hashdecl RestSchemaImportResultInfo {
 */
 public class RestSchemaImporter {
     public {
+        #! The document member recording what an import repaired
+        /** A vendor extension, so the artifact stays a valid schema; it is what tells a reviewer diffing
+            the committed document against the upstream one why they differ.
+        */
+        const NormalizationMarker = "x-qore-normalized";
+
         #! The provenance fields this class can supply
         /** Used by @ref updateProvenanceSource() to decide which members of an application's provenance
             record it owns.  Anything else in that record — Stripe's \c api_version, say — is left alone.
@@ -230,17 +278,42 @@ public class RestSchemaImporter {
 
         hash<RestSchemaSourceInfo> src = RestSchemaImporter::fetch(doc.source);
 
-        list<hash<RestSchemaOperationMatchInfo>> matches = RestSchemaImporter::resolveOperations(src.schema,
-            doc.operations);
+        # repairs are applied before anything else looks at the document, so that pruning, resolution and
+        # the written artifact all see the same thing
+        hash<auto> source_schema = src.schema;
+        int normalized_operations = 0;
+        if (doc.normalize) {
+            source_schema = RestSchemaImporter::normalize(source_schema, doc.normalize,
+                \normalized_operations);
+        }
+
+        list<hash<RestSchemaOperationMatchInfo>> matches = RestSchemaImporter::resolveOperations(
+            source_schema, doc.operations);
         list<hash<SchemaOperationInfo>> resolved = ();
         foreach hash<RestSchemaOperationMatchInfo> m in (matches) {
             resolved += <SchemaOperationInfo>{"method": m.method, "path": m.path};
         }
 
-        hash<PruneResultInfo> pruned = RestSchemaPruner::prune(src.schema, resolved);
+        hash<PruneResultInfo> pruned = RestSchemaPruner::prune(source_schema, resolved);
+
+        # the artifact says how it differs from the document it came from.  This is stamped after pruning
+        # because the pruner keeps only what the selected operations reach, and a record of what was
+        # repaired is reachable from nothing
+        hash<auto> out_schema = pruned.schema;
+        if (doc.normalize) {
+            list<auto> applied = ();
+            foreach hash<RestSchemaNormalizationInfo> n in (doc.normalize) {
+                applied += {
+                    "reason": n.reason,
+                    "operations": (map sprintf("%s %s", $1.method.upr(), $1.path), n.operations),
+                    "add_parameters": (map $1.name, n.add_parameters),
+                };
+            }
+            out_schema{NormalizationMarker} = applied;
+        }
 
         bool json = exists doc.json ? doc.json : src.json;
-        string text = RestSchemaImporter::serialize(pruned.schema, json);
+        string text = RestSchemaImporter::serialize(out_schema, json);
 
         if (!opts.dry_run) {
             FileLocationHandler::writeFileToLocation(doc.output, text);
@@ -269,7 +342,8 @@ public class RestSchemaImporter {
             "output": opts.dry_run ? NOTHING : doc.output,
             "output_size": text.strlen(),
             "matches": matches,
-            "schema": pruned.schema,
+            "normalized_operations": normalized_operations,
+            "schema": out_schema,
         };
     }
 
@@ -342,6 +416,70 @@ public class RestSchemaImporter {
             "schemas": (keys (schema.components.schemas ?? schema.definitions ?? {})).size(),
             "webhooks": (keys (schema.webhooks ?? schema."x-webhooks" ?? {})).size(),
         };
+    }
+
+    #! Applies declared repairs to a document
+    /** @param schema the source document; not modified
+        @param normalizations the repairs to apply
+        @param operations_normalized a reference receiving the number of operations repaired
+
+        @return a new document with the repairs applied
+
+        @throw REST-SCHEMA-IMPORT-ERROR a repair names an operation the document does not declare, or a
+        parameter it already declares
+
+        @note A parameter the document already declares is an error rather than a no-op: it means the
+        vendor has fixed the omission, so the repair has done its job and must be removed.  Silently
+        accepting it would leave a permanent local edit nobody ever revisits.
+
+        @see @ref RestSchemaActions::RestSchemaNormalizationInfo "RestSchemaNormalizationInfo"
+    */
+    static hash<auto> normalize(hash<auto> schema, list<hash<RestSchemaNormalizationInfo>> normalizations,
+            reference<int> operations_normalized) {
+        hash<auto> rv = schema;
+        foreach hash<RestSchemaNormalizationInfo> n in (normalizations) {
+            if (!n.reason.val()) {
+                throw "REST-SCHEMA-IMPORT-ERROR", "a schema repair must say why it is being made; the "
+                    "reason is written into the artifact for whoever next diffs it against upstream";
+            }
+            foreach hash<SchemaOperationInfo> op in (n.operations) {
+                string method = op.method.lwr();
+                if (!exists rv.paths{op.path}) {
+                    throw "REST-SCHEMA-IMPORT-ERROR", sprintf("the repair %y names operation \"%s %s\", "
+                        "but the document declares no such path", n.reason, op.method.upr(), op.path);
+                }
+                if (!exists rv.paths{op.path}{method}) {
+                    throw "REST-SCHEMA-IMPORT-ERROR", sprintf("the repair %y names operation \"%s %s\", "
+                        "but the document declares only %y for that path", n.reason, op.method.upr(),
+                        op.path, RestSchemaPruner::methodsOf(rv.paths{op.path}));
+                }
+                hash<auto> operation = rv.paths{op.path}{method};
+                # a parameter may be declared on the operation or on the path item, and either counts
+                hash<string, bool> declared = {};
+                foreach auto p in ((rv.paths{op.path}.parameters ?? ()) + (operation.parameters ?? ())) {
+                    if (p.typeCode() == NT_HASH && p.name.val()) {
+                        declared{p.name} = True;
+                    }
+                }
+                list<auto> add = ();
+                foreach hash<auto> p in (n.add_parameters) {
+                    if (!p.name.val()) {
+                        throw "REST-SCHEMA-IMPORT-ERROR", sprintf("the repair %y adds a parameter with no "
+                            "name", n.reason);
+                    }
+                    if (declared{p.name}) {
+                        throw "REST-SCHEMA-IMPORT-ERROR", sprintf("the repair %y adds parameter %y to "
+                            "\"%s %s\", which already declares it; the document has been fixed upstream, "
+                            "so the repair must be removed", n.reason, p.name, op.method.upr(), op.path);
+                    }
+                    add += p;
+                }
+                operation.parameters = (operation.parameters ?? ()) + add;
+                rv.paths{op.path}{method} = operation;
+                ++operations_normalized;
+            }
+        }
+        return rv;
     }
 
     #! Resolves requested operations against a document, normalizing path spelling
@@ -618,6 +756,10 @@ public class RestSchemaImporter {
             rv += sprintf("  sha-256:  %s\n", r.source_sha256);
             rv += sprintf("  pruned:   %d bytes, %d path(s), %d operation(s), %d reference(s)\n",
                 r.output_size, r.paths_kept, r.operations_kept, r.refs_kept);
+            if (r.normalized_operations) {
+                rv += sprintf("  repaired: %d operation(s) before pruning; the artifact records this "
+                    "under %y\n", r.normalized_operations, NormalizationMarker);
+            }
             list<hash<RestSchemaOperationMatchInfo>> norm = ();
             foreach hash<RestSchemaOperationMatchInfo> m in (r.matches) {
                 if (m.normalized) {

@@ -243,9 +243,34 @@ separates cleanly:
 | Bitbucket | **3 of 16** — only the three code-search endpoints |
 
 So this is not a general property of published descriptions; it is one vendor's description being wrong in
-one specific way. Where the count is low the document needs an import-time normalization step before the
-path is usable at all, which is a decision to take before the port starts rather than after the manifest is
-written.
+one specific way.
+
+Where the count is low, repair the document at **import time** rather than working around it in the
+application. `RestSchemaNormalizationInfo` declares the repair in the import spec, with a reason:
+
+```yaml
+normalize:
+  - reason: >-
+      Bitbucket documents "page" and "pagelen" on its shared pagination page rather than per endpoint,
+      and declares them on 3 of the 331 operations in this document.
+    operations: [GET /workspaces, GET /repositories/{workspace}, ...]
+    add_parameters:
+      - {name: pagelen, in: query, schema: {type: integer, maximum: 100}}
+```
+
+Three properties make this safe to do:
+
+- naming an operation the document does not declare, or a parameter it **already** declares, fails the
+  import — so a repair that upstream has since made unnecessary is removed rather than left in place
+  forever as a silent local edit;
+- the repair is recorded in the committed artifact under `x-qore-normalized`, so a reviewer diffing it
+  against the upstream document is told why they differ;
+- the provenance checksum still describes the *unmodified* upstream document, because that is the
+  baseline the next import has to be diffed against.
+
+Repair is for what a vendor documents and omits. It is not for guessing at an API: a construct the vendor
+does not document belongs nowhere, and an operation the schema describes wrongly rather than incompletely
+is the hand-written case above.
 
 **Almost no identifier is global, so a dropdown usually needs scope.** A branch belongs to a repository, a
 page to a space, a member to a workspace. `RestSchemaReferenceDataInfo::options_from` forwards named options
