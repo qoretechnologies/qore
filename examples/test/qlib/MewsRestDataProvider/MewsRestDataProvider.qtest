@@ -27,6 +27,17 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+
+        #! Errors reported when an I/O wait on the external service times out
+        /** The asynchronous REST path waits on a Future, so a demo service that stops answering
+            surfaces as \c FUTURE-TIMEOUT rather than as a transport error that
+            @ref QUnit::Test::isConnectionError() "isConnectionError()" recognizes.
+        */
+        const IoTimeoutErrors = {
+            "FUTURE-TIMEOUT": True,
+            "HTTPCLIENT-TIMEOUT": True,
+            "SOCKET-TIMEOUT": True,
+        };
     }
 
     constructor() : Test("MewsRestClientDataProvider Test", "1.0", \ARGV, MyOpts) {
@@ -189,6 +200,12 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             delete mews;
             testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
         }
+        # an I/O wait that expires means the external service did not answer in time; this is an
+        # availability failure of the dependency, not a defect in the code under test
+        if (IoTimeoutErrors{ex.err}) {
+            delete mews;
+            testSkip(sprintf("external service I/O timeout: %s: %s", ex.err, ex.desc));
+        }
         *softint status_code = getHttpStatusCode(ex);
         if (status_code == 429 || status_code == 408) {
             delete mews;
@@ -253,6 +270,9 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
 
             mews = new MewsRestDataProvider(mrc.get());
         } catch (hash<ExceptionInfo> ex) {
+            if (IoTimeoutErrors{ex.err}) {
+                delete mews;
+            }
             *softint status_code = getHttpStatusCode(ex);
             if (status_code == 429 || status_code == 408) {
                 delete mews;
