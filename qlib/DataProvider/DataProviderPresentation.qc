@@ -698,6 +698,14 @@ public class DataProviderPresentationCatalog {
         }
     }
 
+    #! Returns the exact locale represented by this projection catalog
+    /** @return canonical requested BCP-47 locale or \c root
+        @throw no exceptions are expected
+    */
+    string getLocale() {
+        return locale;
+    }
+
     #! Projects localized app presentation while preserving technical identity
     /** @param app provider application metadata
         @return localized presentation plus unchanged app identity and producer provenance
@@ -901,17 +909,18 @@ public class DataProviderPresentationEmbeddingCatalog {
 
     #! Builds a bounded multilingual embedding document for one action
     /** The document contains exact app/action identities, producer app/action
-        presentation, and every distinct requested-locale app/action
-        presentation found in source-owned catalogs. It never reconstructs,
-        classifies, tokenizes, or translates producer prose.
+        presentation, and every requested-locale app/action presentation found
+        in source-owned catalogs. It is the compatibility combination of
+        @ref projectActionDocuments(). It never reconstructs, classifies,
+        tokenizes, or translates producer prose.
 
         @param action registered provider action metadata
         @param max_description_chars maximum Unicode characters retained from
             each long @c desc field; @c 0 omits long descriptions
         @return a hash containing @c embedding_text and
-            @c embedding_language; the latter is @c mul only when at least one
-            distinct catalog translation contributes text, otherwise it is the
-            declared producer locale or @c und
+            @c embedding_language; the latter is @c mul when at least one
+            additional locale document contributes presentation, otherwise it
+            is the declared producer locale or @c und
 
         @throw DATA-PROVIDER-PRESENTATION-ERROR if an exact identity is empty
         @throw DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR if
@@ -932,6 +941,62 @@ public class DataProviderPresentationEmbeddingCatalog {
     */
     hash<auto> projectAction(hash<auto> action,
             int max_description_chars = 200) {
+        list<hash<auto>> documents = projectActionDocuments(action,
+            max_description_chars);
+        list<string> lines = ();
+        hash<string, bool> seen;
+        foreach hash<auto> document in (documents) {
+            foreach string line in (
+                    document.embedding_text.toString().split("\n", False)) {
+                if (line.val() && !seen{line}) {
+                    seen{line} = True;
+                    lines += line;
+                }
+            }
+        }
+        return {
+            "embedding_text": lines.join("\n"),
+            "embedding_language": documents.size() > 1 ? "mul"
+                : documents[0].embedding_language,
+        };
+    }
+
+    #! Builds one bounded embedding document per source-owned locale
+    /** The first document contains the producer presentation and exact
+        app/action identities. Each additional document contains the same
+        identities plus presentation contributed by exactly one discovered
+        locale. Empty locale catalogs and producer-locale aliases do not create
+        redundant documents.
+
+        This representation avoids semantic dilution as more translations are
+        installed while keeping @ref projectAction() as the backwards-
+        compatible combined multilingual projection.
+
+        @param action registered provider action metadata
+        @param max_description_chars maximum Unicode characters retained from
+            each long @c desc field; @c 0 omits long descriptions
+        @return ordered embedding documents with @c embedding_text and exact
+            BCP-47 @c embedding_language; producer presentation is first
+
+        @throw DATA-PROVIDER-PRESENTATION-ERROR if an exact identity is empty
+        @throw DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR if
+            @p max_description_chars is negative or @p action belongs to a
+            different app
+        @throw I18N-CATALOG-ERROR if a discovered catalog is invalid
+        @throw I18N-LOCALE-ERROR if a declared or discovered locale is invalid
+        @throw DATA-PROVIDER-PRESENTATION-CATALOG-ERROR if discovered owner
+            fragments conflict for the same locale and message id
+
+        @par Example
+        A Czech producer action with Japanese and Arabic catalogs returns three
+        documents. Indexers can store the locale documents separately and map
+        every hit back to the same exact provider action identity.
+        @note The result contains retrieval context only. Routing,
+            authorization, schema selection, and execution must continue to use
+            the original exact @p action record.
+    */
+    list<hash<auto>> projectActionDocuments(hash<auto> action,
+            int max_description_chars = 200) {
         if (max_description_chars < 0) {
             throw "DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR",
                 "max_description_chars cannot be negative";
@@ -946,6 +1011,7 @@ public class DataProviderPresentationEmbeddingCatalog {
         DataProviderPresentation::actionMessageId(app.name, action.action,
             "display_name");
 
+        list<hash<auto>> rv = ();
         list<string> lines = ();
         hash<string, bool> seen;
         addEmbeddingIdentity(\lines, \seen, app.name);
@@ -954,28 +1020,40 @@ public class DataProviderPresentationEmbeddingCatalog {
         addEmbeddingIdentity(\lines, \seen, action.action);
         addEmbeddingPresentation(\lines, \seen, action,
             max_description_chars);
+        string source_locale =
+            DataProviderPresentation::actionSourceLocale(app, action);
+        rv += {
+            "embedding_text": lines.join("\n"),
+            "embedding_language": source_locale,
+        };
 
-        bool translated = False;
         string domain = DataProviderPresentation::actionCatalogDomain(app,
             action);
         foreach DataProviderPresentationCatalog catalog in (
                 getCatalogs(domain)) {
+            if (DataProviderPresentation::sourceLocaleMatches(
+                    catalog.getLocale(), source_locale)) {
+                continue;
+            }
+            lines = ();
+            seen = {};
+            addEmbeddingIdentity(\lines, \seen, app.name);
+            addEmbeddingIdentity(\lines, \seen, action.action);
             hash<auto> localized_app = catalog.projectApp(app);
             hash<auto> localized_action = catalog.projectAction(app, action);
-            if (addEmbeddingPresentation(\lines, \seen, localized_app,
-                    max_description_chars)) {
-                translated = True;
+            bool app_text = addEmbeddingPresentation(\lines, \seen,
+                localized_app, max_description_chars);
+            bool action_text = addEmbeddingPresentation(\lines, \seen,
+                localized_action, max_description_chars);
+            if (!app_text && !action_text) {
+                continue;
             }
-            if (addEmbeddingPresentation(\lines, \seen, localized_action,
-                    max_description_chars)) {
-                translated = True;
-            }
+            rv += {
+                "embedding_text": lines.join("\n"),
+                "embedding_language": catalog.getLocale(),
+            };
         }
-        return {
-            "embedding_text": lines.join("\n"),
-            "embedding_language": translated ? "mul"
-                : DataProviderPresentation::actionSourceLocale(app, action),
-        };
+        return rv;
     }
 
     private list<DataProviderPresentationCatalog> getCatalogs(string domain) {

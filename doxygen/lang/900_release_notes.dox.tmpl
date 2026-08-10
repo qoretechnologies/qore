@@ -1408,6 +1408,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - provider presentation, including multilingual embedding population, rejects conflicting owner-catalog
         messages instead of selecting user-facing text by catalog search-path or filename order; disjoint and
         identical shared-app contributions remain composable
+      - provider presentation embedding exposes producer-first, per-locale documents in addition to the combined
+        compatibility document, allowing vector indexes to avoid semantic dilution as translations are added
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration

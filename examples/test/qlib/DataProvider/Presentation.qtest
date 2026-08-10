@@ -794,6 +794,34 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 sprintf("the embedding document contains %y", expected));
         }
 
+        list<hash<auto>> documents =
+            embedding.projectActionDocuments(action());
+        assertEq(("cs-CZ", "ar-EG", "ja"),
+            map $1.embedding_language, documents,
+            "locale embedding documents keep producer-first deterministic order");
+        hash<string, hash<auto>> documents_by_language;
+        foreach hash<auto> document in (documents) {
+            documents_by_language{document.embedding_language} = document;
+            assertTrue(document.embedding_text.find(App) >= 0
+                    && document.embedding_text.find(Action) >= 0,
+                "every locale document retains exact provider identities");
+        }
+        assertTrue(documents_by_language{"cs-CZ"}.embedding_text.find(
+                "Poštovní služba") >= 0
+                && documents_by_language{"cs-CZ"}.embedding_text.find(
+                    "メールサービス") < 0,
+            "the producer document does not absorb translated presentation");
+        assertTrue(documents_by_language.ja.embedding_text.find(
+                "メールサービス") >= 0
+                && documents_by_language.ja.embedding_text.find(
+                    "خدمة البريد") < 0,
+            "the Japanese document contains only Japanese presentation");
+        assertTrue(documents_by_language{"ar-EG"}.embedding_text.find(
+                "خدمة البريد") >= 0
+                && documents_by_language{"ar-EG"}.embedding_text.find(
+                    "Poštovní služba") < 0,
+            "the Arabic document contains only Arabic presentation");
+
         hash<auto> bounded = embedding.projectAction(action(), 0);
         assertEq(-1, bounded.embedding_text.find(
                 "Odešle zprávu přes vybraný účet."),
@@ -820,6 +848,31 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 "language");
         assertEq(-1, source_info.embedding_text.find("メールサービス"),
             "a source-only catalog does not invent translated text");
+        assertEq(("cs-CZ",), map $1.embedding_language,
+            source_embedding.projectActionDocuments(action()),
+            "an empty locale catalog does not create a redundant vector");
+
+        writeJson(root_only + DirSep + Domain + DirSep + "sk.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"sk": {"messages": {
+                DataProviderPresentation::actionMessageId(App, Action,
+                    "short_desc"): {
+                    "source": "Odešle jednu zprávu",
+                    "message": "Odešle jednu zprávu",
+                },
+            }}},
+        });
+        DataProviderPresentationEmbeddingCatalog cognate_embedding(app(), {
+            "search_path": (root_only,),
+        });
+        list<hash<auto>> cognate_documents =
+            cognate_embedding.projectActionDocuments(action());
+        assertEq(("cs-CZ", "sk"), map $1.embedding_language,
+            cognate_documents,
+            "an explicitly translated cognate keeps its own locale vector");
+        assertTrue(cognate_documents[1].embedding_text.find(
+                "Odešle jednu zprávu") >= 0,
+            "identical cognate text is retained without lexical rejection");
 
         assertThrows("DATA-PROVIDER-PRESENTATION-EMBEDDING-ERROR", sub () {
             embedding.projectAction(action(), -1);
