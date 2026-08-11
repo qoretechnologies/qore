@@ -98,6 +98,21 @@ module GitLabDataProvider {
                 GitLabCreateCommitDataProvider::RequestType.getFields()),
         });
 
+        # register the hand-written project-lookup action; see GitLabProjectIdByUrlDataProvider for why it
+        # is not generated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GitLabDataProvider::AppName,
+            "path": "/" + GitLabDataProvider::ProjectIdByUrlAction,
+            "action": GitLabDataProvider::ProjectIdByUrlAction,
+            "display_name": GitLabProjectIdByUrlDataProvider::DisplayName,
+            "short_desc": GitLabProjectIdByUrlDataProvider::ShortDesc,
+            "desc": GitLabProjectIdByUrlDataProvider::Desc,
+            "action_code": DPAT_API,
+            "groups": (GitLabManifest::GroupProjects,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GitLabProjectIdByUrlDataProvider::RequestType.getFields()),
+        });
+
         # register the polling event actions
         foreach hash<auto> i in (GitLabEventsDataProvider::EventMap.pairIterator()) {
             Class cls = i.value;
@@ -137,9 +152,11 @@ module GitLabDataProvider {
     identifiers should be selectable rather than typed.  Those come from an application-owned manifest and
     UX overlay in @ref GitLabDataProvider::GitLabManifest "GitLabManifest".
 
-    **One action is hand-written**: creating a commit, because GitLab's description declares that one
-    operation with a placeholder request body.  See
-    @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider".
+    **Two actions are hand-written**, for two different reasons:
+
+    |!Action|!Why a schema cannot generate it
+    |\c postApiV4ProjectsIdRepositoryCommits|GitLab's description declares that one operation with a placeholder request body.  See @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider"
+    |\c get_project_id_by_url|No GitLab endpoint takes a URL; recovering a project path from one is the action itself.  See @ref GitLabDataProvider::GitLabProjectIdByUrlDataProvider "GitLabProjectIdByUrlDataProvider"
 
     @section gitlabdataprovider_pinned The Pinned Schema
 
@@ -159,7 +176,7 @@ module GitLabDataProvider {
 
     @section gitlabdataprovider_actions Actions
 
-    69 actions are exported, in these groups:
+    70 actions are exported, in these groups:
 
     |!Group|!What it covers
     |Branches|repository branches
@@ -313,7 +330,9 @@ cast<DelayedObservable>(event).observersReady();
 
     @subsection gitlabdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
 
-    The application exports a reviewed subset of GitLab's API — 69 actions of 1752 operations.  For
+    The application exports a reviewed subset of GitLab's API — 70 actions covering 69 of 1752 operations,
+    the two counts differing because \c get_project_id_by_url reads a project through the same endpoint
+    the generated \c getApiV4ProjectsId already exports.  For
     anything else, the generic API call action reaches the rest of it with the same connection and
     authentication:
 

@@ -46,6 +46,14 @@ public class GitLabDataProvider inherits RestSchemaActions::RestSchemaActionSetD
         */
         const CreateCommitAction = "postApiV4ProjectsIdRepositoryCommits";
 
+        #! The action ID of the hand-written project-lookup action
+        /** Hand-written because no GitLab endpoint takes a URL; see
+            @ref GitLabDataProvider::GitLabProjectIdByUrlDataProvider "GitLabProjectIdByUrlDataProvider".
+
+            The ID is the one the superseded TypeScript application registered.
+        */
+        const ProjectIdByUrlAction = "get_project_id_by_url";
+
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "gitlab",
@@ -110,10 +118,10 @@ public class GitLabDataProvider inherits RestSchemaActions::RestSchemaActionSetD
         return "GitLab data provider";
     }
 
-    #! Returns the action IDs plus the hand-written action and the events container
+    #! Returns the action IDs plus the hand-written actions and the events container
     private *list<string> getChildProviderNamesImpl() {
         return (RestSchemaActionSetDataProvider::getChildProviderNamesImpl() ?? ())
-            + (CreateCommitAction, EventsChildName);
+            + (CreateCommitAction, ProjectIdByUrlAction, EventsChildName);
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -124,6 +132,9 @@ public class GitLabDataProvider inherits RestSchemaActions::RestSchemaActionSetD
         if (name == CreateCommitAction) {
             return new GitLabCreateCommitDataProvider(action_set,
                 cast<*GitLabRestClient::GitLabRestClientIo>(rest));
+        }
+        if (name == ProjectIdByUrlAction) {
+            return new GitLabProjectIdByUrlDataProvider(cast<*GitLabRestClient::GitLabRestClientIo>(rest));
         }
         return RestSchemaActionSetDataProvider::getChildProviderImpl(name);
     }

@@ -563,6 +563,18 @@ public class GitHubReleasesDataProvider inherits GitHubTableDataProviderBase {
 }
 
 #! The container holding the GitHub record-based tables
+/** @section githubtables_actions The Table Actions
+
+    The three tables are reachable from the action surface through \c "search", \c "search-single" and
+    \c "create", registered in the module's \c init closure against the path \c "/tables/{table}".  Those
+    three action IDs are the ones the superseded TypeScript application registered, so a workflow that
+    already calls them keeps working.
+
+    An action names its table in the path rather than in an option, and its remaining options therefore
+    depend on which table was named — \c issues accepts a state and a label filter that \c releases has no
+    notion of.  That is what \c data_dependent_options declares: the options are resolved by walking to the
+    chosen table, and @ref RecordActionProviderInfo describes only what all three tables have in common.
+*/
 public class GitHubTablesDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
@@ -578,6 +590,30 @@ public class GitHubTablesDataProvider inherits DataProvider::AbstractDataProvide
             GitHubIssuesDataProvider::TableName: Class::forName("GitHubIssuesDataProvider"),
             GitHubPullsDataProvider::TableName: Class::forName("GitHubPullsDataProvider"),
             GitHubReleasesDataProvider::TableName: Class::forName("GitHubReleasesDataProvider"),
+        };
+
+        #! The table named in a record action's path
+        const TablePathVar = <DataProviderPathVarInfo>{
+            "display_name": "Table",
+            "short_desc": "The name of the GitHub table",
+            "desc": "The table to work with: `issues`, `pulls` or `releases`",
+            "example_value": GitHubIssuesDataProvider::TableName,
+        };
+
+        #! What every table supports, for the record-based actions
+        /** The per-table search and create options are not here; they differ by table and are resolved
+            through \c data_dependent_options.  What is here is the capability set and the options every
+            table requires whatever it is: the repository the table is scoped to.
+        */
+        const RecordActionProviderInfo = <DataProviderInfo>{
+            "type": "GitHubTableDataProviderBase",
+            "has_record": True,
+            "supports_read": True,
+            "supports_create": True,
+            "supports_native_search": True,
+            "search_options": GitHubTableDataProviderBase::RepoOptions
+                + GitHubTableDataProviderBase::LimitOption,
+            "create_options": GitHubTableDataProviderBase::RepoOptions,
         };
     }
 

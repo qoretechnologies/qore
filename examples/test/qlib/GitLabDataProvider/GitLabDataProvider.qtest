@@ -257,6 +257,9 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         #! The action the schema cannot generate, so this application hand-writes it
         const HandWrittenAction = "postApiV4ProjectsIdRepositoryCommits";
 
+        #! The action no schema could generate, because no GitLab endpoint takes a URL
+        const ProjectUrlAction = "get_project_id_by_url";
+
         #! The event providers the application offers
         const ExpectedEvents = (
             "new_commit",
@@ -284,6 +287,7 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("request construction", \requestConstructionTest());
         addTestCase("hand-written commit action", \createCommitTest());
+        addTestCase("hand-written project URL action", \projectIdByUrlTest());
         addTestCase("connection", \connectionTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("event polling", \eventPollingTest());
@@ -479,6 +483,7 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         hash<string, bool> children = {};
         map children{$1} = True, dp.getChildProviderNames();
         assertTrue(children{HandWrittenAction}, "the hand-written action resolves alongside the rest");
+        assertTrue(children{ProjectUrlAction}, "the project-URL action resolves alongside the rest");
         assertTrue(children{GitLabDataProvider::EventsChildName});
         assertNothing(dp.getChildProvider("no-such-action"));
 
@@ -500,6 +505,14 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         assertEq("/" + HandWrittenAction, by_action{HandWrittenAction}.path);
         assertTrue(by_action{HandWrittenAction}.options.branch.ref_data.val(),
             "the hand-written action publishes its options like any other");
+
+        # the project-URL action keeps the ID the superseded application registered, because workflows
+        # already call it by that name
+        assertTrue(exists by_action{ProjectUrlAction}, "the project-URL action keeps its original ID");
+        assertEq(DPAT_API, by_action{ProjectUrlAction}.action_code);
+        assertEq("/" + ProjectUrlAction, by_action{ProjectUrlAction}.path);
+        assertEq(("Projects",), by_action{ProjectUrlAction}.groups);
+        assertEq(("project_url",), keys by_action{ProjectUrlAction}.options);
 
         map assertEq(DPAT_EVENT, by_action{$1}.action_code, sprintf("%y is an event action", $1)),
             ExpectedEvents;
@@ -554,13 +567,14 @@ public class GitLabDataProviderTest inherits QUnit::Test {
 
         rest.push_response({"body": {"id": "abc123", "title": "chore: update"}});
         auto res = cc.doRequest({
-            "id": "my-group%2Fmy-project",
+            "id": "my-group/my-project",
             "branch": "main",
             "commit_message": "chore: update",
             "actions": ({"action": "update", "file_path": "README.md", "content": "hello"},),
         });
         assertEq("POST", rest.last().method);
-        # the project is substituted as given, exactly as the generated actions do
+        # the project is escaped into one path segment, exactly as the generated actions escape theirs; the
+        # option takes the path as it reads, so this action and every generated one accept the same value
         assertEq("/api/v4/projects/my-group%2Fmy-project/repository/commits", rest.last().path);
         auto sent = rest.lastBody();
         assertEq("main", sent.branch);
@@ -570,6 +584,16 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         # the project is a path variable, so it must not also be sent in the body
         assertNothing(sent.id);
         assertEq("abc123", res.id);
+
+        # a numeric project ID has nothing to escape and travels unchanged
+        rest.push_response({"body": {"id": "def456"}});
+        cc.doRequest({
+            "id": "4711",
+            "branch": "main",
+            "commit_message": "chore: update",
+            "actions": ({"action": "update", "file_path": "README.md", "content": "hello"},),
+        });
+        assertEq("/api/v4/projects/4711/repository/commits", rest.last().path);
 
         # the dropdowns it offers are the action set's, not a second copy
         assertEq({
@@ -582,6 +606,79 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         # invalid request rather than reaching GitLab
         assertThrows("INVALID-REQUEST", "id", \cc.doRequest(),
             {"branch": "main", "commit_message": "x", "actions": ()});
+    }
+
+    private projectIdByUrlTest() {
+        FakeGitLabRestClient rest();
+        GitLabDataProvider dp(rest);
+        AbstractDataProvider pu = dp.getChildProviderEx(ProjectUrlAction);
+
+        AbstractDataProviderType rt = pu.getRequestType();
+        assertEq(("project_url",), keys rt.getFields());
+
+        # the front page of a project
+        rest.push_response({"body": {"id": 4711, "path_with_namespace": "my-group/my-project"}});
+        auto res = pu.doRequest({"project_url": "https://gitlab.example.com/my-group/my-project"});
+        assertEq("GET", rest.last().method);
+        # the path is escaped into one path segment, exactly as every generated action escapes it
+        assertEq("/api/v4/projects/my-group%2Fmy-project", rest.last().path);
+        assertEq(4711, res.id);
+        # the unescaped path is what another action's project option takes; the escaped one is returned
+        # because the superseded application returned it and mappers read the name
+        assertEq("my-group/my-project", res.path_with_namespace);
+        assertEq("my-group%2Fmy-project", res.encoded_path_with_namespace);
+
+        # a URL from *within* the project resolves to the same project: GitLab reserves "-" as a path
+        # segment, so "/-/" can only be the boundary between the project and the page being viewed.  The
+        # superseded application took the whole URL path, so every one of these resolved to nothing
+        hash<string, string> within = {
+            "https://gitlab.example.com/my-group/my-project/-/issues/17": "my-group/my-project",
+            "https://gitlab.example.com/my-group/my-project/-/merge_requests/3/diffs":
+                "my-group/my-project",
+            "https://gitlab.example.com/a/b/c/-/blob/main/README.md": "a/b/c",
+            # a clone URL names the project too
+            "https://gitlab.example.com/my-group/my-project.git": "my-group/my-project",
+            # a trailing slash is not part of the path
+            "https://gitlab.example.com/my-group/my-project/": "my-group/my-project",
+            # a subgroup is just more path
+            "https://gitlab.example.com/top/middle/leaf": "top/middle/leaf",
+            # the URL carries the path percent-encoded; the project path is what it decodes to
+            "https://gitlab.example.com/my-group/my%20project": "my-group/my project",
+        };
+        foreach hash<auto> i in (within.pairIterator()) {
+            assertEq(i.value, GitLabProjectIdByUrlDataProvider::getProjectPath(i.key),
+                sprintf("%y names project %y", i.key, i.value));
+        }
+
+        # a path with a space survives as one escaped path segment
+        rest.reset();
+        rest.push_response({"body": {"id": 99}});
+        res = pu.doRequest({"project_url": "https://gitlab.example.com/my-group/my%20project"});
+        assertEq("/api/v4/projects/my-group%2Fmy%20project", rest.last().path);
+        assertEq("my-group/my project", res.path_with_namespace);
+
+        # a URL naming the instance but no project cannot be resolved, and says so rather than asking
+        # GitLab for a project called ""
+        foreach string bad in (("https://gitlab.example.com", "https://gitlab.example.com/",
+                                "https://gitlab.example.com/-/profile")) {
+            assertThrows("GITLAB-PROJECT-URL-ERROR", \GitLabProjectIdByUrlDataProvider::getProjectPath(),
+                bad, sprintf("%y names no project", bad));
+        }
+
+        # a 200 that carries no project ID is reported rather than returned as a project with no ID
+        rest.reset();
+        rest.push_response({"body": {"message": "404 Project Not Found"}});
+        assertThrows("GITLAB-PROJECT-URL-ERROR", "no project ID", \pu.doRequest(),
+            {"project_url": "https://gitlab.example.com/nope/nope"});
+
+        # GitLab's own error survives, with the URL and the path it resolved to attached
+        rest.reset();
+        rest.push_response({"throw_status": 404, "body": {"message": "404 Project Not Found"}});
+        assertThrows("REST-RESPONSE-ERROR", "while resolving GitLab project URL", \pu.doRequest(),
+            {"project_url": "https://gitlab.example.com/nope/nope"});
+
+        # the request type is checked before the action runs
+        assertThrows("INVALID-REQUEST", "project_url", \pu.doRequest(), {});
     }
 
     private connectionTest() {

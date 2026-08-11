@@ -100,8 +100,11 @@ public class GitLabCreateCommitRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "Project",
                 "short_desc": "The project to commit to",
-                "desc": "The project to commit to, given as its numeric ID or as its URL-encoded path "
-                    "(`group%2Fproject`)",
+                "desc": "The project to commit to, given as its numeric ID or as its path "
+                    "(`group/project`).\n\n"
+                    "Give the path as it reads; the transport escapes it into the single path segment "
+                    "GitLab expects. A path escaped by hand would be escaped a second time and would not "
+                    "resolve.",
                 "attr": {
                     "ref_data": GitLabManifest::RefProject,
                     "supports_custom_values": True,
@@ -317,10 +320,12 @@ public class GitLabCreateCommitDataProvider inherits DataProvider::AbstractDataP
             throw "GITLAB-CREATE-COMMIT-ERROR", "the \"id\" option is required; it names the project to "
                 "commit to";
         }
-        # the project is substituted as given, exactly as the generated actions do: GitLab documents a
-        # project as either a numeric ID or an already URL-encoded path, so encoding it again here would
-        # turn "group%2Fproject" into "group%252Fproject" and address nothing
-        string path = sprintf(RequestPath, id);
+        # the project is escaped here, exactly as the generated actions escape their path variables: GitLab
+        # identifies a project by a numeric ID or by its path, and the path has to survive as one path
+        # segment.  The option takes the path as it reads, so "group/project" has to become
+        # "group%2Fproject" before it is substituted; substituting it verbatim would address
+        # /api/v4/projects/group/project/repository/commits, which is a different route entirely
+        string path = sprintf(RequestPath, encode_url(id, True));
         hash<auto> body = args - "id";
         on_error rethrow $1.err, sprintf("%s (while creating a commit in GitLab project %y)", $1.desc, id);
         hash<RestClient::RestResponseInfo> resp = rest.restPost(path, body);

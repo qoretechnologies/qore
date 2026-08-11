@@ -416,6 +416,38 @@ project answers **200 escaped** and **404 unescaped**. The unescaped form is wha
 change, so every action naming a project by its path was broken, and no test caught it because a fake
 client records whatever path it is handed.
 
+**Before the flag day, diff the two action surfaces mechanically.** A port is not finished when its tests
+pass; it is finished when it exports everything the TypeScript application it replaces exported. Both
+sides can be enumerated exactly, so this is a diff and not a reading exercise:
+
+- the TypeScript surface is in the app's i18n catalog under
+  `module-v8/qlib/TypeScriptActionInterface/i18n/data-provider.<base64 app name>/root.json` — every key
+  matching `app.<app>.action.<base64 action id>.display_name` names one exported action;
+- the native surface is `DataProviderActionCatalog::getActions("<app>")`, after `%requires`-ing the
+  module.
+
+Every ID present on the left and absent on the right is a workflow that breaks on the migration, and each
+one needs a decision on the record: ported, deliberately withdrawn, or a gap to close. Run on the five
+schema-driven ports, this found three defects that every other check had passed:
+
+- **GitHub's record tables were unreachable from the action surface.** The module builds `issues`, `pulls`
+  and `releases` correctly, but registered no action against them, so the `search`, `search-single` and
+  `create` actions the TypeScript app offered simply vanished. Tables are reached by *actions*; declaring
+  the providers is only half of it. `SalesforceRestDataProvider` is the pattern — one action per record
+  operation against `"/tables/{table}"`, with `data_dependent_options` resolving the per-table options.
+- **GitLab lost `get_project_id_by_url`**, an action no schema can generate because no GitLab endpoint
+  takes a URL.
+- **The GitLab commit action had not kept up with the escaping change above.** It builds its own URI
+  instead of going through `RestSchemaDataProvider`, so it was still substituting the project verbatim
+  while every generated action had moved to escaping it. The same value therefore behaved differently in
+  two actions of one application. Nothing caught it because the project dropdown supplies a numeric ID,
+  which is unaffected — the divergence is only reachable by typing a path, which the option explicitly
+  supports and its own documentation recommends. **A change to how the framework builds requests has to be
+  applied to the hand-written actions too**; they are precisely the ones that opted out of it.
+
+A deliberate withdrawal is a real outcome and belongs in the commit message, not silence: Bitbucket's
+`repositories_get` is gone because Bitbucket withdrew the endpoint, and that is the answer for it.
+
 **Compose an event's payload type from the pinned schema's components.** The pruner drops a document's
 webhook section, and GitHub's payloads are under an `x-webhooks` extension the pruner would have to learn.
 But the *objects* those payloads carry — an issue, a repository, a user — are component schemas the exported

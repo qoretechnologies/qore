@@ -248,6 +248,16 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         #! The record-based tables the application offers
         const ExpectedTables = ("issues", "pulls", "releases");
 
+        #! The record-based actions, with the IDs the TypeScript application registered
+        /** These reach the tables from the action surface.  Without them the tables are reachable only by
+            walking the provider tree, and a workflow that calls them by name breaks on the migration.
+        */
+        const ExpectedRecordActions = {
+            "search": DPAT_FIND,
+            "search-single": DPAT_FIND_SINGLE,
+            "create": DPAT_CREATE,
+        };
+
         #! The dropdowns scoped to a repository
         const ScopedReferenceData = (
             GitHubManifest::RefBranch, GitHubManifest::RefIssue, GitHubManifest::RefPull,
@@ -274,6 +284,7 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         addTestCase("webhook registration", \webhookRegistrationTest());
         addTestCase("webhook verification", \webhookVerificationTest());
         addTestCase("webhook action filtering", \webhookFilteringTest());
+        addTestCase("record action registration", \recordActionRegistrationTest());
         addTestCase("record tables", \recordTableTest());
         addTestCase("record search", \recordSearchTest());
         addTestCase("record create", \recordCreateTest());
@@ -667,6 +678,51 @@ public class GitHubDataProviderTest inherits QUnit::Test {
             + WebhookSignature::sign("branch-secret", tag), "X-GitHub-Event": "create"}});
         assertEq(1, b.notified.size(), "a new tag is not a new branch");
         assertEq("feature/x", b.notified[0].ref);
+    }
+
+    private recordActionRegistrationTest() {
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Github");
+        hash<string, hash<DataProviderActionInfo>> by_action = {};
+        map by_action{$1.action} = $1, actions;
+
+        # the three tables are worth nothing if no action reaches them; the TypeScript application
+        # registered these three IDs, so a workflow calling them survives the migration
+        foreach hash<auto> i in (ExpectedRecordActions.pairIterator()) {
+            assertTrue(exists by_action{i.key}, sprintf("record action %y is registered", i.key));
+            assertEq(i.value, by_action{i.key}.action_code, sprintf("%y has its record action code", i.key));
+            assertEq("/" + GitHubDataProvider::TablesChildName + "/{table}", by_action{i.key}.path,
+                sprintf("%y names its table in the path", i.key));
+            assertTrue(exists by_action{i.key}.path_vars.table, sprintf("%y takes a table", i.key));
+            assertEq(("Record-Based",), by_action{i.key}.groups);
+            # the options depend on which table was named, so they are resolved from the data rather than
+            # declared here
+            assertTrue(by_action{i.key}.data_dependent_options,
+                sprintf("%y resolves its options from the chosen table", i.key));
+            assertTrue(by_action{i.key}.data_provider_info.has_record,
+                sprintf("%y is declared as record-based", i.key));
+        }
+
+        # the repository is a required option of every table, whatever the table
+        hash<DataProviderInfo> info = GitHubTablesDataProvider::RecordActionProviderInfo;
+        assertTrue(info.supports_read);
+        assertTrue(info.supports_create);
+        assertTrue(info.supports_native_search);
+        assertTrue(info.search_options.owner.required, "a search names the repository owner");
+        assertTrue(info.search_options.repo.required, "a search names the repository");
+        assertTrue(info.create_options.owner.required, "a create names the repository owner");
+        assertTrue(info.create_options.repo.required, "a create names the repository");
+        # the per-table options are not declared here; they differ by table
+        assertNothing(info.search_options.state, "a table-specific option is not declared app-wide");
+
+        # the path a record action registers has to resolve to a table
+        FakeGitHubRestClient rest();
+        GitHubDataProvider dp(rest);
+        AbstractDataProvider tables = dp.getChildProviderEx(GitHubDataProvider::TablesChildName);
+        map assertTrue(exists tables.getChildProvider($1), sprintf("table %y resolves", $1)),
+            ExpectedTables;
+        assertEq(GitHubIssuesDataProvider::TableName,
+            GitHubTablesDataProvider::TablePathVar.example_value,
+            "the example table is one the application actually has");
     }
 
     private recordTableTest() {

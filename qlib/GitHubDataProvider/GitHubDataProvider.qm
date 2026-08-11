@@ -95,6 +95,70 @@ module GitHubDataProvider {
         RestSchemaActionSet action_set = GitHubSchema::getActionSet();
         action_set.registerActions(GitHubDataProvider::AppName);
 
+        # register the record-based table actions; the IDs are those of the TypeScript application this
+        # module replaces, so a workflow that already calls them keeps working
+        {
+            const string RecordGroup = "Record-Based";
+            string tables_path = "/" + GitHubDataProvider::TablesChildName + "/{table}";
+
+            string desc = sprintf("Search for matching records in the given table in app %y",
+                GitHubDataProvider::AppName);
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GitHubDataProvider::AppName,
+                "path": tables_path,
+                "action": "search",
+                "display_name": "Search Records",
+                "short_desc": desc,
+                "desc": desc + "; the repository is given by the `owner` and `repo` options, because a "
+                    "table is scoped to one repository",
+                "action_code": DPAT_FIND,
+                "path_vars": {
+                    "table": GitHubTablesDataProvider::TablePathVar,
+                },
+                "groups": (RecordGroup,),
+                "data_dependent_options": True,
+                "data_provider_info": GitHubTablesDataProvider::RecordActionProviderInfo,
+            });
+
+            desc = sprintf("Search for a single matching record in the given table in app %y",
+                GitHubDataProvider::AppName);
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GitHubDataProvider::AppName,
+                "path": tables_path,
+                "action": "search-single",
+                "display_name": "Find a Single Record",
+                "short_desc": desc,
+                "desc": desc + "; the repository is given by the `owner` and `repo` options, because a "
+                    "table is scoped to one repository",
+                "action_code": DPAT_FIND_SINGLE,
+                "path_vars": {
+                    "table": GitHubTablesDataProvider::TablePathVar,
+                },
+                "groups": (RecordGroup,),
+                "data_dependent_options": True,
+                "data_provider_info": GitHubTablesDataProvider::RecordActionProviderInfo,
+            });
+
+            desc = sprintf("Create new records in the given table in app %y", GitHubDataProvider::AppName);
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GitHubDataProvider::AppName,
+                "path": tables_path,
+                "action": "create",
+                "display_name": "Create Records",
+                "short_desc": desc,
+                "desc": desc + ".\n\nGitHub's collection endpoints lag its writes by a few seconds, so a "
+                    "record created here is **not** in what a search returns immediately afterwards; use "
+                    "what this action returned rather than reading it back",
+                "action_code": DPAT_CREATE,
+                "path_vars": {
+                    "table": GitHubTablesDataProvider::TablePathVar,
+                },
+                "groups": (RecordGroup,),
+                "data_dependent_options": True,
+                "data_provider_info": GitHubTablesDataProvider::RecordActionProviderInfo,
+            });
+        }
+
         # register the webhook event actions
         foreach hash<auto> i in (GitHubEventsDataProvider::EventMap.pairIterator()) {
             Class cls = i.value;
@@ -189,7 +253,19 @@ module GitHubDataProvider {
     Three tables — \c issues, \c pulls and \c releases — are exposed under \c tables for record-based
     reading and creation.  They are **flattened, writable projections** rather than GitHub's response
     shapes: an issue's labels are names, its assignee a login, a pull request's base and head branch names.
-    \c owner and \c repo are required search and create options.
+    \c owner and \c repo are required search and create options, because a table is scoped to one
+    repository.
+
+    Three actions reach them, each naming its table in the path (\c "tables/{table}"):
+
+    |!Action|!What it does
+    |\c search|Returns every record in the table matching the search
+    |\c search-single|Returns the one record matching the search
+    |\c create|Creates records in the table
+
+    Their options depend on which table was named — \c issues accepts a state and a label filter that
+    \c releases has no notion of — so they are resolved from the chosen table rather than declared once for
+    the application.  The three action IDs are those of the application this module replaces.
 
     @section githubdataprovider_examples Examples
 
