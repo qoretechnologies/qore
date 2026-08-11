@@ -702,5 +702,41 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
                 sprintf("%y resolves its options from the chosen table", i.key));
             assertTrue(i.value.data_provider_info.has_record);
         }
+
+        # Bitbucket addresses a repository by its slug in every path, returns the slug in every response,
+        # and declares it in no schema.  A column the table does not declare cannot even be searched, and
+        # without it there was no column a write could take the address from - which is why this table read
+        # and could not write.  The record field is real; only the description was missing it
+        AbstractDataProvider repos = tables.getChildProviderEx("repositories");
+        *hash<string, AbstractDataField> rt = repos.getRecordType();
+        assertTrue(exists rt.slug, "the slug is a column, though Bitbucket describes it nowhere");
+        assertTrue(exists rt.uuid, "and the columns the schema does describe are still there");
+        hash<DataProviderInfo> rinfo = repos.getInfo();
+        assertTrue(rinfo.supports_update, "so a repository can be updated by identity again");
+        assertTrue(rinfo.supports_delete);
+        assertFalse(rinfo.supports_create,
+            "creating one names the slug of a repository that does not exist yet, which is an action");
+
+        # a search naming one repository reads it by slug: a path variable is percent-encoded, and
+        # Bitbucket answers a brace-wrapped UUID spelled as %7B...%7D with 404
+        rest.reset();
+        rest.push_response({"body": {"uuid": "{d4d4d4d4-1111-2222-3333-444444444444}", "slug": "qore-test",
+            "name": "Qore Test", "full_name": "qoretechnologies/qore-test"}});
+        *hash<auto> one = repos.searchSingleRecord({"slug": "qore-test"},
+            {"workspace": "qoretechnologies"});
+        assertEq("qore-test", one.slug);
+        assertEq("/2.0/repositories/qoretechnologies/qore-test", rest.last().path,
+            "read by slug, and nothing is percent-encoded into a 404");
+        assertEq("GET", rest.last().method);
+
+        # and an update goes to the same address
+        rest.reset();
+        rest.push_response({"body": {"uuid": "{d4d4d4d4-1111-2222-3333-444444444444}", "slug": "qore-test",
+            "description": "updated"}});
+        int updated = repos.updateRecords({"description": "updated"}, {"slug": "qore-test"},
+            {"workspace": "qoretechnologies"});
+        assertEq(1, updated);
+        assertEq("PUT", rest.last().method);
+        assertEq("/2.0/repositories/qoretechnologies/qore-test", rest.last().path);
     }
 }

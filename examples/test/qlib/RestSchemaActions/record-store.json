@@ -253,6 +253,31 @@
         }
       }
     },
+    "/unions": {
+      "get": {
+        "operationId": "listUnions",
+        "summary": "Lists things that are one of two shapes",
+        "description": "A response whose element is a union: it describes no fields of its own, so nothing can be checked against it.",
+        "responses": {
+          "200": {
+            "description": "the things",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {"$ref": "#/components/schemas/item"},
+                      {"$ref": "#/components/schemas/note"}
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cursor-items": {
       "get": {
         "operationId": "listCursorItems",
@@ -599,6 +624,7 @@
       },
       "note": {
         "type": "object",
+        "description": "a note as a listing projects it: no space, and a preview the single read does not return",
         "required": [
           "note_id",
           "title"
@@ -611,6 +637,10 @@
           "title": {
             "type": "string",
             "description": "the note title"
+          },
+          "preview": {
+            "type": "string",
+            "description": "the first line of the note, returned only by the listing"
           }
         }
       },
@@ -650,6 +680,10 @@
                 "description": "the space key"
               }
             }
+          },
+          "body": {
+            "type": "string",
+            "description": "the note text, returned only by the single read"
           }
         }
       }

@@ -102,8 +102,10 @@ public class PaddleRecordTables {
             "update_action": "update_customer",
             "id_field": "id",
             "id_option": "customer_id",
+            # a listing carries its records under "data"; a single read does not, because the action
+            # already unwraps it - "record_path" here would unwrap the record a second time and read one
+            # record as nothing at all
             "records_path": ("data",),
-            "record_path": ("data",),
             "paging": Paging,
             "filters": CommonFilters + (
                 <RestSchemaRecordFilterInfo>{
@@ -130,8 +132,10 @@ public class PaddleRecordTables {
             "update_action": "update_product",
             "id_field": "id",
             "id_option": "product_id",
+            # a listing carries its records under "data"; a single read does not, because the action
+            # already unwraps it - "record_path" here would unwrap the record a second time and read one
+            # record as nothing at all
             "records_path": ("data",),
-            "record_path": ("data",),
             "paging": Paging,
             "filters": CommonFilters + (
                 <RestSchemaRecordFilterInfo>{
@@ -157,8 +161,10 @@ public class PaddleRecordTables {
             "update_action": "update_price",
             "id_field": "id",
             "id_option": "price_id",
+            # a listing carries its records under "data"; a single read does not, because the action
+            # already unwraps it - "record_path" here would unwrap the record a second time and read one
+            # record as nothing at all
             "records_path": ("data",),
-            "record_path": ("data",),
             "paging": Paging,
             "filters": CommonFilters + (
                 <RestSchemaRecordFilterInfo>{
@@ -191,8 +197,10 @@ public class PaddleRecordTables {
             "create_action": "create_transaction",
             "id_field": "id",
             "id_option": "transaction_id",
+            # a listing carries its records under "data"; a single read does not, because the action
+            # already unwraps it - "record_path" here would unwrap the record a second time and read one
+            # record as nothing at all
             "records_path": ("data",),
-            "record_path": ("data",),
             "paging": Paging,
             "filters": CommonFilters + (
                 <RestSchemaRecordFilterInfo>{
@@ -266,8 +274,10 @@ public class PaddleRecordTables {
             "create_action": "create_report",
             "id_field": "id",
             "id_option": "report_id",
+            # a listing carries its records under "data"; a single read does not, because the action
+            # already unwraps it - "record_path" here would unwrap the record a second time and read one
+            # record as nothing at all
             "records_path": ("data",),
-            "record_path": ("data",),
             "paging": Paging,
             "record_type": RestSchemaTableDataProvider::makeRecordType(ReportFields),
             "read_only_fields": ("id", "status", "rows", "created_at", "updated_at", "expires_at"),

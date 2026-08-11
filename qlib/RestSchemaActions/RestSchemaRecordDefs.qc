@@ -256,12 +256,20 @@ public hashdecl RestSchemaRecordQueryInfo {
 
     @section restschemarecordtable_type The Record Type
 
-    By default the record type is the **element type of the listing action's response**, which is the schema's
-    own description of the record and therefore cannot drift from it.
+    By default the record type is derived from the schema's own description of the record, so it cannot drift
+    from the contract the table's actions use.  It is taken from **both** reading actions: a listing returns a
+    projection and a single read returns the record, the two rarely agree - GitLab describes a project with 24
+    fields in its listing and 161 in its single read - and the richer of them is published, with any column
+    only the other declares added to it.
 
-    @ref record_type overrides that, for a table that publishes a projection of its own rather than the API's
-    shape.  A projection is a real product decision - it is what existing mappers read - and it needs
-    @ref to_record and @ref to_wire to convert in both directions.
+    That matters more than it looks: a column the table does not declare cannot be searched at all, because
+    the framework rejects a predicate on an undeclared field before the table is reached.
+
+    @ref extra_columns adds the columns a vendor returns and describes nowhere, keeping the schema primary.
+
+    @ref record_type replaces the derived type outright, for a table that publishes a projection of its own
+    rather than the API's shape.  A projection is a real product decision - it is what existing mappers read -
+    and it needs @ref to_record and @ref to_wire to convert in both directions.
 */
 public hashdecl RestSchemaRecordTableInfo {
     #! The table name, unique within the application
@@ -371,10 +379,23 @@ public hashdecl RestSchemaRecordTableInfo {
     */
     *hash<string, hash<auto>> search_option_overrides;
 
-    #! An explicit record type, replacing the one derived from the listing action's response
+    #! An explicit record type, replacing the one derived from the reading actions' responses
     /** @see @ref restschemarecordtable_type
     */
     *hash<string, AbstractDataField> record_type;
+
+    #! Columns the table declares in addition to the ones the schema describes
+    /** For a record field the vendor's description does not declare at all.  Bitbucket returns a
+        repository's \c slug in every response and describes it nowhere, and a column the table does not
+        declare cannot be searched: the framework rejects the predicate before the table is reached.
+
+        Merged over the derived type, so the schema stays the primary description and this is the short
+        list of what it is missing - which is a far lighter thing to maintain than the whole record type,
+        and does not go stale when the vendor adds a field.
+
+        @see @ref restschemarecordtable_type
+    */
+    *hash<string, AbstractDataField> extra_columns;
 
     #! The record fields the table will not accept on a create or an update
     /** An identity and its timestamps are the service's to assign, and sending them is either ignored or

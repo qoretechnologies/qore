@@ -602,9 +602,37 @@ write to a record the caller never matched.
 
 **An identity is what the API's paths take, not what looks like an ID.** GitHub addresses an issue by its
 `number` within the repository and never by its global `id`; GitLab uses `iid` for the same reason, `key` for
-a CI variable and `slug` for a wiki page; Bitbucket's repository record carries a UUID and a `full_name` but
-no bare slug, and its paths accept the UUID in place of one. Getting this wrong produces a table that reads
-correctly and cannot write at all.
+a CI variable and `slug` for a wiki page; Bitbucket takes a repository's `slug` in every path and describes
+that field in no schema, so the identity is a column only `extra_columns` can supply. Getting this wrong
+produces a table that reads correctly and cannot write at all.
+
+**A record type must reflect what the API returns, not what its listing projects.** A listing returns a
+projection and a single read returns the record, and the two rarely agree: GitLab describes a project with
+**24** fields in its listing and **161** in its single read, GitHub a repository with 98 and 105, Confluence
+a page with 15 and 20. The record type is therefore derived from both reading actions, the richer one wins,
+and a column only the other declares is added rather than lost. Guard the case where the single read
+describes *less*: Stripe reads a customer as `anyOf [customer, deleted_customer]`, a union with no fields of
+its own, and the listing has to win there.
+
+This is not cosmetic. **A column the table does not declare cannot be searched at all** - the framework
+rejects a predicate on an undeclared field before the table is reached - so under-declaring silently removes
+functionality. The acceptance test is a live one: read every table and check that no key of a real record is
+missing from the record type. That is what found Bitbucket's five.
+
+**A field a vendor returns and describes nowhere is declared with `extra_columns`.** Bitbucket returns a
+repository's `slug` - the value that addresses it in *every* path - plus `workspace`, `website`,
+`override_settings` and `enforced_signed_commits`, and declares none of them; it returns a pull request's
+`description` and declares that nowhere either. Merging a short list over the derived type keeps the schema
+primary and does not go stale when the vendor adds a field, which a hand-written record type does. Without
+the slug column that table could read and never write: a repository record carries a UUID and a
+`full_name`, Bitbucket documents `{repo_slug}` as accepting a brace-wrapped UUID, and that does not survive
+this transport - a path variable is percent-encoded and `%7B...%7D` answers 404.
+
+**A record path that does not resolve fails silently.** Paddle's manifest already unwraps `data` on a single
+read, so the tables unwrapping it again read one record as *nothing*, and no test that only searches ever
+noticed. `checkTables()` now resolves every `records_path`, `record_path` and `write_record_path` against
+the response its action publishes - the same class of check that caught four field errors - and only skips
+what it cannot verify, a response describing no fields.
 
 **Check what the vendor cannot do before offering an action for it.** GitHub deletes no issue, pull request or
 release; Paddle and Xero delete nothing at all, archiving or voiding instead. Those applications register no

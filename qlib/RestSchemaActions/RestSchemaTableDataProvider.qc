@@ -215,6 +215,98 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
             "\"record_type\"", table.name, table.list_action);
     }
 
+    #! Checks that every path a table reads or writes a record through resolves against the response
+    /** A path that does not resolve fails **silently**: a single read whose record path names a wrapper
+        the action already unwrapped reads one record as nothing at all, and no test that only searches
+        will ever notice.  That is what Paddle's tables did - the manifest unwraps \c data on a single
+        read, so unwrapping it again in the table left \c readOne() and \c searchSingleRecord() returning
+        nothing - and it is the same class of error as a filter naming a field the record does not have.
+
+        Only a response that describes its fields can be checked; a union or an open hash describes none,
+        and an unverifiable path is left alone rather than reported on a guess.
+
+        Called from @ref RestSchemaActions::RestSchemaTablesDataProvider::checkTables() "checkTables()"
+        rather than from @ref check(), because it parses the actions' responses.
+
+        @param action_set the action set the table's actions belong to
+        @param table the table declaration
+
+        @throw REST-SCHEMA-RECORD-ERROR a declared path does not resolve against the response it reads
+    */
+    static checkRecordPaths(RestSchemaActionSet action_set, hash<RestSchemaRecordTableInfo> table) {
+        list<string> bad = ();
+        RestSchemaTableDataProvider::checkPath(action_set, table.list_action, table.records_path,
+            "records_path", \bad);
+        if (table.get_action.val()) {
+            RestSchemaTableDataProvider::checkPath(action_set, table.get_action, table.record_path,
+                "record_path", \bad);
+        }
+        foreach *string action in ((table.create_action, table.update_action)) {
+            if (action.val()) {
+                RestSchemaTableDataProvider::checkPath(action_set, action, table.write_record_path,
+                    "write_record_path", \bad);
+            }
+        }
+        if (bad) {
+            throw "REST-SCHEMA-RECORD-ERROR", sprintf("table %y: %y; the action publishes the response it "
+                "unwraps, so a path naming a wrapper it has already removed reads nothing at all",
+                table.name, bad);
+        }
+    }
+
+    #! Adds a message to \a bad for each element of a path the action's response does not declare
+    private static checkPath(RestSchemaActionSet action_set, string action, *softlist<string> path,
+            string what, reference<list<string>> bad) {
+        if (!path) {
+            return;
+        }
+        *AbstractDataProviderType type = action_set.getOperationEx(action).getResponseType();
+        list<string> seen = ();
+        foreach string name in (path) {
+            *hash<string, AbstractDataField> fields = RestSchemaTableDataProvider::getTypeFields(type);
+            if (!fields) {
+                # a union or an open hash declares no fields, so there is nothing to check against
+                return;
+            }
+            *AbstractDataField field = fields{name};
+            if (!field) {
+                bad += sprintf("%s %y names %y, which the response of action %y does not declare%s; "
+                    "it declares %y", what, path, name, action,
+                    seen ? sprintf(" under %y", seen) : "", keys fields);
+                return;
+            }
+            seen += name;
+            type = field.getType();
+        }
+    }
+
+    #! Returns the fields a type describes, reading through a collection to the type of its elements
+    /** The element type is preferred and the type's own fields are the fallback, because a description does
+        not always say that a collection is a collection: GitLab declares the 200 response of every listing
+        it publishes as a **single** entity rather than an array of them, though the body it returns is an
+        array.  Reading the entity's fields is right in both cases - it is the record either way - and it is
+        the only thing that works for the second.
+
+        A hash type reports its **value** type as its element type, which describes no fields, so the
+        fallback is what answers for one of those.
+
+        @param type the type to read
+
+        @return the fields the type describes, or @ref NOTHING when it describes none - a union, an open
+        hash or a scalar
+    */
+    private static *hash<string, AbstractDataField> getTypeFields(*AbstractDataProviderType type) {
+        if (!type) {
+            return;
+        }
+        if (*AbstractDataProviderType etype = type.getElementType()) {
+            if (*hash<string, AbstractDataField> efields = etype.getFields()) {
+                return efields;
+            }
+        }
+        return type.getFields();
+    }
+
     #! Checks that the listing action declares an option the table sends it
     private static checkOption(hash<RestSchemaRecordTableInfo> table,
             hash<string, hash<RestSchemaFlatFieldInfo>> flat, string option, string what) {
@@ -252,49 +344,79 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
     #! Returns the record type
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         if (exists table.record_type) {
-            return table.record_type;
+            return addExtraColumns(table.record_type);
         }
         AutoLock al(record_type_lock);
         if (!exists record_type) {
-            record_type = checkRecordType(deriveRecordType());
+            record_type = checkRecordType(addExtraColumns(deriveRecordType()));
         }
         return record_type;
     }
 
-    #! Returns the record type derived from the listing action's response
-    /** The element type of the listing's output is the schema's own description of the record, so a table
-        that has not declared a projection of its own cannot drift from the contract its actions use.
+    #! Adds the columns the table declares on top of the ones the schema describes
+    /** @see @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns"
 
-        The element type is preferred and the response's own type is the fallback, because a description does
-        not always say that a collection is a collection: GitLab declares the 200 response of every listing
-        it publishes as a **single** entity rather than an array of them, though the body it returns is an
-        array.  Reading the entity's fields is right in both cases - it is the record either way - and it is
-        the only thing that works for the second.
+        Extra columns never rescue a table whose type could not be derived at all: a table publishing one
+        hand-declared column and none of the record's own is worse than one that said it could not be built.
+    */
+    private *hash<string, AbstractDataField> addExtraColumns(*hash<string, AbstractDataField> rt) {
+        if (!rt || !table.extra_columns) {
+            return rt;
+        }
+        map rt{$1.key} = $1.value, table.extra_columns.pairIterator();
+        return rt;
+    }
+
+    #! Returns the record type derived from the actions that read the collection
+    /** The schema's own description of the record is what the table publishes, so a table that has not
+        declared a projection of its own cannot drift from the contract its actions use.
+
+        **A listing returns a projection; reading one record returns the record.**  A vendor describes both,
+        and the two rarely agree: GitLab describes a project with 24 fields in its listing and 161 in its
+        single read.  The richer of the two is therefore the one published, because an under-declared column
+        is not cosmetic - the framework rejects a search on a column the table does not declare before the
+        table is reached, so those columns cannot be searched at all.
+
+        A column only the other action declares is still a column, and is added rather than lost.  Where
+        neither yields anything - Stripe describes a single customer read as \c anyOf a customer and a
+        deleted customer, a union with no fields of its own - the one that did wins, and where neither did
+        the table is told to name its columns.
     */
     private *hash<string, AbstractDataField> deriveRecordType() {
-        *AbstractDataProviderType type = action_set.getOperationEx(table.list_action).getResponseType();
-        foreach string name in (table.records_path) {
-            if (!type) {
-                break;
-            }
-            *hash<string, AbstractDataField> fields = type.getFields();
+        *hash<string, AbstractDataField> from_list = getResponseFields(table.list_action, table.records_path);
+        *hash<string, AbstractDataField> from_get = table.get_action.val()
+            ? getResponseFields(table.get_action, table.record_path)
+            : NOTHING;
+        bool get_wins = from_get.size() > from_list.size();
+        *hash<string, AbstractDataField> rv = get_wins ? from_get : from_list;
+        if (!rv) {
+            return;
+        }
+        # the fields of the other one, in the order the richer one does not already have them
+        *hash<string, AbstractDataField> other = get_wins ? from_list : from_get;
+        map rv{$1.key} = $1.value, (other ?? {}).pairIterator(), !rv.hasKey($1.key);
+        return rv;
+    }
+
+    #! Returns the record fields an action's response declares at the given path
+    /** @param action the action whose success response describes the record
+        @param path the path of field names leading from the response to the record or the records
+
+        @return the record's fields, or @ref NOTHING when the response does not describe them
+    */
+    private *hash<string, AbstractDataField> getResponseFields(string action, *softlist<string> path) {
+        *AbstractDataProviderType type = action_set.getOperationEx(action).getResponseType();
+        foreach string name in (path) {
+            *hash<string, AbstractDataField> fields = RestSchemaTableDataProvider::getTypeFields(type);
             *AbstractDataField field = fields{name};
             if (!field) {
                 # the response does not declare the path the table reads its records from; there is nothing
-                # to derive, and the caller is told to name the columns instead
+                # to derive here, and the other action - or the table - has to supply the columns
                 return;
             }
             type = field.getType();
         }
-        if (!type) {
-            return;
-        }
-        if (*AbstractDataProviderType etype = type.getElementType()) {
-            if (*hash<string, AbstractDataField> efields = etype.getFields()) {
-                return efields;
-            }
-        }
-        return type.getFields();
+        return RestSchemaTableDataProvider::getTypeFields(type);
     }
 
     #! Returns an iterator over the records matching the search criteria

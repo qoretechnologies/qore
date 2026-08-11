@@ -460,14 +460,14 @@ public class PaddleDataProviderTest inherits QUnit::Test {
 
         # a path variable lands in the path, not the query
         RestSchemaActionOperation get_customer = aset.getOperationEx("get_customer");
-        hash<auto> gwire = get_customer.unflatten({"customer_id": "ctm_1"});
-        assertEq("ctm_1", gwire.path_vars.customer_id);
+        hash<auto> gwire = get_customer.unflatten({"customer_id": "ctm_01h8xce4x86pq3byrwgc7k4qbn"});
+        assertEq("ctm_01h8xce4x86pq3byrwgc7k4qbn", gwire.path_vars.customer_id);
         assertEq({}, gwire.req);
 
         # a body property lands in the body, and a path variable alongside it still goes to the path
         RestSchemaActionOperation update = aset.getOperationEx("update_customer");
-        hash<auto> uwire = update.unflatten({"customer_id": "ctm_1", "email": "a@example.com"});
-        assertEq("ctm_1", uwire.path_vars.customer_id);
+        hash<auto> uwire = update.unflatten({"customer_id": "ctm_01h8xce4x86pq3byrwgc7k4qbn", "email": "a@example.com"});
+        assertEq("ctm_01h8xce4x86pq3byrwgc7k4qbn", uwire.path_vars.customer_id);
         assertEq("a@example.com", uwire.req.body.email);
 
         # a "oneOf" request body has no properties to lift, so the action takes the body whole
@@ -1131,5 +1131,27 @@ public class PaddleDataProviderTest inherits QUnit::Test {
             assertTrue(i.value.data_provider_info.has_record);
         }
         assertNothing(by_action.delete, "no table in this application can delete a record");
+
+        # A Paddle listing carries its records under "data" and a single read does not: the action already
+        # unwraps it.  Unwrapping it again in the table read one record as **nothing at all** - silently,
+        # because a search never goes that way - so the tables read a record through no path of their own.
+        rest.reset();
+        AbstractDataProvider customers = tables.getChildProviderEx("customers");
+        rest.push_response({"body": {"data": {"id": "ctm_01h8xce4x86pq3byrwgc7k4qbn", "name": "Acme", "email": "a@example.com",
+            "status": "active"}}});
+        *hash<auto> one = customers.searchSingleRecord({"id": "ctm_01h8xce4x86pq3byrwgc7k4qbn"});
+        assertEq("ctm_01h8xce4x86pq3byrwgc7k4qbn", one.id, "a search naming one record reads that record, and gets it back");
+        assertEq("Acme", one.name);
+        assertEq("GET", rest.last().method);
+        assertRegex("/customers/ctm_01h8xce4x86pq3byrwgc7k4qbn", rest.last().path,
+            "and reads it directly rather than walking the collection");
+
+        # the listing still carries its records one level down
+        rest.reset();
+        rest.push_response({"body": {"data": ({"id": "ctm_01h8xce4x86pq3byrwgc7k4qbn", "name": "Acme"},
+            {"id": "ctm_01h8xce4x86pq3byrwgc7k4qbp", "name": "Beta"}), "meta": {"pagination": {"has_more": False}}}});
+        list<hash<auto>> found = map $1, customers.searchRecords();
+        assertEq(2, found.size(), "a listing is still read through its \"data\" wrapper");
+        assertEq(("ctm_01h8xce4x86pq3byrwgc7k4qbn", "ctm_01h8xce4x86pq3byrwgc7k4qbp"), (map $1.id, found));
     }
 }

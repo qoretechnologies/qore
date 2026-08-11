@@ -240,6 +240,39 @@ module RestSchemaActions {
     and one function rendering a value.  An operator the language spells without quite meaning it is listed
     in \c inexact_ops, so it narrows the listing and the predicate is still answered here.
 
+    @subsection restschemaactions_records_type What the Columns Are
+
+    A listing returns a **projection**; reading one record returns the **record**.  A vendor describes both
+    and the two rarely agree - GitLab describes a project with 24 fields in its listing and 161 in its single
+    read - so the record type is derived from both and the richer one is published, with any column only the
+    other declares added to it rather than lost.
+
+    That is not a cosmetic difference.  A column the table does not declare **cannot be searched at all**:
+    the framework rejects a predicate on an undeclared field before the table is reached.  Under-declaring
+    therefore removes functionality silently, which is why the richer description wins and why the two are
+    merged rather than one being chosen.
+
+    Where a vendor returns a field and describes it nowhere -
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns" declares it, merged over
+    the derived type.  That keeps the schema the primary description and leaves a short list of what it is
+    missing, rather than a hand-written record type that goes stale the moment the vendor adds a field.
+    Bitbucket is the case: it addresses a repository by a \c slug it returns in every response and declares
+    in no schema, and without that column the table could not address a record at all.
+
+    @subsection restschemaactions_records_paths The Paths a Record Is Read Through
+
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::records_path "records_path",
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::record_path "record_path" and
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::write_record_path "write_record_path" say where in a
+    response the records are, and a path that does not resolve fails **silently**: a single read whose record
+    path names a wrapper the action has already unwrapped reads one record as nothing at all, and no test
+    that only searches will ever notice.
+
+    @ref RestSchemaActions::RestSchemaTablesDataProvider::checkTables() "checkTables()" therefore resolves
+    every one of them against the response the action publishes, which is what an application's test suite
+    calls.  Only a response that describes its fields can be checked; a union describes none, and an
+    unverifiable path is left alone rather than reported on a guess.
+
     @subsection restschemaactions_records_identity Addressing One Record
 
     A table addresses a record by whatever the API's paths take, which is not always one value and is not

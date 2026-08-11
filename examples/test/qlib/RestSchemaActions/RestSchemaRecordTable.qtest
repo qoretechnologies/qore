@@ -113,6 +113,11 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                 "display_name": "Delete Item", "short_desc": "delete an item", "desc": "deletes an item",
             },
             <RestSchemaActionInfo>{
+                "action": "list-unions", "method": "GET", "path": "/unions",
+                "operation_id": "listUnions",
+                "display_name": "List Unions", "short_desc": "list unions", "desc": "lists unions",
+            },
+            <RestSchemaActionInfo>{
                 "action": "list-cursor-items", "method": "GET", "path": "/cursor-items",
                 "operation_id": "listCursorItems",
                 "display_name": "List Items by Cursor", "short_desc": "list items", "desc": "lists items",
@@ -340,6 +345,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         addTestCase("a projection of the API's shape", \projectionTest());
         addTestCase("declaration errors", \declarationErrorTest());
         addTestCase("a collection with no record type", \noRecordTypeTest());
+        addTestCase("the paths a record is read through resolve", \recordPathTest());
         addTestCase("the tables container", \containerTest());
 
         set_return_value(main());
@@ -833,14 +839,67 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
     recordTypeTest() {
         ScriptedRestClient rest;
         RestSchemaTableDataProvider items = table(ItemTable, \rest);
-        # the record type is the element type of the listing's response, so it cannot drift from the schema
+        # the record type is the schema's own description of the record, so it cannot drift from it
         *hash<string, AbstractDataField> rt = items.getRecordType();
         assertEq(("id", "name", "status", "created", "count", "tags"), keys rt);
         assertEq("the item ID", rt.id.getLocalInfo().desc);
 
         # a listing whose output is the list itself needs no records path
         RestSchemaTableDataProvider notes = table(NoteTable, \rest);
-        assertEq(("note_id", "title"), keys notes.getRecordType());
+        assertEq(("note_id", "title", "preview"), keys notes.getRecordType());
+
+        # A listing returns a projection and a single read returns the record: the fixture's listing
+        # projects a note without its space and with a preview, and its single read returns the space and
+        # the body instead.  The richer of the two is what the table publishes, because a column the table
+        # does not declare cannot be searched at all - the predicate is rejected before the table is
+        # reached - so under-declaring is not cosmetic.
+        RestSchemaTableDataProvider read = table(cast<hash<RestSchemaRecordTableInfo>>(NoteTable + {
+            "name": "read-notes",
+            "get_action": "get-note",
+        }), \rest);
+        assertEq(("note_id", "title", "space", "body", "preview"), keys read.getRecordType(),
+            "the single read wins, and the column only the listing declares is added rather than lost");
+
+        # ... and where the single read describes less than the listing, the listing wins.  Stripe
+        # describes a single customer read as anyOf a customer and a deleted customer - a union with no
+        # fields of its own - and a table over it would otherwise publish no columns at all
+        RestSchemaTableDataProvider poorer = table(cast<hash<RestSchemaRecordTableInfo>>(AllNotesTable + {
+            "name": "poorer-notes",
+            "list_action": "list-all-notes",
+            "get_action": "get-item",
+            "record_path": ("nothing-here",),
+        }), \rest);
+        assertEq(("note_id", "title", "space", "body"), keys poorer.getRecordType(),
+            "a single read that describes nothing does not empty the record type");
+
+        # a vendor that returns a field and describes it nowhere - Bitbucket returns a repository's slug in
+        # every response and declares it in no schema - is what "extra_columns" is for.  It is merged over
+        # the derived type, so the schema stays the description and this stays the short list of what it
+        # is missing
+        RestSchemaTableDataProvider extra = table(cast<hash<RestSchemaRecordTableInfo>>(NoteTable + {
+            "name": "extra-notes",
+            "extra_columns": {
+                "slug": new QoreDataField("slug", "the note slug, which the description never declares",
+                    StringOrNothingType),
+            },
+        }), \rest);
+        assertEq(("note_id", "title", "preview", "slug"), keys extra.getRecordType());
+        assertEq("the note slug, which the description never declares",
+            extra.getRecordType().slug.getLocalInfo().desc);
+
+        # extra columns never rescue a table with no record type: one hand-declared column and none of the
+        # record's own is worse than being told the table could not be built
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "no record type could be derived",
+            sub () {
+                table(cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                    "name": "no-type",
+                    "get_action": NOTHING,
+                    "records_path": ("nothing-here",),
+                    "extra_columns": {
+                        "slug": new QoreDataField("slug", "a column", StringOrNothingType),
+                    },
+                }), \rest).getRecordType();
+            });
     }
 
     readOneTest() {
@@ -1168,6 +1227,53 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertThrows("REST-SCHEMA-RECORD-ERROR", "not a known data provider type", sub () {
             RestSchemaTableDataProvider::makeRecordType(({"name": "x", "desc": "x", "type": "*magic"},));
         });
+    }
+
+    recordPathTest() {
+        # A path that does not resolve against the response it reads fails **silently**: a single read
+        # whose record path names a wrapper the action already unwrapped reads one record as nothing at
+        # all, and no test that only searches will ever notice.  Paddle's tables did exactly that.
+        RestSchemaTableDataProvider::checkRecordPaths(aset, ItemTable);
+        RestSchemaTableDataProvider::checkRecordPaths(aset, NoteTable);
+
+        # the listing's records path
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "records_path", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {"records_path": ("items",)}));
+        });
+
+        # the single read's record path: the item read publishes "data", the note read publishes the
+        # note itself, so a record path on the second one unwraps a record that is already unwrapped
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "record_path", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(AllNotesTable + {"record_path": ("data",)}));
+        });
+        # ... and the message says what the response really declares, so the fix is the next thing read
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "note_id", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(AllNotesTable + {"record_path": ("data",)}));
+        });
+
+        # a write response is read through its own path
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "write_record_path", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {"write_record_path": ("payload",)}));
+        });
+
+        # a response that describes no fields - a union, or an open hash - cannot be checked against, and
+        # an unverifiable path is left alone rather than reported on a guess
+        RestSchemaTableDataProvider::checkRecordPaths(aset,
+            cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "list_action": "list-unions",
+                "records_path": ("whatever", "nested"),
+            }));
+
+        # and the whole container is checked at once, which is what an application's test suite calls
+        ScriptedRestClient rest();
+        RestSchemaTablesDataProvider c("tables", aset, (cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "record_path": ("data", "data"),
+        }),), rest);
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "record_path", \c.checkTables());
     }
 
     containerTest() {

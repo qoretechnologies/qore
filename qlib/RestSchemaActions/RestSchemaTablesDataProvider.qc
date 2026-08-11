@@ -140,6 +140,9 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         foreach hash<RestSchemaRecordTableInfo> t in (tables.iterator()) {
             RestSchemaActionSet action_set = RestSchemaTablesDataProvider::getTableSet(action_sets, t);
             RestSchemaTableDataProvider::check(action_set, t);
+            # a path that does not resolve against the response it reads fails silently, so it is checked
+            # here rather than found when one record comes back as none
+            RestSchemaTableDataProvider::checkRecordPaths(action_set, t);
             # asking for the record type is what proves the table has one; a collection whose element is a
             # union has none to derive, and a table with no columns is worse than a table that failed here
             RestSchemaTableDataProvider tp(action_set, t, rest);

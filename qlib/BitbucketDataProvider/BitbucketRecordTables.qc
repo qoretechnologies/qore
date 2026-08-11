@@ -105,20 +105,21 @@ public class BitbucketRecordTables {
         };
 
         #! The repositories table
-        /** @section bitbucketrecord_repos_readonly Why This Table Only Reads
+        /** @section bitbucketrecord_repos_slug Addressed by a Column Bitbucket Does Not Describe
 
-            Bitbucket addresses a repository by its **slug** - the \c {repo_slug} in every path - and a
-            repository record carries \c uuid and \c full_name ("workspace/slug") but no bare slug of its
-            own.  So there is no column a write could take the address from.
+            Bitbucket addresses a repository by its **slug** - the \c {repo_slug} in every path - and its
+            description of a repository declares \c uuid and \c full_name ("workspace/slug") but no slug,
+            though every response carries one.
 
             Bitbucket's documentation says \c {repo_slug} also accepts the brace-wrapped UUID, and that was
             tried: it does not work through this transport, because a path variable is percent-encoded and
             Bitbucket answers \c {...} spelled as \c %7B...%7D with 404.  Verified against the live API -
             the same repository answers 200 by slug and 404 by UUID.
 
-            A table that could read and never write would be worse than one that says so, so this one
-            declares read only.  Creating, updating and deleting a repository remain available as actions,
-            where the caller supplies the slug directly.
+            So the identity is the slug, and the column it is read from is declared with
+            @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns": the record
+            field is real, only the description is missing it, and a column the table does not declare
+            cannot even be searched.
         */
         const RepositoriesTable = <RestSchemaRecordTableInfo>{
             "name": "repositories",
@@ -127,10 +128,42 @@ public class BitbucketRecordTables {
             "desc": "The repositories in one workspace, as records; Bitbucket evaluates a search over them "
                 "itself",
             "list_action": "repositories_workspace_get",
-            # read-only: see @ref bitbucketrecord_repos_readonly
-            "id_field": "uuid",
+            "get_action": "repositories_workspace_repo_slug_get",
+            "update_action": "repositories_workspace_repo_slug_put",
+            "delete_action": "repositories_workspace_repo_slug_delete",
+            # the slug, not the UUID: see @ref bitbucketrecord_repos_slug
+            "id_field": "slug",
+            "id_option": "repo_slug",
             "scope_options": ("workspace",),
             "records_path": ("values",),
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "slug",
+                    "desc": "the repository slug, which addresses it in every path; Bitbucket returns it "
+                        "in every response and declares it in no schema",
+                    "type": "*string",
+                },
+                {
+                    "name": "workspace",
+                    "desc": "the workspace the repository belongs to",
+                    "type": "*hash",
+                },
+                {
+                    "name": "website",
+                    "desc": "the repository's website URL",
+                    "type": "*string",
+                },
+                {
+                    "name": "override_settings",
+                    "desc": "which inherited workspace settings this repository overrides",
+                    "type": "*hash",
+                },
+                {
+                    "name": "enforced_signed_commits",
+                    "desc": "whether the repository requires commits to be signed",
+                    "type": "*bool",
+                },
+            )),
             "paging": Paging,
             "search_options": ("role", "sort"),
             "query": <RestSchemaRecordQueryInfo>{
@@ -163,6 +196,14 @@ public class BitbucketRecordTables {
             "id_option": "pull_request_id",
             "scope_options": ("workspace", "repo_slug"),
             "records_path": ("values",),
+            # Bitbucket returns a pull request's description and declares it in no schema
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "description",
+                    "desc": "the pull request description",
+                    "type": "*string",
+                },
+            )),
             "paging": Paging,
             "search_options": ("state",),
             "filters": (
