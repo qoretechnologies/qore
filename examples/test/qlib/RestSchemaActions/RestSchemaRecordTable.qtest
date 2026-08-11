@@ -373,6 +373,15 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertEq({"status": "open", "created_after": "2026-01-01"}, s.options);
         assertEq(DP_SEARCH_OP_NE, s.client.exp, "the predicate with no rule is left for the client side");
 
+        # a nested AND is the same predicate as a flat one and is split the same way, so a caller who
+        # parenthesised their search does not lose the pushdown
+        s = f.split(logic(DP_OP_AND, (
+            logic(DP_OP_AND, (eq("status", "open"), op(DP_SEARCH_OP_GT, "created", "2026-01-01"))),
+            op(DP_SEARCH_OP_NE, "count", 3),
+        )));
+        assertEq({"status": "open", "created_after": "2026-01-01"}, s.options);
+        assertEq(DP_SEARCH_OP_NE, s.client.exp);
+
         # a field with no rule is entirely client-side
         s = f.split(eq("count", 7));
         assertEq({}, s.options);

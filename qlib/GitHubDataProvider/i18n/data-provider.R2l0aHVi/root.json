@@ -5268,12 +5268,12 @@
           "message": "Update Records"
         },
         "app.R2l0aHVi.action.dXBkYXRl.short_desc": {
-          "source": "Update the records matching the search criteria in the given table in app \"Github\"",
-          "message": "Update the records matching the search criteria in the given table in app \"Github\""
+          "source": "Update matching records in the given table in app \"Github\"",
+          "message": "Update matching records in the given table in app \"Github\""
         },
         "app.R2l0aHVi.action.dXBkYXRl.desc": {
-          "source": "Update the records matching the search criteria in the given table in app \"Github\".\n\nGitHub identifies an issue or a pull request by its `number` within the repository, so a search naming one changes exactly that record; any other search reads the table first and updates every record it matches",
-          "message": "Update the records matching the search criteria in the given table in app \"Github\".\n\nGitHub identifies an issue or a pull request by its `number` within the repository, so a search naming one changes exactly that record; any other search reads the table first and updates every record it matches"
+          "source": "Updates every record in the given table in app \"Github\" matching the search criteria.\n\nGitHub identifies an issue or a pull request by its `number` within the repository, so a search naming one changes exactly that record; any other search reads the table first and updates every record it matches",
+          "message": "Updates every record in the given table in app \"Github\" matching the search criteria.\n\nGitHub identifies an issue or a pull request by its `number` within the repository, so a search naming one changes exactly that record; any other search reads the table first and updates every record it matches"
         },
         "app.R2l0aHVi.action.dXBkYXRl.option.dGFibGU.display_name": {
           "source": "Table",

@@ -102,8 +102,12 @@ module GitHubDataProvider {
                 GitHubDataProvider::AppName);
             string create_desc = sprintf("Create new records in the given table in app %y",
                 GitHubDataProvider::AppName);
-            string update_desc = sprintf("Update the records matching the search criteria in the given "
-                "table in app %y", GitHubDataProvider::AppName);
+            # kept under 80 characters, because a short description is shown where there is no room for
+            # more; the full explanation belongs in "desc"
+            string update_short = sprintf("Update matching records in the given table in app %y",
+                GitHubDataProvider::AppName);
+            string update_desc = sprintf("Updates every record in the given table in app %y matching the "
+                "search criteria", GitHubDataProvider::AppName);
 
             RestSchemaTablesDataProvider::registerRecordActions(GitHubDataProvider::AppName,
                 "/" + GitHubDataProvider::TablesChildName, action_set, GitHubRecordTables::Tables,
@@ -126,7 +130,7 @@ module GitHubDataProvider {
                             "back",
                     },
                     "update": {
-                        "short_desc": update_desc,
+                        "short_desc": update_short,
                         "desc": update_desc + ".\n\nGitHub identifies an issue or a pull request by its "
                             "`number` within the repository, so a search naming one changes exactly that "
                             "record; any other search reads the table first and updates every record it "

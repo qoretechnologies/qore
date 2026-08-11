@@ -154,7 +154,7 @@ public class RestSchemaRecordFilter {
         hash<DataProviderExpression> cond = cast<hash<DataProviderExpression>>(where_cond);
         rv.id = getSingleId(cond);
 
-        list<auto> conjuncts = cond.exp == DP_OP_AND ? cond.args : (cond,);
+        list<auto> conjuncts = getConjuncts(cond);
         list<auto> residual = ();
         list<hash<DataProviderExpression>> pending = ();
         hash<string, bool> used = reserved ?? {};
@@ -205,6 +205,31 @@ public class RestSchemaRecordFilter {
             rv.client = cast<hash<DataProviderExpression>>(residual[0]);
         } else if (residual) {
             rv.client = <DataProviderExpression>{"exp": DP_OP_AND, "args": residual};
+        }
+        return rv;
+    }
+
+    #! Returns the conjuncts of a predicate, flattening nested AND expressions
+    /** <tt>(a AND b) AND c</tt> and <tt>a AND b AND c</tt> are the same predicate, and a caller who wrote
+        the first should get the same pushdown as one who wrote the second.  Flattening is what makes that
+        true, and it is what
+        @ref DataProvider::AbstractDataProvider::splitPushdownableExpression() "splitPushdownableExpression()"
+        does as well.
+
+        @param cond the predicate
+    */
+    private list<auto> getConjuncts(hash<DataProviderExpression> cond) {
+        if (cond.exp != DP_OP_AND) {
+            return (cond,);
+        }
+        list<auto> rv = ();
+        foreach auto arg in (cond.args) {
+            if (arg instanceof hash<DataProviderExpression>
+                && cast<hash<DataProviderExpression>>(arg).exp == DP_OP_AND) {
+                rv += getConjuncts(cast<hash<DataProviderExpression>>(arg));
+            } else {
+                rv += arg;
+            }
         }
         return rv;
     }

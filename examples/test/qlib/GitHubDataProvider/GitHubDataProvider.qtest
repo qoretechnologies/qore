@@ -717,6 +717,13 @@ public class GitHubDataProviderTest inherits QUnit::Test {
                 sprintf("%y names its table in the path", i.key));
             assertTrue(exists by_action{i.key}.path_vars.table, sprintf("%y takes a table", i.key));
             assertEq(("Record-Based",), by_action{i.key}.groups);
+            # a short description is shown where there is no room for more, so it stays plain and short;
+            # this is the check that a per-application override has to pass as well as the generic wording
+            assertLt(80, by_action{i.key}.short_desc.size(), sprintf("%y short description fits", i.key));
+            assertFalse(by_action{i.key}.short_desc =~ /[*`]/,
+                sprintf("%y short description is plain text", i.key));
+            assertEq(-1, by_action{i.key}.short_desc.find("\n"),
+                sprintf("%y short description is one line", i.key));
             # the options depend on which table was named, so they are resolved from the data rather than
             # declared here
             assertTrue(by_action{i.key}.data_dependent_options,
