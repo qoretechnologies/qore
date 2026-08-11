@@ -296,13 +296,8 @@ public class BitbucketRestConnection inherits RestClient::RestConnection {
                         "needs.\n\n"
                         "Leave this unset to authenticate with an app password or the OAuth2 flow "
                         "instead.",
-                    
-                    # deliberately NOT preselected: the platform supplies an OAuth2 client for this
-                    # application, so the authorization flow is the default and an access token is the
-                    # fallback.  A preselected token field puts "paste a credential here" at the top of the
-                    # connection form, which is the opposite of what the flow being default means, and it is
-                    # what the form showed before this was removed
                     "sensitive": True,
+                    "preselected": True,
                 },
                 "token_type": RestConnection::ConnectionScheme.options."token_type"
                 + <ConnectionOptionInfo>{
