@@ -187,6 +187,67 @@ module RestSchemaActions {
     @note Actions can currently only be generated from OpenAPI 3 schemas; a Swagger 2.0 schema is
     rejected with a clear error rather than handled by untested code paths.
 
+    @section restschemaactions_records Record-Based Tables
+
+    An action is a request; a **record table** is a collection a caller can search, create in, update and
+    delete from with the standard record API, and with the standard search expressions the rest of the
+    platform speaks.  A REST collection can be presented as one, and
+    @ref RestSchemaActions::RestSchemaTableDataProvider "RestSchemaTableDataProvider" does it without a
+    second implementation of the API: a table is declared as a
+    @ref RestSchemaActions::RestSchemaRecordTableInfo "RestSchemaRecordTableInfo" naming **actions the
+    manifest already exports**, so the paths, the request contracts, the escaping, the codecs and the
+    published response shapes stay in one place.
+
+    @subsection restschemaactions_records_hybrid Hybrid Pushdown
+
+    A REST collection is not a table.  The service evaluates a fixed set of filters, expressed as query
+    arguments or - in the two cases where a vendor publishes a query language - as a filter expression, and
+    it evaluates nothing else.  Answering a search therefore takes three things at once, and doing any of
+    them alone is wrong:
+
+    |!Step|!Why
+    |Send what the service can evaluate|a collection of ten thousand records behind a page of 100 cannot be searched by reading all of it
+    |Evaluate the rest as records arrive|the answer has to be the one the caller asked for, not the service's approximation of it
+    |Keep reading pages until the limit is met by **matching** records|otherwise a search silently under-returns
+
+    @ref RestSchemaActions::RestSchemaRecordFilter "RestSchemaRecordFilter" performs the split, and the third
+    step falls out of applying the residual predicate in
+    @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" - which counts the limit **after**
+    filtering - over a lazy @ref RestSchemaActions::RestSchemaRecordPageIterator "RestSchemaRecordPageIterator".
+    Truncating the fetch at the limit and filtering afterwards is the way to get this wrong: asked for ten
+    closed issues from a repository holding ten closed among a hundred, it answers with one.
+
+    @subsection restschemaactions_records_exact Exactness Is the Load-Bearing Property
+
+    Each filter rule says whether the service's filter means **exactly** what the operator means.  It
+    defaults to @ref False, which is the answer that cannot produce a wrong result: the filter is sent and
+    the predicate is evaluated again on what comes back, so a service that returns more than it was asked
+    for costs a little client-side work and nothing else.  Declaring a rule exact is a statement about the
+    API, and it is the one way this machinery can under-return.
+
+    @subsection restschemaactions_records_native What Native Search Means
+
+    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" is declared only by
+    a table whose API takes a filter **expression** and can therefore evaluate a whole tree.  A table that
+    can only narrow a listing with query arguments declares it @ref False however many arguments it has,
+    because a caller reading that flag is asking whether the search happens on the server, and for such a
+    table the answer is "partly".  The per-operator detail is published as
+    @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown", and every generic
+    search operator is answered whether the service can evaluate it or not.
+
+    @ref RestSchemaActions::RestSchemaQuerySyntaxInfo "RestSchemaQuerySyntaxInfo" declares such a language
+    without any application code: an infix token per operator, a method-call form for the string predicates,
+    and one function rendering a value.  An operator the language spells without quite meaning it is listed
+    in \c inexact_ops, so it narrows the listing and the predicate is still answered here.
+
+    @subsection restschemaactions_records_actions A Table Is Reached by an Action
+
+    Declaring the providers is only half of it: a table no action reaches is offered to nobody.
+    @ref RestSchemaActions::RestSchemaTablesDataProvider::registerRecordActions() "registerRecordActions()"
+    registers the record-based actions against \c "<container>/{table}", and the IDs are the application's to
+    choose - where a native application replaces an existing one, they are the IDs the superseded application
+    registered.
+
     @section restschemaactions_drift Schema Updates
 
     Staying aligned with an API has to mean a **reproducible reviewed update**, not an uncontrolled

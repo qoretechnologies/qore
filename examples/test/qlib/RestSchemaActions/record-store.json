@@ -1,0 +1,516 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Record Store",
+    "description": "A fixture API with the shapes a record-based table has to cope with: a paged collection with filter parameters, a filter expression language, a cursor-paged collection, a collection scoped by a path variable, and single-record read, update and delete.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://record.example.com/api"
+    }
+  ],
+  "paths": {
+    "/items": {
+      "get": {
+        "operationId": "listItems",
+        "summary": "Lists items",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "the page of items to return, numbered from 1",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "how many items to return per page, at most 100",
+            "schema": {
+              "type": "integer",
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "return only items in this state",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "closed"
+              ]
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "description": "return only items created after this time",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "description": "return only items created before this time",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "description": "return only items carrying all of these tags",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "a free-text search over the item name, which the service matches loosely",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "a filter expression the service evaluates",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "what to sort the listing by",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created",
+                "name"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/item"
+                      }
+                    },
+                    "has_more": {
+                      "type": "boolean",
+                      "description": "more items follow"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createItem",
+        "summary": "Creates an item",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/item_write"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the item that was created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/item"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/{item_id}": {
+      "parameters": [
+        {
+          "name": "item_id",
+          "in": "path",
+          "required": true,
+          "description": "the item ID",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getItem",
+        "summary": "Reads one item",
+        "responses": {
+          "200": {
+            "description": "the item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/item"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateItem",
+        "summary": "Updates one item",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/item_update"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the item that was updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/item"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteItem",
+        "summary": "Deletes one item",
+        "responses": {
+          "204": {
+            "description": "the item was deleted"
+          }
+        }
+      }
+    },
+    "/cursor-items": {
+      "get": {
+        "operationId": "listCursorItems",
+        "summary": "Lists items a cursor at a time",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "the cursor reported by the previous response",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "how many items to return, at most 50",
+            "schema": {
+              "type": "integer",
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/item"
+                      }
+                    },
+                    "links": {
+                      "type": "object",
+                      "properties": {
+                        "next": {
+                          "type": "string",
+                          "description": "a link to the next page"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/spaces/{space}/notes": {
+      "parameters": [
+        {
+          "name": "space",
+          "in": "path",
+          "required": true,
+          "description": "the space the notes belong to",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listNotes",
+        "summary": "Lists the notes in one space",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "the page of notes to return, numbered from 1",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "how many notes to return per page, at most 25",
+            "schema": {
+              "type": "integer",
+              "maximum": 25
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the notes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/note"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createNote",
+        "summary": "Creates a note in one space",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/note_write"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the note that was created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/note"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "item": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "the item ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "the item name"
+          },
+          "status": {
+            "type": "string",
+            "description": "the item state"
+          },
+          "created": {
+            "type": "string",
+            "description": "when the item was created"
+          },
+          "count": {
+            "type": "integer",
+            "description": "how many of the item there are"
+          },
+          "tags": {
+            "type": "array",
+            "description": "free-form tags",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "item_write": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the item name"
+          },
+          "status": {
+            "type": "string",
+            "description": "the item state"
+          },
+          "count": {
+            "type": "integer",
+            "description": "how many of the item there are"
+          },
+          "tags": {
+            "type": "array",
+            "description": "free-form tags",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "item_update": {
+        "type": "object",
+        "description": "the properties to change; only those supplied are changed",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the item name"
+          },
+          "status": {
+            "type": "string",
+            "description": "the item state"
+          },
+          "count": {
+            "type": "integer",
+            "description": "how many of the item there are"
+          },
+          "tags": {
+            "type": "array",
+            "description": "free-form tags",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "note": {
+        "type": "object",
+        "required": [
+          "note_id",
+          "title"
+        ],
+        "properties": {
+          "note_id": {
+            "type": "string",
+            "description": "the note ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "the note title"
+          }
+        }
+      },
+      "note_write": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "the note title"
+          }
+        }
+      }
+    }
+  }
+}

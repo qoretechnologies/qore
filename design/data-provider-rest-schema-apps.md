@@ -26,7 +26,10 @@ existing ports taught that the next one should not have to rediscover.
 |---|---|
 | The vendor publishes a machine-readable OpenAPI 3 description and maintains it | There is no published schema, or it is written by hand and lags the API |
 | The API is large enough that reproducing request and response contracts by hand is real, recurring work | The application exposes a handful of operations |
-| Options and output types matter more than a bespoke provider shape | The integration needs record-based CRUD, server-side search expressions, or another non-action provider shape |
+| Options and output types matter more than a bespoke provider shape | The integration needs a bespoke provider shape that is neither an action nor a record table |
+
+Record-based CRUD and server-side search expressions are **not** a reason to choose the hand-written path.
+They are built once in `RestSchemaActions` and declared per resource; see *Record Tables* below.
 
 Two constraints decide it outright:
 
@@ -483,6 +486,58 @@ But the *objects* those payloads carry - an issue, a repository, a user - are co
 operations already reference, so an event type can be composed from them. Only the few shapes a vendor does
 not publish as reusable components stay open hashes. That keeps the event and the actions describing the
 same record the same way.
+
+## Record tables
+
+A schema-driven application exposes its record-shaped collections as tables under a `tables` child, declared
+in a `<App>RecordTables.qc` and reached by record-based actions registered against `"tables/{table}"`. The
+machinery is documented on the `RestSchemaActions` module main page; what belongs here is what the fleet-wide
+roll-out taught.
+
+**A table is a declaration, not an implementation.** Every one names actions the manifest already exports, so
+a table adds no second copy of a path, a request contract or an escaping rule. Forty-five tables across seven
+applications are around 2,000 lines of declaration in total, and none of them makes an HTTP request of its
+own.
+
+**Declare `supports_native_search` only where the API takes a filter expression.** Two vendors in this family
+publish one - Xero's `where` and Bitbucket's BBQL - and their tables really do have the server do the
+searching. The other five narrow a listing with query arguments and evaluate the rest client-side, which is a
+different claim, and `supports_pushdown` per operator is where that detail goes. The three GitHub tables that
+existed before this work declared native search and did not have it: `where_cond` never reached GitHub.
+
+**A limit counts matching records.** This is the defect that motivated the whole design and it is worth
+stating as a rule: fetch lazily and let `DefaultRecordIterator` apply the limit *after* the residual
+predicate. Truncating the fetch first and filtering afterwards under-returns silently, and no test that
+passes `NOTHING` for `where_cond` will ever notice.
+
+**Measure what a vendor's description actually says before deriving anything from it.** Three separate
+descriptions in this fleet describe their own collections wrongly or not at all, and each needed a different
+answer:
+
+| | |
+|---|---|
+| GitLab declares the 200 response of **every** listing as a single entity rather than an array of them | derive the record type from the response's own fields; the body really is an array at run time |
+| Paddle describes a report as `oneOf` seven models, and Stripe an external account as `anyOf` two | no element type to derive: the table names its columns, which are the ones every branch declares |
+| Bitbucket declares `q` on its repository and commit-comment listings but not on its pull request one, though the API accepts it | an overlay cannot add a parameter, so that table filters on `state` alone; repairing it belongs in the import spec's `normalize` block |
+
+The layer refuses a table whose record type can neither be derived nor is declared, because a table with
+`has_record` and no columns is worse than one that failed while the application was being built.
+
+**An identity is what the API's paths take, not what looks like an ID.** GitHub addresses an issue by its
+`number` within the repository and never by its global `id`; GitLab uses `iid` for the same reason, `key` for
+a CI variable and `slug` for a wiki page; Bitbucket's repository record carries a UUID and a `full_name` but
+no bare slug, and its paths accept the UUID in place of one. Getting this wrong produces a table that reads
+correctly and cannot write at all.
+
+**Check what the vendor cannot do before offering an action for it.** GitHub deletes no issue, pull request or
+release; Paddle and Xero delete nothing at all, archiving or voiding instead. Those applications register no
+delete action, because an action that could only fail is worse than no action.
+
+**A default value on a search option must not block a predicate on the same field.** GitHub's tables default
+`state` to `all` so that a plain search returns open and closed issues alike, as the application they replace
+did. If that default were treated as a value the caller chose, no `state` predicate could ever be pushed
+down. A defaulted option yields to a predicate; one the caller set explicitly does not, and the two together
+mean the intersection.
 
 ## Where per-application detail belongs
 
