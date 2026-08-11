@@ -545,6 +545,17 @@ connection. A connection whose site is discovered has to be creatable without on
 until the flow fills it in. The same edit has to make the option's absence unambiguous in both directions:
 the gateway is not a site, so it must never be read back out of a URL as one.
 
+**A URL path is not always an API namespace, and the ping is where that bites.** An absolute `ping_path`
+normally addresses the **host**, so `RestConnection` drops the connection's own URL path for it - which is
+what a connection on `http://host/v1` needs, since a health endpoint outside the namespace would otherwise
+be looked for at `/v1/health`. Atlassian is the other case: `https://api.atlassian.com/ex/confluence/<cloud_id>`
+puts *which site is being reached* in the path, so dropping it asks the gateway for a site it never named.
+The symptom is specific and misleading - **the ping 404s while every action and table on the same connection
+succeeds**, because only the ping clears the path. Only the connection knows which of the two its path is,
+so it says: `RestConnection::pingInheritsConnectionPath()`, `False` by default, `True` for Confluence. It is
+honored on both ping paths - the blocking one and the polling one - because each implements the rule
+separately and it was the polling one that failed.
+
 **Name the connection option in the error a missing one produces.** A value the connection owns is dropped
 from every action, which is right, and it therefore appears nowhere a user can see when it is missing: the
 Xero failure surfaced as a schema type error about `xero-tenant-id` fifteen frames down. `RestSchemaActions`

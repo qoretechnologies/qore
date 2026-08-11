@@ -688,6 +688,16 @@ public class ConfluenceRestConnection inherits RestClient::RestConnection {
         return (RestConnection::getConnectionOptions(rtopts) ?? {}) - "url";
     }
 
+    #! Returns @ref True: the URL path names the site, so every request carries it - the ping too
+    /** Atlassian addresses a Confluence site as \c https://api.atlassian.com/ex/confluence/\<cloud_id\>,
+        so that prefix is not an API namespace a health endpoint could sit outside of: it is which site is
+        being reached.  A ping that dropped it would ask the gateway for a site it never named and get a
+        404, while every action on the same connection succeeded.
+    */
+    bool pingInheritsConnectionPath() {
+        return True;
+    }
+
     #! Returns the connection type name
     string getType() {
         return "confluence";

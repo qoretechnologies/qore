@@ -556,6 +556,15 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
         assertTrue(bare.getFeatures(){RestConnection::RCF_OAUTH2_AUTH_CODE},
             "and it can still be authorized, which is what fills the site in");
 
+        # An absolute ping path normally addresses the host, and the connection's own URL path is
+        # dropped for it - right for a connection whose path is an API namespace a health endpoint sits
+        # outside of.  Here the path IS the site: dropping "/ex/confluence/<cloud_id>" asks the gateway
+        # for a site it never named, and the ping 404s while every action on the same connection works.
+        assertTrue(bare.pingInheritsConnectionPath(),
+            "the ping carries the site prefix, because the site is what the path names");
+        assertFalse((new RestConnection("plain", "test", "http://example.com/v1", {"monitor": False},
+            {})).pingInheritsConnectionPath(), "which is not the default");
+
         # the gateway is never mistaken for a site, in either spelling
         assertNothing(ConfluenceRestClientBase::getSiteForUrl("confluence://api.atlassian.com"));
         assertNothing(ConfluenceRestClientBase::getSiteForUrl("https://api.atlassian.com"));

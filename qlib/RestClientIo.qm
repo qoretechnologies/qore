@@ -5323,12 +5323,16 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # connection turns ping_path `/get_server_info` into
         # `/v1/get_server_info` and the ping reliably 404s against backends
         # that expose health endpoints outside the API namespace
-        # (e.g. SGLang at `/get_server_info`).
+        # (e.g. SGLang at `/get_server_info`) -- unless that path is not a
+        # namespace but the address of the thing connected to, as Atlassian
+        # addresses a Confluence site as /ex/confluence/<cloud_id>; dropping
+        # it then asks the host for something it never named, and the ping
+        # 404s while every other request on the connection succeeds.
         if (ping_path =~ /^http/) {
             ping_url_parent = rcio;
             rcio = cast<RestClientIo>(ping_url_parent.copyWithUrl(ping_path));
             ping_path = "";
-        } else if (ping_path && ping_path[0] == "/") {
+        } else if (ping_path && ping_path[0] == "/" && !conn.pingInheritsConnectionPath()) {
             rcio.clearConnectionPath();
         }
 
