@@ -713,6 +713,16 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         assertTrue(oauth2_opts.oauth2_auth_url.val(), "the authorization endpoint is known to the connection");
         assertTrue(oauth2_opts.oauth2_token_url.val(), "the token endpoint is known to the connection");
 
+        # the scopes are those the superseded application requested, and that is a commitment rather than a
+        # preference: GitLab validates a request against the scopes the OAuth APPLICATION was registered
+        # with, and the one the platform publishes was registered for that application.  Asking for
+        # anything outside the set - "read_user" is a valid GitLab scope and was tried - fails the whole
+        # authorization with "The requested scope is invalid, unknown, or malformed"
+        assertEq(("api", "profile", "email"), GitLabRestClientBase::DefaultScopes,
+            "the scopes the registered OAuth application allows");
+        assertEq(("api", "profile", "email"), oauth2_opts.oauth2_scopes,
+            "and they are what the connection asks for");
+
         # the instance decides the URL
         GitLabRestConnection conn("gitlab-test", "test", "gitlab://gitlab.example.com", {},
             {"token": "glpat-fake"});

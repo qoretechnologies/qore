@@ -448,6 +448,25 @@ project answers **200 escaped** and **404 unescaped**. The unescaped form is wha
 change, so every action naming a project by its path was broken, and no test caught it because a fake
 client records whatever path it is handed.
 
+**An OAuth2 scope set is a commitment, like an action ID.** The platform publishes an OAuth2 client per
+application (`qrest dataprovider/apps/<App>/oauth2_clients`), and for a replacement it is the client
+registered for the application being replaced. Where the provider validates a request against the scopes the
+**registered application** holds, asking for anything outside that set fails the authorization outright,
+before the user is shown a consent screen at all. The port changed GitLab's from the superseded app's
+`api, profile, email` to `api, read_user, email` - `read_user` is a perfectly valid GitLab scope, just not
+one that application was registered for - and every authorization died with *"The requested scope is invalid,
+unknown, or malformed."*
+
+So diff the scopes against the superseded app the same way the action surface is diffed, and remember that
+providers differ in whether they check:
+
+| | |
+|---|---|
+| GitLab, Atlassian, Xero | validate against the application's registered scopes; a new scope needs the application re-registered, not a code edit |
+| GitHub | OAuth Apps carry no registered scope list, so a request may ask for more - which is why adding `delete_repo` was safe |
+
+Asking for **fewer** scopes is always safe, which is why Confluence's reduced set is not a problem.
+
 **Before the flag day, diff the two action surfaces mechanically.** A port is not finished when its tests
 pass; it is finished when it exports everything the TypeScript application it replaces exported. Both
 sides can be enumerated exactly, so this is a diff and not a reading exercise:

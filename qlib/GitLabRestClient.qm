@@ -145,10 +145,22 @@ public class GitLabRestClientBase {
         const DefaultGrantType = "authorization_code";
 
         #! Default OAuth2 scopes
-        /** \c api is GitLab's full read/write API scope; \c read_user and \c email are what the ping
-            endpoint reads.
+        /** \c api is GitLab's full read/write API scope, which covers every endpoint this module calls
+            including the \c "/api/v4/user" ping; \c profile and \c email are the OpenID Connect scopes that
+            identify the authorizing user.
+
+            @note These are the scopes the application this module replaces requested, and that is not a
+            style choice.  GitLab validates a request against the scopes the **OAuth application** was
+            registered with, and the application the platform publishes for GitLab was registered for the
+            superseded one.  Asking for a scope outside that set - \c read_user, say, which is a perfectly
+            valid GitLab scope in general - fails the authorization outright with "The requested scope is
+            invalid, unknown, or malformed", before the user is ever asked to approve anything.
+
+            So a registered OAuth2 client's scope set is a commitment in the same way an action ID is: it is
+            shared platform state, it was created for the application being replaced, and changing what is
+            asked for means re-registering the application rather than editing this list.
         */
-        const DefaultScopes = ("api", "read_user", "email");
+        const DefaultScopes = ("api", "profile", "email");
 
         #! Default data serialization
         /** GitLab takes and returns JSON.
