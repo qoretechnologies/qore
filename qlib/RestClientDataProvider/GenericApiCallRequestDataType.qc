@@ -32,7 +32,7 @@ public const GenericApiCallRequestDataType = new GenericApiCallRequestDataType()
     auto-injection can expose a richer schema (body-type selector, path-variable templating,
     response-status assertions) without altering the standalone `RestClientDataProvider/call` action.
 
-    The @c body field's effective type is data-dependent — see
+    The @c body field's effective type is data-dependent - see
     @ref GenericApiCallProvider::getRequestTypeWithDataImpl() and
     @ref GenericApiCallProvider::getRequestTypeWithOptionsImpl(). The static declaration here uses
     @c AutoType so that off-the-shelf consumers see an unconstrained value; the provider's dynamic
@@ -150,9 +150,9 @@ public class GenericApiCallRequestDataType inherits HashDataType {
                 "type": StringType,
                 "short_desc": "How the body is serialized and what Content-Type is sent",
                 "desc": "Selects the body serialization mode and the corresponding `Content-Type` header. "
-                    "Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, "
+                    "Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, "
                     "selecting Multipart Form exposes a file picker, and so on.",
-                # NOT marked required at the field level — Qorus's UI bucket-sort would split it
+                # NOT marked required at the field level - Qorus's UI bucket-sort would split it
                 # from `body` (which can't be required because GET/DELETE often have no body).
                 # The default_value below means the form is still pre-filled with "auto".
                 "default_value": "auto",
@@ -193,7 +193,7 @@ public class GenericApiCallRequestDataType inherits HashDataType {
                 "short_desc": "Return non-2xx responses normally instead of throwing",
                 "desc": "If `True`, non-2xx HTTP responses return as the normal response hash (with the "
                     "actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling "
-                    "4xx/5xx as data — e.g. checking whether a resource exists. Overrides the "
+                    "4xx/5xx as data - e.g. checking whether a resource exists. Overrides the "
                     "connection's `error_passthru` setting for this call only.",
             },
             "include_debug": {
