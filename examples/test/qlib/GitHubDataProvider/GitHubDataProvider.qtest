@@ -256,6 +256,7 @@ public class GitHubDataProviderTest inherits QUnit::Test {
             "search": DPAT_FIND,
             "search-single": DPAT_FIND_SINGLE,
             "create": DPAT_CREATE,
+            "update": DPAT_UPDATE,
         };
 
         #! The dropdowns scoped to a repository
@@ -287,7 +288,10 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         addTestCase("record action registration", \recordActionRegistrationTest());
         addTestCase("record tables", \recordTableTest());
         addTestCase("record search", \recordSearchTest());
+        addTestCase("record search pushdown", \recordPushdownTest());
+        addTestCase("a record limit counts matches", \recordLimitTest());
         addTestCase("record create", \recordCreateTest());
+        addTestCase("record update", \recordUpdateTest());
         set_return_value(main());
     }
 
@@ -687,13 +691,25 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         assertEq("feature/x", b.notified[0].ref);
     }
 
+    #! Returns the tables container of a provider built on a fake client
+    private AbstractDataProvider tables(FakeGitHubRestClient rest) {
+        GitHubDataProvider dp(rest);
+        return dp.getChildProviderEx(GitHubDataProvider::TablesChildName);
+    }
+
+    #! Returns the given table
+    private AbstractDataProvider table(FakeGitHubRestClient rest, string name) {
+        return tables(rest).getChildProviderEx(name);
+    }
+
     private recordActionRegistrationTest() {
         *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Github");
         hash<string, hash<DataProviderActionInfo>> by_action = {};
         map by_action{$1.action} = $1, actions;
 
         # the three tables are worth nothing if no action reaches them; the TypeScript application
-        # registered these three IDs, so a workflow calling them survives the migration
+        # registered "search", "search-single" and "create", so a workflow calling them survives the
+        # migration, and "update" is added because GitHub does export a PATCH for issues and pull requests
         foreach hash<auto> i in (ExpectedRecordActions.pairIterator()) {
             assertTrue(exists by_action{i.key}, sprintf("record action %y is registered", i.key));
             assertEq(i.value, by_action{i.key}.action_code, sprintf("%y has its record action code", i.key));
@@ -709,11 +725,21 @@ public class GitHubDataProviderTest inherits QUnit::Test {
                 sprintf("%y is declared as record-based", i.key));
         }
 
+        # GitHub's REST API cannot delete an issue, a pull request or a release, so no delete action is
+        # registered: an action that could only fail is worse than no action
+        assertNothing(by_action.delete, "GitHub cannot delete a record, so no delete action is offered");
+
         # the repository is a required option of every table, whatever the table
-        hash<DataProviderInfo> info = GitHubTablesDataProvider::RecordActionProviderInfo;
+        hash<DataProviderInfo> info = RestSchemaTablesDataProvider::getRecordActionProviderInfo(aset,
+            GitHubRecordTables::Tables);
         assertTrue(info.supports_read);
         assertTrue(info.supports_create);
-        assertTrue(info.supports_native_search);
+        assertTrue(info.supports_update);
+        assertFalse(info.supports_delete);
+        # GitHub takes a few query arguments; it has no filter expression language, so a search is not
+        # answered by the server alone and saying otherwise would misdescribe every result
+        assertFalse(info.supports_native_search);
+        assertTrue(info.supports_search_expressions);
         assertTrue(info.search_options.owner.required, "a search names the repository owner");
         assertTrue(info.search_options.repo.required, "a search names the repository");
         assertTrue(info.create_options.owner.required, "a create names the repository owner");
@@ -723,24 +749,34 @@ public class GitHubDataProviderTest inherits QUnit::Test {
 
         # the path a record action registers has to resolve to a table
         FakeGitHubRestClient rest();
-        GitHubDataProvider dp(rest);
-        AbstractDataProvider tables = dp.getChildProviderEx(GitHubDataProvider::TablesChildName);
-        map assertTrue(exists tables.getChildProvider($1), sprintf("table %y resolves", $1)),
-            ExpectedTables;
-        assertEq(GitHubIssuesDataProvider::TableName,
-            GitHubTablesDataProvider::TablePathVar.example_value,
+        AbstractDataProvider t = tables(rest);
+        map assertTrue(exists t.getChildProvider($1), sprintf("table %y resolves", $1)), ExpectedTables;
+        assertEq("issues",
+            RestSchemaTablesDataProvider::getTablePathVar(GitHubRecordTables::Tables).example_value,
             "the example table is one the application actually has");
+
+        # every table has to name actions the manifest still exports
+        cast<RestSchemaTablesDataProvider>(t).checkTables();
     }
 
     private recordTableTest() {
         FakeGitHubRestClient rest();
-        GitHubIssuesDataProvider issues(rest);
+        AbstractDataProvider issues = table(rest, "issues");
         hash<DataProviderInfo> info = issues.getInfo();
         assertTrue(info.supports_read);
         assertTrue(info.supports_create);
-        assertTrue(info.supports_native_search);
+        assertTrue(info.supports_update, "GitHub exports a PATCH for an issue");
+        assertFalse(info.supports_delete, "GitHub cannot delete an issue");
+        assertTrue(info.supports_search_expressions);
+        assertFalse(info.supports_native_search, "the where clause does not reach GitHub");
         assertTrue(info.search_options.owner.required);
         assertTrue(info.create_options.repo.required);
+        # the repository dropdowns are the manifest's, and reach the table option unchanged
+        assertEq(GitHubManifest::RefOwner, info.search_options.owner.ref_data);
+        assertEq(GitHubManifest::RefRepository, info.search_options.repo.ref_data);
+        # the application this module replaces returned open and closed records by default; GitHub's own
+        # listing defaults to open, so the table has to say so
+        assertEq("all", info.search_options.state.default_value);
 
         # the table is a flattened, writable projection, not GitHub's response shape
         *hash<string, AbstractDataField> fields = issues.getRecordType();
@@ -751,15 +787,16 @@ public class GitHubDataProviderTest inherits QUnit::Test {
             "labels are names, not the objects GitHub returns");
 
         # GitHub's releases collection accepts no state, sort or direction, so none is offered
-        GitHubReleasesDataProvider releases(rest);
+        AbstractDataProvider releases = table(rest, "releases");
         assertNothing(releases.getInfo().search_options.state);
         assertNothing(releases.getInfo().search_options.sort);
         assertTrue(exists releases.getInfo().search_options.limit);
+        assertFalse(releases.getInfo().supports_update, "the manifest exports no release update");
     }
 
     private recordSearchTest() {
         FakeGitHubRestClient rest();
-        GitHubIssuesDataProvider issues(rest);
+        AbstractDataProvider issues = table(rest, "issues");
 
         rest.push_response({"body": (
             {
@@ -787,8 +824,19 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         # a table is scoped to one repository, and there is no default for it
         assertThrows("SEARCH-OPTION-ERROR", "owner", \issues.searchRecords(), (NOTHING, {"repo": "qorus"}));
 
+        # a search naming an issue by its number reads that issue rather than walking the collection, which
+        # is what makes a record readable straight after it is created
+        rest.reset();
+        rest.push_response({"body": {"id": 1, "number": 7, "title": "an issue"}});
+        *hash<auto> one = issues.searchSingleRecord(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "number"}, 7),
+        }, {"owner": "o", "repo": "r"});
+        assertEq(7, one.number);
+        assertEq("/repos/o/r/issues/7", rest.last().path);
+
         # a pull request's base and head arrive as objects and are presented as branch names
-        GitHubPullsDataProvider pulls(rest);
+        AbstractDataProvider pulls = table(rest, "pulls");
         rest.reset();
         rest.push_response({"body": (
             {
@@ -803,9 +851,132 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         assertEq("octocat/qorus", pull_recs[0].head_repo);
     }
 
+    #! What GitHub filters for itself, and what this module filters
+    private recordPushdownTest() {
+        FakeGitHubRestClient rest();
+        AbstractDataProvider issues = table(rest, "issues");
+
+        # with no predicate the table sends its own default, which is "all": the application this module
+        # replaces returned open and closed issues alike, and GitHub's listing defaults to open
+        rest.push_response({"body": ()});
+        map $1, issues.searchRecords(NOTHING, {"owner": "o", "repo": "r"});
+        assertRegex("state=all", rest.last().path, "the table's default reaches GitHub");
+
+        # a predicate on the same field replaces that default rather than being blocked by it
+        rest.reset();
+        rest.push_response({"body": ()});
+        map $1, issues.searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "state"}, "closed"),
+        }, {"owner": "o", "repo": "r"});
+        assertRegex("state=closed", rest.last().path, "a defaulted option yields to a predicate");
+
+        # but an option the caller set explicitly does not yield: the two together mean the intersection,
+        # so GitHub is asked for the open issues and the closed-ness is checked here, matching nothing
+        rest.reset();
+        rest.push_response({"body": ({"id": 1, "number": 1, "state": "open"},)});
+        list<hash<auto>> both = map $1, issues.searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "state"}, "closed"),
+        }, {"owner": "o", "repo": "r", "state": "open"});
+        assertRegex("state=open", rest.last().path, "the caller's own option is what was sent");
+        assertEq(0, both.size(), "and the predicate is still answered");
+
+        # an issue's state is a filter GitHub evaluates exactly, so it is sent
+        rest.reset();
+        rest.push_response({"body": ()});
+        map $1, issues.searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "state"}, "closed"),
+        }, {"owner": "o", "repo": "r"});
+        assertRegex("state=closed", rest.last().path, "the state predicate reaches GitHub");
+
+        # a title predicate is not a filter GitHub offers, so it is evaluated here, over the whole listing
+        rest.reset();
+        rest.push_response({"body": ({"id": 1, "number": 1, "title": "keep"},
+            {"id": 2, "number": 2, "title": "drop"})});
+        list<hash<auto>> found = map $1, issues.searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "title"}, "keep"),
+        }, {"owner": "o", "repo": "r"});
+        assertEq(1, found.size(), "the predicate GitHub cannot evaluate is still answered");
+        assertEq("keep", found[0].title);
+        assertFalse(rest.last().path =~ /title=/, "no filter GitHub does not offer is invented");
+
+        # "since" narrows the listing but is not relied on to answer the predicate, because GitHub does not
+        # document whether its bound is inclusive
+        rest.reset();
+        rest.push_response({"body": ({"id": 1, "number": 1, "title": "old", "updated_at": "2026-01-01"},
+            {"id": 2, "number": 2, "title": "new", "updated_at": "2026-06-01"})});
+        found = map $1, issues.searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_GT,
+            "args": (<DataProviderFieldReference>{"field": "updated_at"}, "2026-03-01"),
+        }, {"owner": "o", "repo": "r"});
+        assertRegex("since=2026-03-01", rest.last().path, "the bound reaches GitHub as a narrowing hint");
+        assertEq(1, found.size(), "and the predicate is applied again to what came back");
+        assertEq("new", found[0].title);
+
+        # a pull request's base branch is a filter GitHub evaluates exactly
+        rest.reset();
+        rest.push_response({"body": ()});
+        map $1, table(rest, "pulls").searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "base"}, "develop"),
+        }, {"owner": "o", "repo": "r"});
+        assertRegex("base=develop", rest.last().path);
+
+        # every generic search operator is answered; what varies is who does the work
+        hash<DataProviderInfo> info = issues.getInfo();
+        assertTrue(info.expressions{DP_SEARCH_OP_EQ}.supports_pushdown);
+        assertFalse(info.expressions{DP_SEARCH_OP_REGEX}.supports_pushdown);
+        assertTrue(exists info.expressions{DP_SEARCH_OP_REGEX}, "an operator GitHub cannot evaluate is "
+            "still offered, because this module evaluates it");
+    }
+
+    #! The defect the audit demonstrated: a limit counts matching records, not records read
+    /** Measured before this change: a repository holding 10 closed issues among 100, asked for 10 records
+        where the state is closed, answered with **one** - the fetch stopped at the limit and the filter ran
+        afterwards, so nine matching issues were never read.
+    */
+    private recordLimitTest() {
+        FakeGitHubRestClient rest();
+        AbstractDataProvider issues = table(rest, "issues");
+
+        # 250 issues served 100 to a page, as GitHub serves them: two full pages and a short third one,
+        # and a short page is the last page.  Every twenty-fifth issue matches, so the ten matches are
+        # spread over all three pages and none of them can be reached without reading that far
+        for (int p = 1; p <= 3; ++p) {
+            list<hash<auto>> body = ();
+            for (int j = (p - 1) * 100; j < p * 100 && j < 250; ++j) {
+                body += {"id": j, "number": j, "state": "open",
+                    "title": sprintf("%s %d", j % 25 == 0 ? "match" : "issue", j)};
+            }
+            rest.push_response({"body": body});
+        }
+
+        list<hash<auto>> found = map $1, issues.searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_REGEX,
+            "args": (<DataProviderFieldReference>{"field": "title"}, "^match "),
+        }, {"owner": "o", "repo": "r", "limit": 10});
+        assertEq(10, found.size(), "a limit counts matching records, not records read");
+        assertEq(3, rest.requests.size(), "every page holding a match was read");
+        assertEq(225, found[9].number, "the last match is on the last page");
+
+        # and a limit met on the first page stops there
+        rest.reset();
+        list<hash<auto>> one_page = ();
+        for (int j = 0; j < 100; ++j) {
+            one_page += {"id": j, "number": j, "title": sprintf("issue %d", j), "state": "open"};
+        }
+        rest.push_response({"body": one_page});
+        found = map $1, issues.searchRecords(NOTHING, {"owner": "o", "repo": "r", "limit": 3});
+        assertEq(3, found.size());
+        assertEq(1, rest.requests.size());
+    }
+
     private recordCreateTest() {
         FakeGitHubRestClient rest();
-        GitHubIssuesDataProvider issues(rest);
+        AbstractDataProvider issues = table(rest, "issues");
 
         rest.push_response({"body": {"id": 9, "number": 12, "title": "from a record",
             "labels": ({"name": "bug"},)}});
@@ -831,5 +1002,50 @@ public class GitHubDataProviderTest inherits QUnit::Test {
 
         assertThrows("CREATE-RECORD-ERROR", "repo", \issues.createRecord(), ({"title": "x"},
             {"owner": "qoretechnologies"}));
+
+        # a column the create does not accept is dropped rather than turned into a request GitHub rejects:
+        # a record is read and written in one shape, and "state" is settable only on an update
+        rest.reset();
+        rest.push_response({"body": {"id": 10, "number": 13, "title": "x"}});
+        issues.createRecord({"title": "x", "state": "open", "number": 99},
+            {"owner": "o", "repo": "r"});
+        assertEq({"title": "x"}, rest.lastBody());
+    }
+
+    private recordUpdateTest() {
+        FakeGitHubRestClient rest();
+        AbstractDataProvider issues = table(rest, "issues");
+
+        # an issue is addressed by its number within the repository, not by GitHub's global ID, so a search
+        # naming the number changes exactly that issue and reads nothing first
+        rest.push_response({"body": {"id": 1, "number": 7, "state": "closed"}});
+        assertTrue(issues.updateSingleRecord({"state": "closed"}, <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "number"}, 7),
+        }, {"owner": "o", "repo": "r"}));
+        assertEq(1, rest.requests.size(), "naming the record needs no search");
+        assertEq("PATCH", rest.last().method);
+        assertEq("/repos/o/r/issues/7", rest.last().path);
+        assertEq({"state": "closed"}, rest.lastBody());
+
+        # any other predicate is resolved by reading the table first, and every matching record is updated
+        rest.reset();
+        rest.push_response({"body": ({"id": 1, "number": 1, "title": "a", "state": "open"},
+            {"id": 2, "number": 2, "title": "b", "state": "open"})});
+        rest.push_response({"body": {"id": 1, "number": 1, "state": "closed"}});
+        rest.push_response({"body": {"id": 2, "number": 2, "state": "closed"}});
+        assertEq(2, issues.updateRecords({"state": "closed"}, <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_REGEX,
+            "args": (<DataProviderFieldReference>{"field": "title"}, "^[ab]$"),
+        }, {"owner": "o", "repo": "r"}));
+        assertEq(3, rest.requests.size(), "one listing and two updates");
+        assertEq("GET", rest.requests[0].method);
+        assertEq("/repos/o/r/issues/1", rest.requests[1].path);
+        assertEq("/repos/o/r/issues/2", rest.requests[2].path);
+
+        # a table with no update action says so rather than doing nothing
+        AbstractDataProvider releases = table(rest, "releases");
+        assertThrows("INVALID-OPERATION", \releases.updateRecords(), ({"name": "x"}, {"id": 1},
+            {"owner": "o", "repo": "r"}));
     }
 }

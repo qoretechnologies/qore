@@ -5208,8 +5208,8 @@
           "message": "Table"
         },
         "app.R2l0aHVi.action.c2VhcmNo.option.dGFibGU.short_desc": {
-          "source": "The name of the GitHub table",
-          "message": "The name of the GitHub table"
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.c2VhcmNo.option.dGFibGU.desc": {
           "source": "The table to work with: `issues`, `pulls` or `releases`",
@@ -5232,8 +5232,8 @@
           "message": "Table"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
-          "source": "The name of the GitHub table",
-          "message": "The name of the GitHub table"
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
           "source": "The table to work with: `issues`, `pulls` or `releases`",
@@ -5256,10 +5256,34 @@
           "message": "Table"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.option.dGFibGU.short_desc": {
-          "source": "The name of the GitHub table",
-          "message": "The name of the GitHub table"
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `issues`, `pulls` or `releases`",
+          "message": "The table to work with: `issues`, `pulls` or `releases`"
+        },
+        "app.R2l0aHVi.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Update Records"
+        },
+        "app.R2l0aHVi.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria in the given table in app \"Github\"",
+          "message": "Update the records matching the search criteria in the given table in app \"Github\""
+        },
+        "app.R2l0aHVi.action.dXBkYXRl.desc": {
+          "source": "Update the records matching the search criteria in the given table in app \"Github\".\n\nGitHub identifies an issue or a pull request by its `number` within the repository, so a search naming one changes exactly that record; any other search reads the table first and updates every record it matches",
+          "message": "Update the records matching the search criteria in the given table in app \"Github\".\n\nGitHub identifies an issue or a pull request by its `number` within the repository, so a search naming one changes exactly that record; any other search reads the table first and updates every record it matches"
+        },
+        "app.R2l0aHVi.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.R2l0aHVi.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.R2l0aHVi.action.dXBkYXRl.option.dGFibGU.desc": {
           "source": "The table to work with: `issues`, `pulls` or `releases`",
           "message": "The table to work with: `issues`, `pulls` or `releases`"
         },

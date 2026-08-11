@@ -113,7 +113,8 @@ public class GitHubDataProvider inherits RestSchemaActions::RestSchemaActionSetD
             case EventsChildName:
                 return new GitHubEventsDataProvider(cast<*GitHubRestClient::GitHubRestClientIo>(rest));
             case TablesChildName:
-                return new GitHubTablesDataProvider(cast<*GitHubRestClient::GitHubRestClientIo>(rest));
+                return new RestSchemaTablesDataProvider(TablesChildName, GitHubSchema::getActionSet(),
+                    GitHubRecordTables::Tables, rest);
         }
         return RestSchemaActionSetDataProvider::getChildProviderImpl(name);
     }

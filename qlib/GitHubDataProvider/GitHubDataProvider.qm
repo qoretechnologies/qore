@@ -94,65 +94,45 @@ module GitHubDataProvider {
         # register the record-based table actions; the IDs are those of the TypeScript application this
         # module replaces, so a workflow that already calls them keeps working
         {
-            const string RecordGroup = "Record-Based";
-            string tables_path = "/" + GitHubDataProvider::TablesChildName + "/{table}";
-
-            string desc = sprintf("Search for matching records in the given table in app %y",
+            string scope_desc = "; the repository is given by the `owner` and `repo` options, because a "
+                "table is scoped to one repository";
+            string search_desc = sprintf("Search for matching records in the given table in app %y",
                 GitHubDataProvider::AppName);
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": GitHubDataProvider::AppName,
-                "path": tables_path,
-                "action": "search",
-                "display_name": "Search Records",
-                "short_desc": desc,
-                "desc": desc + "; the repository is given by the `owner` and `repo` options, because a "
-                    "table is scoped to one repository",
-                "action_code": DPAT_FIND,
-                "path_vars": {
-                    "table": GitHubTablesDataProvider::TablePathVar,
-                },
-                "groups": (RecordGroup,),
-                "data_dependent_options": True,
-                "data_provider_info": GitHubTablesDataProvider::RecordActionProviderInfo,
-            });
-
-            desc = sprintf("Search for a single matching record in the given table in app %y",
+            string single_desc = sprintf("Search for a single matching record in the given table in app %y",
                 GitHubDataProvider::AppName);
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": GitHubDataProvider::AppName,
-                "path": tables_path,
-                "action": "search-single",
-                "display_name": "Find a Single Record",
-                "short_desc": desc,
-                "desc": desc + "; the repository is given by the `owner` and `repo` options, because a "
-                    "table is scoped to one repository",
-                "action_code": DPAT_FIND_SINGLE,
-                "path_vars": {
-                    "table": GitHubTablesDataProvider::TablePathVar,
-                },
-                "groups": (RecordGroup,),
-                "data_dependent_options": True,
-                "data_provider_info": GitHubTablesDataProvider::RecordActionProviderInfo,
-            });
+            string create_desc = sprintf("Create new records in the given table in app %y",
+                GitHubDataProvider::AppName);
+            string update_desc = sprintf("Update the records matching the search criteria in the given "
+                "table in app %y", GitHubDataProvider::AppName);
 
-            desc = sprintf("Create new records in the given table in app %y", GitHubDataProvider::AppName);
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": GitHubDataProvider::AppName,
-                "path": tables_path,
-                "action": "create",
-                "display_name": "Create Records",
-                "short_desc": desc,
-                "desc": desc + ".\n\nGitHub's collection endpoints lag its writes by a few seconds, so a "
-                    "record created here is **not** in what a search returns immediately afterwards; use "
-                    "what this action returned rather than reading it back",
-                "action_code": DPAT_CREATE,
-                "path_vars": {
-                    "table": GitHubTablesDataProvider::TablePathVar,
-                },
-                "groups": (RecordGroup,),
-                "data_dependent_options": True,
-                "data_provider_info": GitHubTablesDataProvider::RecordActionProviderInfo,
-            });
+            RestSchemaTablesDataProvider::registerRecordActions(GitHubDataProvider::AppName,
+                "/" + GitHubDataProvider::TablesChildName, action_set, GitHubRecordTables::Tables,
+                GitHubRecordTables::RecordActionIds, {
+                    "groups": (GitHubRecordTables::RecordGroup,),
+                }, {
+                    "search": {
+                        "short_desc": search_desc,
+                        "desc": search_desc + scope_desc,
+                    },
+                    "search-single": {
+                        "short_desc": single_desc,
+                        "desc": single_desc + scope_desc,
+                    },
+                    "create": {
+                        "short_desc": create_desc,
+                        "desc": create_desc + ".\n\nGitHub's collection endpoints lag its writes by a few "
+                            "seconds, so a record created here is **not** in what a search returns "
+                            "immediately afterwards; use what this action returned rather than reading it "
+                            "back",
+                    },
+                    "update": {
+                        "short_desc": update_desc,
+                        "desc": update_desc + ".\n\nGitHub identifies an issue or a pull request by its "
+                            "`number` within the repository, so a search naming one changes exactly that "
+                            "record; any other search reads the table first and updates every record it "
+                            "matches",
+                    },
+                });
         }
 
         # register the webhook event actions
@@ -252,16 +232,32 @@ module GitHubDataProvider {
     \c owner and \c repo are required search and create options, because a table is scoped to one
     repository.
 
-    Three actions reach them, each naming its table in the path (\c "tables/{table}"):
+    Four actions reach them, each naming its table in the path (\c "tables/{table}"):
 
     |!Action|!What it does
     |\c search|Returns every record in the table matching the search
     |\c search-single|Returns the one record matching the search
     |\c create|Creates records in the table
+    |\c update|Updates every record matching the search
 
-    Their options depend on which table was named - \c issues accepts a state and a label filter that
-    \c releases has no notion of - so they are resolved from the chosen table rather than declared once for
-    the application.  The three action IDs are those of the application this module replaces.
+    Their options depend on which table was named - \c issues accepts a state and a sort that \c releases has
+    no notion of - so they are resolved from the chosen table rather than declared once for the application.
+    The first three action IDs are those of the application this module replaces.
+
+    There is **no delete action**: GitHub's REST API cannot delete an issue, a pull request or a release.  An
+    issue is closed rather than removed, which is an update.
+
+    @subsection githubdataprovider_records_search How a Search Is Answered
+
+    A table takes the standard search expressions, and answers one in two parts.  What GitHub can evaluate is
+    sent with the listing: an issue's \c state, a pull request's \c base branch, and \c since for issues
+    updated after a point in time.  Everything else is evaluated against each record as it arrives, and the
+    listing is paged until the caller's \c limit is met **by matching records** - so a search for ten closed
+    issues returns ten of them however far into the repository they are.
+
+    The tables therefore declare \c supports_search_expressions and **not** \c supports_native_search: GitHub
+    has no filter expression language, so the search does not happen entirely on the server, and each
+    operator says for itself whether GitHub can evaluate it.
 
     @section githubdataprovider_examples Examples
 
