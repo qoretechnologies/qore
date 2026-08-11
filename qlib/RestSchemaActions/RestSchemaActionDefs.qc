@@ -61,6 +61,19 @@ public const RestSchemaActionLocations = {
 };
 #/@}
 
+#! HTTP methods whose defined semantics are read-only
+/** The comparison is performed against normalized protocol tokens, never action names or presentation text.
+    Methods not listed here fail closed as potentially mutating.
+
+    @since %RestSchemaActions 1.0
+*/
+public const RestSchemaReadOnlyHttpMethods = {
+    "GET": True,
+    "HEAD": True,
+    "OPTIONS": True,
+    "TRACE": True,
+};
+
 #! Describes where one flattened action option belongs in the outgoing HTTP request
 /** This is the reverse map that makes flattening lossless; it is the contract tested by
     @ref RestSchemaActions::RestSchemaActionOperation::flatten() "flatten()" /

@@ -202,6 +202,7 @@ public class RestSchemaActionSet {
             "short_desc": info.short_desc,
             "desc": info.desc,
             "action_code": DPAT_API,
+            "mutates_state": !RestSchemaReadOnlyHttpMethods{op.getMethod()},
         };
         if (info.groups) {
             rv.groups = info.groups;

@@ -453,6 +453,19 @@ public hashdecl DataProviderActionInfo {
     */
     int action_code;
 
+    #! Whether executing the action can change provider or external state
+    /** This is structural producer metadata for safety-sensitive consumers.  It must be derived from the
+        action's implementation or protocol contract, never from its name, display name, description, or
+        translated presentation text.
+
+        If unset, @ref DataProviderActionCatalog::actionMutatesState() applies the action-code default.  In
+        particular, generic @ref DPAT_API "DPAT_API" actions default to mutating so unknown actions fail
+        closed.
+
+        @since %DataProvider 3.7
+    */
+    *bool mutates_state;
+
     #! Message or event type
     /** if \c action_code is:
         - @ref DPAT_EVENT "DPAT_EVENT": this is the event type
@@ -1364,6 +1377,41 @@ public class DataProviderActionCatalog {
         }
         deregisterAppIntern(name);
         return app;
+    }
+
+    #! Returns whether executing an action can change provider or external state
+    /** An explicit @ref DataProviderActionInfo::mutates_state "mutates_state" value is authoritative.  When
+        it is unset, event and record-read actions are read-only and every other action type is treated as
+        mutating.  The conservative default is intentional: an unknown or generic API action must not become
+        executable in a read-only context merely because its identifier or translated description resembles a
+        read operation.
+
+        @param action action definition to classify
+        @return False only when structural producer metadata or the exact action type establishes that the
+        action is read-only
+
+        @throw no exceptions are expected
+
+        @par Example
+        A schema-generated HTTP \c GET action carries \c mutates_state = \c False and is classified as read-only.
+        An unannotated generic @ref DPAT_API "DPAT_API" action is classified as mutating.
+
+        @note Producers must derive an explicit read-only value from implementation or protocol semantics; action
+        identifiers, descriptions, and translated presentation text are never evidence that an action is read-only.
+
+        @since %DataProvider 3.7
+    */
+    static bool actionMutatesState(hash<DataProviderActionInfo> action) {
+        if (action.mutates_state.typeCode() == NT_BOOLEAN) {
+            return action.mutates_state;
+        }
+        switch (action.action_code) {
+            case DPAT_EVENT:
+            case DPAT_FIND:
+            case DPAT_FIND_SINGLE:
+                return False;
+        }
+        return True;
     }
 
     #! Registers a data provider action
