@@ -736,10 +736,10 @@ cargo install tree-sitter-cli@0.26.5
     @par Versioned C++ APIs Between Binary Modules
     @parblock
     A binary module can now publish a C++ API for other binary modules to consume, without the
-    API having to be moved into \c libqore.  The exporting module declares a struct of function
+    API having to be moved into \c libqore.  The exporting module declares a hashdecl of function
     pointers in an installed header and publishes it through a single \c extern \c "C" entry
     point named <tt>&lt;feature&gt;_qore_cpp_api</tt>; the consuming module includes only that
-    header and resolves the struct at run time with \c q_get_module_cpp_api(), declared in the
+    header and resolves the hashdecl at run time with \c q_get_module_cpp_api(), declared in the
     new \c <qore/QoreModuleCppApi.h>.
 
     Resolution loads the exporting module on demand and verifies that the version it publishes
@@ -1859,6 +1859,14 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref bigcommercerestclientintro "BigCommerceRestClient" module
       - new module providing a REST client for <a href="https://www.bigcommerce.com/">BigCommerce</a>'s e-commerce API
 
+    - @ref bitbucketdataproviderintro "BitbucketDataProvider" module
+      - new module providing a data provider API for <a href="https://bitbucket.org">Bitbucket</a> repositories,
+        pull requests, issues and pipelines, with actions generated from Bitbucket's own OpenAPI 3 description
+
+    - @ref bitbucketrestclientintro "BitbucketRestClient" module
+      - new module providing a REST client for the <a href="https://bitbucket.org">Bitbucket</a> API,
+        authenticating with an app password or through OAuth2
+
     - @ref bitlydataproviderintro "BitlyDataProvider" module
       - new module providing a data provider API for <a href="https://bitly.com/">Bitly</a> URL shortening
 
@@ -1906,6 +1914,15 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     - @ref cohererestclientintro "CohereRestClient" module
       - new module providing a REST client for <a href="https://cohere.com">Cohere</a>'s v2 REST API
+
+    - @ref confluencedataproviderintro "ConfluenceDataProvider" module
+      - new module providing a data provider API for <a href="https://www.atlassian.com/software/confluence">Confluence</a>
+        Cloud spaces, pages, blog posts and attachments, with actions generated from Confluence's own OpenAPI 3
+        description
+
+    - @ref confluencerestclientintro "ConfluenceRestClient" module
+      - new module providing a REST client for the <a href="https://www.atlassian.com/software/confluence">Confluence</a>
+        Cloud v2 API, authenticating with an API token or through OAuth2
 
     - @ref constantcontactdataproviderintro "ConstantContactDataProvider" module
       - new module providing a data provider API for <a href="https://www.constantcontact.com/">Constant Contact</a> email marketing
@@ -2017,6 +2034,24 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref generatordataproviderintro "GeneratorDataProvider" module
       - new module providing a data provider API for generating configurable test record streams for data
         pipeline testing with no external dependencies
+
+    - @ref githubdataproviderintro "GitHubDataProvider" module
+      - new module providing a data provider API for <a href="https://github.com">GitHub</a> repositories, issues,
+        pull requests, releases and Actions, with actions generated from GitHub's own OpenAPI 3 description, three
+        record-based tables, and seven webhook events that verify the signature on every delivery
+
+    - @ref githubrestclientintro "GitHubRestClient" module
+      - new module providing a REST client for the <a href="https://github.com">GitHub</a> REST API,
+        authenticating with a personal access token or through OAuth2
+
+    - @ref gitlabdataproviderintro "GitLabDataProvider" module
+      - new module providing a data provider API for <a href="https://gitlab.com">GitLab</a> projects, branches,
+        commits, issues and merge requests, with actions generated from GitLab's own OpenAPI 3 description, on
+        GitLab.com and on self-managed installations alike
+
+    - @ref gitlabrestclientintro "GitLabRestClient" module
+      - new module providing a REST client for the <a href="https://gitlab.com">GitLab</a> API, deriving the
+        target URL from the instance hostname
 
     - @ref gohighleveldataproviderintro "GoHighLevelDataProvider" module
       - new module providing a data provider API for <a href="https://www.gohighlevel.com/">GoHighLevel</a> CRM
@@ -2559,6 +2594,16 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     - @ref woocommercerestclientintro "WooCommerceRestClient" module
       - new module providing a REST client for <a href="https://woocommerce.com/">WooCommerce</a>'s REST API v3
+
+    - @ref xerodataproviderintro "XeroDataProvider" module
+      - new module providing a data provider API for <a href="https://www.xero.com">Xero</a> accounting, projects
+        and payroll, with actions generated from Xero's own OpenAPI 3 descriptions; the first application built
+        over more than one of a vendor's documents, each action routing itself to the base path its own document
+        declares
+
+    - @ref xerorestclientintro "XeroRestClient" module
+      - new module providing a REST client for the <a href="https://www.xero.com">Xero</a> API, resolving the
+        tenant and sending it on every request
 
     - @ref zohobooksdataproviderintro "ZohoBooksDataProvider" module
       - new module providing a data provider API for <a href="https://www.zoho.com/books/">Zoho Books</a> accounting and invoicing
@@ -3106,7 +3151,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - \c qore_module_init_t signature changed from \c QoreStringNode*() to
         \c void(QoreModuleInitContext&, \c ExceptionSink&); errors are now reported via exceptions
       - \c qore_module_ns_init_t now takes an additional \c ExceptionSink& parameter
-      - The \c QoreModuleInfo struct uses default member initializers, making it extensible without future API breaks
+      - The \c QoreModuleInfo hashdecl uses default member initializers, making it extensible without future API breaks
 
     @subsection qore_2_0_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/BulkSqlUtil/html/index.html#bulksqlutilintro">BulkSqlUtil</a> module
@@ -4378,7 +4423,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     @subsection qore_1_0_10_bug_fixes Bug Fixes in Qore
     - fixed a bug in calculating abstract overrides in child classes that could cause spurious errors
       (<a href="https://github.com/qoretechnologies/qore/issues/4338">issue 4338</a>)
-    - implemented the @ref Qore::parse_url(string, __7_ int) variant to allow for percent decoding in URL strings
+    - implemented the @ref Qore::parse_url(string, *int) variant to allow for percent decoding in URL strings
       (<a href="https://github.com/qoretechnologies/qore/issues/4332">issue 4332</a>)
     - fixed C++ foreign thread registration APIs to support TID reuse to provide thread affinity for language
       modules such as Python and Java with successive rapid transitions into %Qore in callbacks
@@ -4695,7 +4740,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
 
     @subsection qore_0913_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/Mapper/html/index.html#mapperintro">Mapper</a> module updates:
-      - fixed a bug handling the \c struct key in mappers
+      - fixed a bug handling the \c hashdecl key in mappers
         (<a href="https://github.com/qoretechnologies/qore/issues/4189">issue 4189</a>)
 
     @section qore_0912 Qore 0.9.12
@@ -5569,7 +5614,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       (<a href="https://github.com/qoretechnologies/qore/issues/3509">issue 3509</a>)
     - fixed bugs importing user modules with an injected API in an existing @ref Qore::Program "Program" container
       (<a href="https://github.com/qoretechnologies/qore/issues/3504">issue 3504</a>)
-    - fixed a memory leak in @ref Qore::Serializable::deserialize(string, __7_ int) "Serializable::deserialize(string)"
+    - fixed a memory leak in @ref Qore::Serializable::deserialize(string, *int) "Serializable::deserialize(string)"
     - fixed a memory leak (crash in debug mode) related to @ref garbage_collection "deterministic garbage collection"
       (<a href="https://github.com/qoretechnologies/qore/issues/3481">issue 3481</a>)
     - fixed a bug where HTTP redirect messages with a simple path and not a full URL were not processed correctly
@@ -8472,7 +8517,7 @@ class MyAbstractInterface {
     @par Other Minor Improvements and Changes
     - qpp updated to support abstract methods and multiple inheritance (+ other minor qpp enhancements)
     - improved the \c QOREADDRINFO-GETINFO-ERROR exception description by adding information about the arguments passed
-    - added a string argument to @ref Qore::chr(softint, __7_ string) "char(softint, *string)" to accept an output encoding
+    - added a string argument to @ref Qore::chr(softint, *string) "char(softint, *string)" to accept an output encoding
     - added a @ref Qore::int(string, int) "int(string, int)" variant to parse a string as a number and give the base
     - added a new parameter to parse_url() and parseURL() to allow for any [] in the hostname to be included in the \c "host" output key for indicating that the <a href="http://wikipedia.org/wiki/IPv6">ipv6</a> protocol be used
     - added the following pseudo-methods:

@@ -51,6 +51,17 @@ its overlay, not by module code).
 
 ### Registration
 - [ ] Factory registered in `qlib/DataProvider/DataProvider.qc` -> `FactoryMap`
+- [ ] **Presentation catalog committed** at `qlib/<Module>/i18n/data-provider.<base64 app name>/root.json`.
+      Every app that registers presentation strings owns one, and `examples/test/qlib/DataProvider/Presentation.qtest`
+      fails with `MISSING: owner module "<Module>" catalog domain "data-provider.<b64>"` without it. Generate
+      it — never hand-write it — with the **repo's** tool, which is byte-reproducible:
+      ```
+      QORE_MODULE_DIR=build/qlib-qmod:build/modules/i18n:build/modules/json:qlib LD_LIBRARY_PATH=build \
+        build/qore bin/qore-data-provider-i18n -C -o qlib/<Module>/i18n -m <Module> --owner <Module>
+      ```
+      Regenerate whenever a `display_name`, `short_desc` or `desc` changes; the test compares the committed
+      tree against what the module currently produces. Note the check only reaches an app once its factory is
+      in `FactoryMap`, so a module missing both fails silently until the factory is added.
 - [ ] `registerApp()` called with correct fields
 - [ ] `groups` includes at least one `AppGroup` enum value (enforced at runtime by `RequiredAppKeys`)
 - [ ] `groups` uses only `AppGroup` enum values from `qlib/DataProvider/AppGroup.qc` (not raw strings)

@@ -74,6 +74,35 @@ file a reviewer should read to know what the application actually offers.
 `<App>Schema.qc` and `<App>Manifest.qc` are the two files with no counterpart in a hand-written
 application, and the two whose class-level documentation carries the application's durable rationale.
 
+### The five registrations that live outside the module
+
+A schema-driven application is still an ordinary Qore module, so it needs the same five entries
+outside its own directory that any other one does. They are listed here because everything else on
+this page is inside the module, and because **all five applications in the first series shipped
+without all five of them** — the module loaded, every test passed, and the live verification against
+each vendor's API worked, because none of these is on the path a `%requires` takes:
+
+| Registration | Where | What breaks without it |
+|---|---|---|
+| Connection scheme | `qlib/ConnectionProvider/ConnectionSchemeCache.qc` → `SchemeMap` | the scheme is unknown to the index, so the app is dropped from it |
+| Provider factory | `qlib/DataProvider/DataProvider.qc` → `FactoryMap` | the module loads but the app never appears in the apps list |
+| Presentation catalog | `qlib/<Module>/i18n/data-provider.<base64 app name>/root.json` | `Presentation.qtest` fails; the app has no translatable strings |
+| Module list | `doxygen/lang/120_modules.dox.tmpl` | the module is missing from the published module index |
+| Release note | `doxygen/lang/900_release_notes.dox.tmpl` | the new module is unannounced |
+
+Both `doxygen/lang/` lists are maintained in **alphabetical order**; insert in place rather than
+appending. The presentation catalog is generated, never hand-written — see the checklist for the
+command, and regenerate it whenever a display name or description changes.
+
+The two failures compound in a way worth knowing about: the presentation check reaches an app only
+once its factory is in `FactoryMap`, so a module missing both is reported as missing *neither*.
+Adding the factory is what made the catalogs' absence visible.
+
+[data-provider-checklist.md](data-provider-checklist.md) is authoritative for all five and for
+everything else a module owes the platform — its sections 1, 2 and 9-11 apply to a schema-driven
+application unchanged; only sections 3-8 and 12 are taken over by the manifest and its overlay.
+**Run it before calling a port finished.**
+
 ## Vendoring the schema
 
 The committed `<app>-openapi.*` file is **not** the upstream document. It is the output of
