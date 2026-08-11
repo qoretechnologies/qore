@@ -55,7 +55,7 @@ public const XeroMaxPollPages = 10;
 
     @section xeroevent_dates Xero Writes Two Kinds of Timestamp
 
-    Xero's accounting API answers JSON with .NET timestamps — \c "/Date(1573755038314+0000)/" — while its
+    Xero's accounting API answers JSON with .NET timestamps - \c "/Date(1573755038314+0000)/" - while its
     description declares them as RFC 3339 strings and its projects and payroll APIs actually send those.
     A cursor that could read only one of the two forms would either never advance or advance wrongly, so
     both are parsed here.
@@ -531,7 +531,7 @@ public class XeroNewBankTransactionDataProvider inherits XeroAccountingWatchData
         const ShortDesc = "Fires when a bank transaction is created or changed";
 
         #! The event description
-        const Desc = "Fires for each bank transaction created or changed — money spent or received "
+        const Desc = "Fires for each bank transaction created or changed - money spent or received "
             "against a bank account.\n\n"
             "The event carries the bank transaction record Xero returns.";
 

@@ -138,7 +138,7 @@ module StripeDataProvider {
             "action": EVENT_CUSTOMER_CREATED,
             "display_name": "Customer Created",
             "short_desc": "React to a customer being created",
-            "desc": "Fires when a customer is created, however it happened — through the API, the dashboard, or a Checkout session.\n\nUseful for keeping a CRM in step with Stripe without polling.",
+            "desc": "Fires when a customer is created, however it happened - through the API, the dashboard, or a Checkout session.\n\nUseful for keeping a CRM in step with Stripe without polling.",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_CUSTOMER_CREATED,
             "groups": ("Events",),
@@ -190,7 +190,7 @@ module StripeDataProvider {
             "action": EVENT_PAYMENT_INTENT_FAILED,
             "display_name": "Payment Failed",
             "short_desc": "React to a payment failing",
-            "desc": "Fires when a payment intent fails.\n\n`last_payment_error` says why. A failure is not always final — the same payment intent can be confirmed again with a different payment method.",
+            "desc": "Fires when a payment intent fails.\n\n`last_payment_error` says why. A failure is not always final - the same payment intent can be confirmed again with a different payment method.",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_PAYMENT_INTENT_FAILED,
             "groups": ("Events",),
@@ -229,7 +229,7 @@ module StripeDataProvider {
             "action": EVENT_SUBSCRIPTION_UPDATED,
             "display_name": "Subscription Updated",
             "short_desc": "React to a subscription changing",
-            "desc": "Fires whenever a subscription changes — an upgrade or downgrade, a quantity change, a trial ending, or a payment failure moving it to `past_due`.\n\nThe event's `data.previous_attributes` holds only the fields that changed, which is the reliable way to tell what actually happened.",
+            "desc": "Fires whenever a subscription changes - an upgrade or downgrade, a quantity change, a trial ending, or a payment failure moving it to `past_due`.\n\nThe event's `data.previous_attributes` holds only the fields that changed, which is the reliable way to tell what actually happened.",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_SUBSCRIPTION_UPDATED,
             "groups": ("Events",),
@@ -242,7 +242,7 @@ module StripeDataProvider {
             "action": EVENT_SUBSCRIPTION_CANCELED,
             "display_name": "Subscription Canceled",
             "short_desc": "React to a subscription ending",
-            "desc": "Fires when a subscription ends and billing stops.\n\nThis is the signal to revoke access. A subscription set to cancel at the end of its period stays active until then, and this fires when that moment arrives — not when the cancellation was requested.",
+            "desc": "Fires when a subscription ends and billing stops.\n\nThis is the signal to revoke access. A subscription set to cancel at the end of its period stays active until then, and this fires when that moment arrives - not when the cancellation was requested.",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_SUBSCRIPTION_CANCELED,
             "groups": ("Events",),
@@ -285,7 +285,7 @@ module StripeDataProvider {
     |Stripe API version|\c 2026-07-29.dahlia
     |Imported|2026-08-08
 
-    The committed copy is pruned to the exported operations and everything they reference — 21 of 416
+    The committed copy is pruned to the exported operations and everything they reference - 21 of 416
     paths and 1022 of 1440 component schemas.  That is not only a size reduction: parsing the full
     document takes around 45 seconds, which is not a reasonable cost for an application exposing a few
     dozen operations.
@@ -341,7 +341,7 @@ module StripeDataProvider {
     - **Stripe can deliver the same event more than once.**  Record the event \c id and ignore one already
       processed, so that handling is idempotent.
     - **For an update, \c data.previous_attributes holds only the fields that changed**, which is the
-      reliable way to tell what actually happened — a \c customer.subscription.updated event fires for an
+      reliable way to tell what actually happened - a \c customer.subscription.updated event fires for an
       upgrade, a quantity change, a trial ending and a failed payment alike.
 
     @section stripedataproviderrelnotes Release Notes

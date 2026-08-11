@@ -18,7 +18,7 @@ documents:
       - reason: >-
           Confluence declares a page or blog post body as
           "oneOf: [<Type>BodyWrite, <Type>NestedBodyWrite]", but neither branch requires any property, so
-          every body matches both and "oneOf" — which means exactly one — can never be satisfied. Every
+          every body matches both and "oneOf" - which means exactly one - can never be satisfied. Every
           create and update was rejected before the request was sent. The branches are alternatives the
           API accepts, which is "anyOf"; Atlassian's own prose says as much ("Only one body format should
           be specified as the property for this object"), it is simply not what the document encodes.

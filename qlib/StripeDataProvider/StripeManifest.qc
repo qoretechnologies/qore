@@ -204,7 +204,7 @@ public class StripeManifest {
                 "display_name": "Get Account",
                 "short_desc": "Retrieve the account the credentials belong to",
                 "desc": "Retrieves the Stripe account that the connection's credentials authenticate as.\n\n"
-                    "Use this to confirm which account an integration is working against — the `id`, the "
+                    "Use this to confirm which account an integration is working against - the `id`, the "
                     "country and default currency it settles in, and which `capabilities` are active. It is "
                     "also the cheapest way to check that credentials are valid before doing anything else.",
                 "groups": (GroupAccount,),
@@ -219,7 +219,7 @@ public class StripeManifest {
                 "desc": "Retrieves the funds Stripe currently holds for the account, split into `available` "
                     "and `pending` amounts per currency.\n\n"
                     "`pending` is money from payments that have not yet settled; `available` is what the "
-                    "next payout can draw on. Amounts are in the currency's smallest unit — cents for USD "
+                    "next payout can draw on. Amounts are in the currency's smallest unit - cents for USD "
                     "and EUR, whole yen for JPY.",
                 "groups": (GroupBalance,),
             },
@@ -254,7 +254,7 @@ public class StripeManifest {
                 "short_desc": "Retrieve one balance transaction",
                 "desc": "Retrieves a single balance transaction, showing the gross amount, the fee Stripe "
                     "took and the net amount that reached the balance.\n\n"
-                    "The `source` field links back to whatever caused it — the charge, refund or dispute.",
+                    "The `source` field links back to whatever caused it - the charge, refund or dispute.",
                 "groups": (GroupBalance,),
                 "fields": {
                     "id": <RestSchemaFieldOverlayInfo>{
@@ -291,7 +291,7 @@ public class StripeManifest {
                 "operation_id": "GetAccountsAccount",
                 "display_name": "Get Connected Account",
                 "short_desc": "Retrieve one connected account",
-                "desc": "Retrieves a connected account, including its `requirements` — the information "
+                "desc": "Retrieves a connected account, including its `requirements` - the information "
                     "Stripe still needs before the account can accept payments or receive payouts.\n\n"
                     "Checking `requirements.currently_due` is how an onboarding flow knows what to ask the "
                     "account holder for next.",
@@ -454,7 +454,7 @@ public class StripeManifest {
                 "operation_id": "GetAccountsAccountPersons",
                 "display_name": "List Account People",
                 "short_desc": "List the people associated with a connected account",
-                "desc": "Lists the people Stripe holds on a connected account's legal entity — its "
+                "desc": "Lists the people Stripe holds on a connected account's legal entity - its "
                     "directors, owners, executives and representative.\n\n"
                     "Regulations require these to be identified before an account can be paid out, so this "
                     "is what an onboarding flow reads to see who is still missing.",
@@ -477,7 +477,7 @@ public class StripeManifest {
                 "display_name": "Create Account Person",
                 "short_desc": "Add a person to a connected account",
                 "desc": "Adds a person to a connected account's legal entity and records their "
-                    "`relationship` to it — director, owner, executive or representative.\n\n"
+                    "`relationship` to it - director, owner, executive or representative.\n\n"
                     "Which details Stripe requires depends on the country and the person's relationship; "
                     "the account's `requirements` says what is still outstanding.",
                 "groups": (GroupConnect,),
@@ -571,7 +571,7 @@ public class StripeManifest {
                 "short_desc": "Update a charge's description, metadata or fraud details",
                 "desc": "Updates a charge. Only the fields supplied are changed.\n\n"
                     "The amount and the card cannot be changed once a charge exists; what can be updated is "
-                    "the bookkeeping around it — `description`, `metadata`, `receipt_email` and "
+                    "the bookkeeping around it - `description`, `metadata`, `receipt_email` and "
                     "`fraud_details`. Reporting a charge as fraudulent through `fraud_details` also feeds "
                     "Stripe's fraud detection.",
                 "groups": (GroupCharges,),
@@ -703,7 +703,7 @@ public class StripeManifest {
                 "operation_id": "GetCustomersCustomerBalanceTransactions",
                 "display_name": "List Customer Balance Transactions",
                 "short_desc": "List the entries in a customer's credit balance",
-                "desc": "Lists the entries that changed a customer's credit balance — the running credit or "
+                "desc": "Lists the entries that changed a customer's credit balance - the running credit or "
                     "debit Stripe applies to their next invoice.\n\n"
                     "A negative balance is credit the customer holds; a positive balance is money they owe "
                     "that will be added to their next invoice.",
@@ -968,7 +968,7 @@ public class StripeManifest {
                 "desc": "Starts a payment and tracks it through to completion.\n\n"
                     "This is the way to take a payment: a payment intent can carry out the customer "
                     "authentication that European regulations require, which a direct charge cannot. "
-                    "`amount` is in the currency's smallest unit — `2000` is $20.00 — and the "
+                    "`amount` is in the currency's smallest unit - `2000` is $20.00 - and the "
                     "`client_secret` on the result is what the client-side libraries use to finish the "
                     "payment with the customer.",
                 "groups": (GroupPaymentIntents,),

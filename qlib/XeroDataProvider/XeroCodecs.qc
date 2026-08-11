@@ -25,8 +25,8 @@
 #! contains all public definitions in the XeroDataProvider module
 public namespace XeroDataProvider {
 #! The wire codecs the Xero application registers
-/** Xero declares its date-valued query arguments as plain strings — \c DateFrom and \c DateTo on the
-    purchase order listing are \c {"type": "string"} with nothing to say they are dates — and expects them
+/** Xero declares its date-valued query arguments as plain strings - \c DateFrom and \c DateTo on the
+    purchase order listing are \c {"type": "string"} with nothing to say they are dates - and expects them
     written as \c YYYY-MM-DD.  Anything else is either rejected or, worse, parsed as a different day.
 
     That is exactly the case a codec is for: the schema is not lying about the *shape* of the value, it is
@@ -36,7 +36,7 @@ public namespace XeroDataProvider {
     ones that are dates.
 
     @note The date is formatted in the local zone rather than converted to UTC.  Xero's date filters are
-    calendar dates in the organisation's own terms — "invoices from the first of the month" — and
+    calendar dates in the organisation's own terms - "invoices from the first of the month" - and
     converting to UTC first would move the boundary by a day for anyone east or west of Greenwich.
 */
 public class XeroCodecs {

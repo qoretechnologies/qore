@@ -104,8 +104,8 @@ public hashdecl RestSchemaDerivedValueInfo {
 }
 
 #! Describes a bidirectional conversion between an action-facing value and its wire representation
-/** A codec exists so that an action can present a semantically correct type — a %Qore
-    @ref date "date", say — for a wire value that is something else, such as an integer count of
+/** A codec exists so that an action can present a semantically correct type - a %Qore
+    @ref date "date", say - for a wire value that is something else, such as an integer count of
     seconds since the UNIX epoch, without the UX overlay having to carry executable code.
 
     @see @ref RestSchemaActions::RestSchemaActionCodecs "RestSchemaActionCodecs"
@@ -137,14 +137,14 @@ public hashdecl RestSchemaWireCodecInfo {
     @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()".
 
     An overlay expresses **presentation**: what a field is called, whether it is shown first, whether it
-    offers a dropdown.  It must never be used to repair a schema — a missing or malformed reference belongs
+    offers a dropdown.  It must never be used to repair a schema - a missing or malformed reference belongs
     in a normalization step, and a valid construct %Qore cannot parse belongs in
     @ref openapi3intro "OpenApi3".
 */
 public hashdecl RestSchemaFieldOverlayInfo {
     #! Drop the field from the action entirely
-    /** Use for values the connection owns — an API key header, an account identifier fixed by the
-        connection — which must never appear as an action option.
+    /** Use for values the connection owns - an API key header, an account identifier fixed by the
+        connection - which must never appear as an action option.
     */
     *bool ignore;
 
@@ -269,7 +269,7 @@ public hashdecl RestSchemaFieldOverlayInfo {
     is never the source of persistent identity, because an upstream rename must be reported rather than
     silently rename an action that existing workflows call.
 
-    It also makes additions deliberate — an endpoint that appears in an updated schema does not become a
+    It also makes additions deliberate - an endpoint that appears in an updated schema does not become a
     public action until somebody adds it here.
 */
 public hashdecl RestSchemaActionInfo {
@@ -291,8 +291,8 @@ public hashdecl RestSchemaActionInfo {
     #! Names the action this one is a deliberately narrowed variant of
     /** An operation may normally be exported only once, so that a copy-and-paste slip in the manifest is
         caught rather than producing two actions nobody meant to have.  Setting this declares the exception:
-        a second action on the same operation whose overlay narrows it to one job — an "archive" action that
-        is an update with the status fixed, say — where the general action remains available for everything
+        a second action on the same operation whose overlay narrows it to one job - an "archive" action that
+        is an update with the status fixed, say - where the general action remains available for everything
         else.
 
         The named action must be in the same manifest and must resolve to the same method and path, so that

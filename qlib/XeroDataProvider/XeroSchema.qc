@@ -76,7 +76,7 @@ public hashdecl XeroSchemaProvenanceInfo {
     action \c /projects.xro/2.0.
 
     What does **not** split cleanly is the dropdowns.  A project names a **contact**, and contacts are
-    declared in the accounting document — so the projects set is built with the accounting set as a peer,
+    declared in the accounting document - so the projects set is built with the accounting set as a peer,
     and a projects action can offer a dropdown the accounting set produces.  The listing then runs against
     the accounting schema, which is the only way its URI prefix can be right.
 

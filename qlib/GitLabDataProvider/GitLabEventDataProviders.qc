@@ -45,7 +45,7 @@ public const GitLabDefaultPollInterval = 60;
 
     @ref DataProvider::AbstractTimestampWatchDataProvider "AbstractTimestampWatchDataProvider" positions the
     feed by \c created_at instead, keeps only the identities recorded **at exactly** the cursor timestamp to
-    break ties, and makes the cursor durable when the host supplies persistence — so delivery is
+    break ties, and makes the cursor durable when the host supplies persistence - so delivery is
     at-least-once across restarts rather than best-effort. It also dispatches in ascending order and only
     advances the cursor after an item has been delivered successfully, so a consumer that throws gets the
     item again instead of losing it.
@@ -57,7 +57,7 @@ public const GitLabDefaultPollInterval = 60;
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method to the
     first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the operation as
-    unsupported — so listing the data provider base first would leave every subscription failing with
+    unsupported - so listing the data provider base first would leave every subscription failing with
     \c UNIMPLEMENTED.
 */
 public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestampWatchDataProvider,
@@ -91,7 +91,7 @@ public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestam
                 "type": AbstractDataProviderType::get(DateOrNothingType),
                 "desc": "Deliver records created at or after this time.\n\n"
                     "Without it the cursor starts at the moment the subscription starts, so nothing "
-                    "already in the repository is delivered — set it to backfill",
+                    "already in the repository is delivered - set it to backfill",
             },
         };
     }
@@ -166,7 +166,7 @@ public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestam
     }
 
     #! Returns any further options that decide which records the feed returns
-    /** Overridden by a provider with a filter of its own — a branch, a commit — so that changing it starts
+    /** Overridden by a provider with a filter of its own - a branch, a commit - so that changing it starts
         a new cursor rather than resuming the old one against a different selection.
     */
     private *hash<auto> getWatchFilterIdentity() {
@@ -511,8 +511,8 @@ public class GitLabNewCommitCommentDataProvider inherits GitLabWatchDataProvider
 
         A digest of exactly those fields is therefore the identity.  Two genuinely distinct comments agree
         on all of them only if the same author posted the same text at the same place in the same second,
-        in which case delivering one event is the better failure: the alternative — treating them as
-        distinct — would make every poll re-deliver both, because the cursor could never advance past a
+        in which case delivering one event is the better failure: the alternative - treating them as
+        distinct - would make every poll re-deliver both, because the cursor could never advance past a
         tie it cannot break.
     */
     private *string getWatchRecordId(hash<auto> record) {
@@ -738,7 +738,7 @@ public class GitLabEventsDataProvider inherits DataProvider::AbstractDataProvide
     #! Returns the given event provider or @ref nothing if the event is unknown
     /** The child returned here is a **template**: it carries the event's option declarations, and the
         values are supplied when a subscription is created.  That is why the project is not required to
-        construct one — see @ref GitLabDataProvider::GitLabWatchDataProviderBase "GitLabWatchDataProviderBase".
+        construct one - see @ref GitLabDataProvider::GitLabWatchDataProviderBase "GitLabWatchDataProviderBase".
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = EventMap{name};

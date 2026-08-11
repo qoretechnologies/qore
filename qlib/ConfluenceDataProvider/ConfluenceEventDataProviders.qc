@@ -38,7 +38,7 @@ public const ConfluenceMaxPollPages = 5;
 
 #! Base class for Confluence polling watch data providers
 /** Confluence Cloud does have webhooks, but registering one needs a Connect or Forge app installed on the
-    site — an administrator action that a connection cannot perform — so these poll, exactly as the
+    site - an administrator action that a connection cannot perform - so these poll, exactly as the
     application this module replaces did.
 
     They poll better, though.  That application kept the identities it had already delivered in a bounded
@@ -121,7 +121,7 @@ public class ConfluenceWatchDataProviderBase inherits DataProvider::AbstractTime
     }
 
     #! Returns the configuration that defines which scan this provider follows
-    /** The space scopes the feed, so watching a different one — or the whole site — is a different scan
+    /** The space scopes the feed, so watching a different one - or the whole site - is a different scan
         and the previous cursor must not be resumed against it.
     */
     private *hash<auto> getWatchStreamIdentityImpl() {

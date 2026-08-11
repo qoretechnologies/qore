@@ -52,8 +52,8 @@ public hashdecl PruneResultInfo {
 }
 
 #! Prunes a REST schema to an explicitly selected set of operations
-/** Parsing a large schema dominates load time and memory — Stripe's OpenAPI 3 document declares
-    several hundred paths, of which an application typically exposes a couple of dozen — so the
+/** Parsing a large schema dominates load time and memory - Stripe's OpenAPI 3 document declares
+    several hundred paths, of which an application typically exposes a couple of dozen - so the
     document an application builds its actions from should contain the operations it selected and
     nothing else.
 
@@ -69,7 +69,7 @@ public hashdecl PruneResultInfo {
     - security schemes wholesale, because they are referenced **by name** from \c security rather
       than by \c "$ref", so reachability analysis would wrongly discard them.
 
-    Everything else — every unreferenced component, definition and vendor extension blob — is
+    Everything else - every unreferenced component, definition and vendor extension blob - is
     dropped.
 
     @par What is guaranteed

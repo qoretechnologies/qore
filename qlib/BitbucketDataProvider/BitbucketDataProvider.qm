@@ -63,7 +63,7 @@ module BitbucketDataProvider {
                 "- **Workspaces**: read workspaces, their members and their projects\n"
                 "- **Search**: search code across a workspace's repositories\n\n"
                 "**Authentication** is a repository, project or workspace access token, an app password, "
-                "or the OAuth2 authorization code flow — the first two of which need no OAuth consumer "
+                "or the OAuth2 authorization code flow - the first two of which need no OAuth consumer "
                 "and so no workspace administrator.\n\n"
                 "This application targets Bitbucket **Cloud**; Bitbucket Data Center is a different "
                 "product with a different API.\n\n"
@@ -122,7 +122,7 @@ module BitbucketDataProvider {
 
     **The committed document is repaired before it is pruned.**  Bitbucket documents \c page and
     \c pagelen on a shared pagination page rather than per endpoint, and declares them on 3 of the 331
-    operations in its description — so without the repair a generated listing could not ask for the second
+    operations in its description - so without the repair a generated listing could not ask for the second
     page of anything, and every dropdown would be stuck on Bitbucket's default page of ten records.  The
     repair is declared in the import spec with its reason, checked on every import, and recorded in the
     artifact under \c "x-qore-normalized"; see
@@ -145,7 +145,7 @@ module BitbucketDataProvider {
 
     @section bitbucketdataprovider_crossworkspace Bitbucket Withdrew Its Cross-Workspace Listings
 
-    Bitbucket removed every endpoint that listed anything across workspaces — \c "GET /2.0/workspaces",
+    Bitbucket removed every endpoint that listed anything across workspaces - \c "GET /2.0/workspaces",
     \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer **410 Gone**,
     \c "CHANGE-2770 - Functionality has been deprecated".  There is one replacement, and only one:
     \c "GET /2.0/user/workspaces".
@@ -169,13 +169,13 @@ module BitbucketDataProvider {
     @section bitbucketdataprovider_envelope Paging Through a Listing
 
     Every Bitbucket collection is the same envelope: the records are in \c values, and \c next is the URL
-    of the following page.  Page on the presence of \c next — \c size is absent for some collections, so
+    of the following page.  Page on the presence of \c next - \c size is absent for some collections, so
     a loop on a count does not work.  \c pagelen is capped at 100.
 
     @section bitbucketdataprovider_events Events
 
     Three polling events are offered: a new commit, a new deployment and a new pull request.  Bitbucket's
-    REST API has no event stream a credential can read, so these poll — but they poll with a **timestamp
+    REST API has no event stream a credential can read, so these poll - but they poll with a **timestamp
     cursor** rather than a bounded in-memory set of delivered identities, so a restart resumes where it
     left off instead of re-delivering the first page.
 

@@ -136,7 +136,7 @@ public class GitHubNewPullRequestDataProvider inherits GitHubBaseEventDataProvid
 
 #! Raised when a review is submitted on a pull request
 /** @note The superseded application called this event a review **request**, and its description said so,
-    but it subscribes to GitHub's \c pull_request_review event and its payload carries a \c review — so what
+    but it subscribes to GitHub's \c pull_request_review event and its payload carries a \c review - so what
     it actually reports is a review being **given**.  The name is a product commitment and is kept; the
     presentation is corrected here rather than the behaviour, because the payload is what existing workflows
     read.  A review being *requested* is the \c pull_request event with action \c review_requested, which
@@ -155,8 +155,8 @@ public class GitHubNewReviewDataProvider inherits GitHubBaseEventDataProvider {
 
         #! The event description
         const Desc = "Fires when someone submits a review on a pull request.\n\n"
-            "The delivery carries the `review` — its state is `approved`, `changes_requested` or "
-            "`commented` — together with the `pull_request` it is on, the `repository` and the `sender`.\n\n"
+            "The delivery carries the `review` - its state is `approved`, `changes_requested` or "
+            "`commented` - together with the `pull_request` it is on, the `repository` and the `sender`.\n\n"
             "**This is a review being given, not one being asked for**, despite the event's ID: the "
             "application this module replaces named it `new_review_request` while subscribing to reviews. "
             "The ID is kept because existing workflows use it. For a review being *requested*, use **New "
@@ -407,7 +407,7 @@ public class GitHubNewCommitCommentDataProvider inherits GitHubBaseEventDataProv
 
         #! The event description
         const Desc = "Fires when a comment is made directly on a commit.\n\n"
-            "This is a comment on a **commit**, not on an issue or in a pull request review — those are "
+            "This is a comment on a **commit**, not on an issue or in a pull request review - those are "
             "separate GitHub events this application does not subscribe to. The delivery carries the "
             "`comment`, with the `commit_id` it is attached to and, for a comment on a diff line, the "
             "`path` and `position`.";

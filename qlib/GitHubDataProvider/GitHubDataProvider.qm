@@ -195,7 +195,7 @@ module GitHubDataProvider {
     alter the contract of an action that existing workflows already call.  It is imported with
     \c tools/rest-schema-import.qr from \c qlib/GitHubDataProvider/github-import.yaml.
 
-    GitHub publishes one description covering its entire REST API — 12.9 MB and 808 paths — so pruning it
+    GitHub publishes one description covering its entire REST API - 12.9 MB and 808 paths - so pruning it
     to the operations this application exports is what makes the module usable at all; the committed
     artifact is a fraction of a percent of the document it came from.
 
@@ -220,8 +220,8 @@ module GitHubDataProvider {
     |Search|repository and issue search
     |Actions|workflows and encrypted repository secrets
 
-    Three of them — \c "orgs-list-for-authenticated-user", \c "issues-list-labels-for-repo" and
-    \c "repos-list-for-user" — are exported that the superseded application did not, because it offered
+    Three of them - \c "orgs-list-for-authenticated-user", \c "issues-list-labels-for-repo" and
+    \c "repos-list-for-user" - are exported that the superseded application did not, because it offered
     dropdowns backed by endpoints it never exported.
 
     @section githubdataprovider_pagination Paging Through a Listing
@@ -235,8 +235,8 @@ module GitHubDataProvider {
 
     @section githubdataprovider_events Events
 
-    Seven webhook events are offered.  Each registers a hook on **one repository** — so \c owner and
-    \c repo are required options — with a generated shared secret, and **drops any delivery whose
+    Seven webhook events are offered.  Each registers a hook on **one repository** - so \c owner and
+    \c repo are required options - with a generated shared secret, and **drops any delivery whose
     \c X-Hub-Signature-256 does not verify**.  The application this module replaces registered its hooks
     with no secret at all, so nothing it received could be checked.
 
@@ -246,7 +246,7 @@ module GitHubDataProvider {
 
     @section githubdataprovider_records Record-Based Tables
 
-    Three tables — \c issues, \c pulls and \c releases — are exposed under \c tables for record-based
+    Three tables - \c issues, \c pulls and \c releases - are exposed under \c tables for record-based
     reading and creation.  They are **flattened, writable projections** rather than GitHub's response
     shapes: an issue's labels are names, its assignee a login, a pull request's base and head branch names.
     \c owner and \c repo are required search and create options, because a table is scoped to one
@@ -259,8 +259,8 @@ module GitHubDataProvider {
     |\c search-single|Returns the one record matching the search
     |\c create|Creates records in the table
 
-    Their options depend on which table was named — \c issues accepts a state and a label filter that
-    \c releases has no notion of — so they are resolved from the chosen table rather than declared once for
+    Their options depend on which table was named - \c issues accepts a state and a label filter that
+    \c releases has no notion of - so they are resolved from the chosen table rather than declared once for
     the application.  The three action IDs are those of the application this module replaces.
 
     @section githubdataprovider_examples Examples

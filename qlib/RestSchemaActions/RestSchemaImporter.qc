@@ -63,7 +63,7 @@ public hashdecl RestSchemaSourceInfo {
 #! One requested operation, resolved against a source document
 /** @ref RestSchemaActions::RestSchemaOperationMatchInfo::normalized "normalized" says whether the document
     spells the path differently from the request.  It matters because a manifest has to use the document's
-    own spelling to resolve at run time, so a normalized match is a signal that the manifest needs updating —
+    own spelling to resolve at run time, so a normalized match is a signal that the manifest needs updating -
     not something to be silently accepted.
 */
 public hashdecl RestSchemaOperationMatchInfo {
@@ -83,7 +83,7 @@ public hashdecl RestSchemaOperationMatchInfo {
 #! One declared repair applied to a source document before it is pruned
 /** A vendor's description is sometimes **incomplete** rather than merely unhelpful: it omits something the
     API accepts and the vendor documents elsewhere.  Bitbucket describes \c page and \c pagelen on a shared
-    pagination page rather than per endpoint, and declares them on 3 of its 331 operations — so an action
+    pagination page rather than per endpoint, and declares them on 3 of its 331 operations - so an action
     generated from it cannot ask for the second page of anything.
 
     That cannot be fixed in a UX overlay: an overlay expresses presentation, and adding a parameter is
@@ -92,7 +92,7 @@ public hashdecl RestSchemaOperationMatchInfo {
     - the repair is **declared**, with a reason, in the application's import spec rather than buried in
       code;
     - it is **checked**: naming an operation the document does not declare, or a parameter it already
-      declares, is an error — so a normalization that upstream has since fixed fails the next import
+      declares, is an error - so a normalization that upstream has since fixed fails the next import
       instead of quietly staying forever;
     - it is **recorded** in the committed artifact under \c "x-qore-normalized", so that a reviewer diffing
       the artifact against the upstream document is told why they differ.
@@ -121,7 +121,7 @@ public hashdecl RestSchemaNormalizationInfo {
 
         Each pointer names the composition, ex:
         \c "#/components/requestBodies/PageCreateRequest/content/application~1json/schema/properties/body".
-        A pointer that does not resolve, or resolves to something with no \c oneOf, is an error — so the
+        A pointer that does not resolve, or resolves to something with no \c oneOf, is an error - so the
         repair disappears by failing the next import once upstream corrects the document.
     */
     *list<string> relax_oneof;
@@ -236,13 +236,13 @@ public hashdecl RestSchemaImportResultInfo {
 
     Neither changes the operation: a path parameter's name is scoped to its own operation, and a trailing
     slash is not a distinct resource in any of these documents.  So both are normalized away when resolving,
-    and every match that was only reachable through normalization is **reported** — because the manifest
+    and every match that was only reachable through normalization is **reported** - because the manifest
     still has to be written with the document's own spelling for
     @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" to resolve it at run time.
 
     @par Multi-document applications
 
-    An application whose API is split across documents served from different base paths — Xero, for one —
+    An application whose API is split across documents served from different base paths - Xero, for one -
     imports each document separately and ships one @ref RestSchemaActions::RestSchemaActionSet
     "RestSchemaActionSet" per document.  @ref importAll() does the whole set in one call and returns one
     result per document.
@@ -257,7 +257,7 @@ public class RestSchemaImporter {
 
         #! The provenance fields this class can supply
         /** Used by @ref updateProvenanceSource() to decide which members of an application's provenance
-            record it owns.  Anything else in that record — Stripe's \c api_version, say — is left alone.
+            record it owns.  Anything else in that record - Stripe's \c api_version, say - is left alone.
         */
         const ProvenanceFields = (
             "source_url",
@@ -629,8 +629,8 @@ public class RestSchemaImporter {
     }
 
     #! Returns the distinct operations a manifest exports
-    /** Deduplicated, because a manifest may export one operation as more than one action — see
-        @ref RestSchemaActions::RestSchemaActionInfo::variant_of "variant_of" — and pruning the same
+    /** Deduplicated, because a manifest may export one operation as more than one action - see
+        @ref RestSchemaActions::RestSchemaActionInfo::variant_of "variant_of" - and pruning the same
         operation twice is not meaningful.
 
         @param manifest the application's manifest
@@ -727,7 +727,7 @@ public class RestSchemaImporter {
 
     #! Rewrites the provenance values in an application's schema source
     /** Only the members named in @ref values are touched, and only inside the named constant, so an
-        application-specific member — Stripe's \c api_version, which has to move with its schema — is left
+        application-specific member - Stripe's \c api_version, which has to move with its schema - is left
         exactly as it was.
 
         @param src the source of the application's \c \<App\>Schema.qc

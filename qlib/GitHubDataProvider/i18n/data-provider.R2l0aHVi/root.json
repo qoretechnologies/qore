@@ -360,8 +360,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -396,8 +396,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -812,8 +812,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRl.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRl.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -1024,8 +1024,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItdXNlcg.option.dXNlcm5hbWU.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItdXNlcg.option.dHlwZQ.display_name": {
           "source": "Type",
@@ -1132,8 +1132,8 @@
           "message": "Create a repository owned by the authenticated user"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.desc": {
-          "source": "Creates a repository owned by the authenticated user.\n\n`auto_init` creates an initial commit with a README, which matters because a repository with no commits has no branches — so **Create Branch** and the file actions have nothing to work from until something is committed.",
-          "message": "Creates a repository owned by the authenticated user.\n\n`auto_init` creates an initial commit with a README, which matters because a repository with no commits has no branches — so **Create Branch** and the file actions have nothing to work from until something is committed."
+          "source": "Creates a repository owned by the authenticated user.\n\n`auto_init` creates an initial commit with a README, which matters because a repository with no commits has no branches - so **Create Branch** and the file actions have nothing to work from until something is committed.",
+          "message": "Creates a repository owned by the authenticated user.\n\n`auto_init` creates an initial commit with a README, which matters because a repository with no commits has no branches - so **Create Branch** and the file actions have nothing to work from until something is committed."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bmFtZQ.display_name": {
           "source": "Name",
@@ -1976,8 +1976,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb250cmlidXRvcnM.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb250cmlidXRvcnM.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -2048,8 +2048,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb2xsYWJvcmF0b3Jz.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb2xsYWJvcmF0b3Jz.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -2164,8 +2164,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWNvbnRlbnQ.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWNvbnRlbnQ.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -2212,8 +2212,8 @@
           "message": "Commit a file, creating it or replacing it"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.desc": {
-          "source": "Writes a file and commits the change.\n\n`content` must be **Base64-encoded**. Creating a file takes no `sha`; replacing one **requires** the `sha` of the blob being replaced, which **Get File or Directory** returns — that is what makes the write safe against a concurrent change.\n\nWithout `branch` the commit goes to the default branch.",
-          "message": "Writes a file and commits the change.\n\n`content` must be **Base64-encoded**. Creating a file takes no `sha`; replacing one **requires** the `sha` of the blob being replaced, which **Get File or Directory** returns — that is what makes the write safe against a concurrent change.\n\nWithout `branch` the commit goes to the default branch."
+          "source": "Writes a file and commits the change.\n\n`content` must be **Base64-encoded**. Creating a file takes no `sha`; replacing one **requires** the `sha` of the blob being replaced, which **Get File or Directory** returns - that is what makes the write safe against a concurrent change.\n\nWithout `branch` the commit goes to the default branch.",
+          "message": "Writes a file and commits the change.\n\n`content` must be **Base64-encoded**. Creating a file takes no `sha`; replacing one **requires** the `sha` of the blob being replaced, which **Get File or Directory** returns - that is what makes the write safe against a concurrent change.\n\nWithout `branch` the commit goes to the default branch."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.option.b3duZXI.display_name": {
           "source": "Owner",
@@ -2224,8 +2224,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -2344,8 +2344,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRlLWZpbGU.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRlLWZpbGU.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -2440,8 +2440,8 @@
           "message": "List the issues in a repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.desc": {
-          "source": "Lists a repository's issues.\n\n**GitHub returns pull requests here too**, because every pull request is an issue; a record carrying `pull_request` is one. Filter them out if only issues are wanted.\n\n`state` defaults to `open`, and `since` returns only issues updated after a given time — which is what makes an incremental sweep possible.",
-          "message": "Lists a repository's issues.\n\n**GitHub returns pull requests here too**, because every pull request is an issue; a record carrying `pull_request` is one. Filter them out if only issues are wanted.\n\n`state` defaults to `open`, and `since` returns only issues updated after a given time — which is what makes an incremental sweep possible."
+          "source": "Lists a repository's issues.\n\n**GitHub returns pull requests here too**, because every pull request is an issue; a record carrying `pull_request` is one. Filter them out if only issues are wanted.\n\n`state` defaults to `open`, and `since` returns only issues updated after a given time - which is what makes an incremental sweep possible.",
+          "message": "Lists a repository's issues.\n\n**GitHub returns pull requests here too**, because every pull request is an issue; a record carrying `pull_request` is one. Filter them out if only issues are wanted.\n\n`state` defaults to `open`, and `since` returns only issues updated after a given time - which is what makes an incremental sweep possible."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.b3duZXI.display_name": {
           "source": "Owner",
@@ -2452,8 +2452,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -2524,8 +2524,8 @@
           "message": "A comma-separated list of label names"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bGFiZWxz.desc": {
-          "source": "A **comma-separated** list of label names, not a list — an issue must carry all of them to be returned.",
-          "message": "A **comma-separated** list of label names, not a list — an issue must carry all of them to be returned."
+          "source": "A **comma-separated** list of label names, not a list - an issue must carry all of them to be returned.",
+          "message": "A **comma-separated** list of label names, not a list - an issue must carry all of them to be returned."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bWlsZXN0b25l.display_name": {
           "source": "Milestone",
@@ -2656,8 +2656,8 @@
           "message": "List the issues assigned to the authenticated user"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3Q.desc": {
-          "source": "Lists issues across every repository the authenticated user can see, filtered by their relationship to them — assigned, created, mentioned or subscribed.\n\n`pulls` controls whether pull requests are included; unlike **List Issues** they are excluded by default.",
-          "message": "Lists issues across every repository the authenticated user can see, filtered by their relationship to them — assigned, created, mentioned or subscribed.\n\n`pulls` controls whether pull requests are included; unlike **List Issues** they are excluded by default."
+          "source": "Lists issues across every repository the authenticated user can see, filtered by their relationship to them - assigned, created, mentioned or subscribed.\n\n`pulls` controls whether pull requests are included; unlike **List Issues** they are excluded by default.",
+          "message": "Lists issues across every repository the authenticated user can see, filtered by their relationship to them - assigned, created, mentioned or subscribed.\n\n`pulls` controls whether pull requests are included; unlike **List Issues** they are excluded by default."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3Q.option.ZmlsdGVy.display_name": {
           "source": "Filter",
@@ -2848,8 +2848,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWdldA.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWdldA.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -2896,8 +2896,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3008,8 +3008,8 @@
           "message": "Change an issue, or close or reopen it"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.desc": {
-          "source": "Updates an issue.\n\nOnly the properties supplied are changed. Setting `state` to `closed` closes it and `open` reopens it; `state_reason` records **why** it was closed — `completed`, `not_planned` or `duplicate`.\n\n`labels` and `assignees` **replace** what is there rather than adding to it; use **Add Assignees** to add without replacing.",
-          "message": "Updates an issue.\n\nOnly the properties supplied are changed. Setting `state` to `closed` closes it and `open` reopens it; `state_reason` records **why** it was closed — `completed`, `not_planned` or `duplicate`.\n\n`labels` and `assignees` **replace** what is there rather than adding to it; use **Add Assignees** to add without replacing."
+          "source": "Updates an issue.\n\nOnly the properties supplied are changed. Setting `state` to `closed` closes it and `open` reopens it; `state_reason` records **why** it was closed - `completed`, `not_planned` or `duplicate`.\n\n`labels` and `assignees` **replace** what is there rather than adding to it; use **Add Assignees** to add without replacing.",
+          "message": "Updates an issue.\n\nOnly the properties supplied are changed. Setting `state` to `closed` closes it and `open` reopens it; `state_reason` records **why** it was closed - `completed`, `not_planned` or `duplicate`.\n\n`labels` and `assignees` **replace** what is there rather than adding to it; use **Add Assignees** to add without replacing."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.b3duZXI.display_name": {
           "source": "Owner",
@@ -3020,8 +3020,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3216,8 +3216,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3276,8 +3276,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXJlbW92ZS1hc3NpZ25lZXM.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXJlbW92ZS1hc3NpZ25lZXM.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3336,8 +3336,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtbGFiZWxzLWZvci1yZXBv.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtbGFiZWxzLWZvci1yZXBv.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3396,8 +3396,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdA.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdA.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3552,8 +3552,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cHVsbHMtZ2V0.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cHVsbHMtZ2V0.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3600,8 +3600,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3732,8 +3732,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3848,8 +3848,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdC1yZXF1ZXN0ZWQtcmV2aWV3ZXJz.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdC1yZXF1ZXN0ZWQtcmV2aWV3ZXJz.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3896,8 +3896,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVxdWVzdC1yZXZpZXdlcnM.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVxdWVzdC1yZXZpZXdlcnM.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -3968,8 +3968,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVtb3ZlLXJlcXVlc3RlZC1yZXZpZXdlcnM.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVtb3ZlLXJlcXVlc3RlZC1yZXZpZXdlcnM.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -4040,8 +4040,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -4112,8 +4112,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWJyYW5jaA.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWJyYW5jaA.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -4148,8 +4148,8 @@
           "message": "Create a git ref pointing at a commit"
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.desc": {
-          "source": "Creates a git reference, which is how a branch or a tag is made.\n\n`ref` is the **fully qualified** name — `refs/heads/my-branch` for a branch, `refs/tags/v1.0` for a tag — and a bare branch name is rejected. `sha` is the commit the new ref points at, which **Get Branch** returns for the branch being started from.",
-          "message": "Creates a git reference, which is how a branch or a tag is made.\n\n`ref` is the **fully qualified** name — `refs/heads/my-branch` for a branch, `refs/tags/v1.0` for a tag — and a bare branch name is rejected. `sha` is the commit the new ref points at, which **Get Branch** returns for the branch being started from."
+          "source": "Creates a git reference, which is how a branch or a tag is made.\n\n`ref` is the **fully qualified** name - `refs/heads/my-branch` for a branch, `refs/tags/v1.0` for a tag - and a bare branch name is rejected. `sha` is the commit the new ref points at, which **Get Branch** returns for the branch being started from.",
+          "message": "Creates a git reference, which is how a branch or a tag is made.\n\n`ref` is the **fully qualified** name - `refs/heads/my-branch` for a branch, `refs/tags/v1.0` for a tag - and a bare branch name is rejected. `sha` is the commit the new ref points at, which **Get Branch** returns for the branch being started from."
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.option.b3duZXI.display_name": {
           "source": "Owner",
@@ -4160,8 +4160,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -4208,8 +4208,8 @@
           "message": "List a repository's commits"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.desc": {
-          "source": "Lists commits, newest first.\n\n`sha` selects the branch, tag or commit to start from — despite the name it accepts a branch name — and `path` narrows the listing to commits touching one file or directory. `since` and `until` bound it by commit date, which is what makes an incremental sweep possible.",
-          "message": "Lists commits, newest first.\n\n`sha` selects the branch, tag or commit to start from — despite the name it accepts a branch name — and `path` narrows the listing to commits touching one file or directory. `since` and `until` bound it by commit date, which is what makes an incremental sweep possible."
+          "source": "Lists commits, newest first.\n\n`sha` selects the branch, tag or commit to start from - despite the name it accepts a branch name - and `path` narrows the listing to commits touching one file or directory. `since` and `until` bound it by commit date, which is what makes an incremental sweep possible.",
+          "message": "Lists commits, newest first.\n\n`sha` selects the branch, tag or commit to start from - despite the name it accepts a branch name - and `path` narrows the listing to commits touching one file or directory. `since` and `until` bound it by commit date, which is what makes an incremental sweep possible."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.b3duZXI.display_name": {
           "source": "Owner",
@@ -4220,8 +4220,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -4348,8 +4348,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1yZWxlYXNlcw.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1yZWxlYXNlcw.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -4396,8 +4396,8 @@
           "message": "Publish a release for a tag"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.desc": {
-          "source": "Creates a release.\n\n`tag_name` is required. If the tag does not exist GitHub creates it, at `target_commitish` — a branch name or commit SHA, defaulting to the default branch.\n\n`generate_release_notes` writes the notes from the commits and pull requests since the previous release, and `draft` keeps it unpublished until it is edited in the UI.",
-          "message": "Creates a release.\n\n`tag_name` is required. If the tag does not exist GitHub creates it, at `target_commitish` — a branch name or commit SHA, defaulting to the default branch.\n\n`generate_release_notes` writes the notes from the commits and pull requests since the previous release, and `draft` keeps it unpublished until it is edited in the UI."
+          "source": "Creates a release.\n\n`tag_name` is required. If the tag does not exist GitHub creates it, at `target_commitish` - a branch name or commit SHA, defaulting to the default branch.\n\n`generate_release_notes` writes the notes from the commits and pull requests since the previous release, and `draft` keeps it unpublished until it is edited in the UI.",
+          "message": "Creates a release.\n\n`tag_name` is required. If the tag does not exist GitHub creates it, at `target_commitish` - a branch name or commit SHA, defaulting to the default branch.\n\n`generate_release_notes` writes the notes from the commits and pull requests since the previous release, and `draft` keeps it unpublished until it is edited in the UI."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.b3duZXI.display_name": {
           "source": "Owner",
@@ -4408,8 +4408,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -4684,8 +4684,8 @@
           "message": "Search public repositories with a query"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.desc": {
-          "source": "Searches repositories.\n\n`q` takes GitHub's search syntax — `qore user:qoretechnologies`, `language:python stars:>100`. The response is `{total_count, items}` rather than a bare array.\n\nSearch is capped at **1000 results** however far it is paged, and is rate-limited separately from the rest of the API: 30 requests a minute for an authenticated credential. Use **List Repositories for Owner** when the owner is known.",
-          "message": "Searches repositories.\n\n`q` takes GitHub's search syntax — `qore user:qoretechnologies`, `language:python stars:>100`. The response is `{total_count, items}` rather than a bare array.\n\nSearch is capped at **1000 results** however far it is paged, and is rate-limited separately from the rest of the API: 30 requests a minute for an authenticated credential. Use **List Repositories for Owner** when the owner is known."
+          "source": "Searches repositories.\n\n`q` takes GitHub's search syntax - `qore user:qoretechnologies`, `language:python stars:>100`. The response is `{total_count, items}` rather than a bare array.\n\nSearch is capped at **1000 results** however far it is paged, and is rate-limited separately from the rest of the API: 30 requests a minute for an authenticated credential. Use **List Repositories for Owner** when the owner is known.",
+          "message": "Searches repositories.\n\n`q` takes GitHub's search syntax - `qore user:qoretechnologies`, `language:python stars:>100`. The response is `{total_count, items}` rather than a bare array.\n\nSearch is capped at **1000 results** however far it is paged, and is rate-limited separately from the rest of the API: 30 requests a minute for an authenticated credential. Use **List Repositories for Owner** when the owner is known."
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.cQ.display_name": {
           "source": "Query",
@@ -4780,8 +4780,8 @@
           "message": "Search issues and pull requests with a query"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.desc": {
-          "source": "Searches issues and pull requests across repositories.\n\n`q` takes GitHub's search syntax — `repo:owner/name is:open label:bug`. Add `is:issue` or `is:pr` to separate the two, because both are returned. The response is `{total_count, items}`.\n\nAs with repository search this is capped at **1000 results** and rate-limited separately. `advanced_search` opts into GitHub's newer query engine.",
-          "message": "Searches issues and pull requests across repositories.\n\n`q` takes GitHub's search syntax — `repo:owner/name is:open label:bug`. Add `is:issue` or `is:pr` to separate the two, because both are returned. The response is `{total_count, items}`.\n\nAs with repository search this is capped at **1000 results** and rate-limited separately. `advanced_search` opts into GitHub's newer query engine."
+          "source": "Searches issues and pull requests across repositories.\n\n`q` takes GitHub's search syntax - `repo:owner/name is:open label:bug`. Add `is:issue` or `is:pr` to separate the two, because both are returned. The response is `{total_count, items}`.\n\nAs with repository search this is capped at **1000 results** and rate-limited separately. `advanced_search` opts into GitHub's newer query engine.",
+          "message": "Searches issues and pull requests across repositories.\n\n`q` takes GitHub's search syntax - `repo:owner/name is:open label:bug`. Add `is:issue` or `is:pr` to separate the two, because both are returned. The response is `{total_count, items}`.\n\nAs with repository search this is capped at **1000 results** and rate-limited separately. `advanced_search` opts into GitHub's newer query engine."
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.cQ.display_name": {
           "source": "Query",
@@ -4948,8 +4948,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1saXN0LXJlcG8td29ya2Zsb3dz.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1saXN0LXJlcG8td29ya2Zsb3dz.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -5008,8 +5008,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1wdWJsaWMta2V5.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1wdWJsaWMta2V5.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -5032,8 +5032,8 @@
           "message": "Check whether a secret exists, and when it changed"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.desc": {
-          "source": "Retrieves a secret's name and timestamps.\n\n**The value is never returned** — no GitHub API reads a secret back — so this answers whether the secret exists and when it last changed, and nothing else.",
-          "message": "Retrieves a secret's name and timestamps.\n\n**The value is never returned** — no GitHub API reads a secret back — so this answers whether the secret exists and when it last changed, and nothing else."
+          "source": "Retrieves a secret's name and timestamps.\n\n**The value is never returned** - no GitHub API reads a secret back - so this answers whether the secret exists and when it last changed, and nothing else.",
+          "message": "Retrieves a secret's name and timestamps.\n\n**The value is never returned** - no GitHub API reads a secret back - so this answers whether the secret exists and when it last changed, and nothing else."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.option.b3duZXI.display_name": {
           "source": "Owner",
@@ -5044,8 +5044,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -5092,8 +5092,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1jcmVhdGUtb3ItdXBkYXRlLXJlcG8tc2VjcmV0.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1jcmVhdGUtb3ItdXBkYXRlLXJlcG8tc2VjcmV0.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -5164,8 +5164,8 @@
           "message": "The user or organization that owns the repository"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1kZWxldGUtcmVwby1zZWNyZXQ.option.b3duZXI.desc": {
-          "source": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
-          "message": "The account the repository belongs to — a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
+          "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
+          "message": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1kZWxldGUtcmVwby1zZWNyZXQ.option.cmVwbw.display_name": {
           "source": "Repository",
@@ -5296,8 +5296,8 @@
           "message": "Fires when a review is submitted on a pull request"
         },
         "app.R2l0aHVi.action.bmV3X3Jldmlld19yZXF1ZXN0.desc": {
-          "source": "Fires when someone submits a review on a pull request.\n\nThe delivery carries the `review` — its state is `approved`, `changes_requested` or `commented` — together with the `pull_request` it is on, the `repository` and the `sender`.\n\n**This is a review being given, not one being asked for**, despite the event's ID: the application this module replaces named it `new_review_request` while subscribing to reviews. The ID is kept because existing workflows use it. For a review being *requested*, use **New Pull Request** with **All Actions** set and match `action` against `review_requested`.",
-          "message": "Fires when someone submits a review on a pull request.\n\nThe delivery carries the `review` — its state is `approved`, `changes_requested` or `commented` — together with the `pull_request` it is on, the `repository` and the `sender`.\n\n**This is a review being given, not one being asked for**, despite the event's ID: the application this module replaces named it `new_review_request` while subscribing to reviews. The ID is kept because existing workflows use it. For a review being *requested*, use **New Pull Request** with **All Actions** set and match `action` against `review_requested`."
+          "source": "Fires when someone submits a review on a pull request.\n\nThe delivery carries the `review` - its state is `approved`, `changes_requested` or `commented` - together with the `pull_request` it is on, the `repository` and the `sender`.\n\n**This is a review being given, not one being asked for**, despite the event's ID: the application this module replaces named it `new_review_request` while subscribing to reviews. The ID is kept because existing workflows use it. For a review being *requested*, use **New Pull Request** with **All Actions** set and match `action` against `review_requested`.",
+          "message": "Fires when someone submits a review on a pull request.\n\nThe delivery carries the `review` - its state is `approved`, `changes_requested` or `commented` - together with the `pull_request` it is on, the `repository` and the `sender`.\n\n**This is a review being given, not one being asked for**, despite the event's ID: the application this module replaces named it `new_review_request` while subscribing to reviews. The ID is kept because existing workflows use it. For a review being *requested*, use **New Pull Request** with **All Actions** set and match `action` against `review_requested`."
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdA.display_name": {
           "source": "New Commit",
@@ -5344,8 +5344,8 @@
           "message": "Fires when a comment is made on a commit"
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdF9jb21tZW50.desc": {
-          "source": "Fires when a comment is made directly on a commit.\n\nThis is a comment on a **commit**, not on an issue or in a pull request review — those are separate GitHub events this application does not subscribe to. The delivery carries the `comment`, with the `commit_id` it is attached to and, for a comment on a diff line, the `path` and `position`.",
-          "message": "Fires when a comment is made directly on a commit.\n\nThis is a comment on a **commit**, not on an issue or in a pull request review — those are separate GitHub events this application does not subscribe to. The delivery carries the `comment`, with the `commit_id` it is attached to and, for a comment on a diff line, the `path` and `position`."
+          "source": "Fires when a comment is made directly on a commit.\n\nThis is a comment on a **commit**, not on an issue or in a pull request review - those are separate GitHub events this application does not subscribe to. The delivery carries the `comment`, with the `commit_id` it is attached to and, for a comment on a diff line, the `path` and `position`.",
+          "message": "Fires when a comment is made directly on a commit.\n\nThis is a comment on a **commit**, not on an issue or in a pull request review - those are separate GitHub events this application does not subscribe to. The delivery carries the `comment`, with the `commit_id` it is attached to and, for a comment on a diff line, the `path` and `position`."
         }
       }
     }

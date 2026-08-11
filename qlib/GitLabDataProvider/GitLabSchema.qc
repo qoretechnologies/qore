@@ -71,7 +71,7 @@ public hashdecl GitLabSchemaProvenanceInfo {
     paths and 1752 operations, and parsing it takes several seconds, which is not a cost worth paying on
     every data provider construction for an application exposing 68 of them.
 
-    Only 70 of 865 component schemas survive pruning — a much sharper reduction than Paddle's or Stripe's,
+    Only 70 of 865 component schemas survive pruning - a much sharper reduction than Paddle's or Stripe's,
     because GitLab's description inlines most response shapes rather than referencing shared entity types.
 
     @section gitlabschema_generated Why This Document
@@ -84,13 +84,13 @@ public hashdecl GitLabSchemaProvenanceInfo {
 
     @section gitlabschema_defect One Operation Is Not Generated From This Schema
 
-    \c "POST /api/v4/projects/{id}/repository/commits" — creating a commit — is declared upstream with a
+    \c "POST /api/v4/projects/{id}/repository/commits" - creating a commit - is declared upstream with a
     \c multipart/form-data body whose only property is \c file, which is not the API GitLab documents or
     implements: the real request is a JSON body carrying \c branch, \c commit_message and an \c actions
     array.  15 of the document's 656 request bodies carry the same generated placeholder.
 
     An overlay must never be used for structural repair, and inventing the missing fields here would be
-    exactly that, so this one action is **hand-written** instead — see
+    exactly that, so this one action is **hand-written** instead - see
     @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider".  It keeps its
     action ID, so nothing calling it can tell the difference.
 

@@ -65,7 +65,7 @@ public class PaddleEventDataTypeBase inherits HashDataType {
                 "display_name": "Data",
                 "short_desc": "The entity the event is about",
                 "type": AutoHashOrNothingType,
-                "desc": "The entity the event is about — a customer, product, price, subscription, "
+                "desc": "The entity the event is about - a customer, product, price, subscription, "
                     "transaction or report, in the same shape the corresponding action returns.\n\n"
                     "**Paddle sends the entity in full, not a diff**, so an update event does not say "
                     "which field changed; compare against what you hold if that matters.",

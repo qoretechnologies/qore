@@ -28,7 +28,7 @@ public namespace XeroDataProvider {
 /** @section xerodataprovider_composing One Root, Several Action Sets
 
     @ref RestSchemaActions::RestSchemaActionSetDataProvider "RestSchemaActionSetDataProvider" exposes
-    exactly one action set, and Xero has two — one per document, because a set binds one schema and the
+    exactly one action set, and Xero has two - one per document, because a set binds one schema and the
     request URI takes its prefix from that schema's base path.  So this root composes them: it merges the
     action IDs of every set into one list of children and resolves each name against the set that exports
     it, alongside the hand-written employee actions and the polling event providers.

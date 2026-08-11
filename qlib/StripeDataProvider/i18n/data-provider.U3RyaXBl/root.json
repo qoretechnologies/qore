@@ -348,8 +348,8 @@
           "message": "Retrieve the account the credentials belong to"
         },
         "app.U3RyaXBl.action.Z2V0LWFjY291bnQ.desc": {
-          "source": "Retrieves the Stripe account that the connection's credentials authenticate as.\n\nUse this to confirm which account an integration is working against — the `id`, the country and default currency it settles in, and which `capabilities` are active. It is also the cheapest way to check that credentials are valid before doing anything else.",
-          "message": "Retrieves the Stripe account that the connection's credentials authenticate as.\n\nUse this to confirm which account an integration is working against — the `id`, the country and default currency it settles in, and which `capabilities` are active. It is also the cheapest way to check that credentials are valid before doing anything else."
+          "source": "Retrieves the Stripe account that the connection's credentials authenticate as.\n\nUse this to confirm which account an integration is working against - the `id`, the country and default currency it settles in, and which `capabilities` are active. It is also the cheapest way to check that credentials are valid before doing anything else.",
+          "message": "Retrieves the Stripe account that the connection's credentials authenticate as.\n\nUse this to confirm which account an integration is working against - the `id`, the country and default currency it settles in, and which `capabilities` are active. It is also the cheapest way to check that credentials are valid before doing anything else."
         },
         "app.U3RyaXBl.action.Z2V0LWFjY291bnQ.option.ZXhwYW5k.display_name": {
           "source": "Expand",
@@ -372,8 +372,8 @@
           "message": "Retrieve the current account balance"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2U.desc": {
-          "source": "Retrieves the funds Stripe currently holds for the account, split into `available` and `pending` amounts per currency.\n\n`pending` is money from payments that have not yet settled; `available` is what the next payout can draw on. Amounts are in the currency's smallest unit — cents for USD and EUR, whole yen for JPY.",
-          "message": "Retrieves the funds Stripe currently holds for the account, split into `available` and `pending` amounts per currency.\n\n`pending` is money from payments that have not yet settled; `available` is what the next payout can draw on. Amounts are in the currency's smallest unit — cents for USD and EUR, whole yen for JPY."
+          "source": "Retrieves the funds Stripe currently holds for the account, split into `available` and `pending` amounts per currency.\n\n`pending` is money from payments that have not yet settled; `available` is what the next payout can draw on. Amounts are in the currency's smallest unit - cents for USD and EUR, whole yen for JPY.",
+          "message": "Retrieves the funds Stripe currently holds for the account, split into `available` and `pending` amounts per currency.\n\n`pending` is money from payments that have not yet settled; `available` is what the next payout can draw on. Amounts are in the currency's smallest unit - cents for USD and EUR, whole yen for JPY."
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2U.option.ZXhwYW5k.display_name": {
           "source": "Expand",
@@ -516,8 +516,8 @@
           "message": "Retrieve one balance transaction"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.desc": {
-          "source": "Retrieves a single balance transaction, showing the gross amount, the fee Stripe took and the net amount that reached the balance.\n\nThe `source` field links back to whatever caused it — the charge, refund or dispute.",
-          "message": "Retrieves a single balance transaction, showing the gross amount, the fee Stripe took and the net amount that reached the balance.\n\nThe `source` field links back to whatever caused it — the charge, refund or dispute."
+          "source": "Retrieves a single balance transaction, showing the gross amount, the fee Stripe took and the net amount that reached the balance.\n\nThe `source` field links back to whatever caused it - the charge, refund or dispute.",
+          "message": "Retrieves a single balance transaction, showing the gross amount, the fee Stripe took and the net amount that reached the balance.\n\nThe `source` field links back to whatever caused it - the charge, refund or dispute."
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.option.aWQ.display_name": {
           "source": "Balance Transaction",
@@ -620,8 +620,8 @@
           "message": "Retrieve one connected account"
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.desc": {
-          "source": "Retrieves a connected account, including its `requirements` — the information Stripe still needs before the account can accept payments or receive payouts.\n\nChecking `requirements.currently_due` is how an onboarding flow knows what to ask the account holder for next.",
-          "message": "Retrieves a connected account, including its `requirements` — the information Stripe still needs before the account can accept payments or receive payouts.\n\nChecking `requirements.currently_due` is how an onboarding flow knows what to ask the account holder for next."
+          "source": "Retrieves a connected account, including its `requirements` - the information Stripe still needs before the account can accept payments or receive payouts.\n\nChecking `requirements.currently_due` is how an onboarding flow knows what to ask the account holder for next.",
+          "message": "Retrieves a connected account, including its `requirements` - the information Stripe still needs before the account can accept payments or receive payouts.\n\nChecking `requirements.currently_due` is how an onboarding flow knows what to ask the account holder for next."
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.option.YWNjb3VudA.display_name": {
           "source": "Connected Account",
@@ -1176,8 +1176,8 @@
           "message": "List the people associated with a connected account"
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.desc": {
-          "source": "Lists the people Stripe holds on a connected account's legal entity — its directors, owners, executives and representative.\n\nRegulations require these to be identified before an account can be paid out, so this is what an onboarding flow reads to see who is still missing.",
-          "message": "Lists the people Stripe holds on a connected account's legal entity — its directors, owners, executives and representative.\n\nRegulations require these to be identified before an account can be paid out, so this is what an onboarding flow reads to see who is still missing."
+          "source": "Lists the people Stripe holds on a connected account's legal entity - its directors, owners, executives and representative.\n\nRegulations require these to be identified before an account can be paid out, so this is what an onboarding flow reads to see who is still missing.",
+          "message": "Lists the people Stripe holds on a connected account's legal entity - its directors, owners, executives and representative.\n\nRegulations require these to be identified before an account can be paid out, so this is what an onboarding flow reads to see who is still missing."
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.option.YWNjb3VudA.display_name": {
           "source": "Connected Account",
@@ -1252,8 +1252,8 @@
           "message": "Add a person to a connected account"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.desc": {
-          "source": "Adds a person to a connected account's legal entity and records their `relationship` to it — director, owner, executive or representative.\n\nWhich details Stripe requires depends on the country and the person's relationship; the account's `requirements` says what is still outstanding.",
-          "message": "Adds a person to a connected account's legal entity and records their `relationship` to it — director, owner, executive or representative.\n\nWhich details Stripe requires depends on the country and the person's relationship; the account's `requirements` says what is still outstanding."
+          "source": "Adds a person to a connected account's legal entity and records their `relationship` to it - director, owner, executive or representative.\n\nWhich details Stripe requires depends on the country and the person's relationship; the account's `requirements` says what is still outstanding.",
+          "message": "Adds a person to a connected account's legal entity and records their `relationship` to it - director, owner, executive or representative.\n\nWhich details Stripe requires depends on the country and the person's relationship; the account's `requirements` says what is still outstanding."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.YWNjb3VudA.display_name": {
           "source": "Connected Account",
@@ -1996,8 +1996,8 @@
           "message": "Update a charge's description, metadata or fraud details"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.desc": {
-          "source": "Updates a charge. Only the fields supplied are changed.\n\nThe amount and the card cannot be changed once a charge exists; what can be updated is the bookkeeping around it — `description`, `metadata`, `receipt_email` and `fraud_details`. Reporting a charge as fraudulent through `fraud_details` also feeds Stripe's fraud detection.",
-          "message": "Updates a charge. Only the fields supplied are changed.\n\nThe amount and the card cannot be changed once a charge exists; what can be updated is the bookkeeping around it — `description`, `metadata`, `receipt_email` and `fraud_details`. Reporting a charge as fraudulent through `fraud_details` also feeds Stripe's fraud detection."
+          "source": "Updates a charge. Only the fields supplied are changed.\n\nThe amount and the card cannot be changed once a charge exists; what can be updated is the bookkeeping around it - `description`, `metadata`, `receipt_email` and `fraud_details`. Reporting a charge as fraudulent through `fraud_details` also feeds Stripe's fraud detection.",
+          "message": "Updates a charge. Only the fields supplied are changed.\n\nThe amount and the card cannot be changed once a charge exists; what can be updated is the bookkeeping around it - `description`, `metadata`, `receipt_email` and `fraud_details`. Reporting a charge as fraudulent through `fraud_details` also feeds Stripe's fraud detection."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.Y2hhcmdl.display_name": {
           "source": "Charge",
@@ -2864,8 +2864,8 @@
           "message": "List the entries in a customer's credit balance"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.desc": {
-          "source": "Lists the entries that changed a customer's credit balance — the running credit or debit Stripe applies to their next invoice.\n\nA negative balance is credit the customer holds; a positive balance is money they owe that will be added to their next invoice.",
-          "message": "Lists the entries that changed a customer's credit balance — the running credit or debit Stripe applies to their next invoice.\n\nA negative balance is credit the customer holds; a positive balance is money they owe that will be added to their next invoice."
+          "source": "Lists the entries that changed a customer's credit balance - the running credit or debit Stripe applies to their next invoice.\n\nA negative balance is credit the customer holds; a positive balance is money they owe that will be added to their next invoice.",
+          "message": "Lists the entries that changed a customer's credit balance - the running credit or debit Stripe applies to their next invoice.\n\nA negative balance is credit the customer holds; a positive balance is money they owe that will be added to their next invoice."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.option.Y3VzdG9tZXI.display_name": {
           "source": "Customer",
@@ -4804,8 +4804,8 @@
           "message": "Start a payment"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.desc": {
-          "source": "Starts a payment and tracks it through to completion.\n\nThis is the way to take a payment: a payment intent can carry out the customer authentication that European regulations require, which a direct charge cannot. `amount` is in the currency's smallest unit — `2000` is $20.00 — and the `client_secret` on the result is what the client-side libraries use to finish the payment with the customer.",
-          "message": "Starts a payment and tracks it through to completion.\n\nThis is the way to take a payment: a payment intent can carry out the customer authentication that European regulations require, which a direct charge cannot. `amount` is in the currency's smallest unit — `2000` is $20.00 — and the `client_secret` on the result is what the client-side libraries use to finish the payment with the customer."
+          "source": "Starts a payment and tracks it through to completion.\n\nThis is the way to take a payment: a payment intent can carry out the customer authentication that European regulations require, which a direct charge cannot. `amount` is in the currency's smallest unit - `2000` is $20.00 - and the `client_secret` on the result is what the client-side libraries use to finish the payment with the customer.",
+          "message": "Starts a payment and tracks it through to completion.\n\nThis is the way to take a payment: a payment intent can carry out the customer authentication that European regulations require, which a direct charge cannot. `amount` is in the currency's smallest unit - `2000` is $20.00 - and the `client_secret` on the result is what the client-side libraries use to finish the payment with the customer."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YW1vdW50.display_name": {
           "source": "Amount",
@@ -5612,8 +5612,8 @@
           "message": "React to a customer being created"
         },
         "app.U3RyaXBl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
-          "source": "Fires when a customer is created, however it happened — through the API, the dashboard, or a Checkout session.\n\nUseful for keeping a CRM in step with Stripe without polling.",
-          "message": "Fires when a customer is created, however it happened — through the API, the dashboard, or a Checkout session.\n\nUseful for keeping a CRM in step with Stripe without polling."
+          "source": "Fires when a customer is created, however it happened - through the API, the dashboard, or a Checkout session.\n\nUseful for keeping a CRM in step with Stripe without polling.",
+          "message": "Fires when a customer is created, however it happened - through the API, the dashboard, or a Checkout session.\n\nUseful for keeping a CRM in step with Stripe without polling."
         },
         "app.U3RyaXBl.action.aW52b2ljZS1jcmVhdGVk.display_name": {
           "source": "Invoice Created",
@@ -5660,8 +5660,8 @@
           "message": "React to a payment failing"
         },
         "app.U3RyaXBl.action.cGF5bWVudC1pbnRlbnQtcGF5bWVudC1mYWlsZWQ.desc": {
-          "source": "Fires when a payment intent fails.\n\n`last_payment_error` says why. A failure is not always final — the same payment intent can be confirmed again with a different payment method.",
-          "message": "Fires when a payment intent fails.\n\n`last_payment_error` says why. A failure is not always final — the same payment intent can be confirmed again with a different payment method."
+          "source": "Fires when a payment intent fails.\n\n`last_payment_error` says why. A failure is not always final - the same payment intent can be confirmed again with a different payment method.",
+          "message": "Fires when a payment intent fails.\n\n`last_payment_error` says why. A failure is not always final - the same payment intent can be confirmed again with a different payment method."
         },
         "app.U3RyaXBl.action.cGF5bWVudC1saW5rLWNyZWF0ZWQ.display_name": {
           "source": "Payment Link Created",
@@ -5696,8 +5696,8 @@
           "message": "React to a subscription changing"
         },
         "app.U3RyaXBl.action.Y3VzdG9tZXItc3Vic2NyaXB0aW9uLXVwZGF0ZWQ.desc": {
-          "source": "Fires whenever a subscription changes — an upgrade or downgrade, a quantity change, a trial ending, or a payment failure moving it to `past_due`.\n\nThe event's `data.previous_attributes` holds only the fields that changed, which is the reliable way to tell what actually happened.",
-          "message": "Fires whenever a subscription changes — an upgrade or downgrade, a quantity change, a trial ending, or a payment failure moving it to `past_due`.\n\nThe event's `data.previous_attributes` holds only the fields that changed, which is the reliable way to tell what actually happened."
+          "source": "Fires whenever a subscription changes - an upgrade or downgrade, a quantity change, a trial ending, or a payment failure moving it to `past_due`.\n\nThe event's `data.previous_attributes` holds only the fields that changed, which is the reliable way to tell what actually happened.",
+          "message": "Fires whenever a subscription changes - an upgrade or downgrade, a quantity change, a trial ending, or a payment failure moving it to `past_due`.\n\nThe event's `data.previous_attributes` holds only the fields that changed, which is the reliable way to tell what actually happened."
         },
         "app.U3RyaXBl.action.Y3VzdG9tZXItc3Vic2NyaXB0aW9uLWRlbGV0ZWQ.display_name": {
           "source": "Subscription Canceled",
@@ -5708,8 +5708,8 @@
           "message": "React to a subscription ending"
         },
         "app.U3RyaXBl.action.Y3VzdG9tZXItc3Vic2NyaXB0aW9uLWRlbGV0ZWQ.desc": {
-          "source": "Fires when a subscription ends and billing stops.\n\nThis is the signal to revoke access. A subscription set to cancel at the end of its period stays active until then, and this fires when that moment arrives — not when the cancellation was requested.",
-          "message": "Fires when a subscription ends and billing stops.\n\nThis is the signal to revoke access. A subscription set to cancel at the end of its period stays active until then, and this fires when that moment arrives — not when the cancellation was requested."
+          "source": "Fires when a subscription ends and billing stops.\n\nThis is the signal to revoke access. A subscription set to cancel at the end of its period stays active until then, and this fires when that moment arrives - not when the cancellation was requested.",
+          "message": "Fires when a subscription ends and billing stops.\n\nThis is the signal to revoke access. A subscription set to cancel at the end of its period stays active until then, and this fires when that moment arrives - not when the cancellation was requested."
         }
       }
     }

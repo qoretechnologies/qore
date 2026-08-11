@@ -138,7 +138,7 @@ module ConfluenceDataProvider {
     |Tasks|the checkboxes inside content
     |Content|labels and attachments
 
-    Two of them — \c getLabels and \c getAttachments — are exported that the superseded application did
+    Two of them - \c getLabels and \c getAttachments - are exported that the superseded application did
     not, because it offered a label dropdown and an attachment trigger backed by endpoints it never
     exported.
 
@@ -161,8 +161,8 @@ module ConfluenceDataProvider {
     @section confluencedataprovider_events Events
 
     Three polling events are offered: a new page, a new blog post and a new attachment.  Confluence Cloud
-    does have webhooks, but registering one needs a Connect or Forge app installed on the site — an
-    administrator action a connection cannot perform — so these poll, with a **timestamp cursor** rather
+    does have webhooks, but registering one needs a Connect or Forge app installed on the site - an
+    administrator action a connection cannot perform - so these poll, with a **timestamp cursor** rather
     than the bounded in-memory set of delivered identities the superseded application used.
 
     @section confluencedataprovider_examples Examples

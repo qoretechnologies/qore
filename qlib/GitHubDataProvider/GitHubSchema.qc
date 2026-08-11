@@ -70,7 +70,7 @@ public hashdecl GitHubSchemaProvenanceInfo {
 
     @section githubschema_size The Document Is 12.9 MB
 
-    GitHub publishes one description covering its entire REST API — 808 paths — so parsing it on every
+    GitHub publishes one description covering its entire REST API - 808 paths - so parsing it on every
     data provider construction would be untenable.  That is what makes pruning load-bearing here rather
     than merely tidy: the committed artifact is a fraction of a percent of the document it came from.
 

@@ -72,7 +72,7 @@ module RestSchemaActions {
 
     @ref RestSchemaActions::RestSchemaPruner "RestSchemaPruner" reduces a schema to the operations an
     application selected, together with the transitive closure of everything they reference.  This
-    is what keeps a large upstream document — Stripe's declares several hundred paths — from
+    is what keeps a large upstream document - Stripe's declares several hundred paths - from
     dominating load time and memory when an application exposes a couple of dozen of them.
 
     Pruning is a **structural** transformation: it never edits a schema to work around an upstream
@@ -89,7 +89,7 @@ module RestSchemaActions {
     Each entry carries a **stable action ID**.  An OpenAPI \c operationId may be recorded, and is
     checked, but it is never the source of action identity: an upstream rename has to be reported as
     drift rather than silently rename an action that existing workflows call.  The manifest also makes
-    additions deliberate — an endpoint appearing in an updated schema does not become a public action
+    additions deliberate - an endpoint appearing in an updated schema does not become a public action
     until somebody adds it.
 
     Everything is validated when the set is constructed, so a manifest that has drifted from its
@@ -139,7 +139,7 @@ module RestSchemaActions {
     A schema can say that a value is an integer; it cannot say the integer is a point in time, still
     less whether the unit is seconds or milliseconds.  A field overlay names a codec from
     @ref RestSchemaActions::RestSchemaActionCodecs "RestSchemaActionCodecs", and the field is then
-    published with the codec's type and converted in both directions — so the manifest stays
+    published with the codec's type and converted in both directions - so the manifest stays
     declarative and the unit is decided once, in one place, instead of by every caller.
 
     @section restschemaactions_refdata Reference Data
@@ -152,7 +152,7 @@ module RestSchemaActions {
     and @ref DataProvider::AbstractDataProvider::getReferenceData() "getReferenceData()".
 
     Most identifiers are not global.  A branch belongs to a project, a page to a space, a variable to a
-    group — so listing them requires the value the user has already chosen elsewhere in the same form.
+    group - so listing them requires the value the user has already chosen elsewhere in the same form.
     @ref RestSchemaActions::RestSchemaReferenceDataInfo::options_from "options_from" declares that:
     it forwards named options of the action being filled in into the listing action, and the dropdown
     stays empty until they have values, rather than offering identifiers from some other scope.
@@ -190,7 +190,7 @@ module RestSchemaActions {
     @section restschemaactions_drift Schema Updates
 
     Staying aligned with an API has to mean a **reproducible reviewed update**, not an uncontrolled
-    runtime one — a schema fetched at run time could change the contract of an action that existing
+    runtime one - a schema fetched at run time could change the contract of an action that existing
     workflows already call.
 
     @ref RestSchemaActions::RestSchemaDrift "RestSchemaDrift" produces the report that makes such a

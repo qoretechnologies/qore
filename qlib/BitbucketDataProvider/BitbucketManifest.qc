@@ -29,7 +29,7 @@ public namespace BitbucketDataProvider {
 
     The action IDs are those of the TypeScript application this module replaces, and they are **not**
     tidy.  That application derived each ID from the \c operationId of a vendored Swagger 2.0 document,
-    falling back to a mangling of the path and method when the document declared none — which, for
+    falling back to a mangling of the path and method when the document declared none - which, for
     Bitbucket, is most of them.  So five actions are named \c "getReportsForCommit",
     \c "getDeploymentsForRepository", \c "searchTeam", \c "searchAccount" and \c "searchWorkspace", and the
     rest are named \c "repositories_workspace_repo_slug_pullrequests_get".
@@ -47,7 +47,7 @@ public namespace BitbucketDataProvider {
 
     @section bitbucketmanifest_withdrawn What Bitbucket Withdrew
 
-    Bitbucket removed every cross-workspace listing — \c "GET /2.0/workspaces",
+    Bitbucket removed every cross-workspace listing - \c "GET /2.0/workspaces",
     \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer **410 Gone**,
     \c "CHANGE-2770".  Verified against the live API, along with the fact that
     \c "GET /2.0/user/workspaces" is the one replacement.
@@ -58,7 +58,7 @@ public namespace BitbucketDataProvider {
 
     Repointing rather than renaming is the whole point of an action ID being a product commitment: the
     operation behind \c workspaces_get changed, and the name workflows call did not.  The withdrawn one is
-    a different case — the endpoint is gone and Atlassian's own guidance is to list the workspaces and ask
+    a different case - the endpoint is gone and Atlassian's own guidance is to list the workspaces and ask
     each one, which \c repositories_workspace_get already does.
 
     A \c "/user/workspaces" record wraps its workspace and carries no display name, so the workspace
@@ -78,7 +78,7 @@ public namespace BitbucketDataProvider {
     @section bitbucketmanifest_envelope Every Collection Is the Same Envelope
 
     Bitbucket returns every collection as \c {values, pagelen, size, next, previous}.  A listing action
-    returns that envelope whole, because \c next is the only way to reach the following page — Bitbucket
+    returns that envelope whole, because \c next is the only way to reach the following page - Bitbucket
     does not always report \c size, so paging on a count does not work.  \c pagelen is capped at 100.
 */
 public class BitbucketManifest {
@@ -209,7 +209,7 @@ public class BitbucketManifest {
             "display_name": "Workspace",
             "short_desc": "The workspace to work in",
             "desc": "The workspace to work in, given as its slug or as its UUID in braces.\n\n"
-                "Everything else scoped by a workspace — repositories, members — is listed from this "
+                "Everything else scoped by a workspace - repositories, members - is listed from this "
                 "workspace, so changing it re-reads them.",
             "ref_data": RefWorkspace,
             "supports_custom_values": True,
@@ -223,7 +223,7 @@ public class BitbucketManifest {
             "display_name": "Repository",
             "short_desc": "The repository to work on",
             "desc": "The repository to work on, given as its slug or as its UUID in braces.\n\n"
-                "Everything else scoped by a repository — commits, branches, pull requests — is listed "
+                "Everything else scoped by a repository - commits, branches, pull requests - is listed "
                 "from this repository, so changing it re-reads them.",
             "ref_data": RefRepository,
             "depends_on": ("workspace",),
@@ -309,7 +309,7 @@ public class BitbucketManifest {
         /** Bitbucket composes every entity on a shared base carrying a \c type discriminator, and its
             create and update bodies are declared as the **entity itself** rather than as a separate
             request shape.  So an action generated straight from the schema would offer the reader's view
-            of the object — who created it, when, how many comments it has — as things to fill in.
+            of the object - who created it, when, how many comments it has - as things to fill in.
 
             These are dropped from the request.  They are server-owned: sending them is at best ignored
             and at worst rejected.
@@ -419,7 +419,7 @@ public class BitbucketManifest {
                 "short_desc": "List the repositories in a workspace",
                 "desc": "Lists the repositories in a workspace.\n\n"
                     "`role` restricts the listing to repositories the credential has a given relationship "
-                    "with — `member`, `contributor`, `admin` or `owner` — which is how a listing is kept "
+                    "with - `member`, `contributor`, `admin` or `owner` - which is how a listing is kept "
                     "to what the user actually works on.",
                 "groups": (GroupRepositories,),
                 "field_order": ("workspace", "q", "role", "sort", "page", "pagelen"),
@@ -570,7 +570,7 @@ public class BitbucketManifest {
                 "operation_id": "getReportsForCommit",
                 "display_name": "List Commit Reports",
                 "short_desc": "List the code insights reports on a commit",
-                "desc": "Lists the Code Insights reports attached to a commit — the results a linter, a "
+                "desc": "Lists the Code Insights reports attached to a commit - the results a linter, a "
                     "test run or a security scan posted against it.",
                 "groups": (GroupCommits,),
                 "field_order": ("workspace", "repo_slug", "commit", "page", "pagelen"),
@@ -675,7 +675,7 @@ public class BitbucketManifest {
                 "display_name": "List Pull Requests",
                 "short_desc": "List a repository's pull requests",
                 "desc": "Lists pull requests.\n\n"
-                    "`state` selects which — `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` — and defaults "
+                    "`state` selects which - `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` - and defaults "
                     "to `OPEN`. It may be given more than once to include several states.",
                 "groups": (GroupPullRequests,),
                 "field_order": ("workspace", "repo_slug", "state", "page", "pagelen"),
@@ -967,7 +967,7 @@ public class BitbucketManifest {
                     "`administrator` narrows the listing to the ones they administer.\n\n"
                     "This is the **only** listing Bitbucket still serves across workspaces, and it is what "
                     "fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record "
-                    "wraps its workspace — `{administrator, workspace: {slug, uuid, links}}` — and carries "
+                    "wraps its workspace - `{administrator, workspace: {slug, uuid, links}}` - and carries "
                     "no display name, so a workspace is identified by its slug.",
                 "groups": (GroupWorkspaces,),
                 "field_order": ("administrator", "sort"),

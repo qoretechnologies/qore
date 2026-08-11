@@ -92,8 +92,8 @@ public class GitLabProjectIdByUrlResponseDataType inherits HashDataType {
 
 #! Resolves a GitLab project URL to the project it names, as a hand-written action
 /** Every other action in this application is generated from GitLab's own OpenAPI 3 description.  This one
-    cannot be: no GitLab endpoint takes a URL.  What the action does before it calls GitLab — recovering a
-    project path from a URL — is the whole point of it, and a schema cannot describe that.
+    cannot be: no GitLab endpoint takes a URL.  What the action does before it calls GitLab - recovering a
+    project path from a URL - is the whole point of it, and a schema cannot describe that.
 
     It exists because the application this module replaces exported it, under this same action ID, and
     workflows call it: it is the bridge from a URL a person pastes to the ID or path every other action
@@ -138,8 +138,8 @@ public class GitLabProjectIdByUrlDataProvider inherits DataProvider::AbstractDat
         #! The action description
         const Desc = "Resolves the URL of a GitLab project to the project's numeric ID and its full "
             "path.\n\n"
-            "A URL copied from **any** page of the project works — its front page, an issue, a merge "
-            "request or a clone URL — because GitLab separates a project's path from the page being "
+            "A URL copied from **any** page of the project works - its front page, an issue, a merge "
+            "request or a clone URL - because GitLab separates a project's path from the page being "
             "viewed with `/-/`, and reserves `-` so no group or project can be named it.\n\n"
             "Use the returned `id` or `path_with_namespace` in any action that takes a **Project**.";
 

@@ -74,7 +74,7 @@ public hashdecl RestSchemaReferenceDataInfo {
     string value_field;
 
     #! The record field supplying the display name
-    /** Falls back to @ref value_field when absent, or when a record does not carry it — many APIs allow the
+    /** Falls back to @ref value_field when absent, or when a record does not carry it - many APIs allow the
         human-readable name of an object to be unset.  A \c "." separated path reaches into a nested record,
         as for @ref value_field.
     */
@@ -88,9 +88,9 @@ public hashdecl RestSchemaReferenceDataInfo {
 /** Owns the manifest, resolves every entry against the schema, and generates the
     @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo" hashes an application registers.
 
-    All validation happens in the constructor, so a manifest that has drifted from its schema — an operation
+    All validation happens in the constructor, so a manifest that has drifted from its schema - an operation
     that no longer exists, an overlay entry that no longer resolves, a reference-data entry naming an action
-    that was removed — fails when the module is loaded rather than when a user opens the action.
+    that was removed - fails when the module is loaded rather than when a user opens the action.
 */
 public class RestSchemaActionSet {
     private {

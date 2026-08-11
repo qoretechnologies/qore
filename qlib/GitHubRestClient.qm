@@ -68,7 +68,7 @@ module GitHubRestClient {
 
     Every request sends \c "X-GitHub-Api-Version: 2022-11-28".  GitHub versions its REST API by date and
     changes behavior between versions, so a client that sends no version gets whatever GitHub currently
-    considers the default — which is not a stable contract.
+    considers the default - which is not a stable contract.
 
     The pin is recorded in the application's schema provenance as well, so the vendored description and the
     version the requests declare move together; see
@@ -142,7 +142,7 @@ public class GitHubRestClientBase {
         #! Default OAuth2 scopes
         /** \c delete_repo is requested because the application exports a **Delete Repository** action, and
             GitHub keeps that permission out of \c repo deliberately.  A connection without it offers an
-            action that always fails with 403 — which is what the superseded application did, and it is not
+            action that always fails with 403 - which is what the superseded application did, and it is not
             a useful thing to offer.
 
             The scope only grants what the action already announces it does; a credential that should not be

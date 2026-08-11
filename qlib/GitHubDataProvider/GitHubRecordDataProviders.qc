@@ -41,12 +41,12 @@ public namespace GitHubDataProvider {
     @section githubrecord_scope The Repository Is a Search and Create Option
 
     A table is scoped to one repository, and \c owner and \c repo are therefore required search and create
-    options rather than connection settings — exactly as in the application this module replaces.
+    options rather than connection settings - exactly as in the application this module replaces.
 
     @section githubrecord_lag A New Record Is Not Immediately Listed
 
     GitHub's collection endpoints lag its writes by a few seconds: an issue created through
-    @ref createRecord() — or through the \c "issues-create" action — is readable straight away by number,
+    @ref createRecord() - or through the \c "issues-create" action - is readable straight away by number,
     and is **not** yet in what the listing returns.  Verified against the live API: creating an issue and
     searching the table in the same breath returns the records that existed before it.
 
@@ -63,7 +63,7 @@ public class GitHubTableDataProviderBase inherits DataProvider::AbstractDataProv
                 "display_name": "Owner",
                 "short_desc": "The user or organization that owns the repository",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The account the repository belongs to — a user or an organization",
+                "desc": "The account the repository belongs to - a user or an organization",
                 "required": True,
                 "preselected": True,
                 "ref_data": GitHubManifest::RefOwner,
@@ -571,7 +571,7 @@ public class GitHubReleasesDataProvider inherits GitHubTableDataProviderBase {
     already calls them keeps working.
 
     An action names its table in the path rather than in an option, and its remaining options therefore
-    depend on which table was named — \c issues accepts a state and a label filter that \c releases has no
+    depend on which table was named - \c issues accepts a state and a label filter that \c releases has no
     notion of.  That is what \c data_dependent_options declares: the options are resolved by walking to the
     chosen table, and @ref RecordActionProviderInfo describes only what all three tables have in common.
 */

@@ -4082,8 +4082,8 @@ public class HeaderObject inherits ParameterBase {
 
     #! gets a concrete instance of a HeaderObject, resolving a reference if necessary
     /** A response declares each of its headers as either a Header Object or a Reference Object, so a
-        description that keeps its headers in \c "#/components/headers" — as GitHub's does for the \c Link
-        pagination header — is only parseable if the reference is followed.
+        description that keeps its headers in \c "#/components/headers" - as GitHub's does for the \c Link
+        pagination header - is only parseable if the reference is followed.
 
         @param name the header name
         @param oh the header object or reference object
@@ -4966,7 +4966,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     #! Returns True if the schema is an object whose \c oneOf or \c anyOf members only add constraints
     /** A composition beside an object's own \c properties does not always describe alternative shapes.  The
         common idiom is an object that declares every property it accepts and then adds
-        \c {anyOf: [{required: [a]}, {required: [b]}]} to say that at least one of them must be given —
+        \c {anyOf: [{required: [a]}, {required: [b]}]} to say that at least one of them must be given -
         GitHub's "request reviewers" body is exactly that.  Every member of such a composition carries no
         type, no properties and no composition of its own; it is a requiredness rule, not a shape.
 

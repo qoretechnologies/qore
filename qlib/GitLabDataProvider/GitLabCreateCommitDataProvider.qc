@@ -219,7 +219,7 @@ public class GitLabCreateCommitRequestDataType inherits HashDataType {
     what it accepts.  The real request is a JSON body carrying \c branch, \c commit_message and an
     \c actions array.
 
-    Repairing that in the manifest's overlay was not an option — an overlay expresses presentation, and
+    Repairing that in the manifest's overlay was not an option - an overlay expresses presentation, and
     inventing a request contract there would hide an upstream defect behind something that looks like a
     display name.  Writing the one action by hand keeps the defect visible and keeps the action usable.
 

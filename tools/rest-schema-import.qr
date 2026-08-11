@@ -45,8 +45,8 @@
 
     @par Module path
 
-    Modules are found on the usual search path.  When importing against modules that are not installed —
-    which is normally the case in this repository — set \c QORE_MODULE_DIR:
+    Modules are found on the usual search path.  When importing against modules that are not installed -
+    which is normally the case in this repository - set \c QORE_MODULE_DIR:
 
     @code{.sh}
 QORE_MODULE_DIR=qlib tools/rest-schema-import.qr --spec qlib/PaddleDataProvider/paddle-import.yaml

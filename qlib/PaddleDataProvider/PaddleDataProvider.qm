@@ -54,7 +54,7 @@ module PaddleDataProvider {
             "short_desc": "Sell software through Paddle and manage the billing around it",
             "desc": "Provides access to [Paddle](https://www.paddle.com), the billing platform for "
                 "software businesses.\n\n"
-                "Paddle is a **merchant of record**: it sells on your behalf, which means it — not you — "
+                "Paddle is a **merchant of record**: it sells on your behalf, which means it - not you - "
                 "handles payment processing, sales tax registration and remittance, invoicing and "
                 "chargebacks, and then pays out the balance.\n\n"
                 "**Common use cases**:\n"
@@ -135,7 +135,7 @@ module PaddleDataProvider {
     |Imported|2026-08-09
 
     The committed copy is pruned to the exported operations, the two \c /notification-settings
-    operations the webhook event providers call, and everything they reference — 17 of 70 paths and
+    operations the webhook event providers call, and everything they reference - 17 of 70 paths and
     244 of 519 component schemas.  That is not only a size reduction: the full 7.4 MB document
     takes around a second to parse, which is not a reasonable cost to pay on every data provider
     construction.
@@ -164,7 +164,7 @@ module PaddleDataProvider {
     - **Amounts are strings in the currency's smallest unit.**  \c "1000" is $10.00 in USD, but ¥1000 in
       JPY, which has no minor unit.  They are strings rather than numbers so that no precision is lost
       in transit.
-    - **Timestamps are RFC 3339 strings**, not epoch counts, so they need no conversion — unlike Stripe,
+    - **Timestamps are RFC 3339 strings**, not epoch counts, so they need no conversion - unlike Stripe,
       this application has no timestamp codec anywhere.
     - **Every response is an envelope.**  A listing action returns Paddle's \c {data, meta} envelope
       whole, because \c meta.pagination carries the cursor without which the next page cannot be
@@ -174,7 +174,7 @@ module PaddleDataProvider {
     @section paddledataprovider_pagination Paging Through a Listing
 
     A listing returns at most 200 records.  \c meta.pagination.has_more says whether another page
-    exists, and \c meta.pagination.next is the URL of that page, with its \c after cursor already set —
+    exists, and \c meta.pagination.next is the URL of that page, with its \c after cursor already set -
     pass that cursor to the same action's \c after option to continue.
 
     \c next is returned even on the last page, so paging on its presence never terminates; page on

@@ -67,7 +67,7 @@ module GitLabRestClient {
     @section gitlabrestclient_hostname The Instance Is the Connection
 
     GitLab is not one service.  \c https://gitlab.com and every self-managed installation run the same
-    API over entirely separate data, and an integration pointed at the wrong one does not fail — it
+    API over entirely separate data, and an integration pointed at the wrong one does not fail - it
     succeeds against the wrong repositories.
 
     So \c hostname is the connection's defining option, and **everything else is derived from it in both
@@ -332,7 +332,7 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
             "desc": "A connection to [GitLab](https://gitlab.com) for source code, issues, merge "
                 "requests, CI/CD variables and wikis.\n\n"
                 "**The instance is the connection.** `hostname` names the GitLab installation this "
-                "connection works against — `https://gitlab.com` or a self-managed instance — and the "
+                "connection works against - `https://gitlab.com` or a self-managed instance - and the "
                 "target URL and both OAuth2 endpoints are derived from it. GitLab.com and a "
                 "self-managed instance run the same API over entirely different data, so an "
                 "integration pointed at the wrong one does not fail; it succeeds against the wrong "

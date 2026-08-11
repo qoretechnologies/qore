@@ -26,7 +26,7 @@
 public namespace BitbucketDataProvider {
 #! The wire codecs this application registers
 /** Bitbucket names the branches of a pull request as \c "source.branch.name" and its reviewers as a list
-    of user objects each carrying a \c uuid.  Those are the shapes the API takes, and they are correct —
+    of user objects each carrying a \c uuid.  Those are the shapes the API takes, and they are correct -
     but asking somebody to fill in three levels of nesting to name a branch is not a usable form, and a
     dropdown cannot offer a value into the middle of a nested object.
 
@@ -36,14 +36,14 @@ public namespace BitbucketDataProvider {
     @section bitbucketcodecs_why Why a Codec and Not a Request Transform
 
     A codec is **declarative and reversible**: the manifest names it, the option is published with the
-    codec's own type, and the value converts in both directions — so a response reads back as the same flat
+    codec's own type, and the value converts in both directions - so a response reads back as the same flat
     value the request took, and the overlay carries no executable code.  A request transform would convert
     one way only, and would have to be written and maintained per action.
 
     @section bitbucketcodecs_registration Registration
 
     Codecs live in a process-wide registry, so they are registered before the action set that references
-    them is built — see @ref BitbucketDataProvider::BitbucketSchema::getActionSet() "getActionSet()".
+    them is built - see @ref BitbucketDataProvider::BitbucketSchema::getActionSet() "getActionSet()".
     Registering twice is harmless; the second registration replaces the first with the same value.
 */
 public class BitbucketCodecs {

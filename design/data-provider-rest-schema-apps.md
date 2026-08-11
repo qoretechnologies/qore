@@ -10,8 +10,8 @@ modules do.
 The **schema-driven** path generates actions from a vendor's own OpenAPI 3 description using the
 `RestSchemaActions` module. `StripeDataProvider` and `PaddleDataProvider` are built this way.
 
-The machinery itself — the division of ownership between schema, manifest and overlay, request
-flattening, wire codecs, reference data, drift classification — is documented on the
+The machinery itself - the division of ownership between schema, manifest and overlay, request
+flattening, wire codecs, reference data, drift classification - is documented on the
 `RestSchemaActions` module main page (`qlib/RestSchemaActions/RestSchemaActions.qm`), and that
 documentation is the reference. **This document does not repeat it.** It records the repository-level
 conventions and the decisions that are not visible from inside any single module: which path to choose,
@@ -67,7 +67,7 @@ qlib/<App>DataProvider/
 examples/test/qlib/<App>DataProvider/<App>DataProvider.qtest
 ```
 
-`<App>Manifest.qc` is by far the largest source file in such a module — around 55 KB in both
+`<App>Manifest.qc` is by far the largest source file in such a module - around 55 KB in both
 applications. That is expected and correct: it is where every product decision lives, and it is the
 file a reviewer should read to know what the application actually offers.
 
@@ -79,7 +79,7 @@ application, and the two whose class-level documentation carries the application
 A schema-driven application is still an ordinary Qore module, so it needs the same five entries
 outside its own directory that any other one does. They are listed here because everything else on
 this page is inside the module, and because **all five applications in the first series shipped
-without all five of them** — the module loaded, every test passed, and the live verification against
+without all five of them** - the module loaded, every test passed, and the live verification against
 each vendor's API worked, because none of these is on the path a `%requires` takes:
 
 | Registration | Where | What breaks without it |
@@ -91,7 +91,7 @@ each vendor's API worked, because none of these is on the path a `%requires` tak
 | Release note | `doxygen/lang/900_release_notes.dox.tmpl` | the new module is unannounced |
 
 Both `doxygen/lang/` lists are maintained in **alphabetical order**; insert in place rather than
-appending. The presentation catalog is generated, never hand-written — see the checklist for the
+appending. The presentation catalog is generated, never hand-written - see the checklist for the
 command, and regenerate it whenever a display name or description changes.
 
 The two failures compound in a way worth knowing about: the presentation check reaches an app only
@@ -99,7 +99,7 @@ once its factory is in `FactoryMap`, so a module missing both is reported as mis
 Adding the factory is what made the catalogs' absence visible.
 
 [data-provider-checklist.md](data-provider-checklist.md) is authoritative for all five and for
-everything else a module owes the platform — its sections 1, 2 and 9-11 apply to a schema-driven
+everything else a module owes the platform - its sections 1, 2 and 9-11 apply to a schema-driven
 application unchanged; only sections 3-8 and 12 are taken over by the manifest and its overlay.
 **Run it before calling a port finished.**
 
@@ -118,7 +118,7 @@ avoided:
 | Paddle | 7.4 MB, 70 paths, 99 operations, 519 component schemas | 569 KB, 237 schemas | ~1 second |
 | Stripe | 416 paths, 1440 component schemas | 2.5 MB, 21 paths, 1022 schemas | ~45 seconds |
 
-Note how little pruning removes from the component schemas in both cases — around half. Entity types in
+Note how little pruning removes from the component schemas in both cases - around half. Entity types in
 a real API reference each other heavily, so do not expect the closure to be small; the win comes from
 dropping the operations the application does not export and everything reachable only from them.
 
@@ -131,7 +131,7 @@ Three properties of the pinned schema are load-bearing:
   Stripe additionally records the `api_version` its schema describes, because `StripeRestClient` sends
   that version with every request and the two must move together.
 
-- **The schema is parsed on first use, behind a `Mutex`, into a `static` member** — not when the module
+- **The schema is parsed on first use, behind a `Mutex`, into a `static` member** - not when the module
   loads. A program that only needs the connection never pays for it, and the action set is built once
   per process regardless of how many providers are constructed.
 
@@ -143,8 +143,8 @@ Three properties of the pinned schema are load-bearing:
   qore_user_module("qlib/StripeDataProvider" "stripe-logo.svg" "stripe-openapi3.json")
   ```
 
-  This is what makes `get_script_dir()` — used by `<App>DataProviderDefs.qc` to locate both the logo and
-  the schema — resolve correctly whether the module is loaded from `qlib/` sources or from the
+  This is what makes `get_script_dir()` - used by `<App>DataProviderDefs.qc` to locate both the logo and
+  the schema - resolve correctly whether the module is loaded from `qlib/` sources or from the
   AOT-compiled `build/qlib-qmod/<App>DataProvider/`. Omitting a file here produces a module that builds,
   installs and loads, and then throws when the first action is opened. Add both files at the same time
   the module is registered.
@@ -164,13 +164,13 @@ QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
     --drift=GitLabDataProvider:GitLabSchema::getActionSet()
 ```
 
-It rewrites only the provenance members it owns, so an application-specific one — Stripe's `api_version`,
-GitLab's `gitlab_version` — survives untouched and stays the importer's caller's responsibility. It
+It rewrites only the provenance members it owns, so an application-specific one - Stripe's `api_version`,
+GitLab's `gitlab_version` - survives untouched and stays the importer's caller's responsibility. It
 re-parses what it wrote, so an artifact that cannot be loaded is caught during the import rather than at
 the next build. A multi-document application imports each document from one `--spec` file.
 
 **Match manifest paths to the document with normalisation, not string equality.** A trailing slash and a
-path-parameter *name* are not differences — a parameter name is scoped to its own operation — but comparing
+path-parameter *name* are not differences - a parameter name is scoped to its own operation - but comparing
 paths literally reports the operation as withdrawn. Evaluating candidates this way produced false
 rejections: Trello scored 19/21 until `/boards/` was normalised, Intercom 10/13 until `{contact_id}` was
 matched against `{id}`; both are in fact 100%. The importer normalises both, and **fails** on a match that
@@ -179,7 +179,7 @@ not resolve it at run time.
 
 ## Keeping a pinned schema current
 
-An update is a reviewed, reproducible step, not a runtime one — an upstream change must not be able to
+An update is a reviewed, reproducible step, not a runtime one - an upstream change must not be able to
 alter the contract of an action that existing workflows already call:
 
 1. Download a named upstream revision and record its checksum, size and counts.
@@ -203,11 +203,11 @@ disagreement surfacing when a user opens an action.
 
 Beyond the drift-agreement test, each application's `.qtest` should cover:
 
-- **Provenance shape** — the recorded checksum is a SHA-256, the counts are present.
-- **Manifest resolution** — every manifest entry resolves against the vendored schema and its recorded
+- **Provenance shape** - the recorded checksum is a SHA-256, the counts are present.
+- **Manifest resolution** - every manifest entry resolves against the vendored schema and its recorded
   `operationId` still matches.
-- **Reference data** — every dropdown names an action the manifest actually exports.
-- **Execution against a fake client** — subclass the application's `*RestClientIo` (see
+- **Reference data** - every dropdown names an action the manifest actually exports.
+- **Execution against a fake client** - subclass the application's `*RestClientIo` (see
   `FakePaddleRestClient` in `examples/test/qlib/PaddleDataProvider/PaddleDataProvider.qtest`) so that
   request construction is asserted without network access.
 
@@ -219,7 +219,7 @@ once in `examples/test/qlib/RestSchemaActions/`, not per application.
 **Measure a schema-support gap construct by construct, against the parser.** The initial Paddle
 evaluation bulk-normalized the document and concluded that OpenAPI 3.1 support was far off. Probing each
 construct in isolation showed most of 3.1 already worked and only two constructs failed to parse: a
-scalar `type: "null"`, and the object form of `discriminator` (which is the 3.0 form as well — the module
+scalar `type: "null"`, and the object form of `discriminator` (which is the 3.0 form as well - the module
 had only accepted Swagger 2.0's string form). Two further defects appeared only while *generating* the
 actions: `anyOf: [X, null]` widened the whole composition to `any`, and a single-member `allOf` wrapping
 a `$ref` discarded the referenced type. Those two cost 13 of Paddle's action options their types. A bulk
@@ -234,7 +234,7 @@ with the option can never decide where requests go.
 **Action identity is a product commitment, never a schema artifact.** An `operationId` may be recorded
 and checked, but an upstream rename must be reported as drift, not silently rename an action. When a
 schema-driven module replaces an existing application, keep that application's action IDs even if they
-break the new module's own naming style — Paddle's are `snake_case` because that is what existing
+break the new module's own naming style - Paddle's are `snake_case` because that is what existing
 workflows call, while Stripe's were schema-derived from the start and had no such constraint.
 
 **Export at parity first.** The Paddle port exports 24 actions out of the 99 operations its schema
@@ -253,14 +253,14 @@ the pruner to preserve that section first.
 where the schema is already honest is a conversion nobody asked for.
 
 **Check that the document declares paging before choosing this path.** An action can only offer what the
-schema declares, and an overlay cannot add a parameter — that is structural, not presentational. Bitbucket
+schema declares, and an overlay cannot add a parameter - that is structural, not presentational. Bitbucket
 documents `page` and `pagelen` on a shared *Pagination* page rather than per endpoint, and its published
 OpenAPI 3 description declares them on **6 of 331 operations**: every collection accepts them and almost
 none says so. A generated listing action therefore cannot ask for page 2 or for more than Bitbucket's
-default page of 10, which is a regression against any application that paged by hand — and it is invisible
+default page of 10, which is a regression against any application that paged by hand - and it is invisible
 until somebody opens a dropdown against a workspace with more than ten repositories in it.
 
-Measure this over the **exported** operations, not the whole document, and ignore single-entity reads —
+Measure this over the **exported** operations, not the whole document, and ignore single-entity reads -
 a `GET /pages/{id}` has nothing to page. Across the five applications evaluated for #5394 the measurement
 separates cleanly:
 
@@ -270,7 +270,7 @@ separates cleanly:
 | Confluence | all of them (`limit`, `cursor`) |
 | GitHub | all of them (`page`, `per_page`) |
 | Xero | all of them (`page`, `pageSize`), except the four settings listings that have no paging at all |
-| Bitbucket | **3 of 16** — only the three code-search endpoints |
+| Bitbucket | **3 of 16** - only the three code-search endpoints |
 
 So this is not a general property of published descriptions; it is one vendor's description being wrong in
 one specific way.
@@ -291,7 +291,7 @@ normalize:
 Three properties make this safe to do:
 
 - naming an operation the document does not declare, or a parameter it **already** declares, fails the
-  import — so a repair that upstream has since made unnecessary is removed rather than left in place
+  import - so a repair that upstream has since made unnecessary is removed rather than left in place
   forever as a silent local edit;
 - the repair is recorded in the committed artifact under `x-qore-normalized`, so a reviewer diffing it
   against the upstream document is told why they differ;
@@ -300,7 +300,7 @@ Three properties make this safe to do:
 
 `relax_oneof` covers the other repair the ports have needed: a `oneOf` whose branches overlap. `oneOf`
 means *exactly* one branch matches, so a composition whose branches share every value describes something
-that can never be valid — Confluence declares a page body as `oneOf: [PageBodyWrite, PageNestedBodyWrite]`
+that can never be valid - Confluence declares a page body as `oneOf: [PageBodyWrite, PageNestedBodyWrite]`
 where neither branch requires any property, and every create and update was therefore rejected before the
 request was sent. Naming the pointer turns it into the `anyOf` the API actually accepts.
 
@@ -312,7 +312,7 @@ schema describes wrongly rather than incompletely is the hand-written case above
 page to a space, a member to a workspace. `RestSchemaReferenceDataInfo::options_from` forwards named options
 of the action being filled in into the listing action, and leaves the dropdown empty until they have values.
 Without it a scoped dropdown either lists the wrong scope or cannot exist, which is a regression against any
-TypeScript application being replaced — every one of them passed the enclosing option to its
+TypeScript application being replaced - every one of them passed the enclosing option to its
 `get_allowed_values` function.
 
 **A dropdown can only name an action the manifest exports, so exporting one is sometimes the point.** The
@@ -321,11 +321,11 @@ returned nothing or the authenticated user alone. Three read-only listings were 
 other reason than to fill them. Check every `get_allowed_values` helper against the exported set before
 deciding a port is at parity.
 
-**When the schema cannot describe an operation, hand-write that one action — do not repair the schema.**
+**When the schema cannot describe an operation, hand-write that one action - do not repair the schema.**
 GitLab's own description declares `POST /projects/{id}/repository/commits` with a `multipart/form-data` body
 whose only property is `file`; the real request carries `branch`, `commit_message` and an `actions` array.
 15 of that document's 656 request bodies carry the same generated placeholder. An overlay must not invent a
-request contract — that hides an upstream defect behind something that looks like presentation — so the
+request contract - that hides an upstream defect behind something that looks like presentation - so the
 action is written by hand, keeps its action ID, and is registered alongside the generated ones. The two
 paths are not exclusive, and this is the case that proves it.
 
@@ -335,7 +335,7 @@ hand-written action; a document where most bodies are placeholders is not a cand
 **A watch provider must inherit the watch base first.** `AbstractDataProvider` and
 `AbstractWatchDataProviderBase` both implement `observersReady()`, %Qore resolves a method to the first
 `inherits` branch that declares it, and `AbstractDataProvider`'s implementation reports the operation as
-unsupported — so listing the data provider base first leaves every subscription failing with `UNIMPLEMENTED`
+unsupported - so listing the data provider base first leaves every subscription failing with `UNIMPLEMENTED`
 at run time, not at build time.
 
 **Publish the event type from the schema.** A polling event provider that declares `supports_observable`
@@ -345,7 +345,7 @@ copy of that shape would drift from the schema the actions use.
 
 **A deliberate duplicate operation is declared, not permitted.** `RestSchemaActionSet` refuses to export
 one method/path pair twice, which catches a copy-and-paste slip. When two actions genuinely share an
-operation — Paddle's `archive_product` and `update_product` are both `PATCH /products/{product_id}` —
+operation - Paddle's `archive_product` and `update_product` are both `PATCH /products/{product_id}` -
 declare the second with `variant_of` rather than relaxing the guard.
 
 ## What the GitHub and Xero ports added
@@ -353,12 +353,12 @@ declare the second with `variant_of` rather than relaxing the guard.
 **Read the superseded application's action IDs out of its i18n catalog, not out of the schema.** The
 TypeScript loader derives an action ID from the vendored `operationId`, but the action catalog accepts only
 `A-Za-z0-9_-`, so a slash-bearing `operationId` was registered with the slash replaced. GitHub's IDs are
-`pulls-list` and `repos-get`, **not** `pulls/list` — and the only place that is written down is
+`pulls-list` and `repos-get`, **not** `pulls/list` - and the only place that is written down is
 `ts/src/i18n/en/apps/<App>/index.ts`, which is keyed by the registered name. Getting this wrong renames
 every action in the application while looking like it preserved them.
 
 **A connection-owned value still has to be sent.** `RestSchemaFieldOverlayInfo::ignore` exists for exactly
-the value a connection owns — an API key, Xero's `Xero-Tenant-Id` — but dropping it from the action left a
+the value a connection owns - an API key, Xero's `Xero-Tenant-Id` - but dropping it from the action left a
 request the schema rejected as incomplete, because the client only merges its own default headers when the
 request is finally sent. An ignored **header** is now filled in from the client's default headers when the
 request is built, which is what makes `ignore` mean what it documents. A header the client does not supply
@@ -367,7 +367,7 @@ is still reported missing, because that is the truth.
 **A multi-document application needs peer reference data.** One action set per document routes itself, but
 dropdowns do not split along the same lines: a Xero project names a *contact*, and contacts are declared in
 the accounting document. `RestSchemaActionSet` therefore takes optional **peer sets** whose reference data
-it may use, and the listing runs against the set that declares it — the only way its URI prefix can be
+it may use, and the listing runs against the set that declares it - the only way its URI prefix can be
 right. Peers are given at construction, so the sets are built in dependency order and a cycle cannot be
 expressed.
 
@@ -378,12 +378,12 @@ drops the rest.
 
 **A watch provider needs the record's ID field, not just its timestamp.** `AbstractTimestampWatchDataProvider`
 breaks a tie between records sharing a timestamp with `getIdField()`, whose default is `"id"`. Xero names
-every identity after its type — `ContactID`, `InvoiceID` — so without the override **nothing was ever
+every identity after its type - `ContactID`, `InvoiceID` - so without the override **nothing was ever
 delivered**, and the symptom was an empty feed rather than an error.
 
 **When three schemas describe one action differently, hand-write it.** This is the `variant_of` problem one
 level up. Xero publishes a payroll description per region, and Australia's is a different API version from
-New Zealand's and the United Kingdom's — the create takes an array in one and a single object in the other
+New Zealand's and the United Kingdom's - the create takes an array in one and a single object in the other
 two. A registered action has exactly one option shape, so generating from any one region would publish that
 region's contract to everybody. The two employee actions are written by hand, take the region from the
 connection, and normalise the response envelope; they keep their action IDs. The rule from GitLab's
@@ -391,7 +391,7 @@ create-commit generalises: *the schema must be able to describe the action the a
 schemas that disagree cannot.
 
 **Measure a webhook trigger against what it actually subscribes to.** GitHub's `create` event covers
-branches *and tags*, and its `issues` event covers `opened`, `edited`, `closed` and a dozen more — so a
+branches *and tags*, and its `issues` event covers `opened`, `edited`, `closed` and a dozen more - so a
 trigger called "New Branch" or "New Issue" that forwards every delivery is reporting something other than
 what it says. Each event now raises only the change its name describes, with an `all_actions` option that
 restores the old firehose for anyone who depended on it. The same measurement found that the superseded
@@ -404,8 +404,8 @@ fire on anything posted to its endpoint by whoever learned the URL. A generated 
 a `X-Hub-Signature-256` check are the minimum, and are cheap.
 
 **A vendor can withdraw an endpoint the port depends on, and only live traffic will tell you.** Bitbucket
-removed every cross-workspace listing — `GET /2.0/workspaces`, `GET /2.0/repositories` and the
-`/2.0/user/permissions/…` family all answer **410 Gone, "CHANGE-2770"** — while still *declaring* them in
+removed every cross-workspace listing - `GET /2.0/workspaces`, `GET /2.0/repositories` and the
+`/2.0/user/permissions/…` family all answer **410 Gone, "CHANGE-2770"** - while still *declaring* them in
 its published OpenAPI description. So the schema resolved, the manifest agreed, drift was zero, and 12 test
 cases passed against a document describing endpoints that no longer exist. The application's workspace
 dropdown, which scopes every other dropdown it offers, could not be filled at all.
@@ -426,7 +426,7 @@ the module cannot load, so the importer cannot read the manifest. Import once fr
 spec's `normalize` block**, then re-import from the manifest. Bootstrapping with a bare `--ops` list drops
 the repairs, and the next import fails on an overlay naming a parameter the repair was supposed to add.
 
-**An option is a value, not a URL fragment — the transport escapes it.** `RestSchemaDataProvider` used to
+**An option is a value, not a URL fragment - the transport escapes it.** `RestSchemaDataProvider` used to
 place query values and path variables into the URI verbatim. That works only while no value contains a
 reserved character, and the first live GitHub search broke it outright: an unescaped space ends the HTTP
 request line, and the response came back without headers at all. A Xero filter (`Type=="BANK"`) and a file
@@ -434,7 +434,7 @@ called `a file with spaces.md` are the same problem in a query argument and a pa
 percent-encoded, with a list's separating commas left literal because they are the separator rather than
 part of any element.
 
-This settled an open question in the GitLab port, which had documented the opposite contract — that the
+This settled an open question in the GitLab port, which had documented the opposite contract - that the
 user supplies an *already*-encoded project path (`group%2Fproject`). That cannot be right: a value the
 caller pre-escapes is a value the framework cannot escape, so the moment one contains a space there is no
 correct answer. The option now takes the path as it reads and the transport escapes it, which is what
@@ -450,7 +450,7 @@ pass; it is finished when it exports everything the TypeScript application it re
 sides can be enumerated exactly, so this is a diff and not a reading exercise:
 
 - the TypeScript surface is in the app's i18n catalog under
-  `module-v8/qlib/TypeScriptActionInterface/i18n/data-provider.<base64 app name>/root.json` — every key
+  `module-v8/qlib/TypeScriptActionInterface/i18n/data-provider.<base64 app name>/root.json` - every key
   matching `app.<app>.action.<base64 action id>.display_name` names one exported action;
 - the native surface is `DataProviderActionCatalog::getActions("<app>")`, after `%requires`-ing the
   module.
@@ -462,7 +462,7 @@ schema-driven ports, this found three defects that every other check had passed:
 - **GitHub's record tables were unreachable from the action surface.** The module builds `issues`, `pulls`
   and `releases` correctly, but registered no action against them, so the `search`, `search-single` and
   `create` actions the TypeScript app offered simply vanished. Tables are reached by *actions*; declaring
-  the providers is only half of it. `SalesforceRestDataProvider` is the pattern — one action per record
+  the providers is only half of it. `SalesforceRestDataProvider` is the pattern - one action per record
   operation against `"/tables/{table}"`, with `data_dependent_options` resolving the per-table options.
 - **GitLab lost `get_project_id_by_url`**, an action no schema can generate because no GitLab endpoint
   takes a URL.
@@ -470,7 +470,7 @@ schema-driven ports, this found three defects that every other check had passed:
   instead of going through `RestSchemaDataProvider`, so it was still substituting the project verbatim
   while every generated action had moved to escaping it. The same value therefore behaved differently in
   two actions of one application. Nothing caught it because the project dropdown supplies a numeric ID,
-  which is unaffected — the divergence is only reachable by typing a path, which the option explicitly
+  which is unaffected - the divergence is only reachable by typing a path, which the option explicitly
   supports and its own documentation recommends. **A change to how the framework builds requests has to be
   applied to the hand-written actions too**; they are precisely the ones that opted out of it.
 
@@ -479,7 +479,7 @@ A deliberate withdrawal is a real outcome and belongs in the commit message, not
 
 **Compose an event's payload type from the pinned schema's components.** The pruner drops a document's
 webhook section, and GitHub's payloads are under an `x-webhooks` extension the pruner would have to learn.
-But the *objects* those payloads carry — an issue, a repository, a user — are component schemas the exported
+But the *objects* those payloads carry - an issue, a repository, a user - are component schemas the exported
 operations already reference, so an event type can be composed from them. Only the few shapes a vendor does
 not publish as reusable components stay open hashes. That keeps the event and the actions describing the
 same record the same way.
@@ -491,9 +491,9 @@ In the module's own documentation, not here.
 `<App>DataProvider.qm`'s main page, the `<App>Manifest` class documentation and the `<App>Schema` class
 documentation are versioned alongside the code they describe and are published to users. Both existing
 applications record their overlay decisions, their pagination contract, their environment handling and
-their schema rationale there, and that is the right place for it — a `design/<app>.md` per application
+their schema rationale there, and that is the right place for it - a `design/<app>.md` per application
 would duplicate it, drift from it, and grow this directory by one file per port.
 
-`design/` carries what spans applications. If a decision in a new port is genuinely general — a lesson
-the next application would otherwise repeat — add it to the section above instead of starting a new
+`design/` carries what spans applications. If a decision in a new port is genuinely general - a lesson
+the next application would otherwise repeat - add it to the section above instead of starting a new
 document.

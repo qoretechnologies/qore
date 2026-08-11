@@ -35,12 +35,12 @@ public namespace RestSchemaActions {
 
     A schema-derived REST request type groups parameters by where they travel: \c query and \c header become
     nested hashes, the request body becomes a \c body field, and path variables do not appear in the request
-    type at all — they are supplied through the \c path_vars request option.  None of that is meaningful to
+    type at all - they are supplied through the \c path_vars request option.  None of that is meaningful to
     somebody filling in an action form, so this class lifts every value to a single flat level and keeps a
     reverse map (@ref getFlatMap()) so that @ref unflatten() can rebuild the exact transport request.
 
-    Fields are presented in transport order — path variables, then body properties, then query arguments,
-    then headers — which puts the values that identify the object first and the rarely-used transport
+    Fields are presented in transport order - path variables, then body properties, then query arguments,
+    then headers - which puts the values that identify the object first and the rarely-used transport
     controls last.  @ref RestSchemaActions::RestSchemaActionInfo::field_order "field_order" overrides this.
 
     Flattening is conservative: it removes transport groupings, never meaningful domain objects.  A body
@@ -53,7 +53,7 @@ public namespace RestSchemaActions {
 
     @section rsa_collisions Collisions
 
-    Two transport locations can carry the same name — a path variable \c id and a body property \c id, say.
+    Two transport locations can carry the same name - a path variable \c id and a body property \c id, say.
     Rather than silently choose one, the collision is reported, and the manifest resolves it by renaming
     either side through a location-qualified overlay key (\c "body.id").
 */
@@ -85,8 +85,8 @@ public class RestSchemaActionOperation {
         list<hash<RestSchemaDerivedValueInfo>> derived_values = ();
 
         #! Header values dropped by the overlay, which the connection is expected to supply
-        /** An ignored header is one the connection owns — an API key, the tenant a Xero connection works
-            in — so the action must not ask for it, and the request must still carry it.  These names are
+        /** An ignored header is one the connection owns - an API key, the tenant a Xero connection works
+            in - so the action must not ask for it, and the request must still carry it.  These names are
             filled in from the REST client's own default headers when the request is built.
         */
         list<string> connection_headers = ();
@@ -181,7 +181,7 @@ public class RestSchemaActionOperation {
     #! Returns the header values the connection is expected to supply
     /** These are the headers the overlay dropped with
         @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore".  Dropping one hides it from the
-        action, which is the point, but the schema may still declare it required — so the request is filled
+        action, which is the point, but the schema may still declare it required - so the request is filled
         in from the REST client's own default headers rather than being sent without it.
 
         @see @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider"

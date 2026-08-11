@@ -13,13 +13,13 @@ documents:
     provenance: BitbucketSchema.qc
 
     # Repairs applied to the document before it is pruned.  Each is checked: naming an operation the
-    # document does not declare, or a parameter it already declares, fails the import — so a repair that
+    # document does not declare, or a parameter it already declares, fails the import - so a repair that
     # upstream has since made unnecessary is removed rather than left here forever.
     normalize:
       - reason: >-
           Bitbucket documents "page" and "pagelen" on its shared pagination page
           (developer.atlassian.com/cloud/bitbucket/rest/intro/#pagination) rather than per endpoint, and
-          declares them on 3 of the 331 operations in this document — the three code-search endpoints.
+          declares them on 3 of the 331 operations in this document - the three code-search endpoints.
           "GET /user/workspaces" is the same: it answers a "{values, page, pagelen, size}" envelope and
           declares neither argument.
           Every collection here accepts them. Without this repair a generated listing cannot ask for the

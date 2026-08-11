@@ -31,7 +31,7 @@ public namespace GitHubDataProvider {
     \c operationId of a vendored Swagger 2.0 document.  GitHub generates that document and the OpenAPI 3 one
     from the same source, so they agree and the IDs carry over unchanged.
 
-    GitHub writes an \c operationId with a slash — \c "pulls/list" — and the action catalog accepts only
+    GitHub writes an \c operationId with a slash - \c "pulls/list" - and the action catalog accepts only
     \c A-Za-z0-9_- in an action name, so the superseded application registered them with the slash replaced
     by a hyphen: \c "pulls-list", \c "actions-create-or-update-repo-secret".  **That hyphenated form is the
     action ID**, because it is what existing workflows call; the \c operationId is recorded separately in
@@ -54,7 +54,7 @@ public namespace GitHubDataProvider {
     repository belongs to one owner.  Each of those dropdowns therefore declares
     @ref RestSchemaActions::RestSchemaReferenceDataInfo::options_from "options_from", so it forwards the
     \c owner and \c repo already chosen on the action being filled in, and stays empty until they have
-    values — listing every branch the credential can see would offer values that do not belong to the
+    values - listing every branch the credential can see would offer values that do not belong to the
     chosen repository.
 
     \c owner is the one dropdown with no scope: it is read from the owners of the repositories the
@@ -62,7 +62,7 @@ public namespace GitHubDataProvider {
 
     @section githubmanifest_assignees Assignees Come From Collaborators
 
-    The superseded application filled its assignee dropdowns from \c "/contributors" — everyone who has ever
+    The superseded application filled its assignee dropdowns from \c "/contributors" - everyone who has ever
     committed.  GitHub only accepts an assignee with **push access** and silently drops the rest, so that
     dropdown offered values the API would ignore.  This application lists collaborators instead, which is
     exactly the set GitHub will accept.
@@ -222,7 +222,7 @@ public class GitHubManifest {
         const OwnerOverlay = <RestSchemaFieldOverlayInfo>{
             "display_name": "Owner",
             "short_desc": "The user or organization that owns the repository",
-            "desc": "The account the repository belongs to — a user or an organization.\n\n"
+            "desc": "The account the repository belongs to - a user or an organization.\n\n"
                 "For `qoretechnologies/qorus` this is `qoretechnologies`.",
             "ref_data": RefOwner,
             "supports_custom_values": True,
@@ -456,7 +456,7 @@ public class GitHubManifest {
                 "short_desc": "Create a repository owned by the authenticated user",
                 "desc": "Creates a repository owned by the authenticated user.\n\n"
                     "`auto_init` creates an initial commit with a README, which matters because a repository "
-                    "with no commits has no branches — so **Create Branch** and the file actions have "
+                    "with no commits has no branches - so **Create Branch** and the file actions have "
                     "nothing to work from until something is committed.",
                 "groups": (GroupRepositories,),
                 "field_order": ("name", "description", "homepage", "private", "auto_init",
@@ -571,7 +571,7 @@ public class GitHubManifest {
                 "desc": "Writes a file and commits the change.\n\n"
                     "`content` must be **Base64-encoded**. Creating a file takes no `sha`; replacing one "
                     "**requires** the `sha` of the blob being replaced, which **Get File or Directory** "
-                    "returns — that is what makes the write safe against a concurrent change.\n\n"
+                    "returns - that is what makes the write safe against a concurrent change.\n\n"
                     "Without `branch` the commit goes to the default branch.",
                 "groups": (GroupRepositories,),
                 # GitHub answers 201 when the file was created and 200 when it was updated, and both carry
@@ -651,7 +651,7 @@ public class GitHubManifest {
                     "**GitHub returns pull requests here too**, because every pull request is an issue; a "
                     "record carrying `pull_request` is one. Filter them out if only issues are wanted.\n\n"
                     "`state` defaults to `open`, and `since` returns only issues updated after a given "
-                    "time — which is what makes an incremental sweep possible.",
+                    "time - which is what makes an incremental sweep possible.",
                 "groups": (GroupIssues,),
                 "field_order": ("owner", "repo", "state", "assignee", "creator", "labels", "milestone",
                     "since", "sort", "direction", "per_page", "page"),
@@ -667,7 +667,7 @@ public class GitHubManifest {
                     "labels": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Labels",
                         "short_desc": "A comma-separated list of label names",
-                        "desc": "A **comma-separated** list of label names, not a list — an issue must carry "
+                        "desc": "A **comma-separated** list of label names, not a list - an issue must carry "
                             "all of them to be returned.",
                     },
                 },
@@ -680,7 +680,7 @@ public class GitHubManifest {
                 "display_name": "List My Issues",
                 "short_desc": "List the issues assigned to the authenticated user",
                 "desc": "Lists issues across every repository the authenticated user can see, filtered by "
-                    "their relationship to them — assigned, created, mentioned or subscribed.\n\n"
+                    "their relationship to them - assigned, created, mentioned or subscribed.\n\n"
                     "`pulls` controls whether pull requests are included; unlike **List Issues** they are "
                     "excluded by default.",
                 "groups": (GroupIssues,),
@@ -745,7 +745,7 @@ public class GitHubManifest {
                 "short_desc": "Change an issue, or close or reopen it",
                 "desc": "Updates an issue.\n\n"
                     "Only the properties supplied are changed. Setting `state` to `closed` closes it and "
-                    "`open` reopens it; `state_reason` records **why** it was closed — `completed`, "
+                    "`open` reopens it; `state_reason` records **why** it was closed - `completed`, "
                     "`not_planned` or `duplicate`.\n\n"
                     "`labels` and `assignees` **replace** what is there rather than adding to it; use "
                     "**Add Assignees** to add without replacing.",
@@ -1023,8 +1023,8 @@ public class GitHubManifest {
                 "display_name": "Create Branch or Tag",
                 "short_desc": "Create a git ref pointing at a commit",
                 "desc": "Creates a git reference, which is how a branch or a tag is made.\n\n"
-                    "`ref` is the **fully qualified** name — `refs/heads/my-branch` for a branch, "
-                    "`refs/tags/v1.0` for a tag — and a bare branch name is rejected. `sha` is the commit "
+                    "`ref` is the **fully qualified** name - `refs/heads/my-branch` for a branch, "
+                    "`refs/tags/v1.0` for a tag - and a bare branch name is rejected. `sha` is the commit "
                     "the new ref points at, which **Get Branch** returns for the branch being started from.",
                 "groups": (GroupCode,),
                 "field_order": ("owner", "repo", "ref", "sha"),
@@ -1050,8 +1050,8 @@ public class GitHubManifest {
                 "display_name": "List Commits",
                 "short_desc": "List a repository's commits",
                 "desc": "Lists commits, newest first.\n\n"
-                    "`sha` selects the branch, tag or commit to start from — despite the name it accepts a "
-                    "branch name — and `path` narrows the listing to commits touching one file or "
+                    "`sha` selects the branch, tag or commit to start from - despite the name it accepts a "
+                    "branch name - and `path` narrows the listing to commits touching one file or "
                     "directory. `since` and `until` bound it by commit date, which is what makes an "
                     "incremental sweep possible.",
                 "groups": (GroupCode,),
@@ -1092,7 +1092,7 @@ public class GitHubManifest {
                 "short_desc": "Publish a release for a tag",
                 "desc": "Creates a release.\n\n"
                     "`tag_name` is required. If the tag does not exist GitHub creates it, at "
-                    "`target_commitish` — a branch name or commit SHA, defaulting to the default branch.\n\n"
+                    "`target_commitish` - a branch name or commit SHA, defaulting to the default branch.\n\n"
                     "`generate_release_notes` writes the notes from the commits and pull requests since the "
                     "previous release, and `draft` keeps it unpublished until it is edited in the UI.",
                 "groups": (GroupReleases,),
@@ -1168,7 +1168,7 @@ public class GitHubManifest {
                 "display_name": "Search Repositories",
                 "short_desc": "Search public repositories with a query",
                 "desc": "Searches repositories.\n\n"
-                    "`q` takes GitHub's search syntax — `qore user:qoretechnologies`, "
+                    "`q` takes GitHub's search syntax - `qore user:qoretechnologies`, "
                     "`language:python stars:>100`. The response is `{total_count, items}` rather than a bare "
                     "array.\n\n"
                     "Search is capped at **1000 results** however far it is paged, and is rate-limited "
@@ -1193,7 +1193,7 @@ public class GitHubManifest {
                 "display_name": "Search Issues and Pull Requests",
                 "short_desc": "Search issues and pull requests with a query",
                 "desc": "Searches issues and pull requests across repositories.\n\n"
-                    "`q` takes GitHub's search syntax — `repo:owner/name is:open label:bug`. Add "
+                    "`q` takes GitHub's search syntax - `repo:owner/name is:open label:bug`. Add "
                     "`is:issue` or `is:pr` to separate the two, because both are returned. The response is "
                     "`{total_count, items}`.\n\n"
                     "As with repository search this is capped at **1000 results** and rate-limited "
@@ -1247,7 +1247,7 @@ public class GitHubManifest {
                 "display_name": "Get Secret",
                 "short_desc": "Check whether a secret exists, and when it changed",
                 "desc": "Retrieves a secret's name and timestamps.\n\n"
-                    "**The value is never returned** — no GitHub API reads a secret back — so this answers "
+                    "**The value is never returned** - no GitHub API reads a secret back - so this answers "
                     "whether the secret exists and when it last changed, and nothing else.",
                 "groups": (GroupActions,),
                 "field_order": ("owner", "repo", "secret_name"),

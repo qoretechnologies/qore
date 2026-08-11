@@ -72,7 +72,7 @@ module XeroRestClient {
     The tenant therefore belongs to the connection rather than to an action: a connection is a connection to
     one organisation's books, and asking for the tenant on every action would let a workflow write an
     invoice into the wrong company.  \c GET /connections lists what a credential can reach, which is why it
-    is also the ping — it is the one call that needs no tenant.
+    is also the ping - it is the one call that needs no tenant.
 
     @section xerorestclient_paths One Host, Several APIs
 
@@ -135,7 +135,7 @@ public class XeroRestClientBase {
 
         #! The payroll regions Xero serves, and the API version each is served at
         /** Australia is on \c payroll.xro/1.0 and the other two on \c payroll.xro/2.0, and the two versions
-            do not describe the same operations — so the region selects an API, not a parameter.
+            do not describe the same operations - so the region selects an API, not a parameter.
         */
         const PayrollPrefixes = {
             RegionAu: "/payroll.xro/1.0",
@@ -305,7 +305,7 @@ public class XeroRestConnection inherits RestClient::RestConnection {
                 "working when the access token expires.\n\n"
                 "**`tenant_id` names the organisation.** A Xero credential can reach several organisations "
                 "and every call has to say which one it means, so the tenant belongs here rather than to "
-                "each action — a connection is a connection to one organisation's books. `GET /connections` "
+                "each action - a connection is a connection to one organisation's books. `GET /connections` "
                 "lists what the credential can reach and is also the ping.\n\n"
                 "**`payroll_region`** selects the payroll API: Australia is served at `payroll.xro/1.0` "
                 "and New Zealand and the United Kingdom at `payroll.xro/2.0`, which are different API "
@@ -359,7 +359,7 @@ public class XeroRestConnection inherits RestClient::RestConnection {
                     "desc": "The ID of the Xero organisation this connection works in, sent as "
                         "`Xero-Tenant-Id` with every call.\n\n"
                         "A credential can reach several organisations, and a call that does not name one is "
-                        "rejected. `GET /connections` — the ping — lists the `tenantId` of each "
+                        "rejected. `GET /connections` - the ping - lists the `tenantId` of each "
                         "organisation the credential can reach.",
                     "preselected": True,
                 },

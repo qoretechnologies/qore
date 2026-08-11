@@ -83,7 +83,7 @@ module StripeRestClient {
     Every Stripe account is pinned to an API version, and Stripe changes response shapes between
     versions.  Rather than let the account's default decide what a request returns, this client sends
     an explicit \c Stripe-Version header on every request, defaulting to
-    @ref StripeRestClient::StripeRestClientBase::DefaultApiVersion "DefaultApiVersion" — the version of
+    @ref StripeRestClient::StripeRestClientBase::DefaultApiVersion "DefaultApiVersion" - the version of
     the schema that the @ref stripedataproviderintro "StripeDataProvider" module's actions are
     generated from.
 
@@ -310,8 +310,8 @@ public class StripeRestConnection inherits RestClient::RestConnection {
             "short_desc": "A connection to the Stripe REST API",
             "desc": "A connection to the [Stripe](https://stripe.com) REST API for payments, billing "
                 "and connected accounts.\n\n"
-                "Stripe processes payments and manages the objects around them — customers, charges, "
-                "invoices, subscriptions, refunds and payouts — so an integration can charge a "
+                "Stripe processes payments and manages the objects around them - customers, charges, "
+                "invoices, subscriptions, refunds and payouts - so an integration can charge a "
                 "customer, issue an invoice, reconcile a payout or onboard a connected account "
                 "without handling card data itself.\n\n"
                 "**Authentication** is a bearer token, which is either:\n"

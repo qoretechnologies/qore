@@ -27,7 +27,7 @@ public namespace RestSchemaActions {
 #! Executes one schema-derived action
 /** Presents the flattened request type built by
     @ref RestSchemaActions::RestSchemaActionOperation "RestSchemaActionOperation", rebuilds the transport
-    request from the options it is given, and publishes the success response body — not the HTTP envelope —
+    request from the options it is given, and publishes the success response body - not the HTTP envelope -
     as its response.
 */
 public class RestSchemaActionDataProvider inherits AbstractDataProvider {
@@ -119,13 +119,13 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
     #! Fills in the headers the connection owns
     /** A header the overlay dropped with
         @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore" is one the connection supplies,
-        not one the action asks for — an API key, or the tenant a Xero connection works in.  The schema may
+        not one the action asks for - an API key, or the tenant a Xero connection works in.  The schema may
         still declare it required, and the client adds its own default headers only when the request is
         actually sent, so a request validated against the schema in between would be rejected for a value
         the action was never supposed to carry.
 
         Taking it from the client's default headers is what makes \c ignore mean what it says.  A header
-        the client does not supply is left out, so the schema reports it missing — which is the truth: the
+        the client does not supply is left out, so the schema reports it missing - which is the truth: the
         connection was supposed to provide it and did not.
 
         @param wire_req the transport request

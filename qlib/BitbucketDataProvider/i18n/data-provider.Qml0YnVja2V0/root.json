@@ -12,8 +12,8 @@
           "message": "Work with Bitbucket Cloud repositories, pull requests and deployments"
         },
         "app.Qml0YnVja2V0.desc": {
-          "source": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git repository hosting.\n\n**Common use cases**:\n- **Repositories**: create, read, update and delete repositories, and list branches\n- **Pull requests**: open, update and comment on pull requests\n- **Commits**: read commits, approve them, and comment on them\n- **Deployments**: read what was deployed, where, and in what state\n- **Workspaces**: read workspaces, their members and their projects\n- **Search**: search code across a workspace's repositories\n\n**Authentication** is a repository, project or workspace access token, an app password, or the OAuth2 authorization code flow — the first two of which need no OAuth consumer and so no workspace administrator.\n\nThis application targets Bitbucket **Cloud**; Bitbucket Data Center is a different product with a different API.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
-          "message": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git repository hosting.\n\n**Common use cases**:\n- **Repositories**: create, read, update and delete repositories, and list branches\n- **Pull requests**: open, update and comment on pull requests\n- **Commits**: read commits, approve them, and comment on them\n- **Deployments**: read what was deployed, where, and in what state\n- **Workspaces**: read workspaces, their members and their projects\n- **Search**: search code across a workspace's repositories\n\n**Authentication** is a repository, project or workspace access token, an app password, or the OAuth2 authorization code flow — the first two of which need no OAuth consumer and so no workspace administrator.\n\nThis application targets Bitbucket **Cloud**; Bitbucket Data Center is a different product with a different API.\n\nBitbucket is a trademark of Atlassian Pty Ltd."
+          "source": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git repository hosting.\n\n**Common use cases**:\n- **Repositories**: create, read, update and delete repositories, and list branches\n- **Pull requests**: open, update and comment on pull requests\n- **Commits**: read commits, approve them, and comment on them\n- **Deployments**: read what was deployed, where, and in what state\n- **Workspaces**: read workspaces, their members and their projects\n- **Search**: search code across a workspace's repositories\n\n**Authentication** is a repository, project or workspace access token, an app password, or the OAuth2 authorization code flow - the first two of which need no OAuth consumer and so no workspace administrator.\n\nThis application targets Bitbucket **Cloud**; Bitbucket Data Center is a different product with a different API.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git repository hosting.\n\n**Common use cases**:\n- **Repositories**: create, read, update and delete repositories, and list branches\n- **Pull requests**: open, update and comment on pull requests\n- **Commits**: read commits, approve them, and comment on them\n- **Deployments**: read what was deployed, where, and in what state\n- **Workspaces**: read workspaces, their members and their projects\n- **Search**: search code across a workspace's repositories\n\n**Authentication** is a repository, project or workspace access token, an app password, or the OAuth2 authorization code flow - the first two of which need no OAuth consumer and so no workspace administrator.\n\nThis application targets Bitbucket **Cloud**; Bitbucket Data Center is a different product with a different API.\n\nBitbucket is a trademark of Atlassian Pty Ltd."
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -348,8 +348,8 @@
           "message": "List the repositories in a workspace"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.desc": {
-          "source": "Lists the repositories in a workspace.\n\n`role` restricts the listing to repositories the credential has a given relationship with — `member`, `contributor`, `admin` or `owner` — which is how a listing is kept to what the user actually works on.",
-          "message": "Lists the repositories in a workspace.\n\n`role` restricts the listing to repositories the credential has a given relationship with — `member`, `contributor`, `admin` or `owner` — which is how a listing is kept to what the user actually works on."
+          "source": "Lists the repositories in a workspace.\n\n`role` restricts the listing to repositories the credential has a given relationship with - `member`, `contributor`, `admin` or `owner` - which is how a listing is kept to what the user actually works on.",
+          "message": "Lists the repositories in a workspace.\n\n`role` restricts the listing to repositories the credential has a given relationship with - `member`, `contributor`, `admin` or `owner` - which is how a listing is kept to what the user actually works on."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.display_name": {
           "source": "Workspace",
@@ -360,8 +360,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.display_name": {
           "source": "Filter",
@@ -456,8 +456,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -468,8 +468,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
           "source": "Create Repository",
@@ -492,8 +492,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.display_name": {
           "source": "Repository Slug",
@@ -592,8 +592,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -604,8 +604,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
@@ -700,8 +700,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -712,8 +712,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
           "source": "Redirect To",
@@ -748,8 +748,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -760,8 +760,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.display_name": {
           "source": "Filter",
@@ -832,8 +832,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -844,8 +844,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.display_name": {
           "source": "Page",
@@ -892,8 +892,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -904,8 +904,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.display_name": {
           "source": "Commit",
@@ -928,8 +928,8 @@
           "message": "List the code insights reports on a commit"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.desc": {
-          "source": "Lists the Code Insights reports attached to a commit — the results a linter, a test run or a security scan posted against it.",
-          "message": "Lists the Code Insights reports attached to a commit — the results a linter, a test run or a security scan posted against it."
+          "source": "Lists the Code Insights reports attached to a commit - the results a linter, a test run or a security scan posted against it.",
+          "message": "Lists the Code Insights reports attached to a commit - the results a linter, a test run or a security scan posted against it."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.display_name": {
           "source": "Workspace",
@@ -940,8 +940,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -952,8 +952,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.display_name": {
           "source": "Commit",
@@ -1012,8 +1012,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1024,8 +1024,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.display_name": {
           "source": "Commit",
@@ -1108,8 +1108,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1120,8 +1120,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.display_name": {
           "source": "Commit",
@@ -1180,8 +1180,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1192,8 +1192,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.display_name": {
           "source": "Commit",
@@ -1228,8 +1228,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1240,8 +1240,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.display_name": {
           "source": "Commit",
@@ -1276,8 +1276,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1288,8 +1288,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.display_name": {
           "source": "Page",
@@ -1324,8 +1324,8 @@
           "message": "List a repository's pull requests"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.desc": {
-          "source": "Lists pull requests.\n\n`state` selects which — `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` — and defaults to `OPEN`. It may be given more than once to include several states.",
-          "message": "Lists pull requests.\n\n`state` selects which — `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` — and defaults to `OPEN`. It may be given more than once to include several states."
+          "source": "Lists pull requests.\n\n`state` selects which - `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` - and defaults to `OPEN`. It may be given more than once to include several states.",
+          "message": "Lists pull requests.\n\n`state` selects which - `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` - and defaults to `OPEN`. It may be given more than once to include several states."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.display_name": {
           "source": "Workspace",
@@ -1336,8 +1336,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1348,8 +1348,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.display_name": {
           "source": "State",
@@ -1424,8 +1424,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1436,8 +1436,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.display_name": {
           "source": "Title",
@@ -1544,8 +1544,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1556,8 +1556,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
           "source": "Pull Request",
@@ -1592,8 +1592,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1604,8 +1604,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
           "source": "Pull Request",
@@ -1724,8 +1724,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1736,8 +1736,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
           "source": "Pull Request",
@@ -1796,8 +1796,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1808,8 +1808,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
           "source": "Pull Request",
@@ -1872,8 +1872,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1884,8 +1884,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
           "source": "Pull Request",
@@ -1932,8 +1932,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -1944,8 +1944,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
           "source": "Pull Request",
@@ -2016,8 +2016,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
           "source": "Repository",
@@ -2028,8 +2028,8 @@
           "message": "The repository to work on"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
-          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them.",
-          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository — commits, branches, pull requests — is listed from this repository, so changing it re-reads them."
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
           "source": "Pull Request",
@@ -2076,8 +2076,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.display_name": {
           "source": "Search Query",
@@ -2244,8 +2244,8 @@
           "message": "List the workspaces the credential can see"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.desc": {
-          "source": "Lists the workspaces the authenticated user can reach.\n\n`administrator` narrows the listing to the ones they administer.\n\nThis is the **only** listing Bitbucket still serves across workspaces, and it is what fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record wraps its workspace — `{administrator, workspace: {slug, uuid, links}}` — and carries no display name, so a workspace is identified by its slug.",
-          "message": "Lists the workspaces the authenticated user can reach.\n\n`administrator` narrows the listing to the ones they administer.\n\nThis is the **only** listing Bitbucket still serves across workspaces, and it is what fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record wraps its workspace — `{administrator, workspace: {slug, uuid, links}}` — and carries no display name, so a workspace is identified by its slug."
+          "source": "Lists the workspaces the authenticated user can reach.\n\n`administrator` narrows the listing to the ones they administer.\n\nThis is the **only** listing Bitbucket still serves across workspaces, and it is what fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record wraps its workspace - `{administrator, workspace: {slug, uuid, links}}` - and carries no display name, so a workspace is identified by its slug.",
+          "message": "Lists the workspaces the authenticated user can reach.\n\n`administrator` narrows the listing to the ones they administer.\n\nThis is the **only** listing Bitbucket still serves across workspaces, and it is what fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record wraps its workspace - `{administrator, workspace: {slug, uuid, links}}` - and carries no display name, so a workspace is identified by its slug."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.display_name": {
           "source": "Administrator Only",
@@ -2316,8 +2316,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
           "source": "List Workspace Members",
@@ -2340,8 +2340,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.display_name": {
           "source": "Page",
@@ -2388,8 +2388,8 @@
           "message": "The workspace to work in"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.desc": {
-          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them.",
-          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace — repositories, members — is listed from this workspace, so changing it re-reads them."
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.display_name": {
           "source": "Page",

@@ -29,7 +29,7 @@ public namespace ConfluenceDataProvider {
 
     The action IDs are those of the TypeScript application this module replaces, which took them from the
     \c operationId of a vendored Swagger 2.0 document.  Atlassian generates that document and the OpenAPI 3
-    one from the same source, so they agree and the IDs carry over unchanged — \c "getBlogPosts",
+    one from the same source, so they agree and the IDs carry over unchanged - \c "getBlogPosts",
     \c "updatePage".  Each is recorded as \c operation_id as well, so an upstream rename surfaces as drift
     rather than silently renaming an action.
 
@@ -53,7 +53,7 @@ public namespace ConfluenceDataProvider {
     @section confluencemanifest_version Updating Needs the Current Version
 
     Confluence uses optimistic locking: an update must carry \c version.number **one greater** than the
-    version it is changing, or it is rejected with a conflict.  So an update is always read-modify-write —
+    version it is changing, or it is rejected with a conflict.  So an update is always read-modify-write -
     fetch the page, add one to \c version.number, send it back.  That is Confluence's contract, not a
     presentation choice, and the option documents it rather than hiding it.
 
@@ -217,7 +217,7 @@ public class ConfluenceManifest {
             "display_name": "Body",
             "short_desc": "The content; set \"representation\" to say what \"value\" is written in",
             "desc": "The content itself.\n\n"
-                "`representation` says how `value` is written — `storage` for Confluence's XHTML storage "
+                "`representation` says how `value` is written - `storage` for Confluence's XHTML storage "
                 "format, or `atlas_doc_format` for the JSON document format. Getting this wrong is "
                 "usually why content appears as escaped markup rather than as a rendered page.",
             "preselected": True,
@@ -309,7 +309,7 @@ public class ConfluenceManifest {
                 "display_name": "Get Page",
                 "short_desc": "Retrieve one page",
                 "desc": "Retrieves a page.\n\n"
-                    "Set `body-format` to get the content — `storage` for the XHTML storage format — and "
+                    "Set `body-format` to get the content - `storage` for the XHTML storage format - and "
                     "the various `include-*` options for labels, versions, properties and the like. None "
                     "of them is returned by default.",
                 "groups": (GroupPages,),
@@ -571,7 +571,7 @@ public class ConfluenceManifest {
                 "operation_id": "getTasks",
                 "display_name": "List Tasks",
                 "short_desc": "List the tasks on the site",
-                "desc": "Lists tasks — the checkboxes inside pages and blog posts.\n\n"
+                "desc": "Lists tasks - the checkboxes inside pages and blog posts.\n\n"
                     "`status` selects complete or incomplete ones, and the various `*-id` filters restrict "
                     "the listing to one space, page or assignee.",
                 "groups": (GroupTasks,),

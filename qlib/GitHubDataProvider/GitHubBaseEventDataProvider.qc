@@ -31,7 +31,7 @@ public namespace GitHubDataProvider {
     @section githubevent_verification Signature Verification
 
     A webhook endpoint is a URL anyone on the internet can post to.  Without verification it accepts whatever
-    it is sent — a fabricated \c "pull request merged" or \c "release published" is enough to make an
+    it is sent - a fabricated \c "pull request merged" or \c "release published" is enough to make an
     automation deploy code that was never written.
 
     So this provider creates every hook with a **shared secret**, generated per subscription from
@@ -45,8 +45,8 @@ public namespace GitHubDataProvider {
     of its triggers would fire on anything posted to its endpoint by anyone who learned the URL.
 
     @note The signature covers the **exact bytes** GitHub sent.  A body that has been parsed into a hash and
-    re-serialized is a different sequence of bytes — key order, whitespace and number formatting all
-    differ — so a delivery that arrives already parsed cannot be verified and is dropped with an error
+    re-serialized is a different sequence of bytes - key order, whitespace and number formatting all
+    differ - so a delivery that arrives already parsed cannot be verified and is dropped with an error
     saying so, rather than being accepted unchecked.
 
     @section githubevent_scope The Repository Is an Option
@@ -55,7 +55,7 @@ public namespace GitHubDataProvider {
     than connection settings.  They are checked in
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()" rather than in the
     constructor, because the provider is constructed as a **template** when the application's children are
-    enumerated — before anyone has chosen a repository — and a constructor that threw then would make the
+    enumerated - before anyone has chosen a repository - and a constructor that threw then would make the
     event unlistable.
 
     @section githubevent_actions Which Deliveries Are Raised
@@ -66,7 +66,7 @@ public namespace GitHubDataProvider {
     @ref getEventAction() raises only that one.  Set \c all_actions to receive every delivery of the
     underlying GitHub event instead, which is what the superseded application did.
 
-    GitHub's own \c ping delivery — sent once when a hook is created — is always dropped: it is protocol
+    GitHub's own \c ping delivery - sent once when a hook is created - is always dropped: it is protocol
     noise, not an event.
 */
 public class GitHubBaseEventDataProvider inherits AbstractDataProvider, DataProvider::DelayedObservable {
@@ -95,7 +95,7 @@ public class GitHubBaseEventDataProvider inherits AbstractDataProvider, DataProv
                 "display_name": "Owner",
                 "short_desc": "The user or organization that owns the repository",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The account the repository belongs to — a user or an organization",
+                "desc": "The account the repository belongs to - a user or an organization",
                 "required": True,
                 "preselected": True,
                 "ref_data": GitHubManifest::RefOwner,
@@ -116,8 +116,8 @@ public class GitHubBaseEventDataProvider inherits AbstractDataProvider, DataProv
                 "display_name": "All Actions",
                 "short_desc": "Deliver every change the underlying GitHub event covers",
                 "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
-                "desc": "One GitHub event covers a family of changes — the `issues` event fires for "
-                    "`opened`, `edited`, `closed` and more — and this event normally raises only the one "
+                "desc": "One GitHub event covers a family of changes - the `issues` event fires for "
+                    "`opened`, `edited`, `closed` and more - and this event normally raises only the one "
                     "that matches its name.\n\n"
                     "Set this to deliver every one of them instead, and read the payload's `action` "
                     "property to tell them apart. This is what the application this module replaces did.",

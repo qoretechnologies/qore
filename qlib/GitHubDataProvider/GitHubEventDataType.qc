@@ -33,8 +33,8 @@ public namespace GitHubDataProvider {
     The objects those payloads carry are a different matter.  An \c issues delivery carries an \c issue, a
     \c repository and a \c sender, and all three **are** component schemas in the pinned document, reachable
     because the exported operations reference them.  So each event type is composed here from the pinned
-    schema's own components, and only the few shapes GitHub does not publish as reusable components — a push
-    commit, a review, a commit comment — are left as open hashes.
+    schema's own components, and only the few shapes GitHub does not publish as reusable components - a push
+    commit, a review, a commit comment - are left as open hashes.
 
     That is what keeps these types honest: they are the same declarations the actions are generated from, so
     they cannot drift from the API the way a hand-written second copy would.  The application this module

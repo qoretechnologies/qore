@@ -28,7 +28,7 @@ public namespace XeroDataProvider {
 /** @section xeroemployees_defect The Defect This Fixes
 
     The application this module replaces exported \c "/Employees" and read it through the **accounting**
-    API — \c https://api.xero.com/api.xro/2.0/Employees.  That path no longer exists: Xero's published
+    API - \c https://api.xero.com/api.xro/2.0/Employees.  That path no longer exists: Xero's published
     accounting description declares 138 paths and \c /Employees is not among them.  So its employee
     dropdown was always empty and its "new employee" trigger never fired, while the application requested
     the \c payroll.employees scope, which is where the intent shows: only the routing was wrong.
@@ -46,7 +46,7 @@ public namespace XeroDataProvider {
     An action registered in the application catalog has exactly one option shape, and these three
     descriptions do not agree on one.  Generating from any single region would publish that region's
     contract to everybody, so a New Zealand organisation would be shown Australia's envelope or the other
-    way round — a request contract that looks generated but is wrong for two thirds of users.
+    way round - a request contract that looks generated but is wrong for two thirds of users.
 
     That is the case the schema-driven path documents as hand-written: when a schema cannot describe the
     operation the application means, the action is written by hand and keeps its action ID.  These two do
@@ -86,8 +86,8 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
                 "has no single payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and "
                 "the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that "
                 "rather than guessing one.\n\n"
-                "The regions wrap the result differently — `{Employees: [...]}` in Australia and "
-                "`{employees: [...], pagination}` in the other two — and this action returns the employees "
+                "The regions wrap the result differently - `{Employees: [...]}` in Australia and "
+                "`{employees: [...], pagination}` in the other two - and this action returns the employees "
                 "as a plain list either way.\n\n"
                 "The application this module replaces read employees through the accounting API, where "
                 "they do not exist, so this never returned anything at all.",
@@ -96,8 +96,8 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
                 "directly; New Zealand's and the United Kingdom's take one employee per call, so a list of "
                 "several is sent one at a time and the results collected.\n\n"
                 "**Which payroll API is used comes from the connection's `payroll_region`.** The fields an "
-                "employee needs differ by region — a United Kingdom employee has a National Insurance "
-                "number where a New Zealand one has an IRD number — so this passes the employee through "
+                "employee needs differ by region - a United Kingdom employee has a National Insurance "
+                "number where a New Zealand one has an IRD number - so this passes the employee through "
                 "as given rather than declaring one region's shape for all of them.",
         };
 
@@ -183,8 +183,8 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns the response type
-    /** Every region returns a different employee shape, so the type says what is certain — a list of
-        employees — rather than declaring one region's properties for all of them.
+    /** Every region returns a different employee shape, so the type says what is certain - a list of
+        employees - rather than declaring one region's properties for all of them.
     */
     private *AbstractDataProviderType getResponseTypeImpl() {
         return AbstractDataProviderTypeMap."list";
@@ -197,13 +197,13 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
 
     #! Reports a payroll call that answered with something other than JSON
     /** The regional payroll APIs do not answer errors the way the accounting API does.  Australia's 1.0 API
-        answers \c "403 Forbidden" with an **XML** body — \c "<Message>Payroll has not been purchased</Message>" —
+        answers \c "403 Forbidden" with an **XML** body - \c "<Message>Payroll has not been purchased</Message>" -
         whatever the request's \c Accept header says, and the client cannot deserialize it: the caller is
         left with \c "JSON-PARSE-ERROR: invalid input at line 1" and neither the status nor the message.
 
         Nearly always this means what it says: the organisation has no payroll.  New Zealand and the United
-        Kingdom say the same thing in JSON and a 401 — "Ensure that your Organisation has Payroll
-        provisioned, and the User is a Payroll Administrator" — so this only has to translate Australia's
+        Kingdom say the same thing in JSON and a 401 - "Ensure that your Organisation has Payroll
+        provisioned, and the User is a Payroll Administrator" - so this only has to translate Australia's
         answer into something a caller can act on.
 
         @param ex the deserialization failure

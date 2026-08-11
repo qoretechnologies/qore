@@ -75,7 +75,7 @@ module ConfluenceRestClient {
     |\c cloud_id|\c https://api.atlassian.com/ex/confluence/\<cloud_id\>|the OAuth2 authorization code flow
     |\c site|\c https://\<site\>|an API token, sent as basic authentication with the account email
 
-    A site is given as a host — \c "example.atlassian.net" — and \c cloud_id as the site's UUID.  Exactly
+    A site is given as a host - \c "example.atlassian.net" - and \c cloud_id as the site's UUID.  Exactly
     one of them is set; setting both is an error, because the two would name different sites.
 
     @par Finding a cloud ID
@@ -337,7 +337,7 @@ public class ConfluenceRestConnection inherits RestClient::RestConnection {
                 "decide which site is reached.\n\n"
                 "**Authentication** is either:\n"
                 "- an **API token** in `password` with the account email in `username`, sent as basic "
-                "authentication — created at **id.atlassian.com > Security > API tokens**; or\n"
+                "authentication - created at **id.atlassian.com > Security > API tokens**; or\n"
                 "- the **OAuth2 authorization code flow** with `oauth2_client_id` and "
                 "`oauth2_client_secret` from an app created in the Atlassian developer console.\n\n"
                 "This connection targets Confluence **Cloud**; Confluence Data Center has a different "

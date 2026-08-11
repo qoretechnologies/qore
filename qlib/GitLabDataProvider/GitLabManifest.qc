@@ -34,7 +34,7 @@ public namespace GitLabDataProvider {
 
     The action IDs are those of the TypeScript application this module replaces, which derived them from the
     \c operationId of a vendored Swagger 2.0 document.  GitLab generates that document and its OpenAPI 3
-    document from the same API source, so the two agree and the IDs carry over unchanged — \c
+    document from the same API source, so the two agree and the IDs carry over unchanged - \c
     "getApiV4Projects", not \c "list_projects".
 
     They are not pretty, and they are not restyled.  Action identity is what existing workflows call, so it
@@ -67,8 +67,8 @@ public namespace GitLabDataProvider {
 
     @section gitlabmanifest_ids_vs_iids IDs and IIDs
 
-    GitLab addresses an issue or a merge request inside a project by its **IID** — the number shown in the
-    web UI and written \c "#42" — while the instance-wide \c /issues listing filters by \c id.  They are
+    GitLab addresses an issue or a merge request inside a project by its **IID** - the number shown in the
+    web UI and written \c "#42" - while the instance-wide \c /issues listing filters by \c id.  They are
     different numbers for the same object, and confusing them addresses a different issue without any error,
     so each dropdown supplies whichever the endpoint takes and says which it is.
 
@@ -327,7 +327,7 @@ public class GitLabManifest {
                 "(`group/project`).\n\n"
                 "Give the path as it reads; the transport escapes it into the single path segment GitLab "
                 "expects. A path escaped by hand would be escaped a second time and would not resolve.\n\n"
-                "Every other option scoped by a project — branches, issues, members, variables — is listed "
+                "Every other option scoped by a project - branches, issues, members, variables - is listed "
                 "from this project, so changing it re-reads them.",
             "ref_data": RefProject,
             "supports_custom_values": True,
@@ -351,7 +351,7 @@ public class GitLabManifest {
                 "(`parent/group`).\n\n"
                 "Give the path as it reads; the transport escapes it into the single path segment GitLab "
                 "expects. A path escaped by hand would be escaped a second time and would not resolve.\n\n"
-                "Every other option scoped by a group — members, variables — is listed from this group, so "
+                "Every other option scoped by a group - members, variables - is listed from this group, so "
                 "changing it re-reads them.",
             "ref_data": RefGroup,
             "supports_custom_values": True,
@@ -1611,7 +1611,7 @@ public class GitLabManifest {
                 "desc": "Lists projects.\n\n"
                     "Without a filter this returns every project the credential can see, which on "
                     "GitLab.com means every public project in existence. Set `membership`, `owned` or "
-                    "`min_access_level` to restrict it to the projects the user actually works with — "
+                    "`min_access_level` to restrict it to the projects the user actually works with - "
                     "that is what the project dropdowns in this application do.\n\n"
                     "`simple` returns a much smaller record per project and is worth setting when only "
                     "the ID and the name are needed.",
@@ -1770,7 +1770,7 @@ public class GitLabManifest {
                     "`protected` restricts it to pipelines on protected branches and tags; `masked` hides "
                     "it in job logs, which requires the value to meet GitLab's masking rules "
                     "(no newlines, minimum length). `masked_and_hidden` additionally makes the value "
-                    "unreadable through the API afterwards — set it for a real secret, and store the "
+                    "unreadable through the API afterwards - set it for a real secret, and store the "
                     "value somewhere else as well, because it cannot be retrieved.",
                 "groups": (GroupVariables,),
                 "field_order": ("id", "key", "value", "protected", "masked", "masked_and_hidden",

@@ -552,8 +552,8 @@
           "message": "The content; set \"representation\" to say what \"value\" is written in"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.desc": {
-          "source": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
-          "message": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
+          "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
+          "message": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cGFyZW50SWQ.display_name": {
           "source": "Parent Page",
@@ -648,8 +648,8 @@
           "message": "Retrieve one page"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.desc": {
-          "source": "Retrieves a page.\n\nSet `body-format` to get the content — `storage` for the XHTML storage format — and the various `include-*` options for labels, versions, properties and the like. None of them is returned by default.",
-          "message": "Retrieves a page.\n\nSet `body-format` to get the content — `storage` for the XHTML storage format — and the various `include-*` options for labels, versions, properties and the like. None of them is returned by default."
+          "source": "Retrieves a page.\n\nSet `body-format` to get the content - `storage` for the XHTML storage format - and the various `include-*` options for labels, versions, properties and the like. None of them is returned by default.",
+          "message": "Retrieves a page.\n\nSet `body-format` to get the content - `storage` for the XHTML storage format - and the various `include-*` options for labels, versions, properties and the like. None of them is returned by default."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aWQ.display_name": {
           "source": "Page",
@@ -904,8 +904,8 @@
           "message": "The content; set \"representation\" to say what \"value\" is written in"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.desc": {
-          "source": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
-          "message": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
+          "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
+          "message": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.dmVyc2lvbg.display_name": {
           "source": "Version",
@@ -1544,8 +1544,8 @@
           "message": "The content; set \"representation\" to say what \"value\" is written in"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.desc": {
-          "source": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
-          "message": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
+          "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
+          "message": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.display_name": {
           "source": "Status",
@@ -1844,8 +1844,8 @@
           "message": "The content; set \"representation\" to say what \"value\" is written in"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.desc": {
-          "source": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
-          "message": "The content itself.\n\n`representation` says how `value` is written — `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
+          "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
+          "message": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.dmVyc2lvbg.display_name": {
           "source": "Version",
@@ -2544,8 +2544,8 @@
           "message": "List the tasks on the site"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.desc": {
-          "source": "Lists tasks — the checkboxes inside pages and blog posts.\n\n`status` selects complete or incomplete ones, and the various `*-id` filters restrict the listing to one space, page or assignee.",
-          "message": "Lists tasks — the checkboxes inside pages and blog posts.\n\n`status` selects complete or incomplete ones, and the various `*-id` filters restrict the listing to one space, page or assignee."
+          "source": "Lists tasks - the checkboxes inside pages and blog posts.\n\n`status` selects complete or incomplete ones, and the various `*-id` filters restrict the listing to one space, page or assignee.",
+          "message": "Lists tasks - the checkboxes inside pages and blog posts.\n\n`status` selects complete or incomplete ones, and the various `*-id` filters restrict the listing to one space, page or assignee."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.display_name": {
           "source": "Space Id",

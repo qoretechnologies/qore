@@ -143,7 +143,7 @@ module XeroDataProvider {
     @section xerodataprovider_documents Two Documents, One Application
 
     Xero publishes one description per product rather than one per API, and this application exports
-    operations from two of them — accounting and projects — each served from a different path prefix on the
+    operations from two of them - accounting and projects - each served from a different path prefix on the
     same host.  Each becomes its own action set, which is what makes the routing correct with no special
     case, and the root provider merges them into one tree.  See
     @ref XeroDataProvider::XeroSchema "XeroSchema".
@@ -159,7 +159,7 @@ module XeroDataProvider {
 
     A Xero credential is not scoped to an organisation: it is granted access to one or more of them, and
     every call has to say which one it means.  \c tenant_id therefore belongs to the connection, and
-    \c GET /connections — the ping — is what lists the organisations a credential can reach.
+    \c GET /connections - the ping - is what lists the organisations a credential can reach.
 
     @section xerodataprovider_actions Actions
 
@@ -174,14 +174,14 @@ module XeroDataProvider {
     |Projects|projects, their tasks and their users
     |Payroll|employees in the organisation's regional payroll
 
-    Five of them — \c getAccounts, \c getTaxRates, \c getCreditNotes, \c getBankTransactions and
-    \c getPayments — are exported that the superseded application did not, because it offered dropdowns and
+    Five of them - \c getAccounts, \c getTaxRates, \c getCreditNotes, \c getBankTransactions and
+    \c getPayments - are exported that the superseded application did not, because it offered dropdowns and
     triggers backed by endpoints it never exported.
 
     @section xerodataprovider_envelopes Xero's Envelopes
 
-    A Xero accounting collection is an object with one array in it named after the type —
-    \c {Contacts: [...]} — and a create takes the same envelope, so creating one invoice means sending a
+    A Xero accounting collection is an object with one array in it named after the type -
+    \c {Contacts: [...]} - and a create takes the same envelope, so creating one invoice means sending a
     one-element \c Invoices array.  The projects API is different again: \c {items, pagination}, in
     \c camelCase where accounting uses \c PascalCase.
 
@@ -189,7 +189,7 @@ module XeroDataProvider {
 
     Seven polling events are offered.  Xero's published webhook description declares two payload types and
     no operations, and registering a webhook needs a subscription configured in the developer portal rather
-    than anything a connection can do, so these poll — with a **timestamp cursor** sent upstream as
+    than anything a connection can do, so these poll - with a **timestamp cursor** sent upstream as
     \c If-Modified-Since, rather than the bounded in-memory set of delivered identities the superseded
     application used.
 

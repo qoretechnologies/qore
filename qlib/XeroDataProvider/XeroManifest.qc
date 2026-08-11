@@ -32,7 +32,7 @@ public namespace XeroDataProvider {
 
     The action IDs are those of the TypeScript application this module replaces, which took them from the
     \c operationId of a vendored Swagger 2.0 document.  Xero generates that document and the OpenAPI 3 one
-    from the same source, so they agree and the IDs carry over unchanged — \c "getContacts",
+    from the same source, so they agree and the IDs carry over unchanged - \c "getContacts",
     \c "updateOrCreateInvoices".  Each is recorded as \c operation_id as well, so an upstream rename
     surfaces as drift rather than silently renaming an action.
 
@@ -61,8 +61,8 @@ public namespace XeroDataProvider {
 
     @section xeromanifest_envelopes Xero's Envelopes
 
-    A Xero accounting collection is an object with one array in it named after the type — \c {Contacts: [...]},
-    \c {Invoices: [...]} — and a create takes the same envelope, so creating one invoice means sending a
+    A Xero accounting collection is an object with one array in it named after the type - \c {Contacts: [...]},
+    \c {Invoices: [...]} - and a create takes the same envelope, so creating one invoice means sending a
     one-element \c Invoices array.  That is Xero's contract, not a presentation choice, and the actions
     document it rather than hiding it.
 
@@ -247,7 +247,7 @@ public class XeroManifest {
 
         #! Overlay dropping the response fields Xero declares in its request schemas
         /** Xero's request and response bodies share a schema, so a create carries \c pagination and
-            \c Warnings — which are things the server says back, not things a caller sends.
+            \c Warnings - which are things the server says back, not things a caller sends.
         */
         const ResponseOnlyOverlay = <RestSchemaFieldOverlayInfo>{
             "ignore": True,
@@ -371,7 +371,7 @@ public class XeroManifest {
                 "operation_id": "getContacts",
                 "display_name": "Find Contacts",
                 "short_desc": "List the contacts in the organisation",
-                "desc": "Lists contacts — customers, suppliers and everyone else in the address book.\n\n"
+                "desc": "Lists contacts - customers, suppliers and everyone else in the address book.\n\n"
                     "`where` filters with Xero's expression language: `IsCustomer==true`, "
                     "`Name.StartsWith(\"Acme\")`. `IDs` takes a **comma-separated** list of contact IDs "
                     "rather than a list.\n\n"
@@ -394,7 +394,7 @@ public class XeroManifest {
                 "display_name": "Create or Update Contacts",
                 "short_desc": "Create contacts, or update them by ID",
                 "desc": "Creates or updates contacts.\n\n"
-                    "`Contacts` is an **array** even for one contact — that is Xero's envelope. A member "
+                    "`Contacts` is an **array** even for one contact - that is Xero's envelope. A member "
                     "carrying `ContactID` updates that contact; one without creates a new one.\n\n"
                     "`summarizeErrors` set to `false` makes Xero accept the members it can and report the "
                     "rest, instead of rejecting the whole batch.",
@@ -456,8 +456,8 @@ public class XeroManifest {
                 "display_name": "Create or Update Invoices",
                 "short_desc": "Create invoices or bills, or update them by ID",
                 "desc": "Creates or updates invoices.\n\n"
-                    "`Invoices` is an **array** even for one invoice. Each member needs `Type` — `ACCREC` "
-                    "for a sales invoice, `ACCPAY` for a bill — a `Contact`, and `LineItems`.\n\n"
+                    "`Invoices` is an **array** even for one invoice. Each member needs `Type` - `ACCREC` "
+                    "for a sales invoice, `ACCPAY` for a bill - a `Contact`, and `LineItems`.\n\n"
                     "A line item needs an amount and an account: give `AccountCode`, or an `ItemCode` whose "
                     "item already carries one. `Status` decides whether it is a draft: leave it unset for "
                     "`DRAFT`, or set `AUTHORISED` to approve it as it is created.",
@@ -561,7 +561,7 @@ public class XeroManifest {
                 "short_desc": "Send an invoice to its contact by email",
                 "desc": "Sends an invoice to the email address on its contact.\n\n"
                     "Xero decides the recipient and the template; there is nothing to fill in but the "
-                    "invoice. The invoice has to be `AUTHORISED` — a draft cannot be sent.",
+                    "invoice. The invoice has to be `AUTHORISED` - a draft cannot be sent.",
                 "groups": (GroupInvoices,),
                 "field_order": ("InvoiceID",),
                 "fields": AccountingWriteCommon + {
@@ -627,7 +627,7 @@ public class XeroManifest {
                 "display_name": "Create or Update Repeating Invoices",
                 "short_desc": "Set up an invoice that repeats on a schedule",
                 "desc": "Creates or updates repeating invoice templates.\n\n"
-                    "`Schedule` is what makes it repeat — its period, unit and next scheduled date — and "
+                    "`Schedule` is what makes it repeat - its period, unit and next scheduled date - and "
                     "`Status` decides whether Xero sends each occurrence (`AUTHORISED`) or leaves it as a "
                     "draft (`DRAFT`).",
                 "groups": (GroupInvoices,),
@@ -705,7 +705,7 @@ public class XeroManifest {
                     "Unlike most of the accounting API this takes **one** payment rather than an envelope "
                     "of them. It needs the `Invoice` it pays, the `Account` it is paid from or into, an "
                     "`Amount` and a `Date`.\n\n"
-                    "The account has to be one that allows payments — a bank account, in practice — and "
+                    "The account has to be one that allows payments - a bank account, in practice - and "
                     "the invoice has to be `AUTHORISED`.",
                 "groups": (GroupPayments,),
                 "field_order": ("Invoice", "Account", "Amount", "Date", "Reference", "CreditNote",
@@ -820,7 +820,7 @@ public class XeroManifest {
                 "operation_id": "getBankTransactions",
                 "display_name": "Find Bank Transactions",
                 "short_desc": "List the bank transactions in the organisation",
-                "desc": "Lists bank transactions — spend and receive money entries against a bank "
+                "desc": "Lists bank transactions - spend and receive money entries against a bank "
                     "account.\n\n"
                     "This is exported so that the bank transaction dropdown and the **New Bank "
                     "Transaction** event have something to read.\n\n"
@@ -838,8 +838,8 @@ public class XeroManifest {
                 "display_name": "Create Bank Transaction",
                 "short_desc": "Record money spent or received against a bank account",
                 "desc": "Creates or updates bank transactions.\n\n"
-                    "`BankTransactions` is an **array** even for one. Each needs a `Type` — `SPEND` or "
-                    "`RECEIVE` — a `Contact`, a `BankAccount` and `LineItems`.\n\n"
+                    "`BankTransactions` is an **array** even for one. Each needs a `Type` - `SPEND` or "
+                    "`RECEIVE` - a `Contact`, a `BankAccount` and `LineItems`.\n\n"
                     "The bank account must be an account of type `BANK`, which is what its dropdown "
                     "offers; a line item needs `AccountCode` or `AccountID` to say which account it posts "
                     "to.",
@@ -1078,7 +1078,7 @@ public class XeroManifest {
                 "operation_id": "getProjectUsers",
                 "display_name": "Find Project Users",
                 "short_desc": "List the users who can be assigned to project tasks",
-                "desc": "Lists the users of the projects API — the people time can be recorded against.",
+                "desc": "Lists the users of the projects API - the people time can be recorded against.",
                 "groups": (GroupProjects,),
                 "field_order": ("page", "pageSize"),
                 "fields": ProjectsCommon + {
@@ -1115,7 +1115,7 @@ public class XeroManifest {
                 "display_name": "Create Task",
                 "short_desc": "Add a task to a project",
                 "desc": "Creates a task in a project.\n\n"
-                    "`chargeType` decides how it is billed — `TIME`, `FIXED` or `NON_CHARGEABLE` — and a "
+                    "`chargeType` decides how it is billed - `TIME`, `FIXED` or `NON_CHARGEABLE` - and a "
                     "`TIME` task needs a `rate`.",
                 "groups": (GroupProjects,),
                 "field_order": ("projectId", "name", "chargeType", "rate", "estimateMinutes"),

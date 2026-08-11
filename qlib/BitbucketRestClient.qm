@@ -239,7 +239,7 @@ public class BitbucketRestConnection inherits RestClient::RestConnection {
             "desc": "A connection to [Bitbucket Cloud](https://bitbucket.org) for repositories, commits, "
                 "pull requests, deployments and code search.\n\n"
                 "**Authentication** is any one of three credentials:\n"
-                "- an **access token** in `token` — a repository, project or workspace access token, "
+                "- an **access token** in `token` - a repository, project or workspace access token, "
                 "created under the relevant **Settings > Access tokens**. The narrowest option, and the "
                 "one to prefer;\n"
                 "- an **app password** in `username` and `password`, sent as basic authentication. The "

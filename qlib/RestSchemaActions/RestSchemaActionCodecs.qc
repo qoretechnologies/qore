@@ -27,7 +27,7 @@ public namespace RestSchemaActions {
 #! A registry of bidirectional conversions between action-facing values and their wire representations
 /** A REST schema describes what goes on the wire.  It cannot say that an integer is really a point in time,
     so an action generated straight from a schema presents an integer and leaves every caller to do the
-    arithmetic — and to guess whether the unit is seconds or milliseconds.  Guessing wrongly is not a
+    arithmetic - and to guess whether the unit is seconds or milliseconds.  Guessing wrongly is not a
     hypothetical: getting that unit wrong is one of the defects that motivated re-deriving overlays rather
     than copying them.
 

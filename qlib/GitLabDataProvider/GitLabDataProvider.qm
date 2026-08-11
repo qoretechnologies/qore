@@ -166,7 +166,7 @@ module GitLabDataProvider {
     |GitLab version|19.3.0-pre
     |Imported|2026-08-10
 
-    The committed copy is pruned to the exported operations and everything they reference — 35 of 1284
+    The committed copy is pruned to the exported operations and everything they reference - 35 of 1284
     paths and 70 of 865 component schemas.  That is not only a size reduction: the full 3.3 MB document
     takes several seconds to parse, which is not a reasonable cost to pay on every data provider
     construction.
@@ -189,14 +189,14 @@ module GitLabDataProvider {
 
     Identifier options are dropdowns wherever the application exports an operation that can list the
     values, and every dropdown that names something living inside a project or group is **scoped by the
-    container the user chose** — the branches of that project, the members of that group.  Every dropdown
+    container the user chose** - the branches of that project, the members of that group.  Every dropdown
     also accepts a value typed or chained in from a previous step, because an identifier usually comes from
     earlier in a workflow and a narrowly scoped token may not be able to list the values at all.
 
     @section gitlabdataprovider_iids IDs and IIDs
 
-    GitLab addresses an issue or a merge request inside a project by its **IID** — the number shown in the
-    web UI and written \c "#42" — while the instance-wide \c /issues listing filters by \c id.  They are
+    GitLab addresses an issue or a merge request inside a project by its **IID** - the number shown in the
+    web UI and written \c "#42" - while the instance-wide \c /issues listing filters by \c id.  They are
     different numbers for the same object.  Each action takes whichever its endpoint takes, and each
     dropdown says which it supplies.
 
@@ -210,7 +210,7 @@ module GitLabDataProvider {
     @section gitlabdataprovider_events Events
 
     Four polling events are offered: a new commit, a new comment on a commit, a new issue and a new merge
-    request.  GitLab's REST API has no event stream, so these poll — but they poll with a **timestamp
+    request.  GitLab's REST API has no event stream, so these poll - but they poll with a **timestamp
     cursor** rather than a bounded in-memory set of delivered identities, which is what the application
     this module replaces used.  That means:
 
@@ -327,7 +327,7 @@ cast<DelayedObservable>(event).observersReady();
 
     @subsection gitlabdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
 
-    The application exports a reviewed subset of GitLab's API — 70 actions covering 69 of 1752 operations,
+    The application exports a reviewed subset of GitLab's API - 70 actions covering 69 of 1752 operations,
     the two counts differing because \c get_project_id_by_url reads a project through the same endpoint
     the generated \c getApiV4ProjectsId already exports.  For
     anything else, the generic API call action reaches the rest of it with the same connection and
