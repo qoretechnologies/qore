@@ -690,6 +690,29 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         assertEq('oauth2_client_id,oauth2_client_secret', req[0],
             "the OAuth2 option set is the first alternative, so it is the default flow");
 
+        # ...but naming the options first only decides what the form shows.  What decides whether the
+        # platform offers the authorization flow at all is whether the CONNECTION reports it can authorize,
+        # and it works that out from its own options: the grant type plus all five of the authorization
+        # request options.  A connection that leaves any of them to be derived later, when a client is
+        # finally built, reports that it cannot authorize and the platform falls back to asking for a token.
+        GitLabRestConnection oauth2_conn({
+            "name": "oauth2-flow-test",
+            "desc": "test",
+            "url": "gitlab://gitlab.com",
+            "opts": {
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+                "oauth2_redirect_url": "auto",
+            },
+        });
+        assertTrue(oauth2_conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH},
+            "the connection reports that it can authorize with OAuth2");
+        assertTrue(oauth2_conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH_CODE},
+            "specifically with the authorization code flow");
+        hash<auto> oauth2_opts = oauth2_conn.getRealOptions();
+        assertTrue(oauth2_opts.oauth2_auth_url.val(), "the authorization endpoint is known to the connection");
+        assertTrue(oauth2_opts.oauth2_token_url.val(), "the token endpoint is known to the connection");
+
         # the instance decides the URL
         GitLabRestConnection conn("gitlab-test", "test", "gitlab://gitlab.example.com", {},
             {"token": "glpat-fake"});
@@ -728,6 +751,32 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         hash<auto> topts = GitLabRestClientBase::getOptions({"token": "glpat-fake"});
         assertEq("https://gitlab.com", topts.url, "the default instance is GitLab.com");
         assertNothing(topts.oauth2_auth_url);
+
+        # the connection knows the endpoints whatever the credential is, because it has to answer whether
+        # it CAN authorize before anyone has chosen to; a token-only connection still must not claim it can
+        GitLabRestConnection tok("gitlab-token", "test", "gitlab://gitlab.com", {},
+            {"token": "glpat-fake"});
+        assertNothing(tok.getFeatures(){RestConnection::RCF_OAUTH2_AUTH},
+            "no client credentials, so the authorization flow is not offered");
+
+        # GitLab runs on-premises, so the endpoints belong to the instance and follow it
+        GitLabRestConnection onprem("gitlab-onprem", "test", "gitlab://gitlab.example.com", {}, {
+            "oauth2_client_id": "id", "oauth2_client_secret": "secret", "oauth2_redirect_url": "auto",
+        });
+        hash<auto> oopts = onprem.getRealOptions();
+        assertEq("https://gitlab.example.com/oauth/authorize", oopts.oauth2_auth_url);
+        assertEq("https://gitlab.example.com/oauth/token", oopts.oauth2_token_url);
+        assertTrue(onprem.getFeatures(){RestConnection::RCF_OAUTH2_AUTH});
+
+        # a stored endpoint from a previous instance is replaced rather than kept, or an authorization
+        # would be sent to the instance this connection no longer talks to
+        GitLabRestConnection moved("gitlab-moved", "test", "gitlab://gitlab.example.com", {}, {
+            "oauth2_client_id": "id", "oauth2_client_secret": "secret", "oauth2_redirect_url": "auto",
+            "oauth2_auth_url": "https://gitlab.com/oauth/authorize",
+            "oauth2_token_url": "https://gitlab.com/oauth/token",
+        });
+        assertEq("https://gitlab.example.com/oauth/authorize", moved.getRealOptions().oauth2_auth_url,
+            "the endpoint follows the instance, not the stored value");
     }
 
     private eventProviderTest() {

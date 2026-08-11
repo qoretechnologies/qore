@@ -478,10 +478,49 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
         \c hostname option that agrees with it, so the option is never absent and never stale.
     */
     private static hash<auto> getOpts(hash<auto> options, *string url) {
-        if (options.hostname.val() || !url.val()) {
-            return options;
+        hash<auto> rv = options;
+        if (!rv.hostname.val() && url.val()) {
+            rv += {"hostname": GitLabRestClientBase::getHostnameForUrl(url)};
         }
-        return options + {"hostname": GitLabRestClientBase::getHostnameForUrl(url)};
+        return GitLabRestConnection::addOAuth2Urls(rv);
+    }
+
+    #! Fills in the OAuth2 endpoints for the instance the connection works with
+    /** GitLab runs on-premises as well as at gitlab.com, so its authorization and token endpoints belong to
+        the **instance** and cannot be constants in the connection scheme the way GitHub's and Xero's are.
+        They are derived from \c hostname instead.
+
+        Deriving them in the client alone is not enough, and this is the whole reason this method exists.
+        @ref RestClient::RestConnection "RestConnection" decides at construction whether the connection can
+        offer the OAuth2 authorization code flow, and it decides it by looking for \c oauth2_auth_url,
+        \c oauth2_token_url, \c oauth2_client_id, \c oauth2_client_secret and \c oauth2_redirect_url **in
+        the connection's own options**.  A connection that leaves the two endpoints to be worked out later,
+        when a client is finally constructed, therefore reports that it cannot authorize at all: the
+        platform offers an access-token form instead of the authorization flow, and a connection created
+        that way comes back with \c oauth2_auth_code false.
+
+        The endpoints are derived from \c hostname **every time**, overwriting whatever is stored, which is
+        the same rule this connection already applies to its URL and for the same reason: they belong to the
+        instance, so a value left over from a previous one would send the authorization somewhere the
+        connection no longer talks to.  Nothing is lost by it - GitLab serves \c /oauth/authorize and
+        \c /oauth/token from the instance itself and offers no way to move them.
+
+        The client does the opposite and fills them in only when they are absent
+        (@ref GitLabRestClient::GitLabRestClientBase::getOptions() "getOptions()"), because it is given the
+        options for one call rather than storing them across changes of instance.
+
+        @param options the connection options, with \c hostname resolved
+
+        @return the options with the endpoints filled in
+    */
+    private static hash<auto> addOAuth2Urls(hash<auto> options) {
+        string hostname = options.hostname ?? GitLabRestClientBase::DefaultHostname;
+        # "auto!" because the option values are of several types, and a hash narrowed to the type of its
+        # first value would reject the rest
+        hash<auto!> rv = options;
+        rv.oauth2_auth_url = GitLabRestClientBase::getAuthUrlForHostname(hostname);
+        rv.oauth2_token_url = GitLabRestClientBase::getTokenUrlForHostname(hostname);
+        return rv;
     }
 
     #! Returns the config hash with the URL and \c hostname agreeing with each other
@@ -500,10 +539,24 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options) {
-            string target = GitLabRestConnection::getConnectionUrl(opts.hostname
-                ?? GitLabRestClientBase::DefaultHostname);
+            string hostname = opts.hostname ?? GitLabRestClientBase::DefaultHostname;
+            string target = GitLabRestConnection::getConnectionUrl(hostname);
+            # the OAuth2 endpoints move with the instance as well, or an authorization would be sent to the
+            # instance this connection used to talk to
+            hash<auto> updates = {};
             if (url != target) {
-                doUpdateOptions(self, {"url": target});
+                updates.url = target;
+            }
+            string auth_url = GitLabRestClientBase::getAuthUrlForHostname(hostname);
+            if (opts.oauth2_auth_url != auth_url) {
+                updates.oauth2_auth_url = auth_url;
+            }
+            string token_url = GitLabRestClientBase::getTokenUrlForHostname(hostname);
+            if (opts.oauth2_token_url != token_url) {
+                updates.oauth2_token_url = token_url;
+            }
+            if (updates) {
+                doUpdateOptions(self, updates);
             }
         }
     }

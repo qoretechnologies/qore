@@ -525,6 +525,29 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
         assertEq('oauth2_client_id,oauth2_client_secret', req[0],
             "the OAuth2 option set is the first alternative, so it is the default flow");
 
+        # ...but naming the options first only decides what the form shows.  What decides whether the
+        # platform offers the authorization flow at all is whether the CONNECTION reports it can authorize,
+        # and it works that out from its own options: the grant type plus all five of the authorization
+        # request options.  A connection that leaves any of them to be derived later, when a client is
+        # finally built, reports that it cannot authorize and the platform falls back to asking for a token.
+        BitbucketRestConnection oauth2_conn({
+            "name": "oauth2-flow-test",
+            "desc": "test",
+            "url": "bitbucket://api.bitbucket.org",
+            "opts": {
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+                "oauth2_redirect_url": "auto",
+            },
+        });
+        assertTrue(oauth2_conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH},
+            "the connection reports that it can authorize with OAuth2");
+        assertTrue(oauth2_conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH_CODE},
+            "specifically with the authorization code flow");
+        hash<auto> oauth2_opts = oauth2_conn.getRealOptions();
+        assertTrue(oauth2_opts.oauth2_auth_url.val(), "the authorization endpoint is known to the connection");
+        assertTrue(oauth2_opts.oauth2_token_url.val(), "the token endpoint is known to the connection");
+
         BitbucketRestConnection conn("bitbucket-test", "test", "bitbucket://api.bitbucket.org", {},
             {"token": "bbt-fake"});
         assertEq("bitbucket", conn.getType());
