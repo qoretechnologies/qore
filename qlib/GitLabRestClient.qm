@@ -424,7 +424,12 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
                     "default_value": GitLabRestClientBase::DefaultTokenType,
                 },
             },
-            "required_options": "token|oauth2_client_id,oauth2_client_secret",
+            # OAuth2 is named first because it is the flow this connection should default to whenever the
+            # platform can supply a client; an access token is the fallback for a credential that is not
+            # tied to a user's authorization.  The published OAuth2 client for this app additionally
+            # declares "hostname" as required, because GitLab's authorization and token endpoints are
+            # per-instance, which is why "hostname" carries a default and is preselected
+            "required_options": "oauth2_client_id,oauth2_client_secret|token",
         };
     }
 

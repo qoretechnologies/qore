@@ -458,6 +458,13 @@ public class XeroDataProviderTest inherits QUnit::Test {
     }
 
     private connectionTest() {
+        # this application supports OAuth2, so the OAuth2 option set is named FIRST in
+        # "required_options": that is what declares OAuth2 support to the platform and makes the
+        # authorization-code flow the connection's default rather than nothing else
+        list<string> req = XeroRestConnection::ConnectionScheme.required_options.split("|");
+        assertEq('oauth2_client_id,oauth2_client_secret', req[0],
+            "the OAuth2 option set is the first alternative, so it is the default flow");
+
         hash<auto> opts = XeroRestClientBase::getOptions({"token": "abc", "tenant_id": "t-1"});
         assertEq("https://api.xero.com", opts.url);
         assertEq("Bearer", opts.token_type);

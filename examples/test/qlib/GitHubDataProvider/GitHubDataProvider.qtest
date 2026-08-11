@@ -485,6 +485,13 @@ public class GitHubDataProviderTest inherits QUnit::Test {
     }
 
     private connectionTest() {
+        # this application supports OAuth2, so the OAuth2 option set is named FIRST in
+        # "required_options": that is what declares OAuth2 support to the platform and makes the
+        # authorization-code flow the connection's default rather than a personal access token
+        list<string> req = GitHubRestConnection::ConnectionScheme.required_options.split("|");
+        assertEq('oauth2_client_id,oauth2_client_secret', req[0],
+            "the OAuth2 option set is the first alternative, so it is the default flow");
+
         assertEq("2022-11-28", GitHubRestClientBase::ApiVersion);
 
         hash<auto> opts = GitHubRestClientBase::getOptions({"token": "abc"});

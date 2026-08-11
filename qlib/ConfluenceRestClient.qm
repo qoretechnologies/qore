@@ -419,7 +419,10 @@ public class ConfluenceRestConnection inherits RestClient::RestConnection {
                     "default_value": ConfluenceRestClientBase::DefaultTokenType,
                 },
             },
-            "required_options": "cloud_id|site",
+            # \c cloud_id is the OAuth2 path and \c site the API-token path, so naming the OAuth2 option
+            # set alongside \c cloud_id is what declares OAuth2 support to the platform and lets it supply
+            # the client; it is named first because that is the flow this connection defaults to
+            "required_options": "cloud_id,oauth2_client_id,oauth2_client_secret|site",
         };
     }
 

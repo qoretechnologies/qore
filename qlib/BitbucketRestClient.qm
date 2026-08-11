@@ -318,7 +318,10 @@ public class BitbucketRestConnection inherits RestClient::RestConnection {
                 },
             },
             # any one of the three credentials is enough
-            "required_options": "token|username,password|oauth2_client_id,oauth2_client_secret",
+            # OAuth2 is named first because it is the flow this connection should default to whenever the
+            # platform can supply a client; an access token or an app password is the fallback for a
+            # credential that is not tied to a user's authorization
+            "required_options": "oauth2_client_id,oauth2_client_secret|token|username,password",
         };
     }
 
