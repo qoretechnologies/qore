@@ -12,119 +12,6 @@
     }
   },
   "paths": {
-    "/repositories": {
-      "get": {
-        "tags": [
-          "Repositories"
-        ],
-        "description": "**This endpoint is deprecated. Please use the\n[workspace scoped alternative](/cloud/bitbucket/rest/api-group-repositories/#api-repositories-workspace-get).**\n\nReturns a paginated list of all public repositories.\n\nThis endpoint also supports filtering and sorting of the results. See\n[filtering and sorting](/cloud/bitbucket/rest/intro/#filtering) for more details.",
-        "summary": "List public repositories",
-        "responses": {
-          "200": {
-            "description": "All public repositories.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/paginated_repositories"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "after",
-            "in": "query",
-            "description": "Filter the results to include only repositories created on or\nafter this [ISO-8601](https://en.wikipedia.org/wiki/ISO_8601)\n timestamp. Example: `YYYY-MM-DDTHH:mm:ss.sssZ`",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "role",
-            "in": "query",
-            "description": "Filters the result based on the authenticated user's role on each repository.\n\n* **member**: returns repositories to which the user has explicit read access\n* **contributor**: returns repositories to which the user has explicit write access\n* **admin**: returns repositories to which the user has explicit administrator access\n* **owner**: returns all repositories owned by the current user\n",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "admin",
-                "contributor",
-                "member",
-                "owner"
-              ]
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Query string to narrow down the response as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n`role` parameter must also be specified.\n",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "description": "Field by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "description": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            }
-          },
-          {
-            "name": "pagelen",
-            "in": "query",
-            "required": false,
-            "description": "How many records to return in one page, up to 100. Bitbucket documents this for every collection but declares it on almost none of them.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          }
-        ],
-        "security": [
-          {
-            "oauth2": [
-              "repository"
-            ]
-          },
-          {
-            "basic": []
-          },
-          {
-            "api_key": []
-          }
-        ],
-        "deprecated": true,
-        "x-atlassian-oauth2-scopes": [
-          {
-            "state": "Current",
-            "scheme": "oauth2",
-            "scopes": [
-              "read:repository:bitbucket"
-            ]
-          }
-        ],
-        "x-atlassian-auth-types": [
-          "api-token"
-        ]
-      },
-      "parameters": []
-    },
     "/repositories/{workspace}": {
       "get": {
         "tags": [
@@ -2638,6 +2525,143 @@
         ]
       }
     },
+    "/user/workspaces": {
+      "get": {
+        "tags": [
+          "Workspaces"
+        ],
+        "description": "Returns an object for each workspace accessible to the caller. This object\nalso contains details on whether the caller has admin permissions on the workspace\n(`\"administrator\" = true`) or not (`\"administrator\" = false`).\n\nQueries support filtering based on administrator permissions,\n[sorting](/cloud/bitbucket/rest/intro/#sorting-query-results) or\n[filtering](/cloud/bitbucket/rest/intro/#filtering) by `slug`. Results can\nbe [paginated](/cloud/bitbucket/rest/intro/#pagination).",
+        "summary": "List workspaces for the current user",
+        "responses": {
+          "200": {
+            "description": "The list of workspaces accessible by the authenticated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/paginated_workspace_access"
+                },
+                "examples": {
+                  "response": {
+                    "value": {
+                      "pagelen": 25,
+                      "page": 1,
+                      "size": 1,
+                      "values": [
+                        {
+                          "administrator": true,
+                          "type": "workspace_access",
+                          "workspace": {
+                            "links": {
+                              "avatar": {
+                                "href": "https://api.bitbucket.org/workspaces/bbworkspace1/avatar/"
+                              },
+                              "self": {
+                                "href": "https://api.bitbucket.org/2.0/workspaces/bbworkspace1"
+                              }
+                            },
+                            "slug": "bbworkspace1",
+                            "type": "workspace_base",
+                            "uuid": "{470c176d-3574-44ea-bb41-89e8638bcca4}"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request wasn't authenticated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Name of a response property to sort results (only slug is supported).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "administrator",
+            "in": "query",
+            "description": "Filter workspaces based on which ones the caller has admin permissions or not.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pagelen",
+            "in": "query",
+            "required": false,
+            "description": "How many records to return in one page, up to 100. Bitbucket documents this for every collection but declares it on almost none of them.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "account"
+            ]
+          },
+          {
+            "basic": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "state": "Current",
+            "scheme": "oauth2",
+            "scopes": [
+              "read:workspace:bitbucket"
+            ]
+          }
+        ],
+        "x-atlassian-auth-types": [
+          "forge-oauth2",
+          "api-token"
+        ]
+      },
+      "parameters": []
+    },
     "/users/{selected_user}/search/code": {
       "get": {
         "tags": [
@@ -2831,165 +2855,6 @@
           "api-token"
         ]
       }
-    },
-    "/workspaces": {
-      "get": {
-        "tags": [
-          "Workspaces"
-        ],
-        "description": "**This endpoint is deprecated. Please use the\n[supported alternative](/cloud/bitbucket/rest/api-group-workspaces/#api-user-workspaces-get).**\n\nReturns a list of workspaces accessible by the authenticated user.\n\nResults may be further [filtered or sorted](/cloud/bitbucket/rest/intro/#filtering) by\nworkspace or permission by adding the following query string parameters:\n\n* `q=slug=\"bbworkspace1\"` or `q=is_private=true`\n* `sort=created_on`\n\nNote that the query parameter values need to be URL escaped so that `=`\nwould become `%3D`.\n\n**The `collaborator` role is being removed from the Bitbucket Cloud API. For more information,\nsee the [deprecation announcement](/cloud/bitbucket/deprecation-notice-collaborator-role/).**",
-        "summary": "List workspaces for user",
-        "responses": {
-          "200": {
-            "description": "The list of workspaces accessible by the authenticated user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/paginated_workspaces"
-                },
-                "examples": {
-                  "response": {
-                    "value": {
-                      "pagelen": 10,
-                      "page": 1,
-                      "size": 1,
-                      "values": [
-                        {
-                          "uuid": "{a15fb181-db1f-48f7-b41f-e1eff06929d6}",
-                          "links": {
-                            "owners": {
-                              "href": "https://api.bitbucket.org/2.0/workspaces/bbworkspace1/members?q=permission%3D%22owner%22"
-                            },
-                            "self": {
-                              "href": "https://api.bitbucket.org/2.0/workspaces/bbworkspace1"
-                            },
-                            "repositories": {
-                              "href": "https://api.bitbucket.org/2.0/repositories/bbworkspace1"
-                            },
-                            "snippets": {
-                              "href": "https://api.bitbucket.org/2.0/snippets/bbworkspace1"
-                            },
-                            "html": {
-                              "href": "https://bitbucket.org/bbworkspace1/"
-                            },
-                            "avatar": {
-                              "href": "https://bitbucket.org/workspaces/bbworkspace1/avatar/?ts=1543465801"
-                            },
-                            "members": {
-                              "href": "https://api.bitbucket.org/2.0/workspaces/bbworkspace1/members"
-                            },
-                            "projects": {
-                              "href": "https://api.bitbucket.org/2.0/workspaces/bbworkspace1/projects"
-                            }
-                          },
-                          "created_on": "2018-11-14T19:15:05.058566+00:00",
-                          "type": "workspace",
-                          "slug": "bbworkspace1",
-                          "is_private": true,
-                          "name": "Atlassian Bitbucket"
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "The request wasn't authenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/error"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "role",
-            "in": "query",
-            "description": "\n            Filters the workspaces based on the authenticated user's role on each workspace.\n\n            * **member**: returns a list of all the workspaces which the caller is a member of\n                at least one workspace group or repository\n            * **collaborator**: returns a list of workspaces which the caller has write access\n                to at least one repository in the workspace\n            * **owner**: returns a list of workspaces which the caller has administrator access\n            ",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "owner",
-                "collaborator",
-                "member"
-              ]
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "description": "\nQuery string to narrow down the response. See\n[filtering and sorting](/cloud/bitbucket/rest/intro/#filtering) for details.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "description": "\nName of a response property to sort results. See\n[filtering and sorting](/cloud/bitbucket/rest/intro/#sorting-query-results)\nfor details.\n",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "description": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            }
-          },
-          {
-            "name": "pagelen",
-            "in": "query",
-            "required": false,
-            "description": "How many records to return in one page, up to 100. Bitbucket documents this for every collection but declares it on almost none of them.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          }
-        ],
-        "security": [
-          {
-            "oauth2": [
-              "account"
-            ]
-          },
-          {
-            "basic": []
-          },
-          {
-            "api_key": []
-          }
-        ],
-        "deprecated": true,
-        "x-atlassian-oauth2-scopes": [
-          {
-            "state": "Current",
-            "scheme": "oauth2",
-            "scopes": [
-              "read:user:bitbucket",
-              "read:workspace:bitbucket"
-            ]
-          }
-        ],
-        "x-atlassian-auth-types": [
-          "api-token"
-        ]
-      },
-      "parameters": []
     },
     "/workspaces/{workspace}": {
       "get": {
@@ -5564,6 +5429,128 @@
         ],
         "additionalProperties": true
       },
+      "workspace_access": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/object"
+          },
+          {
+            "type": "object",
+            "title": "Workspace Permission",
+            "description": "A Bitbucket workspace permission for a user.",
+            "properties": {
+              "administrator": {
+                "type": "boolean",
+                "description": "The permission level the user has for the workspace. True if the user is an administrator, otherwise False."
+              },
+              "workspace": {
+                "$ref": "#/components/schemas/workspace_base"
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      },
+      "workspace_base": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/object"
+          },
+          {
+            "type": "object",
+            "title": "Workspace Base",
+            "description": "A Bitbucket workspace.\n            Workspaces are used to organize repositories.",
+            "properties": {
+              "links": {
+                "type": "object",
+                "properties": {
+                  "avatar": {
+                    "type": "object",
+                    "title": "Link",
+                    "description": "A link to a resource related to this object.",
+                    "properties": {
+                      "href": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "self": {
+                    "type": "object",
+                    "title": "Link",
+                    "description": "A link to a resource related to this object.",
+                    "properties": {
+                      "href": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "uuid": {
+                "type": "string",
+                "description": "The workspace's immutable id."
+              },
+              "slug": {
+                "type": "string",
+                "description": "The short label that identifies this workspace."
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      },
+      "paginated_workspace_access": {
+        "type": "object",
+        "title": "Paginated Workspace Permissions",
+        "description": "A paginated list of workspace permissions.",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "description": "Total number of objects in the response. This is an optional element that is not provided in all responses, as it can be expensive to compute.",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "description": "Page number of the current results. This is an optional element that is not provided in all responses.",
+            "minimum": 1
+          },
+          "pagelen": {
+            "type": "integer",
+            "description": "Current number of objects on the existing page. The default value is 10 with 100 being the maximum allowed value. Individual APIs may enforce different values.",
+            "minimum": 1
+          },
+          "next": {
+            "type": "string",
+            "description": "Link to the next page if it exists. The last page of a collection does not have this value. Use this link to navigate the result set and refrain from constructing your own URLs.",
+            "format": "uri"
+          },
+          "previous": {
+            "type": "string",
+            "description": "Link to previous page if it exists. A collections first page does not have this value. This is an optional element that is not provided in all responses. Some result sets strictly support forward navigation and never provide previous links. Clients must anticipate that backwards navigation is not always available. Use this link to navigate the result set and refrain from constructing your own URLs.",
+            "format": "uri"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/workspace_access"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
       "paginated_workspace_memberships": {
         "type": "object",
         "title": "Paginated Workspace Memberships",
@@ -5598,47 +5585,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/workspace_membership"
-            },
-            "minItems": 0,
-            "uniqueItems": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "paginated_workspaces": {
-        "type": "object",
-        "title": "Paginated Workspaces",
-        "description": "A paginated list of workspaces.",
-        "properties": {
-          "size": {
-            "type": "integer",
-            "description": "Total number of objects in the response. This is an optional element that is not provided in all responses, as it can be expensive to compute.",
-            "minimum": 0
-          },
-          "page": {
-            "type": "integer",
-            "description": "Page number of the current results. This is an optional element that is not provided in all responses.",
-            "minimum": 1
-          },
-          "pagelen": {
-            "type": "integer",
-            "description": "Current number of objects on the existing page. The default value is 10 with 100 being the maximum allowed value. Individual APIs may enforce different values.",
-            "minimum": 1
-          },
-          "next": {
-            "type": "string",
-            "description": "Link to the next page if it exists. The last page of a collection does not have this value. Use this link to navigate the result set and refrain from constructing your own URLs.",
-            "format": "uri"
-          },
-          "previous": {
-            "type": "string",
-            "description": "Link to previous page if it exists. A collections first page does not have this value. This is an optional element that is not provided in all responses. Some result sets strictly support forward navigation and never provide previous links. Clients must anticipate that backwards navigation is not always available. Use this link to navigate the result set and refrain from constructing your own URLs.",
-            "format": "uri"
-          },
-          "values": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/workspace"
             },
             "minItems": 0,
             "uniqueItems": true
@@ -6015,9 +5961,8 @@
   },
   "x-qore-normalized": [
     {
-      "reason": "Bitbucket documents \"page\" and \"pagelen\" on its shared pagination page (developer.atlassian.com/cloud/bitbucket/rest/intro/#pagination) rather than per endpoint, and declares them on 3 of the 331 operations in this document — the three code-search endpoints. Every collection here accepts them. Without this repair a generated listing cannot ask for the second page of anything, and every dropdown is stuck on Bitbucket's default page of 10.",
+      "reason": "Bitbucket documents \"page\" and \"pagelen\" on its shared pagination page (developer.atlassian.com/cloud/bitbucket/rest/intro/#pagination) rather than per endpoint, and declares them on 3 of the 331 operations in this document — the three code-search endpoints. \"GET /user/workspaces\" is the same: it answers a \"{values, page, pagelen, size}\" envelope and declares neither argument. Every collection here accepts them. Without this repair a generated listing cannot ask for the second page of anything, and every dropdown is stuck on Bitbucket's default page of 10.",
       "operations": [
-        "GET /repositories",
         "GET /repositories/{workspace}",
         "GET /repositories/{workspace}/{repo_slug}/commits",
         "GET /repositories/{workspace}/{repo_slug}/commit/{commit}/reports",
@@ -6026,14 +5971,15 @@
         "GET /repositories/{workspace}/{repo_slug}/pullrequests",
         "GET /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments",
         "GET /repositories/{workspace}/{repo_slug}/refs/branches",
-        "GET /workspaces",
+        "GET /user/workspaces",
         "GET /workspaces/{workspace}/members",
         "GET /workspaces/{workspace}/projects"
       ],
       "add_parameters": [
         "page",
         "pagelen"
-      ]
+      ],
+      "relax_oneof": []
     }
   ]
 }

@@ -374,6 +374,29 @@ hooks without `config.secret`, so GitHub sent no signature and none could be che
 fire on anything posted to its endpoint by whoever learned the URL. A generated per-subscription secret and
 a `X-Hub-Signature-256` check are the minimum, and are cheap.
 
+**A vendor can withdraw an endpoint the port depends on, and only live traffic will tell you.** Bitbucket
+removed every cross-workspace listing — `GET /2.0/workspaces`, `GET /2.0/repositories` and the
+`/2.0/user/permissions/…` family all answer **410 Gone, "CHANGE-2770"** — while still *declaring* them in
+its published OpenAPI description. So the schema resolved, the manifest agreed, drift was zero, and 12 test
+cases passed against a document describing endpoints that no longer exist. The application's workspace
+dropdown, which scopes every other dropdown it offers, could not be filled at all.
+
+Nothing in the schema-driven path can catch that: a description is what the vendor says, and this is a case
+where they no longer agree with themselves. Only a live call finds it, which is the argument for running
+one against each ported application before it ships.
+
+The repair splits by whether a replacement exists:
+
+| | |
+|---|---|
+| A replacement exists | **repoint the action, keep its ID.** `workspaces_get` moved from `GET /workspaces` to `GET /user/workspaces`. That is what an action ID being a product commitment means: the operation behind it changed, the name workflows call did not. |
+| Nothing replaces it | **withdraw the action.** `repositories_get` listed public repositories across all of Bitbucket; Atlassian's guidance is to list the workspaces and ask each one, which another exported action already did. Keeping a name that cannot work is worse than removing it. |
+
+Repointing an action to a path the committed document does not yet contain is the bootstrap problem again:
+the module cannot load, so the importer cannot read the manifest. Import once from an `ops` file **with the
+spec's `normalize` block**, then re-import from the manifest. Bootstrapping with a bare `--ops` list drops
+the repairs, and the next import fails on an overlay naming a parameter the repair was supposed to add.
+
 **An option is a value, not a URL fragment — the transport escapes it.** `RestSchemaDataProvider` used to
 place query values and path variables into the URI verbatim. That works only while no value contains a
 reserved character, and the first live GitHub search broke it outright: an unescaped space ends the HTTP

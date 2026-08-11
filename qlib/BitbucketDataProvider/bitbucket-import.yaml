@@ -20,10 +20,11 @@ documents:
           Bitbucket documents "page" and "pagelen" on its shared pagination page
           (developer.atlassian.com/cloud/bitbucket/rest/intro/#pagination) rather than per endpoint, and
           declares them on 3 of the 331 operations in this document — the three code-search endpoints.
+          "GET /user/workspaces" is the same: it answers a "{values, page, pagelen, size}" envelope and
+          declares neither argument.
           Every collection here accepts them. Without this repair a generated listing cannot ask for the
           second page of anything, and every dropdown is stuck on Bitbucket's default page of 10.
         operations:
-          - GET /repositories
           - GET /repositories/{workspace}
           - GET /repositories/{workspace}/{repo_slug}/commits
           - GET /repositories/{workspace}/{repo_slug}/commit/{commit}/reports
@@ -32,7 +33,7 @@ documents:
           - GET /repositories/{workspace}/{repo_slug}/pullrequests
           - GET /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments
           - GET /repositories/{workspace}/{repo_slug}/refs/branches
-          - GET /workspaces
+          - GET /user/workspaces
           - GET /workspaces/{workspace}/members
           - GET /workspaces/{workspace}/projects
         add_parameters:

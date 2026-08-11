@@ -85,7 +85,7 @@ public class BitbucketSchema {
             "source_url": "https://developer.atlassian.com/cloud/bitbucket/swagger.v3.json",
             "source_sha256": "8c7911c0a9109be263a3528b0307f1f3418bf0fabac26bdd50d7f3841af94f89",
             "source_size": 1485729,
-            "imported": 2026-08-10,
+            "imported": 2026-08-11,
             "source_paths": 193,
             "source_operations": 331,
             "source_schemas": 211,

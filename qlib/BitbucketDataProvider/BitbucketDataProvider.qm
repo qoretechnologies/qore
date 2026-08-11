@@ -132,7 +132,7 @@ module BitbucketDataProvider {
 
     @section bitbucketdataprovider_actions Actions
 
-    31 actions are exported, in these groups:
+    30 actions are exported, in these groups:
 
     |!Group|!What it covers
     |Commits|repository commits, their comments and their approvals
@@ -144,6 +144,22 @@ module BitbucketDataProvider {
 
     Identifier options are dropdowns wherever the application exports an operation that can list the
     values, and everything below a workspace or a repository is **scoped by the one the user chose**.
+
+    @section bitbucketdataprovider_crossworkspace Bitbucket Withdrew Its Cross-Workspace Listings
+
+    Bitbucket removed every endpoint that listed anything across workspaces — \c "GET /2.0/workspaces",
+    \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer **410 Gone**,
+    \c "CHANGE-2770 - Functionality has been deprecated".  There is one replacement, and only one:
+    \c "GET /2.0/user/workspaces".
+
+    That matters here because a workspace scopes every other dropdown this application offers, so without a
+    way to list workspaces none of them could be filled.  **List Workspaces** keeps its action ID and now
+    calls the replacement; a record wraps its workspace and carries no display name, so a workspace is
+    identified by its slug.
+
+    The action that listed public repositories across Bitbucket is **withdrawn**, because nothing replaces
+    it: Atlassian's own guidance is to list the workspaces and then ask each one.  **List Workspace
+    Repositories** is what to use, and it is what the repository dropdown has always been filled from.
 
     @section bitbucketdataprovider_flat Branches and Reviewers
 

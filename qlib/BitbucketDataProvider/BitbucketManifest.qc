@@ -45,6 +45,25 @@ public namespace BitbucketDataProvider {
     the pull request actions, filled by an endpoint it never exported; a dropdown here is produced by
     executing an action **in this manifest**, so exporting the listing is what makes those dropdowns work.
 
+    @section bitbucketmanifest_withdrawn What Bitbucket Withdrew
+
+    Bitbucket removed every cross-workspace listing — \c "GET /2.0/workspaces",
+    \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer **410 Gone**,
+    \c "CHANGE-2770".  Verified against the live API, along with the fact that
+    \c "GET /2.0/user/workspaces" is the one replacement.
+
+    |!Action|!What happened
+    |\c workspaces_get|repointed from \c "GET /workspaces" to \c "GET /user/workspaces"; the ID is unchanged and so is what it means
+    |\c repositories_get|**withdrawn**: it listed public repositories across all of Bitbucket, and nothing replaces that
+
+    Repointing rather than renaming is the whole point of an action ID being a product commitment: the
+    operation behind \c workspaces_get changed, and the name workflows call did not.  The withdrawn one is
+    a different case — the endpoint is gone and Atlassian's own guidance is to list the workspaces and ask
+    each one, which \c repositories_workspace_get already does.
+
+    A \c "/user/workspaces" record wraps its workspace and carries no display name, so the workspace
+    dropdown reads \c "workspace.slug" for both the value and the label.
+
     @section bitbucketmanifest_nesting Branches and Reviewers Are Presented Flat
 
     A pull request declares its branches as \c "source.branch.name" and its reviewers as a list of objects
@@ -119,8 +138,9 @@ public class BitbucketManifest {
                 "name": RefWorkspace,
                 "action": "workspaces_get",
                 "records_path": "values",
-                "value_field": "slug",
-                "display_field": "name",
+                # a record is a membership wrapping its workspace, and carries no display name of its own
+                "value_field": "workspace.slug",
+                "display_field": "workspace.slug",
                 "desc": "workspaces the credential can see",
             },
             RefRepository: <RestSchemaReferenceDataInfo>{
@@ -391,27 +411,6 @@ public class BitbucketManifest {
         #! The operations the application exports
         const Manifest = (
             # --- Repositories ---
-            <RestSchemaActionInfo>{
-                "action": "repositories_get",
-                "method": "GET",
-                "path": "/repositories",
-                "display_name": "List Public Repositories",
-                "short_desc": "List public repositories across Bitbucket",
-                "desc": "Lists **public** repositories across all of Bitbucket, newest first.\n\n"
-                    "This is not the way to list your own repositories — use **List Workspace "
-                    "Repositories** for that. Paging here uses `after` rather than `page`, because the "
-                    "collection is far too large to number.",
-                "groups": (GroupRepositories,),
-                "field_order": ("q", "role", "sort", "after", "pagelen"),
-                "fields": PagingOverlay + {
-                    "q": QueryOverlay,
-                    "sort": SortOverlay,
-                    "after": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "After",
-                        "short_desc": "Return repositories created after this ISO-8601 timestamp",
-                    },
-                },
-            },
             <RestSchemaActionInfo>{
                 "action": "repositories_workspace_get",
                 "method": "GET",
@@ -961,17 +960,23 @@ public class BitbucketManifest {
             <RestSchemaActionInfo>{
                 "action": "workspaces_get",
                 "method": "GET",
-                "path": "/workspaces",
+                "path": "/user/workspaces",
                 "display_name": "List Workspaces",
                 "short_desc": "List the workspaces the credential can see",
-                "desc": "Lists the workspaces the authenticated user is a member of.\n\n"
-                    "`role` restricts the listing to workspaces with a given relationship — `owner`, "
-                    "`collaborator` or `member`.",
+                "desc": "Lists the workspaces the authenticated user can reach.\n\n"
+                    "`administrator` narrows the listing to the ones they administer.\n\n"
+                    "This is the **only** listing Bitbucket still serves across workspaces, and it is what "
+                    "fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record "
+                    "wraps its workspace — `{administrator, workspace: {slug, uuid, links}}` — and carries "
+                    "no display name, so a workspace is identified by its slug.",
                 "groups": (GroupWorkspaces,),
-                "field_order": ("q", "role", "sort", "page", "pagelen"),
-                "fields": PagingOverlay + {
-                    "q": QueryOverlay,
+                "field_order": ("administrator", "sort"),
+                "fields": {
                     "sort": SortOverlay,
+                    "administrator": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Administrator Only",
+                        "short_desc": "Return only workspaces the credential administers",
+                    },
                 },
             },
             <RestSchemaActionInfo>{

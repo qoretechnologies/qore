@@ -198,7 +198,6 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
             "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_get",
             "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_put",
             "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_delete",
-            "repositories_get",
             "repositories_workspace_get",
             "repositories_workspace_repo_slug_get",
             "repositories_workspace_repo_slug_put",
@@ -218,7 +217,6 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
 
         #! The collections the import repairs, because the document omits their paging parameters
         const RepairedCollections = (
-            "repositories_get",
             "repositories_workspace_get",
             "repositories_workspace_repo_slug_commits_get",
             "getReportsForCommit",
@@ -246,6 +244,7 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
         addTestCase("provenance", \provenanceTest());
         addTestCase("drift agreement", \driftTest());
         addTestCase("action identity", \actionIdentityTest());
+        addTestCase("withdrawn endpoints", \withdrawnEndpointTest());
         addTestCase("schema repair", \schemaRepairTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("scoped dropdowns", \scopedDropdownTest());
@@ -301,8 +300,43 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
         map opids{$1.action} = $1.operation_id, BitbucketManifest::Manifest;
         assertEq("getReportsForCommit", opids.getReportsForCommit);
         assertEq("searchWorkspace", opids.searchWorkspace);
-        assertNothing(opids.repositories_get,
+        assertNothing(opids.workspaces_get,
             "an action whose operation the document does not name records no operationId");
+    }
+
+    private withdrawnEndpointTest() {
+        # Bitbucket removed every cross-workspace listing (410 Gone, CHANGE-2770), and there is exactly one
+        # replacement.  Verified against the live API.
+        hash<string, hash<RestSchemaActionInfo>> byid = {};
+        map byid{$1.action} = $1, BitbucketManifest::Manifest;
+
+        assertEq("/user/workspaces", byid.workspaces_get.path,
+            "the workspace listing calls the endpoint that replaced the withdrawn one");
+        assertNothing(byid.repositories_get,
+            "the cross-workspace repository listing is withdrawn; nothing replaces it");
+        assertTrue(exists byid.repositories_workspace_get,
+            "and the workspace-scoped listing, which is what to use instead, is still exported");
+
+        # a workspace scopes every other dropdown, so this one has to be fillable or none of them are
+        hash<string, hash<RestSchemaReferenceDataInfo>> rd = aset.getReferenceDataDecls();
+        assertEq("workspaces_get", rd{BitbucketManifest::RefWorkspace}.action);
+        # a record wraps its workspace and carries no display name of its own
+        assertEq("workspace.slug", rd{BitbucketManifest::RefWorkspace}.value_field);
+        assertEq("workspace.slug", rd{BitbucketManifest::RefWorkspace}.display_field);
+
+        # ... and it reads the shape the replacement actually returns
+        FakeBitbucketRestClient rest();
+        BitbucketDataProvider dp(rest);
+        AbstractDataProvider a = dp.getChildProviderEx("repositories_workspace_get");
+        rest.push_response({"body": {"values": (
+            {"administrator": True, "workspace": {"slug": "qoretechnologies", "uuid": "{a}"}},
+            {"administrator": True, "workspace": {"slug": "qorus-testing-2", "uuid": "{b}"}},
+        )}});
+        *list<hash<AllowedValueInfo>> vals = a.getReferenceData(BitbucketManifest::RefWorkspace);
+        assertEq(2, vals.size());
+        assertEq("qoretechnologies", vals[0].value);
+        assertEq("qoretechnologies", vals[0].display_name);
+        assertRegex("/user/workspaces", rest.last().path);
     }
 
     private schemaRepairTest() {
