@@ -287,6 +287,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         addTestCase("the limit counts matching records", \limitAfterFilterTest());
         addTestCase("paging stops where it should", \pagingTest());
         addTestCase("cursor paging", \cursorPagingTest());
+        addTestCase("paging by the last record's ID", \afterIdPagingTest());
         addTestCase("record type derivation", \recordTypeTest());
         addTestCase("reading one record by ID", \readOneTest());
         addTestCase("create", \createTest());
@@ -647,6 +648,46 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertFalse(rest.paths[0] =~ /cursor=/, "the first request carries no cursor");
         assertRegex("cursor=2", rest.paths[1]);
         assertRegex("limit=50", rest.paths[1]);
+    }
+
+    #! Cursor-by-last-record-id paging, over a table that renames the column carrying the identity
+    afterIdPagingTest() {
+        hash<RestSchemaRecordTableInfo> t = cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "name": "after-id",
+            # the identity is published under a name of the table's own, which is what the cursor has to be
+            # taken from: the service is told the value, not the column it came from
+            "record_type": RestSchemaTableDataProvider::makeRecordType((
+                {"name": "ref", "desc": "the item reference", "type": "*string"},
+                {"name": "name", "desc": "the item name", "type": "*string"},
+            )),
+            "id_field": "ref",
+            "to_record": hash<auto> sub (hash<auto> rec) {
+                return {"ref": rec.id, "name": rec.name};
+            },
+            "to_wire": hash<auto> sub (hash<auto> rec) {
+                return {"name": rec.name};
+            },
+            "paging": <RestSchemaRecordPagingInfo>{
+                "mode": RSRP_AFTER_ID,
+                "page_option": "search",
+                "size_option": "per_page",
+                "max_size": 100,
+                "has_more_path": ("has_more",),
+            },
+        });
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(t, \rest, auto sub (string method, string path) {
+            *list<string> m = (path =~ x/[?&]search=i_([0-9]+)/);
+            int first = m[0].val() ? m[0].toInt() + 1 : 0;
+            return {"data": itemPage((first / 100) + 1, 100, 250), "has_more": first + 100 < 250};
+        });
+        list<hash<auto>> found = map $1, items.searchRecords();
+        assertEq(250, found.size());
+        assertEq(3, rest.paths.size());
+        assertFalse(rest.paths[0] =~ /search=/, "the first request carries no cursor");
+        assertRegex("search=i_99", rest.paths[1], "the cursor is the last record's identity");
+        assertRegex("search=i_199", rest.paths[2]);
+        assertEq("i_0", found[0].ref, "and the records are in the table's shape");
     }
 
     recordTypeTest() {

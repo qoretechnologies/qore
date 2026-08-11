@@ -128,7 +128,10 @@ public class RestSchemaRecordPageIterator inherits Qore::AbstractIterator {
         hash<auto> resp_opts = options + getPagingOptions();
         started = True;
         auto resp = lister.doRequest(resp_opts);
-        list<hash<auto>> records = extractRecords(resp);
+        # the records are put into the table's shape before the next page is worked out, because with
+        # @ref RSRP_AFTER_ID the cursor is the last record's identity and that is a **table** field: a table
+        # publishing a projection names it in its own terms, which need not be the service's
+        list<hash<auto>> records = map formatRecord($1), extractRecords(resp);
         advance(resp, records);
         if (!records) {
             # an empty page ends the walk whatever the API says about there being more, because reading
@@ -136,7 +139,7 @@ public class RestSchemaRecordPageIterator inherits Qore::AbstractIterator {
             exhausted = True;
             return False;
         }
-        page = map formatRecord($1), records;
+        page = records;
         return True;
     }
 
