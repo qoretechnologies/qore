@@ -411,6 +411,11 @@ caller pre-escapes is a value the framework cannot escape, so the moment one con
 correct answer. The option now takes the path as it reads and the transport escapes it, which is what
 GitLab's single `{id}` path segment needs and what every other option already did.
 
+Confirmed against live GitLab, which is worth stating as measurement rather than argument: the same
+project answers **200 escaped** and **404 unescaped**. The unescaped form is what the port sent before this
+change, so every action naming a project by its path was broken, and no test caught it because a fake
+client records whatever path it is handed.
+
 **Compose an event's payload type from the pinned schema's components.** The pruner drops a document's
 webhook section, and GitHub's payloads are under an `x-webhooks` extension the pruner would have to learn.
 But the *objects* those payloads carry — an issue, a repository, a user — are component schemas the exported
