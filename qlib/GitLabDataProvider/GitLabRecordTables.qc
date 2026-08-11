@@ -197,15 +197,15 @@ public class GitLabRecordTables {
             "delete_action": "deleteApiV4ProjectsId",
             "id_field": "id",
             "paging": Paging,
+            # "archived" is a listing argument but not a column of the response GitLab declares, so it is
+            # offered as a search option and not wired to a predicate: a filter on a field the record type
+            # does not have is rejected before it ever reaches the table
             "search_options": ("membership", "owned", "starred", "search", "order_by", "sort", "archived",
                 "active"),
             "filters": (
                 <RestSchemaRecordFilterInfo>{
                     "field": "visibility", "operator": DP_SEARCH_OP_EQ, "option": "visibility",
                     "exact": True,
-                },
-                <RestSchemaRecordFilterInfo>{
-                    "field": "archived", "operator": DP_SEARCH_OP_EQ, "option": "archived", "exact": True,
                 },
                 <RestSchemaRecordFilterInfo>{
                     "field": "last_activity_at", "operator": DP_SEARCH_OP_GE,

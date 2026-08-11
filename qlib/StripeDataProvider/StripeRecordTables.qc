@@ -137,7 +137,10 @@ public class StripeRecordTables {
             "id_option": "invoice",
             "records_path": ("data",),
             "paging": Paging,
-            "search_options": ("created", "due_date"),
+            # "subscription" is a listing argument, but the invoice this API version returns carries the
+            # subscription elsewhere and not as a top-level column, so it stays an option rather than a
+            # predicate on a field the record does not have
+            "search_options": ("created", "due_date", "subscription"),
             "filters": (
                 <RestSchemaRecordFilterInfo>{
                     "field": "customer", "operator": DP_SEARCH_OP_EQ, "option": "customer", "exact": True,
@@ -147,10 +150,6 @@ public class StripeRecordTables {
                 },
                 <RestSchemaRecordFilterInfo>{
                     "field": "collection_method", "operator": DP_SEARCH_OP_EQ, "option": "collection_method",
-                    "exact": True,
-                },
-                <RestSchemaRecordFilterInfo>{
-                    "field": "subscription", "operator": DP_SEARCH_OP_EQ, "option": "subscription",
                     "exact": True,
                 },
             ),

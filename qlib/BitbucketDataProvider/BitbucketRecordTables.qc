@@ -91,14 +91,35 @@ public class BitbucketRecordTables {
         const BbqlInexact = {DP_OP_CONTAINS: True};
 
         #! How every Bitbucket collection pages
+        /** \c pagelen is capped at **50**, not the 100 Bitbucket's pagination page implies.  The cap is not
+            uniform across its endpoints - the repository listing accepts 100 and the pull request listing
+            answers the same value with <tt>400 "Invalid pagelen"</tt> - so the tables ask for the largest
+            size every endpoint accepts rather than the largest any of them does.  Found against the live
+            API; nothing in the published description says it.
+        */
         const Paging = <RestSchemaRecordPagingInfo>{
             "mode": RSRP_PAGE,
             "page_option": "page",
             "size_option": "pagelen",
-            "max_size": 100,
+            "max_size": 50,
         };
 
         #! The repositories table
+        /** @section bitbucketrecord_repos_readonly Why This Table Only Reads
+
+            Bitbucket addresses a repository by its **slug** - the \c {repo_slug} in every path - and a
+            repository record carries \c uuid and \c full_name ("workspace/slug") but no bare slug of its
+            own.  So there is no column a write could take the address from.
+
+            Bitbucket's documentation says \c {repo_slug} also accepts the brace-wrapped UUID, and that was
+            tried: it does not work through this transport, because a path variable is percent-encoded and
+            Bitbucket answers \c {...} spelled as \c %7B...%7D with 404.  Verified against the live API -
+            the same repository answers 200 by slug and 404 by UUID.
+
+            A table that could read and never write would be worse than one that says so, so this one
+            declares read only.  Creating, updating and deleting a repository remain available as actions,
+            where the caller supplies the slug directly.
+        */
         const RepositoriesTable = <RestSchemaRecordTableInfo>{
             "name": "repositories",
             "display_name": "Repositories",
@@ -106,15 +127,8 @@ public class BitbucketRecordTables {
             "desc": "The repositories in one workspace, as records; Bitbucket evaluates a search over them "
                 "itself",
             "list_action": "repositories_workspace_get",
-            "get_action": "repositories_workspace_repo_slug_get",
-            "create_action": "repositories_workspace_repo_slug_post",
-            "update_action": "repositories_workspace_repo_slug_put",
-            "delete_action": "repositories_workspace_repo_slug_delete",
-            # a repository record carries its UUID and its "workspace/slug" full name, and not the slug on
-            # its own; Bitbucket accepts either the slug or the brace-wrapped UUID wherever a path takes a
-            # "repo_slug", so the UUID is what addresses a record here
+            # read-only: see @ref bitbucketrecord_repos_readonly
             "id_field": "uuid",
-            "id_option": "repo_slug",
             "scope_options": ("workspace",),
             "records_path": ("values",),
             "paging": Paging,
@@ -125,7 +139,7 @@ public class BitbucketRecordTables {
                 "inexact_ops": BbqlInexact,
                 # Bitbucket rejects a query naming a field it does not index
                 "fields": {
-                    "name": True, "slug": True, "full_name": True, "description": True, "language": True,
+                    "name": True, "full_name": True, "description": True, "language": True,
                     "scm": True, "is_private": True, "fork_policy": True, "has_issues": True,
                     "has_wiki": True, "created_on": True, "updated_on": True, "size": True, "uuid": True,
                 },
