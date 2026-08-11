@@ -13579,6 +13579,126 @@
           "source": "The slug of a wiki page",
           "message": "The slug of a wiki page"
         },
+        "app.R2l0bGFi.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Search Records"
+        },
+        "app.R2l0bGFi.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Search for matching records in the given table"
+        },
+        "app.R2l0bGFi.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Returns every record in the given table matching the search criteria"
+        },
+        "app.R2l0bGFi.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.R2l0bGFi.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.R2l0bGFi.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`",
+          "message": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`"
+        },
+        "app.R2l0bGFi.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Find a Single Record"
+        },
+        "app.R2l0bGFi.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Search for a single matching record in the given table"
+        },
+        "app.R2l0bGFi.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches"
+        },
+        "app.R2l0bGFi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.R2l0bGFi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.R2l0bGFi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`",
+          "message": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`"
+        },
+        "app.R2l0bGFi.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Create Records"
+        },
+        "app.R2l0bGFi.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Create new records in the given table"
+        },
+        "app.R2l0bGFi.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Creates new records in the given table"
+        },
+        "app.R2l0bGFi.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.R2l0bGFi.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.R2l0bGFi.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`",
+          "message": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`"
+        },
+        "app.R2l0bGFi.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Update Records"
+        },
+        "app.R2l0bGFi.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Update the records matching the search criteria"
+        },
+        "app.R2l0bGFi.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Updates every record in the given table matching the search criteria"
+        },
+        "app.R2l0bGFi.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.R2l0bGFi.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.R2l0bGFi.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`",
+          "message": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`"
+        },
+        "app.R2l0bGFi.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Delete Records"
+        },
+        "app.R2l0bGFi.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "Delete the records matching the search criteria"
+        },
+        "app.R2l0bGFi.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "Deletes every record in the given table matching the search criteria"
+        },
+        "app.R2l0bGFi.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.R2l0bGFi.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.R2l0bGFi.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`",
+          "message": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`"
+        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.display_name": {
           "source": "Create Commit",
           "message": "Create Commit"

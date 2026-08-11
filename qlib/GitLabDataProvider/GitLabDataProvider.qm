@@ -80,6 +80,14 @@ module GitLabDataProvider {
         RestSchemaActionSet action_set = GitLabSchema::getActionSet();
         action_set.registerActions(GitLabDataProvider::AppName);
 
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(GitLabDataProvider::AppName,
+            "/" + GitLabDataProvider::TablesChildName, action_set, GitLabRecordTables::Tables,
+            GitLabRecordTables::RecordActionIds, {
+                "groups": (GitLabRecordTables::RecordGroup,),
+            });
+
         # register the one hand-written action; see GitLabCreateCommitDataProvider for why it is not
         # generated
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -220,6 +228,28 @@ module GitLabDataProvider {
       the item again rather than losing it.
 
     Each event is scoped to one project, which is a required option.
+
+    @section gitlabdataprovider_records Record-Based Tables
+
+    Twelve of GitLab's collections are exposed under \c tables for record-based reading and writing:
+    \c projects, \c groups, \c issues, \c merge-requests, \c branches, \c commit-comments,
+    \c project-members, \c group-members, \c project-variables, \c group-variables, \c deploy-keys and
+    \c wikis.
+
+    Each table takes the standard search expressions.  What the listing's own arguments can express is sent
+    to the service, and the rest is evaluated against each record as it arrives; the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    The tables declare \c supports_search_expressions and **not** \c supports_native_search: this API has no
+    filter expression language, so a search does not happen entirely on the server, and each operator says
+    for itself whether the service can evaluate it.
+
+    An issue and a merge request are addressed by the \c iid that identifies them **within their project**,
+    because that is what every GitLab endpoint reading or changing one takes; a CI variable is addressed by
+    its \c key, a branch by its name and a wiki page by its \c slug, for the same reason.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
 
     @section gitlabdataprovider_examples Examples
 

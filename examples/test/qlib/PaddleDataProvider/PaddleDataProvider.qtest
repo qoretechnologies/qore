@@ -292,6 +292,7 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         addTestCase("live catalog round trip", \liveCatalogRoundTripTest());
         addTestCase("live webhook destination", \liveWebhookTest());
 
+        addTestCase("record tables", \recordTableTest());
         set_return_value(main());
     }
 
@@ -585,8 +586,9 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         # field with nothing to explain it
         *list<hash<DataProviderActionInfo>> all = DataProviderActionCatalog::getActions(
             PaddleDataProvider::AppName);
-        assertEq(ExpectedActions.size() + PaddleEvents.size() + 1, all.size(),
-            "every manifest action, every event, and the generic API call action");
+        assertEq(ExpectedActions.size() + PaddleEvents.size() + 1 + ExpectedRecordActions.size(),
+            all.size(), "every manifest action, every event, the generic API call action, and the "
+            "record-based actions that reach the tables");
         foreach hash<DataProviderActionInfo> a in (all) {
             assertTrue(a.display_name.val(), sprintf("%y has a display name", a.action));
             assertTrue(a.short_desc.val(), sprintf("%y has a short description", a.action));
@@ -594,7 +596,11 @@ public class PaddleDataProviderTest inherits QUnit::Test {
             assertTrue(a.short_desc.size() < 80, sprintf("%y short description fits", a.action));
             assertFalse(a.short_desc =~ /[*`]/, sprintf("%y short description is plain text", a.action));
             assertTrue(a.groups.val(), sprintf("%y is in a group", a.action));
-            assertTrue(exists a.output_type, sprintf("%y publishes an output type", a.action));
+            # a record-based action has no static output type: what it returns is the record type of
+            # whichever table was named in its path, which is resolved from the data along with its options
+            if (!a.data_dependent_options) {
+                assertTrue(exists a.output_type, sprintf("%y publishes an output type", a.action));
+            }
             foreach hash<auto> i in ((a.options ?? {}).pairIterator()) {
                 assertTrue(i.value.display_name.val(),
                     sprintf("%y option %y has a display name", a.action, i.key));
@@ -679,10 +685,11 @@ public class PaddleDataProviderTest inherits QUnit::Test {
             assertTrue(exists children{action}, sprintf("action %y resolves as a child provider", action));
         }
         assertTrue(exists children{PaddleDataProvider::EventsChildName});
+        assertTrue(exists children{PaddleDataProvider::TablesChildName});
         # a client also makes the framework's generic API-call child available, for an endpoint the
         # manifest does not export
         assertTrue(exists children{"__call__"});
-        assertEq(ExpectedActions.size() + 2, children.size(), "and nothing else");
+        assertEq(ExpectedActions.size() + 3, children.size(), "and nothing else");
         assertThrows("INVALID-CHILD-PROVIDER", \fromrest.getChildProviderEx(), ("no_such_action",));
     }
 
@@ -1061,5 +1068,68 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         assertThrows("REST-RESPONSE-ERROR", sub () {
             rest.restGet("/notification-settings/" + setting.id);
         });
+    }
+
+    public {
+        #! The record-based actions this application registers
+        const ExpectedRecordActions = ("search", "search-single", "create", "update");
+    }
+
+    #! Every record-based table resolves, and an action reaches it
+    /** A table is reached by an **action**; declaring the providers is only half of it, and a table no
+        action reaches is offered to nobody.
+    */
+    private recordTableTest() {
+        FakePaddleRestClient rest();
+        PaddleDataProvider::PaddleDataProvider dp(rest);
+        AbstractDataProvider tables = dp.getChildProviderEx(PaddleDataProvider::PaddleDataProvider::TablesChildName);
+        assertEq((map $1.name, PaddleRecordTables::Tables), tables.getChildProviderNames());
+
+        # a table naming an action the manifest no longer exports, an option a listing does not declare, or
+        # a collection with no record type to derive fails here rather than when a user opens it
+        cast<RestSchemaTablesDataProvider>(tables).checkTables();
+
+        bool any_native = False;
+        foreach hash<RestSchemaRecordTableInfo> t in (PaddleRecordTables::Tables) {
+            AbstractDataProvider tp = tables.getChildProviderEx(t.name);
+            hash<DataProviderInfo> info = tp.getInfo();
+            assertTrue(info.has_record, sprintf("table %y is record-based", t.name));
+            assertTrue(info.supports_read, sprintf("table %y can be read", t.name));
+            # every table answers a search expression, whoever does the work
+            assertTrue(info.supports_search_expressions, sprintf("table %y takes search expressions", t.name));
+            assertTrue(exists info.expressions{DP_SEARCH_OP_EQ}, sprintf("table %y offers equality", t.name));
+            assertEq(t.create_action.val().toBool(), info.supports_create,
+                sprintf("table %y declares create only where the manifest exports one", t.name));
+            assertEq(t.update_action.val().toBool(), info.supports_update,
+                sprintf("table %y declares update only where the manifest exports one", t.name));
+            assertEq(t.delete_action.val().toBool(), info.supports_delete,
+                sprintf("table %y declares delete only where the manifest exports one", t.name));
+            # native search means the API evaluates a whole filter expression, not that it takes arguments
+            assertEq(exists t.query, info.supports_native_search,
+                sprintf("table %y declares native search only with a filter expression language", t.name));
+            if (exists t.query) {
+                any_native = True;
+            }
+            assertTrue(tp.getRecordType().size() > 0, sprintf("table %y has columns", t.name));
+            # a scope option identifies the collection and is required
+            map assertTrue(info.search_options{$1}.required,
+                sprintf("table %y requires the %y scope option", t.name, $1)), t.scope_options;
+        }
+        assertEq(False, any_native,
+            "the tables declare native search exactly where the API has a filter expression language");
+
+        # the record actions are what make the tables reachable
+        hash<string, hash<DataProviderActionInfo>> by_action = {};
+        map by_action{$1.action} = $1, (select DataProviderActionCatalog::getActions(
+            PaddleDataProvider::PaddleDataProvider::AppName), $1.path =~ /tables/);
+        assertEq(("search", "search-single", "create", "update"), keys by_action);
+        foreach hash<auto> i in (by_action.pairIterator()) {
+            assertEq("/" + PaddleDataProvider::PaddleDataProvider::TablesChildName + "/{table}", i.value.path);
+            assertTrue(exists i.value.path_vars.table, sprintf("%y takes a table", i.key));
+            assertTrue(i.value.data_dependent_options,
+                sprintf("%y resolves its options from the chosen table", i.key));
+            assertTrue(i.value.data_provider_info.has_record);
+        }
+        assertNothing(by_action.delete, "no table in this application can delete a record");
     }
 }

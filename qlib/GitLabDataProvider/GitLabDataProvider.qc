@@ -40,6 +40,9 @@ public class GitLabDataProvider inherits RestSchemaActions::RestSchemaActionSetD
         #! The name of the child provider holding the polling event providers
         const EventsChildName = "events";
 
+        #! The name of the child provider holding the record-based tables
+        const TablesChildName = "tables";
+
         #! The action ID of the hand-written commit-creation action
         /** Hand-written because GitLab's own description declares this operation with a placeholder
             request body; see @ref GitLabDataProvider::GitLabSchema "GitLabSchema".
@@ -62,6 +65,7 @@ public class GitLabDataProvider inherits RestSchemaActions::RestSchemaActionSetD
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
             "children_can_support_observers": True,
+            "children_can_support_records": True,
         };
 
         #! Constructor options
@@ -121,11 +125,15 @@ public class GitLabDataProvider inherits RestSchemaActions::RestSchemaActionSetD
     #! Returns the action IDs plus the hand-written actions and the events container
     private *list<string> getChildProviderNamesImpl() {
         return (RestSchemaActionSetDataProvider::getChildProviderNamesImpl() ?? ())
-            + (CreateCommitAction, ProjectIdByUrlAction, EventsChildName);
+            + (CreateCommitAction, ProjectIdByUrlAction, EventsChildName, TablesChildName);
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == TablesChildName) {
+            return new RestSchemaTablesDataProvider(TablesChildName, GitLabSchema::getActionSet(),
+                GitLabRecordTables::Tables, rest);
+        }
         if (name == EventsChildName) {
             return new GitLabEventsDataProvider(cast<*GitLabRestClient::GitLabRestClientIo>(rest));
         }

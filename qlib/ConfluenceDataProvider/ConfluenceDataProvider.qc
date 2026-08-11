@@ -40,6 +40,9 @@ public class ConfluenceDataProvider inherits RestSchemaActions::RestSchemaAction
         #! The name of the child provider holding the polling event providers
         const EventsChildName = "events";
 
+        #! The name of the child provider holding the record-based tables
+        const TablesChildName = "tables";
+
 
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -49,6 +52,7 @@ public class ConfluenceDataProvider inherits RestSchemaActions::RestSchemaAction
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
             "children_can_support_observers": True,
+            "children_can_support_records": True,
         };
 
         #! Constructor options
@@ -125,11 +129,16 @@ public class ConfluenceDataProvider inherits RestSchemaActions::RestSchemaAction
 
     #! Returns the action IDs plus the events container
     private *list<string> getChildProviderNamesImpl() {
-        return (RestSchemaActionSetDataProvider::getChildProviderNamesImpl() ?? ()) + (EventsChildName,);
+        return (RestSchemaActionSetDataProvider::getChildProviderNamesImpl() ?? ())
+            + (EventsChildName, TablesChildName);
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == TablesChildName) {
+            return new RestSchemaTablesDataProvider(TablesChildName, ConfluenceSchema::getActionSet(),
+                ConfluenceRecordTables::Tables, rest);
+        }
         if (name == EventsChildName) {
             return new ConfluenceEventsDataProvider(cast<*ConfluenceRestClient::ConfluenceRestClientIo>(rest));
         }

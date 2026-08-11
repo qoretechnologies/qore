@@ -275,6 +275,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
         addTestCase("live customer round trip", \liveCustomerRoundTripTest());
         addTestCase("live credential redaction", \liveCredentialRedactionTest());
 
+        addTestCase("record tables", \recordTableTest());
         set_return_value(main());
     }
 
@@ -355,12 +356,14 @@ public class StripeDataProviderTest inherits QUnit::Test {
         FakeStripeRestClient rest();
         StripeDataProvider root(rest);
         aset.validateActionPaths(root);
-        # besides the actions the root resolves two more children: the generic API-call child the
-        # framework injects into every REST-scheme provider, and the container holding the event providers
+        # besides the actions the root resolves three more children: the generic API-call child the
+        # framework injects into every REST-scheme provider, the container holding the event providers, and
+        # the container holding the record-based tables
         list<string> children = root.getChildProviderNames();
-        assertEq(actions.size() + 2, children.size());
+        assertEq(actions.size() + 3, children.size());
         assertEq(actions.size(), (map $1, children,
-            $1 != "__call__" && $1 != StripeDataProvider::EventsChildName).size());
+            $1 != "__call__" && $1 != StripeDataProvider::EventsChildName
+            && $1 != StripeDataProvider::TablesChildName).size());
         assertNothing(root.getChildProvider("no-such-action"));
 
         AbstractDataProvider child = root.getChildProviderEx("get-customer");
@@ -822,8 +825,9 @@ public class StripeDataProviderTest inherits QUnit::Test {
         # every action this application publishes
         *hash<string, hash<DataProviderActionInfo>> registered =
             DataProviderActionCatalog::getActionHash(StripeDataProvider::AppName);
-        # 38 schema actions + 13 events + the generic API call the framework injects
-        assertEq(52, registered.size());
+        # 38 schema actions + 13 events + the generic API call the framework injects + the 5 record-based
+        # actions that reach the tables
+        assertEq(57, registered.size());
 
         FakeStripeRestClient rest();
         StripeDataProvider root(rest);
@@ -838,7 +842,11 @@ public class StripeDataProviderTest inherits QUnit::Test {
             assertEq(-1, a.short_desc.find("\n"), ctx + ": short description is one line");
             assertTrue(a.desc.val(), ctx + ": description");
             assertTrue(a.groups.val(), ctx + ": groups");
-            assertTrue(exists a.output_type || exists a.get_output_type, ctx + ": output type");
+            # a record-based action has no static output type: what it returns is the record type of
+            # whichever table was named in its path, which is resolved from the data along with its options
+            if (!a.data_dependent_options) {
+                assertTrue(exists a.output_type || exists a.get_output_type, ctx + ": output type");
+            }
 
             if (a.action_code == DPAT_EVENT) {
                 ++events;
@@ -848,11 +856,22 @@ public class StripeDataProviderTest inherits QUnit::Test {
                 assertRegex("^/events/", a.path, ctx + ": event path");
             }
 
-            # every action path has to resolve, or the action is in the catalogue but cannot be executed
+            # every action path has to resolve, or the action is in the catalogue but cannot be executed;
+            # a path variable is filled in with the example value declared beside it, which is what makes
+            # the check meaningful for a record action naming its table in the path
             AbstractDataProvider cur = root;
             foreach string part in (a.path.split("/")) {
                 if (!part.val()) {
                     continue;
+                }
+                if (part =~ /^\{.*\}$/) {
+                    string var_name = part.substr(1, part.size() - 2);
+                    *hash<DataProviderPathVarInfo> pv = a.path_vars{var_name};
+                    assertTrue(exists pv, sprintf("%s: path variable %y is declared", ctx, var_name));
+                    if (!pv) {
+                        break;
+                    }
+                    part = pv.example_value.toString();
                 }
                 *AbstractDataProvider child = cur.getChildProvider(part);
                 assertTrue(exists child, sprintf("%s: path component %y resolves", ctx, part));
@@ -1013,4 +1032,60 @@ public class StripeDataProviderTest inherits QUnit::Test {
         assertThrows("STRIPE-WEBHOOK-ERROR", "no REST client", \ep3.observersReady());
     }
 
+    #! Every record-based table resolves, and an action reaches it
+    /** A table is reached by an **action**; declaring the providers is only half of it, and a table no
+        action reaches is offered to nobody.
+    */
+    private recordTableTest() {
+        FakeStripeRestClient rest();
+        StripeDataProvider::StripeDataProvider dp(rest);
+        AbstractDataProvider tables = dp.getChildProviderEx(StripeDataProvider::StripeDataProvider::TablesChildName);
+        assertEq((map $1.name, StripeRecordTables::Tables), tables.getChildProviderNames());
+
+        # a table naming an action the manifest no longer exports, an option a listing does not declare, or
+        # a collection with no record type to derive fails here rather than when a user opens it
+        cast<RestSchemaTablesDataProvider>(tables).checkTables();
+
+        bool any_native = False;
+        foreach hash<RestSchemaRecordTableInfo> t in (StripeRecordTables::Tables) {
+            AbstractDataProvider tp = tables.getChildProviderEx(t.name);
+            hash<DataProviderInfo> info = tp.getInfo();
+            assertTrue(info.has_record, sprintf("table %y is record-based", t.name));
+            assertTrue(info.supports_read, sprintf("table %y can be read", t.name));
+            # every table answers a search expression, whoever does the work
+            assertTrue(info.supports_search_expressions, sprintf("table %y takes search expressions", t.name));
+            assertTrue(exists info.expressions{DP_SEARCH_OP_EQ}, sprintf("table %y offers equality", t.name));
+            assertEq(t.create_action.val().toBool(), info.supports_create,
+                sprintf("table %y declares create only where the manifest exports one", t.name));
+            assertEq(t.update_action.val().toBool(), info.supports_update,
+                sprintf("table %y declares update only where the manifest exports one", t.name));
+            assertEq(t.delete_action.val().toBool(), info.supports_delete,
+                sprintf("table %y declares delete only where the manifest exports one", t.name));
+            # native search means the API evaluates a whole filter expression, not that it takes arguments
+            assertEq(exists t.query, info.supports_native_search,
+                sprintf("table %y declares native search only with a filter expression language", t.name));
+            if (exists t.query) {
+                any_native = True;
+            }
+            assertTrue(tp.getRecordType().size() > 0, sprintf("table %y has columns", t.name));
+            # a scope option identifies the collection and is required
+            map assertTrue(info.search_options{$1}.required,
+                sprintf("table %y requires the %y scope option", t.name, $1)), t.scope_options;
+        }
+        assertEq(False, any_native,
+            "the tables declare native search exactly where the API has a filter expression language");
+
+        # the record actions are what make the tables reachable
+        hash<string, hash<DataProviderActionInfo>> by_action = {};
+        map by_action{$1.action} = $1, (select DataProviderActionCatalog::getActions(
+            StripeDataProvider::StripeDataProvider::AppName), $1.path =~ /tables/);
+        assertEq(("search", "search-single", "create", "update", "delete"), keys by_action);
+        foreach hash<auto> i in (by_action.pairIterator()) {
+            assertEq("/" + StripeDataProvider::StripeDataProvider::TablesChildName + "/{table}", i.value.path);
+            assertTrue(exists i.value.path_vars.table, sprintf("%y takes a table", i.key));
+            assertTrue(i.value.data_dependent_options,
+                sprintf("%y resolves its options from the chosen table", i.key));
+            assertTrue(i.value.data_provider_info.has_record);
+        }
+    }
 }

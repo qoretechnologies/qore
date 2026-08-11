@@ -254,6 +254,7 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
         addTestCase("connection", \connectionTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("event polling", \eventPollingTest());
+        addTestCase("record tables", \recordTableTest());
         set_return_value(main());
     }
 
@@ -621,5 +622,62 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
         FakeBitbucketRestClient crest();
         BitbucketNewCommitDataProvider commits(crest, {"workspace": "w", "repo_slug": "r"});
         assertEq("new_commit", commits.getName());
+    }
+
+    #! Every record-based table resolves, and an action reaches it
+    /** A table is reached by an **action**; declaring the providers is only half of it, and a table no
+        action reaches is offered to nobody.
+    */
+    private recordTableTest() {
+        FakeBitbucketRestClient rest();
+        BitbucketDataProvider::BitbucketDataProvider dp(rest);
+        AbstractDataProvider tables = dp.getChildProviderEx(BitbucketDataProvider::BitbucketDataProvider::TablesChildName);
+        assertEq((map $1.name, BitbucketRecordTables::Tables), tables.getChildProviderNames());
+
+        # a table naming an action the manifest no longer exports, an option a listing does not declare, or
+        # a collection with no record type to derive fails here rather than when a user opens it
+        cast<RestSchemaTablesDataProvider>(tables).checkTables();
+
+        bool any_native = False;
+        foreach hash<RestSchemaRecordTableInfo> t in (BitbucketRecordTables::Tables) {
+            AbstractDataProvider tp = tables.getChildProviderEx(t.name);
+            hash<DataProviderInfo> info = tp.getInfo();
+            assertTrue(info.has_record, sprintf("table %y is record-based", t.name));
+            assertTrue(info.supports_read, sprintf("table %y can be read", t.name));
+            # every table answers a search expression, whoever does the work
+            assertTrue(info.supports_search_expressions, sprintf("table %y takes search expressions", t.name));
+            assertTrue(exists info.expressions{DP_SEARCH_OP_EQ}, sprintf("table %y offers equality", t.name));
+            assertEq(t.create_action.val().toBool(), info.supports_create,
+                sprintf("table %y declares create only where the manifest exports one", t.name));
+            assertEq(t.update_action.val().toBool(), info.supports_update,
+                sprintf("table %y declares update only where the manifest exports one", t.name));
+            assertEq(t.delete_action.val().toBool(), info.supports_delete,
+                sprintf("table %y declares delete only where the manifest exports one", t.name));
+            # native search means the API evaluates a whole filter expression, not that it takes arguments
+            assertEq(exists t.query, info.supports_native_search,
+                sprintf("table %y declares native search only with a filter expression language", t.name));
+            if (exists t.query) {
+                any_native = True;
+            }
+            assertTrue(tp.getRecordType().size() > 0, sprintf("table %y has columns", t.name));
+            # a scope option identifies the collection and is required
+            map assertTrue(info.search_options{$1}.required,
+                sprintf("table %y requires the %y scope option", t.name, $1)), t.scope_options;
+        }
+        assertEq(True, any_native,
+            "the tables declare native search exactly where the API has a filter expression language");
+
+        # the record actions are what make the tables reachable
+        hash<string, hash<DataProviderActionInfo>> by_action = {};
+        map by_action{$1.action} = $1, (select DataProviderActionCatalog::getActions(
+            BitbucketDataProvider::BitbucketDataProvider::AppName), $1.path =~ /tables/);
+        assertEq(("search", "search-single", "create", "update", "delete"), keys by_action);
+        foreach hash<auto> i in (by_action.pairIterator()) {
+            assertEq("/" + BitbucketDataProvider::BitbucketDataProvider::TablesChildName + "/{table}", i.value.path);
+            assertTrue(exists i.value.path_vars.table, sprintf("%y takes a table", i.key));
+            assertTrue(i.value.data_dependent_options,
+                sprintf("%y resolves its options from the chosen table", i.key));
+            assertTrue(i.value.data_provider_info.has_record);
+        }
     }
 }

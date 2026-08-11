@@ -51,6 +51,9 @@ public class XeroDataProvider inherits DataProvider::AbstractDataProvider {
         #! The name of the child provider holding the polling event providers
         const EventsChildName = "events";
 
+        #! The name of the child provider holding the record-based tables
+        const TablesChildName = "tables";
+
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "xero",
@@ -59,6 +62,7 @@ public class XeroDataProvider inherits DataProvider::AbstractDataProvider {
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
             "children_can_support_observers": True,
+            "children_can_support_records": True,
         };
 
         #! Constructor options
@@ -135,11 +139,16 @@ public class XeroDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns the action IDs of every set, plus the employee actions and the events container
     private *list<string> getChildProviderNamesImpl() {
-        return (keys action_owner) + XeroEmployeesDataProvider::ActionNames + (EventsChildName,);
+        return (keys action_owner) + XeroEmployeesDataProvider::ActionNames
+            + (EventsChildName, TablesChildName);
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == TablesChildName) {
+            return new RestSchemaTablesDataProvider(TablesChildName, XeroSchema::getActionSets(),
+                XeroRecordTables::Tables, rest);
+        }
         if (name == EventsChildName) {
             return new XeroEventsDataProvider(rest);
         }

@@ -79,6 +79,14 @@ module StripeDataProvider {
         RestSchemaActionSet action_set = StripeSchema::getActionSet();
         action_set.registerActions(StripeDataProvider::AppName);
 
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(StripeDataProvider::AppName,
+            "/" + StripeDataProvider::TablesChildName, action_set, StripeRecordTables::Tables,
+            StripeRecordTables::RecordActionIds, {
+                "groups": (StripeRecordTables::RecordGroup,),
+            });
+
         # register the webhook event actions
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": StripeDataProvider::AppName,
@@ -321,6 +329,27 @@ module StripeDataProvider {
     - **Stripe's timestamps are counts of seconds since the epoch.** Every one of them is presented as
       a %Qore @ref date "date" and converted on the way out, so the unit is decided once rather than by
       each caller.
+
+    @section stripedataprovider_records Record-Based Tables
+
+    Eleven of Stripe's collections are exposed under \c tables for record-based reading and writing:
+    \c customers, \c charges, \c invoices, \c payment-intents, \c refunds, \c connected-accounts,
+    \c external-accounts, \c account-people, \c customer-balance-transactions, \c customer-sources and
+    \c customer-subscriptions.
+
+    Each table takes the standard search expressions.  What the listing's own arguments can express is sent
+    to the service, and the rest is evaluated against each record as it arrives; the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    The tables declare \c supports_search_expressions and **not** \c supports_native_search: this API has no
+    filter expression language, so a search does not happen entirely on the server, and each operator says
+    for itself whether the service can evaluate it.
+
+    Stripe pages by the ID of the last record read rather than by page number, and only a customer and an
+    invoice can be deleted; everything else is refunded, cancelled or expired instead.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
 
     @section stripedataprovider_events Events
 

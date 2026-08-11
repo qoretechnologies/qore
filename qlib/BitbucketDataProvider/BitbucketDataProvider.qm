@@ -79,6 +79,14 @@ module BitbucketDataProvider {
         RestSchemaActionSet action_set = BitbucketSchema::getActionSet();
         action_set.registerActions(BitbucketDataProvider::AppName);
 
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(BitbucketDataProvider::AppName,
+            "/" + BitbucketDataProvider::TablesChildName, action_set, BitbucketRecordTables::Tables,
+            BitbucketRecordTables::RecordActionIds, {
+                "groups": (BitbucketRecordTables::RecordGroup,),
+            });
+
         # register the polling event actions
         foreach hash<auto> i in (BitbucketEventsDataProvider::EventMap.pairIterator()) {
             Class cls = i.value;
@@ -171,6 +179,24 @@ module BitbucketDataProvider {
     Every Bitbucket collection is the same envelope: the records are in \c values, and \c next is the URL
     of the following page.  Page on the presence of \c next - \c size is absent for some collections, so
     a loop on a count does not work.  \c pagelen is capped at 100.
+
+    @section bitbucketdataprovider_records Record-Based Tables
+
+    Four of Bitbucket's collections are exposed under \c tables for record-based reading and writing:
+    \c repositories, \c pullrequests, \c pullrequest-comments and \c commit-comments.
+
+    Each table takes the standard search expressions.  Where a table's API publishes a filter expression
+    language the whole expression is rendered into it and the service does the searching, and that table
+    declares \c supports_native_search; where it does not, what the listing's own arguments can express is
+    sent and the rest is evaluated against each record as it arrives.  Either way the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    \c repositories and \c commit-comments render a search into Bitbucket Query Language and Bitbucket
+    evaluates it; the pull request listing does not declare \c q in Bitbucket's published description, so
+    that table filters on \c state and answers the rest itself.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
 
     @section bitbucketdataprovider_events Events
 

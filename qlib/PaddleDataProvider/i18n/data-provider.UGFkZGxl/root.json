@@ -2795,6 +2795,102 @@
           "source": "Paddle ID of the report entity.",
           "message": "Paddle ID of the report entity."
         },
+        "app.UGFkZGxl.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Search Records"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Search for matching records in the given table"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Returns every record in the given table matching the search criteria"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Find a Single Record"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Search for a single matching record in the given table"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Create Records"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Create new records in the given table"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Creates new records in the given table"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Update Records"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Update the records matching the search criteria"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Updates every record in the given table matching the search criteria"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`"
+        },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
           "source": "Customer Created",
           "message": "Customer Created"

@@ -90,6 +90,14 @@ module XeroDataProvider {
         # from the base path of the schema its action was generated from
         map $1.registerActions(XeroDataProvider::AppName), XeroSchema::getActionSets();
 
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(XeroDataProvider::AppName,
+            "/" + XeroDataProvider::TablesChildName, XeroSchema::getActionSets(),
+            XeroRecordTables::Tables, XeroRecordTables::RecordActionIds, {
+                "groups": (XeroRecordTables::RecordGroup,),
+            });
+
         # register the hand-written employee actions
         foreach string action in (XeroEmployeesDataProvider::ActionNames) {
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -184,6 +192,26 @@ module XeroDataProvider {
     \c {Contacts: [...]} - and a create takes the same envelope, so creating one invoice means sending a
     one-element \c Invoices array.  The projects API is different again: \c {items, pagination}, in
     \c camelCase where accounting uses \c PascalCase.
+
+    @section xerodataprovider_records Record-Based Tables
+
+    Seven of Xero's collections are exposed under \c tables for record-based reading and writing:
+    \c invoices, \c contacts, \c bank-transactions, \c items and \c payments from the accounting
+    description, and \c projects and \c project-tasks from the projects one.
+
+    Each table takes the standard search expressions.  Where a table's API publishes a filter expression
+    language the whole expression is rendered into it and the service does the searching, and that table
+    declares \c supports_native_search; where it does not, what the listing's own arguments can express is
+    sent and the rest is evaluated against each record as it arrives.  Either way the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    The accounting tables render a search into Xero's \c where clause, so Xero evaluates it.  A write takes a
+    list of documents and the same operation creates and updates - a document carrying its identity is an
+    update - so the identity travels inside the document rather than in a path variable.  Nothing is deleted:
+    an invoice is voided and a contact archived, and both are updates.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
 
     @section xerodataprovider_events Events
 
