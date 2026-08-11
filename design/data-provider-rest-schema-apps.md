@@ -514,8 +514,8 @@ machinery is documented on the `RestSchemaActions` module main page; what belong
 roll-out taught.
 
 **A table is a declaration, not an implementation.** Every one names actions the manifest already exports, so
-a table adds no second copy of a path, a request contract or an escaping rule. Forty-five tables across seven
-applications are around 2,000 lines of declaration in total, and none of them makes an HTTP request of its
+a table adds no second copy of a path, a request contract or an escaping rule. Forty-seven tables across seven
+applications are around 2,300 lines of declaration in total, and none of them makes an HTTP request of its
 own.
 
 **Declare `supports_native_search` only where the API takes a filter expression.** Two vendors in this family
