@@ -148,6 +148,92 @@ class FakeConfluenceRestClient inherits ConfluenceRestClient::ConfluenceRestClie
 
 
 
+#! An appender that keeps every message, so a test can assert what was logged
+class CapturingAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! Every message logged, in order
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            push messages, params.toString();
+        }
+    }
+}
+
+#! Answers the site discovery without reaching Atlassian
+class StubSiteDiscovery {
+    public {
+        #! How many times the discovery was made
+        int calls = 0;
+
+        #! The token it was made with
+        *string token;
+
+        #! What to answer with
+        *hash<auto> answer;
+
+        #! An error code to throw instead of answering
+        *string err;
+    }
+
+    *hash<auto> answerDiscovery(string token) {
+        ++calls;
+        self.token = token;
+        if (err) {
+            throw err, "the discovery call failed";
+        }
+        return answer;
+    }
+}
+
+#! A Confluence connection whose site discovery is answered without reaching Atlassian
+class StubConfluenceRestConnection inherits ConfluenceRestClient::ConfluenceRestConnection {
+    public {
+        StubSiteDiscovery stub();
+    }
+
+    constructor(hash<auto> config) : ConfluenceRestConnection(config) {
+    }
+
+    private *hash<auto> discoverSite(string token) {
+        return stub.answerDiscovery(token);
+    }
+}
+
+#! A Confluence client whose site discovery is answered without reaching Atlassian
+class StubConfluenceRestClient inherits ConfluenceRestClient::ConfluenceRestClient {
+    public {
+        StubSiteDiscovery stub();
+    }
+
+    constructor(*hash<auto> opts) : ConfluenceRestClient(opts, True) {
+    }
+
+    private *hash<auto> discoverSite(string token) {
+        return stub.answerDiscovery(token);
+    }
+}
+
+#! An async-I/O Confluence client whose site discovery is answered without reaching Atlassian
+class StubConfluenceRestClientIo inherits ConfluenceRestClient::ConfluenceRestClientIo {
+    public {
+        StubSiteDiscovery stub();
+    }
+
+    constructor(*hash<auto> opts) : ConfluenceRestClientIo(opts) {
+    }
+
+    private *hash<auto> discoverSite(string token) {
+        return stub.answerDiscovery(token);
+    }
+}
+
 #! An event provider whose polling can be driven directly
 class TestConfluenceNewPageProvider inherits ConfluenceDataProvider::ConfluenceNewPageDataProvider {
     public {
@@ -211,6 +297,7 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
         addTestCase("provider paths", \providerPathTest());
         addTestCase("request construction", \requestConstructionTest());
         addTestCase("connection", \connectionTest());
+        addTestCase("the cloud ID fills itself in", \siteDiscoveryTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("event polling", \eventPollingTest());
         addTestCase("record tables", \recordTableTest());
@@ -365,10 +452,12 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
     private connectionTest() {
         # this application supports OAuth2, so the OAuth2 option set is named FIRST in
         # "required_options": that is what declares OAuth2 support to the platform and makes the
-        # authorization-code flow the connection's default rather than an API token
+        # authorization-code flow the connection's default rather than an API token.  It asks for the
+        # client credentials and nothing else, because the flow is what discovers the site
         list<string> req = ConfluenceRestConnection::ConnectionScheme.required_options.split("|");
-        assertEq('cloud_id,oauth2_client_id,oauth2_client_secret', req[0],
+        assertEq('oauth2_client_id,oauth2_client_secret', req[0],
             "the OAuth2 option set is the first alternative, so it is the default flow");
+        assertEq('site', req[1], "an API token has no flow to discover a site from, so it names one");
 
         # ...but naming the options first only decides what the form shows.  What decides whether the
         # platform offers the authorization flow at all is whether the CONNECTION reports it can authorize,
@@ -408,6 +497,11 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
         assertThrows("CONFLUENCE-SITE-ERROR", "is not set",
             \ConfluenceRestClientBase::getUrlForSite(), (NOTHING, NOTHING));
 
+        # ... except for the OAuth2 flow, which cannot know the site until it has issued a credential:
+        # the connection targets the gateway until it does, rather than refusing to exist
+        assertEq("https://api.atlassian.com",
+            ConfluenceRestClientBase::getUrlForSite(NOTHING, NOTHING, True));
+
         # ... and it is recovered from a URL, so a connection built from one alone still has the option
         assertEq("abc-123", ConfluenceRestClientBase::getCloudIdForUrl(
             "https://api.atlassian.com/ex/confluence/abc-123"));
@@ -440,6 +534,202 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
         assertEq("https://auth.atlassian.com/oauth/token", oopts.oauth2_token_url);
         assertTrue(inlist("offline_access", oopts.oauth2_scopes),
             "without offline_access the connection stops working when the token expires");
+    }
+
+    private siteDiscoveryTest() {
+        # An Atlassian OAuth2 credential is issued against the gateway rather than against a site, so a
+        # connection cannot know which site it reaches until it has one.  Requiring the cloud ID up front
+        # requires a value that cannot exist yet, which is what put a site of "api.atlassian.com" - the
+        # gateway, which holds no Confluence - into a real connection.
+
+        # a connection configured for the flow can be created with no site at all, and targets the gateway
+        hash<auto> copts = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_url": "auto",
+        };
+        ConfluenceRestConnection bare("confluence-bare", "test",
+            ConfluenceRestConnection::DefaultConnectionUrl, {}, copts);
+        assertEq("confluence://api.atlassian.com", bare.getInfo().url);
+        assertNothing(bare.getInfo().opts.site, "the gateway is not a site, and is never read back as one");
+        assertNothing(bare.getInfo().opts.cloud_id);
+        assertTrue(bare.getFeatures(){RestConnection::RCF_OAUTH2_AUTH_CODE},
+            "and it can still be authorized, which is what fills the site in");
+
+        # the gateway is never mistaken for a site, in either spelling
+        assertNothing(ConfluenceRestClientBase::getSiteForUrl("confluence://api.atlassian.com"));
+        assertNothing(ConfluenceRestClientBase::getSiteForUrl("https://api.atlassian.com"));
+        assertEq("example.atlassian.net",
+            ConfluenceRestClientBase::getSiteForUrl("confluence://example.atlassian.net"));
+        assertTrue(ConfluenceRestClientBase::isGatewayUrl("https://api.atlassian.com"));
+        assertTrue(ConfluenceRestClientBase::isGatewayUrl("https://api.atlassian.com/"));
+        assertTrue(ConfluenceRestClientBase::isGatewayUrl("confluence://api.atlassian.com"));
+        assertFalse(ConfluenceRestClientBase::isGatewayUrl(
+            "https://api.atlassian.com/ex/confluence/abc-123"), "a site through the gateway is a site");
+        assertFalse(ConfluenceRestClientBase::isGatewayUrl("https://example.atlassian.net"));
+
+        # what the accessible-resources endpoint says, turned into the options the connection stores
+        assertEq({
+            "cloud_id": "abc-123",
+            "url": "confluence://api.atlassian.com/ex/confluence/abc-123",
+        }, ConfluenceRestClientBase::getSiteOptions((
+            {"id": "abc-123", "url": "https://example.atlassian.net", "name": "Example"},
+        )), "the URL is derived from the site, on the connection's own scheme");
+        assertEq("abc-123", ConfluenceRestClientBase::getSiteOptions((
+            {"id": "abc-123", "url": "https://example.atlassian.net"},
+            {"id": "def-456", "url": "https://other.atlassian.net"},
+        )).cloud_id, "the first site Atlassian lists is the one used");
+
+        # a credential that reaches nothing usable names no site rather than a wrong one
+        assertNothing(ConfluenceRestClientBase::getSiteOptions(()), "no sites, no cloud ID");
+        assertNothing(ConfluenceRestClientBase::getSiteOptions(NOTHING), "no body, no cloud ID");
+        assertNothing(ConfluenceRestClientBase::getSiteOptions({"message": "no"}),
+            "a body that is not a list of resources names no cloud ID");
+        assertNothing(ConfluenceRestClientBase::getSiteOptions(({"name": "Example"},)),
+            "a resource with no id names no cloud ID");
+
+        # the alternatives are logged, because a credential reaching several sites gets the first one
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        CapturingAppender appender();
+        logger.addAppender(appender);
+        ConfluenceRestClientBase::getSiteOptions((
+            {"id": "abc-123", "url": "https://example.atlassian.net"},
+            {"id": "def-456", "url": "https://other.atlassian.net"},
+        ), logger);
+        assertEq(1, appender.messages.size());
+        assertRegex("example.atlassian.net", appender.messages[0]);
+        assertRegex("other.atlassian.net \\(def-456\\)", appender.messages[0],
+            "the sites not chosen are named, so one of them can be chosen instead");
+        assertRegex("cloud_id", appender.messages[0], "and the option to set is named");
+
+        appender.messages = ();
+        ConfluenceRestClientBase::getSiteOptions((), logger);
+        assertEq(1, appender.messages.size(), "a credential that reaches no site is reported");
+
+        # the authorization code flow's own path: the platform exchanges the code and hands the token
+        # response to the connection, which is where an authorized connection becomes a working one
+        StubConfluenceRestConnection conn({
+            "name": "confluence-auth", "desc": "test",
+            "url": ConfluenceRestConnection::DefaultConnectionUrl, "opts": copts,
+        });
+        conn.stub.answer = {
+            "cloud_id": "abc-123",
+            "url": "confluence://api.atlassian.com/ex/confluence/abc-123",
+        };
+        *hash<auto> persisted;
+        conn.setUpdateOptionsCode(sub (hash<auto> update) { persisted = update; });
+        hash<auto> rv = conn.processOAuth2TokenResponse({
+            "token_type": "Bearer", "access_token": "tok-1", "refresh_token": "ref-1", "expires_in": 1800,
+        });
+        assertEq(1, conn.stub.calls, "the site is discovered when the connection is authorized");
+        assertEq("tok-1", conn.stub.token, "with the token just issued, not one the client may still hold");
+        assertEq("abc-123", persisted.cloud_id, "and is persisted onto the connection");
+        assertEq("confluence://api.atlassian.com/ex/confluence/abc-123", persisted.url,
+            "with the URL that reaches it");
+        assertEq("abc-123", rv.cloud_id, "and is part of the options the flow returns");
+        assertFalse(persisted.hasKey("site"), "a connection that never had a site is not given an empty one");
+
+        # a connection being repaired cannot keep a site it could not use: naming the site both ways is
+        # an error, so the one the flow discovers replaces it
+        StubConfluenceRestConnection repaired({
+            "name": "confluence-repair", "desc": "test",
+            "url": "confluence://api.atlassian.com", "opts": copts + {"site": "api.atlassian.com"},
+        });
+        repaired.stub.answer = {
+            "cloud_id": "abc-123",
+            "url": "confluence://api.atlassian.com/ex/confluence/abc-123",
+        };
+        *hash<auto> repaired_persisted;
+        repaired.setUpdateOptionsCode(sub (hash<auto> update) { repaired_persisted = update; });
+        repaired.processOAuth2TokenResponse({"token_type": "Bearer", "access_token": "tok-2"});
+        assertEq("abc-123", repaired_persisted.cloud_id);
+        assertTrue(repaired_persisted.hasKey("site"), "the site it could not use is cleared");
+        assertNothing(repaired_persisted.site);
+        # and the cleared options really do produce a usable connection
+        assertEq("confluence://api.atlassian.com/ex/confluence/abc-123",
+            ConfluenceRestConnection::getConnectionUrl(copts + {"site": NOTHING, "cloud_id": "abc-123"}));
+
+        # a site the user chose is never overwritten
+        StubConfluenceRestConnection set_conn({
+            "name": "confluence-set", "desc": "test",
+            "url": "confluence://api.atlassian.com/ex/confluence/mine",
+            "opts": copts + {"cloud_id": "mine"},
+        });
+        set_conn.stub.answer = {"cloud_id": "abc-123"};
+        set_conn.setUpdateOptionsCode(sub (hash<auto> update) {});
+        set_conn.processOAuth2TokenResponse({"token_type": "Bearer", "access_token": "tok-3"});
+        assertEq(0, set_conn.stub.calls, "a cloud_id that is already set is left alone");
+
+        # nothing to discover with, nothing discovered
+        StubConfluenceRestConnection no_token({
+            "name": "confluence-no-token", "desc": "test",
+            "url": ConfluenceRestConnection::DefaultConnectionUrl, "opts": copts,
+        });
+        no_token.setUpdateOptionsCode(sub (hash<auto> update) {});
+        no_token.processOAuth2TokenResponse({"token_type": "Bearer"});
+        assertEq(0, no_token.stub.calls, "a response with no token discovers nothing");
+
+        # a failed discovery must not break an otherwise successful authorization
+        StubConfluenceRestConnection failing({
+            "name": "confluence-fail", "desc": "test",
+            "url": ConfluenceRestConnection::DefaultConnectionUrl, "opts": copts,
+        });
+        failing.stub.err = "REST-RESPONSE-ERROR";
+        *hash<auto> failed_persisted;
+        failing.setUpdateOptionsCode(sub (hash<auto> update) { failed_persisted = update; });
+        failing.processOAuth2TokenResponse({"token_type": "Bearer", "access_token": "tok-4"});
+        assertEq(1, failing.stub.calls);
+        assertEq("tok-4", failed_persisted.token,
+            "the authorization survives a discovery that could not be made");
+        assertNothing(failed_persisted.cloud_id);
+
+        # the client paths: either client may perform the exchange, so both discover
+        StubConfluenceRestClient sync_client(copts + {"token": "old"});
+        assertEq("https://api.atlassian.com", sync_client.getURL(),
+            "a client with no site yet targets the gateway");
+        sync_client.stub.answer = {
+            "cloud_id": "abc-123",
+            "url": "confluence://api.atlassian.com/ex/confluence/abc-123",
+        };
+        *hash<auto> sync_persisted;
+        sync_client.setUpdateOptionsCode(sub (hash<auto> update) { sync_persisted = update; });
+        sync_client.gotOAuth2LoginInfo({"token_type": "Bearer", "access_token": "new-token"}, False);
+        assertEq(1, sync_client.stub.calls);
+        assertEq("abc-123", sync_persisted.cloud_id);
+        assertEq("https://api.atlassian.com/ex/confluence/abc-123", sync_client.getURL(),
+            "the client reaches the site immediately, not only the next one built from the options");
+
+        # a refresh does not pay for the call again
+        StubConfluenceRestClient refreshing(copts + {"token": "old"});
+        refreshing.stub.answer = {"cloud_id": "abc-123"};
+        refreshing.setUpdateOptionsCode(sub (hash<auto> update) {});
+        refreshing.gotOAuth2LoginInfo({"token_type": "Bearer", "access_token": "new-token"}, True);
+        assertEq(0, refreshing.stub.calls, "a refresh does not repeat the discovery");
+
+        # ... and neither does a client that already knows its site
+        StubConfluenceRestClient known(copts + {"token": "old", "cloud_id": "known"});
+        known.stub.answer = {"cloud_id": "abc-123"};
+        known.setUpdateOptionsCode(sub (hash<auto> update) {});
+        known.gotOAuth2LoginInfo({"token_type": "Bearer", "access_token": "new-token"}, False);
+        assertEq(0, known.stub.calls, "a client that already reaches a site discovers nothing");
+
+        StubConfluenceRestClientIo io_client(copts + {"token": "old"});
+        io_client.stub.answer = {
+            "cloud_id": "abc-123",
+            "url": "confluence://api.atlassian.com/ex/confluence/abc-123",
+        };
+        *hash<auto> io_persisted;
+        io_client.setUpdateOptionsCode(sub (hash<auto> update) { io_persisted = update; });
+        io_client.updateOAuth2Token({"token_type": "Bearer", "access_token": "new-token"});
+        assertEq(1, io_client.stub.calls);
+        assertEq("abc-123", io_persisted.cloud_id);
+        assertEq("confluence://api.atlassian.com/ex/confluence/abc-123", io_persisted.url);
+
+        StubConfluenceRestClientIo known_io(copts + {"token": "old", "cloud_id": "known"});
+        known_io.stub.answer = {"cloud_id": "abc-123"};
+        known_io.setUpdateOptionsCode(sub (hash<auto> update) {});
+        known_io.updateOAuth2Token({"token_type": "Bearer", "access_token": "new-token"});
+        assertEq(0, known_io.stub.calls, "a client built for a site discovers nothing");
     }
 
     private eventProviderTest() {

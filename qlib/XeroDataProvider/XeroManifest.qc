@@ -245,6 +245,15 @@ public class XeroManifest {
             "ignore": True,
         };
 
+        #! Overlay dropping the tenant header, which the connection owns
+        /** Naming the option is what lets a connection that does not send the header be reported as
+            such, instead of as a schema type error about a header no action offers.
+        */
+        const TenantHeaderOverlay = <RestSchemaFieldOverlayInfo>{
+            "ignore": True,
+            "connection_option": "tenant_id",
+        };
+
         #! Overlay dropping the response fields Xero declares in its request schemas
         /** Xero's request and response bodies share a schema, so a create carries \c pagination and
             \c Warnings - which are things the server says back, not things a caller sends.
@@ -255,7 +264,7 @@ public class XeroManifest {
 
         #! Overlay dropping the tenant header, as the accounting document spells it
         const AccountingCommon = {
-            "xero-tenant-id": ConnectionOwnedOverlay,
+            "xero-tenant-id": TenantHeaderOverlay,
         };
 
         #! Overlay dropping the tenant header and the idempotency key, for an accounting write
@@ -270,7 +279,7 @@ public class XeroManifest {
         /** The two documents disagree on the case of the header name, so the overlay cannot be shared.
         */
         const ProjectsCommon = {
-            "Xero-Tenant-Id": ConnectionOwnedOverlay,
+            "Xero-Tenant-Id": TenantHeaderOverlay,
         };
 
         #! Overlay dropping the tenant header and the idempotency key, for a projects write

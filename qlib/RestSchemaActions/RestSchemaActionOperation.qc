@@ -86,10 +86,11 @@ public class RestSchemaActionOperation {
 
         #! Header values dropped by the overlay, which the connection is expected to supply
         /** An ignored header is one the connection owns - an API key, the tenant a Xero connection works
-            in - so the action must not ask for it, and the request must still carry it.  These names are
-            filled in from the REST client's own default headers when the request is built.
+            in - so the action must not ask for it, and the request must still carry it.  These are
+            filled in from the REST client's own default headers when the request is built, and a
+            required one the connection does not send is reported as the connection problem it is.
         */
-        list<string> connection_headers = ();
+        list<hash<RestSchemaConnectionHeaderInfo>> connection_headers = ();
 
         #! The action output type: the success response body, unwrapped
         *AbstractDataProviderType response_type;
@@ -186,7 +187,7 @@ public class RestSchemaActionOperation {
 
         @see @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider"
     */
-    list<string> getConnectionHeaders() {
+    list<hash<RestSchemaConnectionHeaderInfo>> getConnectionHeaders() {
         return connection_headers;
     }
 
@@ -402,6 +403,7 @@ public class RestSchemaActionOperation {
                     derived{param.inLoc} += {
                         "wire_name": param.name,
                         # a path variable is part of the URI and is therefore always required
+                        "required": param.inLoc == RSAL_PATH || param.required ? True : False,
                         "field": schema.getFieldFromSchema(param.name, param.desc, param.schema,
                             param.inLoc == RSAL_PATH || param.required),
                     };
@@ -433,7 +435,11 @@ public class RestSchemaActionOperation {
                     # still require it, and dropping it from the action must not produce a request the
                     # schema rejects
                     if (loc == RSAL_HEADER) {
-                        connection_headers += derived_name;
+                        connection_headers += <RestSchemaConnectionHeaderInfo>{
+                            "wire_name": derived_name,
+                            "required": entry.required ?? False,
+                            "connection_option": ov.connection_option,
+                        };
                     }
                     continue;
                 }

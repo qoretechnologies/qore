@@ -152,6 +152,92 @@ class FakeXeroRestClient inherits XeroRestClient::XeroRestClientIo {
     }
 }
 
+#! An appender that keeps every message, so a test can assert what was logged
+class CapturingAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! Every message logged, in order
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            push messages, params.toString();
+        }
+    }
+}
+
+#! Answers the organisation discovery without reaching Xero
+class StubTenantDiscovery {
+    public {
+        #! How many times the discovery was made
+        int calls = 0;
+
+        #! The token it was made with
+        *string token;
+
+        #! What to answer with
+        *hash<auto> answer;
+
+        #! An error code to throw instead of answering
+        *string err;
+    }
+
+    *hash<auto> answerDiscovery(string token) {
+        ++calls;
+        self.token = token;
+        if (err) {
+            throw err, "the discovery call failed";
+        }
+        return answer;
+    }
+}
+
+#! A Xero connection whose organisation discovery is answered without reaching Xero
+class StubXeroRestConnection inherits XeroRestClient::XeroRestConnection {
+    public {
+        StubTenantDiscovery stub();
+    }
+
+    constructor(hash<auto> config) : XeroRestConnection(config) {
+    }
+
+    private *hash<auto> discoverTenant(string token) {
+        return stub.answerDiscovery(token);
+    }
+}
+
+#! A Xero client whose organisation discovery is answered without reaching Xero
+class StubXeroRestClient inherits XeroRestClient::XeroRestClient {
+    public {
+        StubTenantDiscovery stub();
+    }
+
+    constructor(*hash<auto> opts) : XeroRestClient(opts, True) {
+    }
+
+    private *hash<auto> discoverTenant(string token) {
+        return stub.answerDiscovery(token);
+    }
+}
+
+#! An async-I/O Xero client whose organisation discovery is answered without reaching Xero
+class StubXeroRestClientIo inherits XeroRestClient::XeroRestClientIo {
+    public {
+        StubTenantDiscovery stub();
+    }
+
+    constructor(*hash<auto> opts) : XeroRestClientIo(opts) {
+    }
+
+    private *hash<auto> discoverTenant(string token) {
+        return stub.answerDiscovery(token);
+    }
+}
+
 #! A contact event provider whose polling can be driven directly
 class TestXeroNewContactProvider inherits XeroDataProvider::XeroNewContactDataProvider {
     public {
@@ -227,6 +313,7 @@ public class XeroDataProviderTest inherits QUnit::Test {
         addTestCase("request construction", \requestConstructionTest());
         addTestCase("query date codec", \queryDateCodecTest());
         addTestCase("connection", \connectionTest());
+        addTestCase("the tenant fills itself in", \tenantDiscoveryTest());
         addTestCase("employees by region", \employeeRegionTest());
         addTestCase("employee envelopes", \employeeEnvelopeTest());
         addTestCase("payroll errors are legible", \payrollErrorTest());
@@ -524,6 +611,155 @@ public class XeroDataProviderTest inherits QUnit::Test {
         assertEq("Xero", conn.getAppName());
         assertTrue(conn.hasDataProvider());
         assertEq("t-1", conn.getInfo().opts.tenant_id);
+    }
+
+    private tenantDiscoveryTest() {
+        # A Xero credential is not scoped to an organisation, and every call has to name one, so a
+        # connection that has been authorized and does not know its organisation cannot make a single
+        # successful call.  The organisation cannot be known before the credential exists, so it is read
+        # back off the credential rather than asked of the user.
+
+        # what "GET /connections" says, turned into the option the connection stores
+        assertEq({"tenant_id": "t-1"},
+            XeroRestClientBase::getTenantOptions(({"tenantId": "t-1", "tenantName": "Demo"},)));
+        assertEq("t-1", XeroRestClientBase::getTenantOptions((
+            {"tenantId": "t-1", "tenantName": "Demo"},
+            {"tenantId": "t-2", "tenantName": "Other"},
+        )).tenant_id, "the first organisation Xero lists is the one used");
+
+        # a credential that reaches nothing usable names no organisation rather than a wrong one
+        assertNothing(XeroRestClientBase::getTenantOptions(()), "no organisations, no tenant");
+        assertNothing(XeroRestClientBase::getTenantOptions(NOTHING), "no body, no tenant");
+        assertNothing(XeroRestClientBase::getTenantOptions({"Status": "OK"}),
+            "a body that is not a list of connections names no tenant");
+        assertNothing(XeroRestClientBase::getTenantOptions(({"id": "conn-1"},)),
+            "a connection entry with no tenantId names no tenant");
+
+        # the alternatives are logged, because a credential reaching several organisations gets the
+        # first one and the user has to be able to see what was chosen and what else was available
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        CapturingAppender appender();
+        logger.addAppender(appender);
+        XeroRestClientBase::getTenantOptions((
+            {"tenantId": "t-1", "tenantName": "Demo Company"},
+            {"tenantId": "t-2", "tenantName": "Other Company"},
+        ), logger);
+        assertEq(1, appender.messages.size());
+        assertRegex("Demo Company", appender.messages[0]);
+        assertRegex("Other Company \\(t-2\\)", appender.messages[0],
+            "the organisations not chosen are named, so one of them can be chosen instead");
+        assertRegex("tenant_id", appender.messages[0], "and the option to set is named");
+
+        appender.messages = ();
+        XeroRestClientBase::getTenantOptions((), logger);
+        assertEq(1, appender.messages.size(), "a credential that reaches no organisation is reported");
+
+        # the authorization code flow's own path: the platform exchanges the code and hands the token
+        # response to the connection, which is where an authorized connection becomes a working one
+        hash<auto> copts = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_url": "auto",
+        };
+        StubXeroRestConnection conn({
+            "name": "xero-auth", "desc": "test", "url": "xero://api.xero.com", "opts": copts,
+        });
+        conn.stub.answer = {"tenant_id": "t-9"};
+        *hash<auto> persisted;
+        conn.setUpdateOptionsCode(sub (hash<auto> update) { persisted = update; });
+        hash<auto> rv = conn.processOAuth2TokenResponse({
+            "token_type": "Bearer", "access_token": "tok-1", "refresh_token": "ref-1", "expires_in": 1800,
+        });
+        assertEq(1, conn.stub.calls, "the organisation is discovered when the connection is authorized");
+        assertEq("tok-1", conn.stub.token, "with the token just issued, not one the client may still hold");
+        assertEq("t-9", persisted.tenant_id, "and is persisted onto the connection");
+        assertEq("t-9", rv.tenant_id, "and is part of the options the flow returns");
+        assertEq("tok-1", persisted.token, "the token is still persisted");
+
+        # an organisation the user chose is never overwritten
+        StubXeroRestConnection set_conn({
+            "name": "xero-set", "desc": "test", "url": "xero://api.xero.com",
+            "opts": copts + {"tenant_id": "mine"},
+        });
+        set_conn.stub.answer = {"tenant_id": "t-9"};
+        set_conn.setUpdateOptionsCode(sub (hash<auto> update) {});
+        set_conn.processOAuth2TokenResponse({"token_type": "Bearer", "access_token": "tok-2"});
+        assertEq(0, set_conn.stub.calls, "a tenant_id that is already set is left alone");
+
+        # nothing to discover with, nothing discovered
+        StubXeroRestConnection no_token({
+            "name": "xero-no-token", "desc": "test", "url": "xero://api.xero.com", "opts": copts,
+        });
+        no_token.setUpdateOptionsCode(sub (hash<auto> update) {});
+        no_token.processOAuth2TokenResponse({"token_type": "Bearer"});
+        assertEq(0, no_token.stub.calls, "a response with no token discovers nothing");
+
+        # a failed discovery must not break an otherwise successful authorization
+        StubXeroRestConnection failing({
+            "name": "xero-fail", "desc": "test", "url": "xero://api.xero.com", "opts": copts,
+        });
+        failing.stub.err = "REST-RESPONSE-ERROR";
+        *hash<auto> failed_persisted;
+        failing.setUpdateOptionsCode(sub (hash<auto> update) { failed_persisted = update; });
+        failing.processOAuth2TokenResponse({"token_type": "Bearer", "access_token": "tok-3"});
+        assertEq(1, failing.stub.calls);
+        assertEq("tok-3", failed_persisted.token,
+            "the authorization survives a discovery that could not be made");
+        assertNothing(failed_persisted.tenant_id);
+
+        # the client paths: either client may perform the exchange, so both discover
+        StubXeroRestClient sync_client({"token": "old"});
+        sync_client.stub.answer = {"tenant_id": "t-sync"};
+        *hash<auto> sync_persisted;
+        sync_client.setUpdateOptionsCode(sub (hash<auto> update) { sync_persisted = update; });
+        sync_client.gotOAuth2LoginInfo({"token_type": "Bearer", "access_token": "new-token"}, False);
+        assertEq(1, sync_client.stub.calls);
+        assertEq("t-sync", sync_persisted.tenant_id);
+        assertEq("t-sync", sync_client.getDefaultHeaders(){XeroRestClientBase::TenantHeader},
+            "the client sends the header immediately, not only the next one built from the options");
+
+        # a refresh does not pay for the call again
+        StubXeroRestClient refreshing({"token": "old"});
+        refreshing.stub.answer = {"tenant_id": "t-sync"};
+        refreshing.setUpdateOptionsCode(sub (hash<auto> update) {});
+        refreshing.gotOAuth2LoginInfo({"token_type": "Bearer", "access_token": "new-token"}, True);
+        assertEq(0, refreshing.stub.calls, "a refresh does not repeat the discovery");
+
+        StubXeroRestClientIo io_client({"token": "old"});
+        io_client.stub.answer = {"tenant_id": "t-io"};
+        *hash<auto> io_persisted;
+        io_client.setUpdateOptionsCode(sub (hash<auto> update) { io_persisted = update; });
+        io_client.updateOAuth2Token({"token_type": "Bearer", "access_token": "new-token"});
+        assertEq(1, io_client.stub.calls);
+        assertEq("t-io", io_persisted.tenant_id);
+        assertTrue(XeroRestClientBase::hasTenantHeader(io_client.getDefaultHeaders()));
+
+        # the async client has no refresh flag, so knowing the organisation is what stops the second call
+        io_client.updateOAuth2Token({"token_type": "Bearer", "access_token": "newer-token"});
+        assertEq(1, io_client.stub.calls, "a client that already names its organisation discovers nothing");
+
+        StubXeroRestClientIo known_io({"token": "old", "tenant_id": "t-known"});
+        known_io.stub.answer = {"tenant_id": "t-io"};
+        known_io.setUpdateOptionsCode(sub (hash<auto> update) {});
+        known_io.updateOAuth2Token({"token_type": "Bearer", "access_token": "new-token"});
+        assertEq(0, known_io.stub.calls, "a client built with a tenant discovers nothing");
+
+        # ... and until all of that has happened, a connection with no organisation says which option is
+        # missing.  Every Xero operation requires the header, so a connection without one fails on the
+        # plainest action there is, and it used to fail as a schema type error about "xero-tenant-id" -
+        # a name no action offers and no user has seen
+        FakeXeroRestClient no_tenant({"tenant_id": NOTHING});
+        assertFalse(XeroRestClientBase::hasTenantHeader(no_tenant.getDefaultHeaders()));
+        XeroDataProvider bare_dp(no_tenant);
+        AbstractDataProvider contacts = bare_dp.getChildProviderEx("getContacts");
+        hash<auto> no_args = {};
+        assertThrows("REST-CONNECTION-OPTION-ERROR", "set the \"tenant_id\" option on the connection",
+            \contacts.doRequest(), no_args);
+
+        # the projects document spells the header differently, and has to be just as legible
+        AbstractDataProvider projects = bare_dp.getChildProviderEx("getProjects");
+        assertThrows("REST-CONNECTION-OPTION-ERROR", "set the \"tenant_id\" option on the connection",
+            \projects.doRequest(), no_args);
     }
 
     private employeeRegionTest() {

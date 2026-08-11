@@ -35,6 +35,45 @@
                 }
             }
         },
+        "/tenant-status": {
+            "get": {
+                "operationId": "getTenantStatus",
+                "summary": "Returns service status for one tenant",
+                "description": "Declares a required header that the connection owns rather than the action.",
+                "parameters": [
+                    {
+                        "name": "X-Tenant-Id",
+                        "in": "header",
+                        "required": true,
+                        "description": "the tenant the request applies to",
+                        "schema": {"type": "string"}
+                    },
+                    {
+                        "name": "X-Request-Id",
+                        "in": "header",
+                        "required": false,
+                        "description": "an opaque request identifier echoed in the response",
+                        "schema": {"type": "string"}
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "the service status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["status"],
+                                    "properties": {
+                                        "status": {"type": "string", "description": "service status"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/categories": {
             "get": {
                 "operationId": "listCategories",

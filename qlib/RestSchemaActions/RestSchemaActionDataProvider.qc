@@ -124,35 +124,42 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         actually sent, so a request validated against the schema in between would be rejected for a value
         the action was never supposed to carry.
 
-        Taking it from the client's default headers is what makes \c ignore mean what it says.  A header
-        the client does not supply is left out, so the schema reports it missing - which is the truth: the
-        connection was supposed to provide it and did not.
+        Taking it from the client's default headers is what makes \c ignore mean what it says.  An
+        optional header the client does not supply is left out; a **required** one is reported here,
+        naming the connection option that supplies it, because the alternative is a schema type error
+        about a value the user never saw and could not have set on the action.
 
         @param wire_req the transport request
 
         @return the request with any connection-owned headers filled in
+
+        @throw REST-CONNECTION-OPTION-ERROR the connection does not supply a header the schema requires
     */
     private hash<auto> addConnectionHeaders(hash<auto> wire_req) {
-        list<string> names = op.getConnectionHeaders();
-        if (!names || !rest) {
-            return wire_req;
-        }
-        *hash<auto> defaults = rest.getDefaultHeaders();
-        if (!defaults) {
+        list<hash<RestSchemaConnectionHeaderInfo>> conn_headers = op.getConnectionHeaders();
+        if (!conn_headers || !rest) {
             return wire_req;
         }
         # HTTP header names are case-insensitive, and a schema and a client need not spell one the same way
         hash<string, auto> lower = {};
-        map lower{$1.key.lwr()} = $1.value, defaults.pairIterator();
+        map lower{$1.key.lwr()} = $1.value, (rest.getDefaultHeaders() ?? {}).pairIterator();
         # "auto!" because the header values are not all of one type once a caller's own are merged in
         hash<auto!> hdr = wire_req.header ?? {};
-        foreach string name in (names) {
-            if (exists hdr{name}) {
+        foreach hash<RestSchemaConnectionHeaderInfo> ch in (conn_headers) {
+            if (exists hdr{ch.wire_name}) {
                 continue;
             }
-            auto value = lower{name.lwr()};
+            auto value = lower{ch.wire_name.lwr()};
             if (exists value) {
-                hdr{name} = value;
+                hdr{ch.wire_name} = value;
+                continue;
+            }
+            if (ch.required) {
+                throw "REST-CONNECTION-OPTION-ERROR", sprintf("action %y requires the %y header, which the "
+                    "connection supplies rather than the action, and this connection does not send it%s",
+                    op.getAction(), ch.wire_name, ch.connection_option.val()
+                        ? sprintf("; set the %y option on the connection", ch.connection_option)
+                        : "");
             }
         }
         if (hdr) {

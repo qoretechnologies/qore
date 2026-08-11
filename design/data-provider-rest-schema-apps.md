@@ -506,6 +506,51 @@ operations already reference, so an event type can be composed from them. Only t
 not publish as reusable components stay open hashes. That keeps the event and the actions describing the
 same record the same way.
 
+## A connection has to configure itself
+
+**A connection option whose value only exists after authorization must be discovered, never asked for.**
+Two of these applications need a value that no user has before the OAuth2 flow runs and that nobody should
+have to go and look up afterwards: Xero's `tenant_id` - a credential reaches one or more organisations and
+every call has to name one - and Confluence's `cloud_id` - an Atlassian credential is issued against the
+gateway rather than against a site. A connection that has been authorized and still does not work is a
+defect in the module, not a step for the user, and both of these failed in exactly that way: every Xero
+call was rejected for a missing header, and every Confluence call went to the gateway and 404'd, including
+the ping.
+
+The mechanism is already there and has to be used on **every** path that can complete an authorization,
+because different callers complete it in different places:
+
+|Path|Who calls it|
+|---|---|
+| `RestConnection::processOAuth2TokenResponseImpl()` | the platform, after it exchanges an authorization code - the flow a user actually goes through |
+| `RestClient::getUpdateOptionsAfterLogin()` | a synchronous client performing its own login or refresh |
+| `RestClientIo::getUpdateOptionsAfterLogin()` | the async client, and the connection's ping poller through it |
+
+Whatever they return is persisted onto the connection, so the discovery belongs in one shared method per
+application and each override is three lines. Four rules make it safe:
+
+- **discover with the token just issued**, from the response hash, not with whatever the client still holds;
+- **discover once**: skip when the option is already set, which leaves an explicitly chosen value alone and
+  keeps a refresh from paying for the call. The precise predicate is "is this connection already usable" -
+  the client already sends the header, the client already targets a site - not a flag about the flow;
+- **a failed discovery must not break the authorization**: log it and continue, or an unrelated outage at
+  the vendor turns a good credential into no connection at all;
+- **log the alternatives**: taking the first organisation or site a vendor lists is right, but a user with
+  several has to be able to see what was chosen and set the option to another one.
+
+**The requirement can reach back into what a connection may be created with.** Confluence's
+`required_options` demanded `cloud_id`, so a connection could not exist until it had a value that only its
+own authorization produces - which is what pushed a *site* of `api.atlassian.com`, the gateway, into a real
+connection. A connection whose site is discovered has to be creatable without one and target the gateway
+until the flow fills it in. The same edit has to make the option's absence unambiguous in both directions:
+the gateway is not a site, so it must never be read back out of a URL as one.
+
+**Name the connection option in the error a missing one produces.** A value the connection owns is dropped
+from every action, which is right, and it therefore appears nowhere a user can see when it is missing: the
+Xero failure surfaced as a schema type error about `xero-tenant-id` fifteen frames down. `RestSchemaActions`
+now reports a **required** connection-owned header the connection does not send as what it is, naming the
+option to set - `connection_option` on the field overlay - while an optional one is still simply left out.
+
 ## Record tables
 
 A schema-driven application exposes its record-shaped collections as tables under a `tables` child, declared

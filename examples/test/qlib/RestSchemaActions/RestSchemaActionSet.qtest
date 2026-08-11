@@ -169,6 +169,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider execution", \providerExecutionTest());
         addTestCase("provider paths", \providerPathTest());
+        addTestCase("a header the connection owns", \connectionHeaderTest());
         addTestCase("schema drift", \driftReportTest());
 
         set_return_value(main());
@@ -869,6 +870,71 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         rest.reset();
         rest.push_response({"throw_status": 404, "body": {"message": "no such widget"}});
         assertThrows("REST-RESPONSE-ERROR", "HTTP 404", \get.doRequest(), {"widget_id": "gone"});
+    }
+
+    connectionHeaderTest() {
+        # A header the connection owns is dropped from the action, which is the point: nobody should be
+        # asked for an API key or a tenant on every call.  The schema may still declare it required, so
+        # the request is filled in from the client's own default headers when it is built.
+        hash<auto> overlay = {
+            "fields": {
+                "X-Tenant-Id": <RestSchemaFieldOverlayInfo>{
+                    "ignore": True,
+                    "connection_option": "tenant_id",
+                },
+                "X-Request-Id": <RestSchemaFieldOverlayInfo>{"ignore": True},
+            },
+        };
+        RestSchemaActionSet aset = makeSet((
+            entry("get-tenant-status", "GET", "/tenant-status", overlay),
+        ));
+        RestSchemaActionOperation op = aset.getOperationEx("get-tenant-status");
+        assertFalse(op.getRequestFields().hasKey("X-Tenant-Id"),
+            "a connection-owned header is not an action option");
+        assertFalse(op.getRequestFields().hasKey("X-Request-Id"));
+
+        list<hash<RestSchemaConnectionHeaderInfo>> conn_hdrs = op.getConnectionHeaders();
+        assertEq(2, conn_hdrs.size());
+        assertEq("X-Tenant-Id", conn_hdrs[0].wire_name);
+        assertTrue(conn_hdrs[0].required, "the schema still requires it, whoever supplies it");
+        assertEq("tenant_id", conn_hdrs[0].connection_option);
+        assertEq("X-Request-Id", conn_hdrs[1].wire_name);
+        assertFalse(conn_hdrs[1].required);
+        assertNothing(conn_hdrs[1].connection_option);
+
+        # a connection that supplies the header sends it, however either side spells it
+        FakeRestClient rest();
+        rest.addDefaultHeaders({"x-tenant-id": "t-1"});
+        RestSchemaActionSetDataProvider root(aset, rest);
+        AbstractDataProvider status = root.getChildProviderEx("get-tenant-status");
+        rest.push_response({"body": {"status": "ok"}});
+        hash<auto> no_args = {};
+        assertEq("ok", status.doRequest(no_args).status);
+        assertEq("t-1", rest.last().headers{"X-Tenant-Id"},
+            "the header travels under the name the schema declares, from the value the client holds");
+
+        # ... and a connection that does not supply it says so, naming the option to set, rather than
+        # failing as a schema type error about a header no action offers
+        FakeRestClient bare();
+        RestSchemaActionSetDataProvider bare_root(aset, bare);
+        AbstractDataProvider bare_status = bare_root.getChildProviderEx("get-tenant-status");
+        assertThrows("REST-CONNECTION-OPTION-ERROR", "set the \"tenant_id\" option on the connection",
+            \bare_status.doRequest(), no_args);
+
+        # the optional one is simply left out: an idempotency key no connection sets is not an error
+        RestSchemaActionSet opt_only = makeSet((
+            entry("get-tenant-status", "GET", "/tenant-status", {
+                "fields": {"X-Request-Id": <RestSchemaFieldOverlayInfo>{"ignore": True}},
+            }),
+        ));
+        FakeRestClient opt_rest();
+        opt_rest.addDefaultHeaders({"X-Tenant-Id": "t-2"});
+        RestSchemaActionSetDataProvider opt_root(opt_only, opt_rest);
+        AbstractDataProvider opt_status = opt_root.getChildProviderEx("get-tenant-status");
+        opt_rest.push_response({"body": {"status": "ok"}});
+        opt_status.doRequest({"X-Tenant-Id": "t-2"});
+        assertNothing(opt_rest.last().headers{"X-Request-Id"},
+            "an optional header nobody supplies is left out rather than reported");
     }
 
     providerPathTest() {

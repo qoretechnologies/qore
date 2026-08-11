@@ -131,6 +131,27 @@ public hashdecl RestSchemaWireCodecInfo {
     *string desc;
 }
 
+#! A header the connection is expected to supply rather than the action
+/** Produced for every header an overlay drops with
+    @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore", and used when the transport
+    request is built.
+
+    @see @ref RestSchemaActions::RestSchemaActionOperation::getConnectionHeaders() "getConnectionHeaders()"
+*/
+public hashdecl RestSchemaConnectionHeaderInfo {
+    #! The header name, spelled as the schema spells it
+    string wire_name;
+
+    #! @ref True if the schema declares the header required
+    /** A required header the connection does not send makes every call fail, so it is reported as the
+        connection problem it is; an optional one is simply left out.
+    */
+    bool required = False;
+
+    #! The connection option that supplies it, when the manifest names one
+    *string connection_option;
+}
+
 #! A declarative UX override for a single field derived from a REST schema
 /** Applied after the schema-derived request or response type has been flattened and before action options
     are generated, so that every override is visible to
@@ -147,6 +168,16 @@ public hashdecl RestSchemaFieldOverlayInfo {
         connection - which must never appear as an action option.
     */
     *bool ignore;
+
+    #! The connection option that supplies an @ref ignore "ignored" header
+    /** A header the connection owns is one the action cannot be asked for, so when the connection does
+        not send it there is nothing in the action to point at: the schema rejects the request for a value
+        the user never saw, fifteen frames down.  Naming the option that supplies it turns that into a
+        sentence saying which connection option to set.
+
+        Only meaningful together with @ref ignore on a header, and only used in that error.
+    */
+    *string connection_option;
 
     #! Rename the action-facing field
     /** The wire name is unchanged; the reverse map records the original.  This is how a collision between
