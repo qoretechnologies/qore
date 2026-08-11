@@ -498,6 +498,14 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         assertEq('oauth2_client_id,oauth2_client_secret', req[0],
             "the OAuth2 option set is the first alternative, so it is the default flow");
 
+        # nor may the fallback credential be preselected.  A preselected option is what the connection form
+        # shows before anything is expanded, so preselecting "token" puts "paste a credential here" at the
+        # top of the form and the OAuth2 flow looks like the alternative rather than the default - which is
+        # exactly what it looked like.  Only nothing else belongs there.
+        list<string> presel = ();
+        map presel += $1.key, GitHubRestConnection::ConnectionScheme.options.pairIterator(), $1.value.preselected;
+        assertEq((), presel, "no credential is preselected on an OAuth2-first connection");
+
         # ...but naming the options first only decides what the form shows.  What decides whether the
         # platform offers the authorization flow at all is whether the CONNECTION reports it can authorize,
         # and it works that out from its own options: the grant type plus all five of the authorization
