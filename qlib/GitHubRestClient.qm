@@ -140,7 +140,15 @@ public class GitHubRestClientBase {
         const DefaultGrantType = "authorization_code";
 
         #! Default OAuth2 scopes
-        const DefaultScopes = ("repo", "user", "public_repo");
+        /** \c delete_repo is requested because the application exports a **Delete Repository** action, and
+            GitHub keeps that permission out of \c repo deliberately.  A connection without it offers an
+            action that always fails with 403 — which is what the superseded application did, and it is not
+            a useful thing to offer.
+
+            The scope only grants what the action already announces it does; a credential that should not be
+            able to delete a repository should not be given an application that offers to.
+        */
+        const DefaultScopes = ("repo", "user", "public_repo", "delete_repo");
 
         #! Default data serialization
         const DefaultData = "json";

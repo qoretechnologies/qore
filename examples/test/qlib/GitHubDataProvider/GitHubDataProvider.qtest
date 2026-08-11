@@ -494,6 +494,10 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         assertEq("https://github.com/login/oauth/authorize", oopts.oauth2_auth_url);
         assertEq("https://github.com/login/oauth/access_token", oopts.oauth2_token_url);
         assertEq("authorization_code", oopts.oauth2_grant_type);
+        # the application exports a Delete Repository action, and GitHub keeps that permission out of
+        # "repo" deliberately; a connection without it offers an action that always fails with 403
+        assertTrue(inlist("delete_repo", oopts.oauth2_scopes),
+            "the scopes cover every action the application exports");
 
         GitHubRestConnection conn("github-test", "test", "github://api.github.com", {}, {"token": "abc"});
         assertEq("github", conn.getType());

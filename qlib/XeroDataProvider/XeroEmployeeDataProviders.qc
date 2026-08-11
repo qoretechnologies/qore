@@ -195,6 +195,29 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
         return action == ActionGetEmployees ? listEmployees(req) : createEmployees(req);
     }
 
+    #! Reports a payroll call that answered with something other than JSON
+    /** The regional payroll APIs do not answer errors the way the accounting API does.  Australia's 1.0 API
+        answers \c "403 Forbidden" with an **XML** body — \c "<Message>Payroll has not been purchased</Message>" —
+        whatever the request's \c Accept header says, and the client cannot deserialize it: the caller is
+        left with \c "JSON-PARSE-ERROR: invalid input at line 1" and neither the status nor the message.
+
+        Nearly always this means what it says: the organisation has no payroll.  New Zealand and the United
+        Kingdom say the same thing in JSON and a 401 — "Ensure that your Organisation has Payroll
+        provisioned, and the User is a Payroll Administrator" — so this only has to translate Australia's
+        answer into something a caller can act on.
+
+        @param ex the deserialization failure
+
+        @throw XERO-PAYROLL-ERROR always
+    */
+    private nothing rethrowPayrollError(hash<ExceptionInfo> ex) {
+        throw "XERO-PAYROLL-ERROR", sprintf("the %s payroll API answered with a body that is not JSON, "
+            "which is how it reports that the organisation has no payroll provisioned, or that this user "
+            "is not a payroll administrator; check the connection's \"payroll_region\" (%y) against the "
+            "organisation, and that payroll is enabled for it (original error: %s: %s)",
+            rest.payroll_region.upr(), rest.payroll_region, ex.err, ex.desc);
+    }
+
     #! Lists the employees in the connection's payroll region
     private list<auto> listEmployees(*hash<auto> req) {
         string prefix = getPayrollPrefix();
@@ -208,8 +231,15 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
             args += sprintf("page=%s", encode_url(req.page.toString(), True));
         }
         string path = prefix + EmployeesPath + (args ? "?" + join("&", args) : "");
-        hash<RestClient::RestResponseInfo> resp = getRest().restGet(path);
-        return XeroEmployeesDataProvider::getEmployeeList(resp.body);
+        try {
+            hash<RestClient::RestResponseInfo> resp = getRest().restGet(path);
+            return XeroEmployeesDataProvider::getEmployeeList(resp.body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "DESERIALIZATION-ERROR") {
+                rethrowPayrollError(ex);
+            }
+            rethrow;
+        }
     }
 
     #! Creates the employees given, one call per employee where the region takes one at a time
@@ -221,16 +251,23 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
         string prefix = getPayrollPrefix();
         string path = prefix + EmployeesPath;
         # Australia's 1.0 API takes the whole list in one call; the 2.0 APIs take one employee per call
-        if (prefix =~ /1\.0$/) {
-            hash<RestClient::RestResponseInfo> resp = getRest().restPost(path, employees);
-            return XeroEmployeesDataProvider::getEmployeeList(resp.body);
+        try {
+            if (prefix =~ /1\.0$/) {
+                hash<RestClient::RestResponseInfo> resp = getRest().restPost(path, employees);
+                return XeroEmployeesDataProvider::getEmployeeList(resp.body);
+            }
+            list<auto> rv = ();
+            foreach auto employee in (employees) {
+                hash<RestClient::RestResponseInfo> resp = getRest().restPost(path, employee);
+                rv += XeroEmployeesDataProvider::getEmployeeList(resp.body);
+            }
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "DESERIALIZATION-ERROR") {
+                rethrowPayrollError(ex);
+            }
+            rethrow;
         }
-        list<auto> rv = ();
-        foreach auto employee in (employees) {
-            hash<RestClient::RestResponseInfo> resp = getRest().restPost(path, employee);
-            rv += XeroEmployeesDataProvider::getEmployeeList(resp.body);
-        }
-        return rv;
     }
 
     #! Returns the employees in a payroll response, whichever envelope carried them

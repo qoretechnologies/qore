@@ -129,6 +129,12 @@ class FakeXeroRestClient inherits XeroRestClient::XeroRestClientIo {
             "headers": hdr,
         };
         hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_deserialization) {
+            # what the client raises when a response body is not the serialization it was told to expect;
+            # Xero's 1.0 payroll API answers errors in XML, and the status is lost with it
+            throw "DESERIALIZATION-ERROR", "JSON-PARSE-ERROR: invalid input at line 1; unable to parse "
+                "JSON value";
+        }
         if (resp.throw_status) {
             throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
                 <RestClient::RestResponseInfo>{
@@ -223,6 +229,7 @@ public class XeroDataProviderTest inherits QUnit::Test {
         addTestCase("connection", \connectionTest());
         addTestCase("employees by region", \employeeRegionTest());
         addTestCase("employee envelopes", \employeeEnvelopeTest());
+        addTestCase("payroll errors are legible", \payrollErrorTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("xero timestamps", \timestampTest());
         addTestCase("event polling", \eventPollingTest());
@@ -549,6 +556,31 @@ public class XeroDataProviderTest inherits QUnit::Test {
         assertEq(("a",), XeroEmployeesDataProvider::getEmployeeList(("a",)));
         assertEq((), XeroEmployeesDataProvider::getEmployeeList({"pagination": {"page": 1}}));
         assertEq((), XeroEmployeesDataProvider::getEmployeeList(NOTHING));
+    }
+
+    private payrollErrorTest() {
+        # Australia's 1.0 payroll API answers "403 Forbidden" with an XML body -- "Payroll has not been
+        # purchased" -- whatever the request's Accept header says, so the client cannot deserialize it and
+        # the caller was left with "JSON-PARSE-ERROR: invalid input at line 1" and neither the status nor
+        # the message.  Verified against the live API.
+        FakeXeroRestClient au({"payroll_region": "au"});
+        XeroDataProvider dp(au);
+        au.push_response({"throw_deserialization": True});
+        AbstractDataProvider emp = dp.getChildProviderEx("getEmployees");
+        hash<auto> no_args = {};
+        assertThrows("XERO-PAYROLL-ERROR", "no payroll provisioned", \emp.doRequest(), no_args);
+
+        # the region is named, so the message can say which API said it
+        try {
+            emp.doRequest(no_args);
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("AU", ex.desc, "the message names the region that answered");
+            assertRegex("payroll_region", ex.desc, "and the option to check");
+        }
+
+        # an error that is not a deserialization failure keeps its own identity
+        au.push_response({"throw_status": 401, "body": {"problem": {"detail": "no payroll"}}});
+        assertThrows("REST-RESPONSE-ERROR", \emp.doRequest(), no_args);
     }
 
     private eventProviderTest() {

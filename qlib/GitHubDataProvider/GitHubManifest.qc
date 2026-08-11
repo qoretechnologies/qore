@@ -400,8 +400,10 @@ public class GitHubManifest {
                 "short_desc": "Delete a repository permanently",
                 "desc": "Deletes a repository.\n\n"
                     "**This cannot be undone.** GitHub keeps no trash for repositories; recovering one means "
-                    "asking GitHub Support within 90 days. A classic token needs the `delete_repo` scope, "
-                    "which is not one of the scopes this connection requests by default.",
+                    "asking GitHub Support within 90 days.\n\n"
+                    "This needs the `delete_repo` scope, which GitHub keeps out of `repo` deliberately and "
+                    "which this connection requests by default. A credential authorized before that was "
+                    "the case has to be re-authorized, or this action fails with 403.",
                 "groups": (GroupRepositories,),
                 "field_order": ("owner", "repo"),
                 "fields": RepoScopeOverlay,
