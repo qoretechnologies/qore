@@ -298,9 +298,34 @@ public hashdecl RestSchemaRecordTableInfo {
     string id_field = "id";
 
     #! The option carrying the record's identity on the get, update and delete actions
-    /** Defaults to @ref id_field.
+    /** Defaults to @ref id_field.  Ignored when @ref id_parts is set.
     */
     *string id_option;
+
+    #! The record's identity, where the API addresses a record with more than one value
+    /** Keyed by the option name on the get, update and delete actions, with the value naming the record
+        field supplying it - a \c "." separated path where the value is nested in the record.
+
+        An API does not always address a record with one value.  GitHub names a repository by its
+        \c {owner} **and** its \c {repo}, both path variables, and a repository record carries the second as
+        \c name and the first as \c "owner.login", because its \c owner is an object rather than a string:
+
+        @code{.py}
+"id_parts": {"owner": "owner.login", "repo": "name"},
+        @endcode
+
+        This is **not** the same thing as
+        @ref RestSchemaRecordTableInfo::scope_options "scope_options", and the difference decides which one
+        to use.  A scope option identifies the **collection** and is the same for every record in a search -
+        the repository an issue belongs to, the customer a subscription belongs to - so the caller supplies
+        it and the listing requires it.  An identity part identifies **one record** and varies from row to
+        row within a single listing, so it is read back off each record.  GitHub's repository listing spans
+        owners, which is precisely why \c owner cannot be a scope there.
+
+        Set this **or** @ref id_field and @ref id_option, not both kinds; a single-valued identity is the
+        common case and is written the short way.
+    */
+    *hash<string, string> id_parts;
 
     #! A path of field names leading from the listing response to the list of records
     /** Not needed when the listing's output is itself the list.

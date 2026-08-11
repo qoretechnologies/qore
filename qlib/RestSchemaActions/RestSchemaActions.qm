@@ -240,6 +240,25 @@ module RestSchemaActions {
     and one function rendering a value.  An operator the language spells without quite meaning it is listed
     in \c inexact_ops, so it narrows the listing and the predicate is still answered here.
 
+    @subsection restschemaactions_records_identity Addressing One Record
+
+    A table addresses a record by whatever the API's paths take, which is not always one value and is not
+    always a top-level field.  @ref RestSchemaActions::RestSchemaRecordTableInfo::id_parts "id_parts"
+    declares a composite identity as option to record field path - GitHub names a repository by its
+    \c {owner} and its \c {repo}, and carries the first as a nested \c "owner.login".
+
+    That is a different thing from
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::scope_options "scope_options", and the difference is
+    what decides between them:
+
+    |!|!Identifies|!Comes from
+    |a scope option|the **collection**, the same for every record in a search|the caller, and the listing requires it
+    |an identity part|**one record**, varying from row to row within a listing|the record itself
+
+    A search whose predicate is the identity and nothing else is answered by reading that one record.  A
+    predicate that also asks something more is not, because answering only the identity half would return -
+    or write to - a record the caller did not match.
+
     @subsection restschemaactions_records_actions A Table Is Reached by an Action
 
     Declaring the providers is only half of it: a table no action reaches is offered to nobody.

@@ -5200,8 +5200,8 @@
           "message": "Search for matching records in the given table in app \"Github\""
         },
         "app.R2l0aHVi.action.c2VhcmNo.desc": {
-          "source": "Search for matching records in the given table in app \"Github\"; the repository is given by the `owner` and `repo` options, because a table is scoped to one repository",
-          "message": "Search for matching records in the given table in app \"Github\"; the repository is given by the `owner` and `repo` options, because a table is scoped to one repository"
+          "source": "Search for matching records in the given table in app \"Github\"; the `issues`, `pulls` and `releases` tables are each scoped to one repository, given by the `owner` and `repo` options, while `repositories` spans every owner the credential can see",
+          "message": "Search for matching records in the given table in app \"Github\"; the `issues`, `pulls` and `releases` tables are each scoped to one repository, given by the `owner` and `repo` options, while `repositories` spans every owner the credential can see"
         },
         "app.R2l0aHVi.action.c2VhcmNo.option.dGFibGU.display_name": {
           "source": "Table",
@@ -5212,8 +5212,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.c2VhcmNo.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls` or `releases`",
-          "message": "The table to work with: `issues`, `pulls` or `releases`"
+          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
+          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.display_name": {
           "source": "Find a Single Record",
@@ -5224,8 +5224,8 @@
           "message": "Search for a single matching record in the given table in app \"Github\""
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.desc": {
-          "source": "Search for a single matching record in the given table in app \"Github\"; the repository is given by the `owner` and `repo` options, because a table is scoped to one repository",
-          "message": "Search for a single matching record in the given table in app \"Github\"; the repository is given by the `owner` and `repo` options, because a table is scoped to one repository"
+          "source": "Search for a single matching record in the given table in app \"Github\"; the `issues`, `pulls` and `releases` tables are each scoped to one repository, given by the `owner` and `repo` options, while `repositories` spans every owner the credential can see",
+          "message": "Search for a single matching record in the given table in app \"Github\"; the `issues`, `pulls` and `releases` tables are each scoped to one repository, given by the `owner` and `repo` options, while `repositories` spans every owner the credential can see"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
           "source": "Table",
@@ -5236,8 +5236,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls` or `releases`",
-          "message": "The table to work with: `issues`, `pulls` or `releases`"
+          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
+          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.display_name": {
           "source": "Create Records",
@@ -5260,8 +5260,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls` or `releases`",
-          "message": "The table to work with: `issues`, `pulls` or `releases`"
+          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
+          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
         },
         "app.R2l0aHVi.action.dXBkYXRl.display_name": {
           "source": "Update Records",
@@ -5284,8 +5284,32 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.dXBkYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls` or `releases`",
-          "message": "The table to work with: `issues`, `pulls` or `releases`"
+          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
+          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
+        },
+        "app.R2l0aHVi.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Delete Records"
+        },
+        "app.R2l0aHVi.action.ZGVsZXRl.short_desc": {
+          "source": "Delete matching records in the given table in app \"Github\"",
+          "message": "Delete matching records in the given table in app \"Github\""
+        },
+        "app.R2l0aHVi.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria.\n\nOnly the **Repositories** table can be deleted from: GitHub closes an issue or a pull request rather than removing it, and offers no delete for a release.\n\n**Deleting a repository cannot be undone.** GitHub keeps no trash for one; recovering it means asking GitHub Support within 90 days. This needs the `delete_repo` scope, which this connection requests by default.",
+          "message": "Deletes every record in the given table matching the search criteria.\n\nOnly the **Repositories** table can be deleted from: GitHub closes an issue or a pull request rather than removing it, and offers no delete for a release.\n\n**Deleting a repository cannot be undone.** GitHub keeps no trash for one; recovering it means asking GitHub Support within 90 days. This needs the `delete_repo` scope, which this connection requests by default."
+        },
+        "app.R2l0aHVi.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Table"
+        },
+        "app.R2l0aHVi.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "The name of the table to work with"
+        },
+        "app.R2l0aHVi.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
+          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfaXNzdWU.display_name": {
           "source": "New Issue",

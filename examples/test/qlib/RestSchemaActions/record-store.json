@@ -390,6 +390,121 @@
           }
         }
       }
+    },
+    "/all-notes": {
+      "get": {
+        "operationId": "listAllNotes",
+        "summary": "Lists the notes in every space",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "the page of notes to return, numbered from 1",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "how many notes to return per page, at most 25",
+            "schema": {
+              "type": "integer",
+              "maximum": 25
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the notes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/scoped_note"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/spaces/{space}/notes/{note_id}": {
+      "parameters": [
+        {
+          "name": "space",
+          "in": "path",
+          "required": true,
+          "description": "the space the note belongs to",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "note_id",
+          "in": "path",
+          "required": true,
+          "description": "the note ID",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNote",
+        "summary": "Reads one note",
+        "responses": {
+          "200": {
+            "description": "the note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/scoped_note"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateNote",
+        "summary": "Updates one note",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/note_write"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/scoped_note"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteNote",
+        "summary": "Deletes one note",
+        "responses": {
+          "204": {
+            "description": "the note was deleted"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -508,6 +623,33 @@
           "title": {
             "type": "string",
             "description": "the note title"
+          }
+        }
+      },
+      "scoped_note": {
+        "type": "object",
+        "required": [
+          "note_id",
+          "title"
+        ],
+        "properties": {
+          "note_id": {
+            "type": "string",
+            "description": "the note ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "the note title"
+          },
+          "space": {
+            "type": "object",
+            "description": "the space the note belongs to",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "the space key"
+              }
+            }
           }
         }
       }

@@ -246,7 +246,7 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         );
 
         #! The record-based tables the application offers
-        const ExpectedTables = ("issues", "pulls", "releases");
+        const ExpectedTables = ("issues", "pulls", "releases", "repositories");
 
         #! The record-based actions, with the IDs the TypeScript application registered
         /** These reach the tables from the action surface.  Without them the tables are reachable only by
@@ -257,6 +257,7 @@ public class GitHubDataProviderTest inherits QUnit::Test {
             "search-single": DPAT_FIND_SINGLE,
             "create": DPAT_CREATE,
             "update": DPAT_UPDATE,
+            "delete": DPAT_DELETE,
         };
 
         #! The dropdowns scoped to a repository
@@ -292,6 +293,7 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         addTestCase("a record limit counts matches", \recordLimitTest());
         addTestCase("record create", \recordCreateTest());
         addTestCase("record update", \recordUpdateTest());
+        addTestCase("a repository is named by owner and name", \repositoryTableTest());
         set_return_value(main());
     }
 
@@ -732,31 +734,36 @@ public class GitHubDataProviderTest inherits QUnit::Test {
                 sprintf("%y is declared as record-based", i.key));
         }
 
-        # GitHub's REST API cannot delete an issue, a pull request or a release, so no delete action is
-        # registered: an action that could only fail is worse than no action
-        assertNothing(by_action.delete, "GitHub cannot delete a record, so no delete action is offered");
+        # GitHub cannot delete an issue, a pull request or a release - each is closed rather than removed -
+        # but it can delete a repository, so the action exists and the three tables that cannot honour it
+        # report that for themselves
+        assertTrue(exists by_action.delete, "a repository can be deleted, so a delete action is offered");
 
-        # the repository is a required option of every table, whatever the table
+        # what every table has in common, which is what a form can show before a table has been chosen
         hash<DataProviderInfo> info = RestSchemaTablesDataProvider::getRecordActionProviderInfo(aset,
             GitHubRecordTables::Tables);
         assertTrue(info.supports_read);
         assertTrue(info.supports_create);
         assertTrue(info.supports_update);
-        assertFalse(info.supports_delete);
+        assertTrue(info.supports_delete, "one table - repositories - can delete");
         # GitHub takes a few query arguments; it has no filter expression language, so a search is not
         # answered by the server alone and saying otherwise would misdescribe every result
         assertFalse(info.supports_native_search);
         assertTrue(info.supports_search_expressions);
-        assertTrue(info.search_options.owner.required, "a search names the repository owner");
-        assertTrue(info.search_options.repo.required, "a search names the repository");
-        assertTrue(info.create_options.owner.required, "a create names the repository owner");
-        assertTrue(info.create_options.repo.required, "a create names the repository");
-        # the per-table options are not declared here; they differ by table
+        # only an option EVERY table needs can be published before a table has been chosen, and
+        # "repositories" needs no repository - its records are the repositories - so the repository scope is
+        # resolved per table like everything else
+        assertNothing(info.search_options.owner, "an option only some tables need is not declared app-wide");
         assertNothing(info.search_options.state, "a table-specific option is not declared app-wide");
-
         # the path a record action registers has to resolve to a table
         FakeGitHubRestClient rest();
         AbstractDataProvider t = tables(rest);
+
+        # and the tables that are scoped still require the repository, resolved from the chosen table
+        assertTrue(t.getChildProviderEx("issues").getInfo().search_options.owner.required,
+            "a scoped table names the repository owner");
+        assertNothing(t.getChildProviderEx("repositories").getInfo().search_options.owner,
+            "the repositories table has no repository scope; its records are the repositories");
         map assertTrue(exists t.getChildProvider($1), sprintf("table %y resolves", $1)), ExpectedTables;
         assertEq("issues",
             RestSchemaTablesDataProvider::getTablePathVar(GitHubRecordTables::Tables).example_value,
@@ -979,6 +986,74 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         found = map $1, issues.searchRecords(NOTHING, {"owner": "o", "repo": "r", "limit": 3});
         assertEq(3, found.size());
         assertEq(1, rest.requests.size());
+    }
+
+    #! A repository is addressed by its owner and its name, and the listing spans owners
+    private repositoryTableTest() {
+        FakeGitHubRestClient rest();
+        AbstractDataProvider repos = table(rest, "repositories");
+        hash<DataProviderInfo> info = repos.getInfo();
+        assertTrue(info.supports_read);
+        assertFalse(info.supports_create, "a repository is created under an owner, not in this collection");
+        assertTrue(info.supports_update);
+        assertTrue(info.supports_delete);
+        # the one GitHub table with no repository scope: its records are the repositories
+        assertNothing(info.search_options.owner);
+        assertNothing(info.search_options.repo);
+        assertTrue(exists info.search_options.visibility, "the listing's own options are search options");
+
+        # GitHub's listing returns repositories belonging to different owners in one response, which is
+        # exactly why the owner cannot be a scope
+        rest.push_response({"body": (
+            {"id": 1, "name": "alpha", "owner": {"login": "octocat"}, "visibility": "public"},
+            {"id": 2, "name": "beta", "owner": {"login": "acme"}, "visibility": "private"},
+        )});
+        list<hash<auto>> found = map $1, repos.searchRecords();
+        assertEq(2, found.size());
+        assertEq("octocat", found[0].owner.login);
+        assertEq("acme", found[1].owner.login);
+        assertEq("/user/repos?per_page=100&page=1", rest.last().path);
+
+        # a write addresses each record by ITS OWN owner, read back off the record
+        rest.reset();
+        rest.push_response({"body": (
+            {"id": 1, "name": "alpha", "owner": {"login": "octocat"}},
+            {"id": 2, "name": "beta", "owner": {"login": "acme"}},
+        )});
+        rest.push_response({"body": {"id": 1, "name": "alpha"}});
+        rest.push_response({"body": {"id": 2, "name": "beta"}});
+        assertEq(2, repos.updateRecords({"description": "changed"}, <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_REGEX,
+            "args": (<DataProviderFieldReference>{"field": "name"}, "^"),
+        }));
+        assertEq(3, rest.requests.size(), "one listing and two updates");
+        assertEq("/repos/octocat/alpha", rest.requests[1].path);
+        assertEq("/repos/acme/beta", rest.requests[2].path, "each record carries its own owner");
+
+        # naming both parts reads the one repository instead of walking the listing
+        rest.reset();
+        rest.push_response({"body": {"id": 1, "name": "alpha", "owner": {"login": "octocat"}}});
+        *hash<auto> one = repos.searchSingleRecord(<DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{"exp": DP_SEARCH_OP_EQ,
+                    "args": (<DataProviderFieldReference>{"field": "owner.login"}, "octocat")},
+                <DataProviderExpression>{"exp": DP_SEARCH_OP_EQ,
+                    "args": (<DataProviderFieldReference>{"field": "name"}, "alpha")},
+            ),
+        });
+        assertEq("alpha", one.name);
+        assertEq(1, rest.requests.size());
+        assertEq("/repos/octocat/alpha", rest.last().path);
+
+        # naming only the name is not naming a repository: two owners may each have one
+        rest.reset();
+        rest.push_response({"body": ({"id": 1, "name": "alpha", "owner": {"login": "octocat"}},)});
+        map $1, repos.searchRecords(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "name"}, "alpha"),
+        });
+        assertRegex("^/user/repos", rest.requests[0].path, "a partial identity walks the listing");
     }
 
     private recordCreateTest() {

@@ -94,8 +94,9 @@ module GitHubDataProvider {
         # register the record-based table actions; the IDs are those of the TypeScript application this
         # module replaces, so a workflow that already calls them keeps working
         {
-            string scope_desc = "; the repository is given by the `owner` and `repo` options, because a "
-                "table is scoped to one repository";
+            string scope_desc = "; the `issues`, `pulls` and `releases` tables are each scoped to one "
+                "repository, given by the `owner` and `repo` options, while `repositories` spans every "
+                "owner the credential can see";
             string search_desc = sprintf("Search for matching records in the given table in app %y",
                 GitHubDataProvider::AppName);
             string single_desc = sprintf("Search for a single matching record in the given table in app %y",
@@ -108,6 +109,8 @@ module GitHubDataProvider {
                 GitHubDataProvider::AppName);
             string update_desc = sprintf("Updates every record in the given table in app %y matching the "
                 "search criteria", GitHubDataProvider::AppName);
+            string delete_short = sprintf("Delete matching records in the given table in app %y",
+                GitHubDataProvider::AppName);
 
             RestSchemaTablesDataProvider::registerRecordActions(GitHubDataProvider::AppName,
                 "/" + GitHubDataProvider::TablesChildName, action_set, GitHubRecordTables::Tables,
@@ -128,6 +131,15 @@ module GitHubDataProvider {
                             "seconds, so a record created here is **not** in what a search returns "
                             "immediately afterwards; use what this action returned rather than reading it "
                             "back",
+                    },
+                    "delete": {
+                        "short_desc": delete_short,
+                        "desc": "Deletes every record in the given table matching the search criteria.\n\n"
+                            "Only the **Repositories** table can be deleted from: GitHub closes an issue or "
+                            "a pull request rather than removing it, and offers no delete for a release.\n\n"
+                            "**Deleting a repository cannot be undone.** GitHub keeps no trash for one; "
+                            "recovering it means asking GitHub Support within 90 days. This needs the "
+                            "`delete_repo` scope, which this connection requests by default.",
                     },
                     "update": {
                         "short_desc": update_short,
@@ -230,26 +242,32 @@ module GitHubDataProvider {
 
     @section githubdataprovider_records Record-Based Tables
 
-    Three tables - \c issues, \c pulls and \c releases - are exposed under \c tables for record-based
-    reading and creation.  They are **flattened, writable projections** rather than GitHub's response
+    Four tables - \c issues, \c pulls, \c releases and \c repositories - are exposed under \c tables for
+    record-based reading and writing.  They are **flattened, writable projections** rather than GitHub's response
     shapes: an issue's labels are names, its assignee a login, a pull request's base and head branch names.
     \c owner and \c repo are required search and create options, because a table is scoped to one
     repository.
 
-    Four actions reach them, each naming its table in the path (\c "tables/{table}"):
+    Five actions reach them, each naming its table in the path (\c "tables/{table}"):
 
     |!Action|!What it does
     |\c search|Returns every record in the table matching the search
     |\c search-single|Returns the one record matching the search
     |\c create|Creates records in the table
     |\c update|Updates every record matching the search
+    |\c delete|Deletes every record matching the search
 
     Their options depend on which table was named - \c issues accepts a state and a sort that \c releases has
     no notion of - so they are resolved from the chosen table rather than declared once for the application.
     The first three action IDs are those of the application this module replaces.
 
-    There is **no delete action**: GitHub's REST API cannot delete an issue, a pull request or a release.  An
-    issue is closed rather than removed, which is an update.
+    \c delete applies to \c repositories alone: GitHub's REST API cannot delete an issue, a pull request or a
+    release - an issue is closed rather than removed, which is an update - and the other three tables report
+    that they cannot rather than pretending.  **Deleting a repository cannot be undone.**
+
+    \c repositories is also the one table with no repository scope, because its records are the repositories.
+    GitHub names one by its \c {owner} and its \c {repo}, so a record there is addressed by two values: the
+    record's \c name and its \c "owner.login".
 
     @subsection githubdataprovider_records_search How a Search Is Answered
 

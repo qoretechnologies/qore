@@ -523,6 +523,19 @@ answer:
 The layer refuses a table whose record type can neither be derived nor is declared, because a table with
 `has_record` and no columns is worse than one that failed while the application was being built.
 
+**An identity is not always one value, and a scope is not the same thing.** GitHub addresses a repository
+by its `owner` **and** its `repo`, both path variables, and carries the first as a nested `owner.login` on
+the record. `id_parts` declares such an identity as option -> record field path. The distinction that
+decides which mechanism to use: a **scope option** identifies the *collection* and is the same for every
+record in a search, so the caller supplies it and the listing requires it; an **identity part** identifies
+*one record* and varies from row to row within a single listing, so it is read back off each record.
+GitHub's repository listing spans owners, which is exactly why the owner cannot be a scope there.
+
+Naming a record is only a shortcut when the predicate is the identity and **nothing else**. A search for
+`id == 5 AND state == "open"` names a record *and* asks a question about it; reading that record without
+asking the question would answer a search with a record it excluded - and for `updateRecords()` it would
+write to a record the caller never matched.
+
 **An identity is what the API's paths take, not what looks like an ID.** GitHub addresses an issue by its
 `number` within the repository and never by its global `id`; GitLab uses `iid` for the same reason, `key` for
 a CI variable and `slug` for a wiki page; Bitbucket's repository record carries a UUID and a `full_name` but

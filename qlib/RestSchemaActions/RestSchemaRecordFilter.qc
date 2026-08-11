@@ -35,10 +35,10 @@ public hashdecl RestSchemaRecordFilterSplit {
     */
     *hash<DataProviderExpression> client;
 
-    #! The record's identity, when the whole predicate is an equality on the table's ID field
+    #! The options addressing one record, when the predicate pins every part of its identity
     /** Lets a search be answered by reading one record instead of walking a collection.
     */
-    auto id;
+    *hash<auto> id;
 }
 
 #! Splits a search predicate into the part the API can evaluate and the part left for the client side
@@ -234,26 +234,56 @@ public class RestSchemaRecordFilter {
         return rv;
     }
 
-    #! Returns the record identity when the whole predicate is an equality on the table's ID field
-    /** @param cond the predicate
+    #! Returns the options addressing one record, when the predicate pins every part of its identity
+    /** An identity is one value for most tables and more than one for a few - GitHub names a repository by
+        its owner **and** its name - so this looks for an equality on **every** part.  Pinning some of them
+        is not naming a record, and the search walks the collection as it would for any other predicate.
 
-        @return the identity, or @ref nothing when the predicate is anything else
+        The predicate has to be the identity and **nothing else**.  A search for
+        <tt>id == 5 AND state == "open"</tt> names a record and also asks a question about it, and reading
+        that record without asking the question would answer a search with a record it excluded - which for
+        @ref DataProvider::AbstractDataProvider::updateRecords() "updateRecords()" means writing to a record
+        the caller did not match.  Such a predicate is answered the ordinary way instead.
+
+        @param cond the predicate
+
+        @return the options addressing the record, or @ref nothing when the predicate does not name one
     */
-    private auto getSingleId(hash<DataProviderExpression> cond) {
-        if (cond.exp != DP_SEARCH_OP_EQ || cond.args.size() != 2) {
+    private *hash<auto> getSingleId(hash<DataProviderExpression> cond) {
+        hash<string, string> parts = RestSchemaTableDataProvider::getIdParts(table);
+        list<auto> conjuncts = getConjuncts(cond);
+        if (conjuncts.size() != parts.size()) {
             return;
         }
-        if (!(cond.args[0] instanceof hash<DataProviderFieldReference>)) {
-            return;
+        # the value each identity part is pinned to, keyed by the record field naming that part
+        hash<string, auto> found = {};
+        foreach auto arg in (conjuncts) {
+            if (!(arg instanceof hash<DataProviderExpression>)) {
+                return;
+            }
+            hash<DataProviderExpression> c = cast<hash<DataProviderExpression>>(arg);
+            if (c.exp != DP_SEARCH_OP_EQ || c.args.size() != 2) {
+                return;
+            }
+            if (!(c.args[0] instanceof hash<DataProviderFieldReference>)) {
+                return;
+            }
+            if (c.args[1] instanceof hash<DataProviderExpression>
+                || c.args[1] instanceof hash<DataProviderFieldReference>) {
+                return;
+            }
+            found{cast<hash<DataProviderFieldReference>>(c.args[0]).field} = c.args[1];
         }
-        if (cast<hash<DataProviderFieldReference>>(cond.args[0]).field != table.id_field) {
-            return;
+        # "auto!" because a composite identity is a mix of names and numbers, and a hash narrowed to the
+        # type of its first part would reject the rest
+        hash<auto!> rv = {};
+        foreach hash<auto> i in (parts.pairIterator()) {
+            if (!found.hasKey(i.value)) {
+                return;
+            }
+            rv{i.key} = found{i.value};
         }
-        if (cond.args[1] instanceof hash<DataProviderExpression>
-            || cond.args[1] instanceof hash<DataProviderFieldReference>) {
-            return;
-        }
-        return cond.args[1];
+        return rv;
     }
 
     #! Applies a filter rule to one conjunct, if one matches and its option is still free

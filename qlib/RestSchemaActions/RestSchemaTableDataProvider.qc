@@ -307,10 +307,15 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
             getExplicitSearchOptions(search_options));
         if (exists split.id && table.get_action.val()) {
             # the caller named one record; reading the collection to find it would be wasteful and, on a
-            # collection the service lags behind its own writes, wrong
+            # collection the service lags behind its own writes, wrong.
+            #
+            # the predicate is still applied to what comes back, because naming a record is not the whole of
+            # what a caller may have asked: "id == 5 and state == open" names one record AND asks a question
+            # about it, and answering only the first half would return a record the search excluded.  The
+            # identity equality is in the residual too and simply matches
             *hash<auto> rec = readOne(split.id, search_options);
-            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(rec ? (rec,) : ()), NOTHING,
-                search_options, getRecordTypeImpl(search_options));
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(rec ? (rec,) : ()),
+                split.client, search_options, getRecordTypeImpl(search_options));
         }
         RestSchemaRecordPageIterator pages = new RestSchemaRecordPageIterator(getLister(table.list_action),
             table, getScope(search_options, "search") + extra + split.options);
@@ -331,8 +336,8 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
 
     #! Updates the records matching the search criteria and returns how many were updated
     private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
-        list<auto> ids = getTargetIds(where_cond, search_options, "update");
-        foreach auto id in (ids) {
+        list<hash<auto>> ids = getTargetIds(where_cond, search_options, "update");
+        foreach hash<auto> id in (ids) {
             updateOne(id, set, search_options);
         }
         return ids.size();
@@ -340,7 +345,7 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
 
     #! Updates the one record matching the search criteria
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
-        list<auto> ids = getTargetIds(where_cond, search_options, "update");
+        list<hash<auto>> ids = getTargetIds(where_cond, search_options, "update");
         if (ids.size() > 1) {
             throw "UPDATE-SINGLE-RECORD-ERROR", sprintf("%d records in table %y match the search criteria; "
                 "no record has been updated", ids.size(), table.name);
@@ -358,10 +363,9 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
             throw "REST-SCHEMA-RECORD-ERROR", sprintf("table %y cannot delete records; the application "
                 "exports no delete action for it", table.name);
         }
-        list<auto> ids = getTargetIds(where_cond, search_options, "delete");
-        foreach auto id in (ids) {
-            getLister(table.delete_action).doRequest(getScope(search_options, "delete")
-                + {getIdOption(): id});
+        list<hash<auto>> ids = getTargetIds(where_cond, search_options, "delete");
+        foreach hash<auto> id in (ids) {
+            getLister(table.delete_action).doRequest(getScope(search_options, "delete") + id);
         }
         return ids.size();
     }
@@ -380,7 +384,7 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
         @throw REST-SCHEMA-RECORD-ERROR the predicate is empty, so the write would apply to the whole table
         @throw MAX-RECORDS-EXCEEDED more records match than \c max_records allows
     */
-    private list<auto> getTargetIds(*hash<auto> where_cond, *hash<auto> search_options, string what) {
+    private list<hash<auto>> getTargetIds(*hash<auto> where_cond, *hash<auto> search_options, string what) {
         if (!where_cond) {
             throw "REST-SCHEMA-RECORD-ERROR", sprintf("a %s on table %y needs search criteria; without them "
                 "it would apply to every record in the table", what, table.name);
@@ -389,24 +393,23 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
         if (exists split.id) {
             return (split.id,);
         }
-        list<auto> rv = ();
+        list<hash<auto>> rv = ();
         # collected in full before the first write: a paged collection modified while it is read returns a
         # different set of pages, and records would be skipped or repeated
         AbstractDataProviderRecordIterator<hash<auto>> i = searchRecordsImpl(where_cond,
             (search_options ?? {}) - ("columns", "limit", "offset"));
         while (i.next()) {
-            auto id = i.getValue(){table.id_field};
-            if (!exists id) {
-                throw "REST-SCHEMA-RECORD-ERROR", sprintf("a record matched by the %s on table %y carries no "
-                    "%y, so it cannot be addressed", what, table.name, table.id_field);
-            }
-            rv += id;
+            rv += getRecordId(i.getValue(), what);
         }
         return rv;
     }
 
     #! Updates one record by its identity
-    private updateOne(auto id, hash<auto> set, *hash<auto> search_options) {
+    /** @param id the options addressing the record
+        @param set the values to change
+        @param search_options the search options, which carry the collection's scope
+    */
+    private updateOne(hash<auto> id, hash<auto> set, *hash<auto> search_options) {
         if (!table.update_action.val()) {
             throw "REST-SCHEMA-RECORD-ERROR", sprintf("table %y cannot update records; the application "
                 "exports no update action for it", table.name);
@@ -416,17 +419,19 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
             # the document, not beside it: there is no path variable to put it in, and the write is the same
             # operation as a create with the identity present
             getLister(table.update_action).doRequest(getScope(search_options, "update")
-                + getWriteBody(table.update_action, set + {table.id_field: id}));
+                + getWriteBody(table.update_action, set + {table.id_field: id.firstValue()}));
             return;
         }
-        getLister(table.update_action).doRequest(getScope(search_options, "update")
-            + {getIdOption(): id} + getWriteBody(table.update_action, set));
+        getLister(table.update_action).doRequest(getScope(search_options, "update") + id
+            + getWriteBody(table.update_action, set));
     }
 
     #! Reads one record by its identity
-    private *hash<auto> readOne(auto id, *hash<auto> search_options) {
-        auto resp = getLister(table.get_action).doRequest(getScope(search_options, "search")
-            + {getIdOption(): id});
+    /** @param id the options addressing the record
+        @param search_options the search options, which carry the collection's scope
+    */
+    private *hash<auto> readOne(hash<auto> id, *hash<auto> search_options) {
+        auto resp = getLister(table.get_action).doRequest(getScope(search_options, "search") + id);
         auto rec = RestSchemaRecordPageIterator::followPath(resp, table.record_path);
         if (rec.typeCode() == NT_LIST) {
             rec = rec[0];
@@ -452,9 +457,39 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
         return table.to_record ? table.to_record(rec) : rec;
     }
 
-    #! Returns the option carrying a record's identity on the get, update and delete actions
-    private string getIdOption() {
-        return table.id_option ?? table.id_field;
+    #! Returns a record's identity as the options carrying it, keyed by option name
+    /** Normalises the two ways a table may declare an identity into the one the write path uses: a
+        single-valued identity is one entry, and a composite one is what
+        @ref RestSchemaRecordTableInfo::id_parts "id_parts" declares.
+
+        @param table the table declaration
+    */
+    static hash<string, string> getIdParts(hash<RestSchemaRecordTableInfo> table) {
+        if (exists table.id_parts) {
+            return table.id_parts;
+        }
+        return {(table.id_option ?? table.id_field): table.id_field};
+    }
+
+    #! Returns the identity of a record, as the options addressing it
+    /** @param rec the record, in the table's shape
+        @param what the operation name, for the error message
+
+        @throw REST-SCHEMA-RECORD-ERROR the record does not carry a part of its own identity
+    */
+    private hash<auto> getRecordId(hash<auto> rec, string what) {
+        # "auto!" because a composite identity is a mix of names and numbers, and a hash narrowed to the
+        # type of its first part would reject the rest
+        hash<auto!> rv = {};
+        foreach hash<auto> i in (RestSchemaTableDataProvider::getIdParts(table).pairIterator()) {
+            auto value = RestSchemaRecordPageIterator::followPath(rec, split(".", i.value));
+            if (!exists value) {
+                throw "REST-SCHEMA-RECORD-ERROR", sprintf("a record matched by the %s on table %y carries "
+                    "no %y, so it cannot be addressed", what, table.name, i.value);
+            }
+            rv{i.key} = value;
+        }
+        return rv;
     }
 
     #! Returns the options a write sends, from a record in the table's shape

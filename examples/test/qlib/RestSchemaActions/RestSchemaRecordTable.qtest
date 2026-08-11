@@ -127,7 +127,50 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                 "operation_id": "createNote",
                 "display_name": "Create Note", "short_desc": "create a note", "desc": "creates a note",
             },
+            <RestSchemaActionInfo>{
+                "action": "list-all-notes", "method": "GET", "path": "/all-notes",
+                "operation_id": "listAllNotes",
+                "display_name": "List All Notes", "short_desc": "list notes", "desc": "lists every note",
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-note", "method": "GET", "path": "/spaces/{space}/notes/{note_id}",
+                "operation_id": "getNote",
+                "display_name": "Get Note", "short_desc": "read a note", "desc": "reads a note",
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-note", "method": "PATCH", "path": "/spaces/{space}/notes/{note_id}",
+                "operation_id": "updateNote",
+                "display_name": "Update Note", "short_desc": "update a note", "desc": "updates a note",
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete-note", "method": "DELETE", "path": "/spaces/{space}/notes/{note_id}",
+                "operation_id": "deleteNote",
+                "display_name": "Delete Note", "short_desc": "delete a note", "desc": "deletes a note",
+            },
         );
+
+        #! A collection spanning scopes, whose records each carry their own
+        /** This is GitHub's repository shape: the listing returns notes from every space, so the space
+            cannot be a scope option - it varies from record to record - and a note is addressed by its
+            space **and** its ID, with the space nested inside the record.
+        */
+        const AllNotesTable = <RestSchemaRecordTableInfo>{
+            "name": "all-notes",
+            "display_name": "All Notes",
+            "short_desc": "the notes in every space",
+            "desc": "the notes in every space",
+            "list_action": "list-all-notes",
+            "get_action": "get-note",
+            "update_action": "update-note",
+            "delete_action": "delete-note",
+            "id_parts": {"space": "space.key", "note_id": "note_id"},
+            "paging": <RestSchemaRecordPagingInfo>{
+                "mode": RSRP_PAGE,
+                "page_option": "page",
+                "size_option": "per_page",
+                "max_size": 25,
+            },
+        };
 
         #! Page-numbered paging over the item collection
         const ItemPaging = <RestSchemaRecordPagingInfo>{
@@ -288,6 +331,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         addTestCase("paging stops where it should", \pagingTest());
         addTestCase("cursor paging", \cursorPagingTest());
         addTestCase("paging by the last record's ID", \afterIdPagingTest());
+        addTestCase("an identity of more than one value", \compositeIdentityTest());
         addTestCase("record type derivation", \recordTypeTest());
         addTestCase("reading one record by ID", \readOneTest());
         addTestCase("create", \createTest());
@@ -697,6 +741,93 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertRegex("search=i_99", rest.paths[1], "the cursor is the last record's identity");
         assertRegex("search=i_199", rest.paths[2]);
         assertEq("i_0", found[0].ref, "and the records are in the table's shape");
+    }
+
+    #! A record addressed by more than one value, one of them nested in the record
+    /** GitHub names a repository by its owner and its name, carries the owner as an object, and lists
+        repositories across owners so the owner cannot be a scope.  This fixture is that shape.
+    */
+    compositeIdentityTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider notes = table(AllNotesTable, \rest,
+            auto sub (string method, string path) {
+                if (path =~ m{/spaces/[^/]+/notes/}) {
+                    return {"note_id": "n_1", "title": "one", "space": {"key": "docs"}};
+                }
+                *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+                if (m[0].toInt() != 1) {
+                    return ();
+                }
+                return (
+                    {"note_id": "n_1", "title": "one", "space": {"key": "docs"}},
+                    {"note_id": "n_2", "title": "two", "space": {"key": "ops"}},
+                );
+            });
+
+        # the space is not a scope: the listing spans spaces and needs no option to do it
+        hash<DataProviderInfo> info = notes.getInfo();
+        assertNothing(info.search_options.space, "a per-record identity part is not a search option");
+        assertTrue(info.supports_update);
+        assertTrue(info.supports_delete);
+
+        list<hash<auto>> found = map $1, notes.searchRecords();
+        assertEq(2, found.size());
+        assertEq("docs", found[0].space.key);
+
+        # a predicate pinning every part names one record, and it is read rather than searched for
+        rest.reset();
+        found = map $1, notes.searchRecords(logic(DP_OP_AND, (
+            eq("space.key", "docs"), eq("note_id", "n_1"))));
+        assertEq(1, found.size());
+        assertEq(1, rest.paths.size(), "naming every part reads the record directly");
+        assertEq("/api/spaces/docs/notes/n_1", rest.paths[0], "both parts are in the path");
+
+        # pinning only one part is not naming a record: the collection is walked
+        rest.reset();
+        found = map $1, notes.searchRecords(eq("note_id", "n_1"));
+        assertEq(1, found.size());
+        assertEq("/api/all-notes", (rest.paths[0] =~ x/^([^?]*)/)[0],
+            "a partial identity is not a record name");
+
+        # a write addresses each matching record by every part, read back off the record itself - which is
+        # the whole point: the space differs from row to row
+        rest.reset();
+        assertEq(2, notes.updateRecords({"title": "renamed"}, <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_REGEX,
+            "args": (<DataProviderFieldReference>{"field": "note_id"}, "^n_"),
+        }));
+        assertEq(3, rest.paths.size(), "one listing and two updates");
+        assertEq("/api/spaces/docs/notes/n_1", rest.paths[1]);
+        assertEq("/api/spaces/ops/notes/n_2", rest.paths[2], "each record carries its own space");
+        assertEq({"title": "renamed"}, parse_json(rest.bodies[1]));
+
+        # naming a record and also asking a question about it is not naming a record on its own: answering
+        # only the first half would write to a record the caller did not match
+        rest.reset();
+        assertEq(0, notes.updateRecords({"title": "x"}, logic(DP_OP_AND, (
+            eq("space.key", "docs"), eq("note_id", "n_1"), eq("title", "no such title")))));
+        assertEq("/api/all-notes", (rest.paths[0] =~ x/^([^?]*)/)[0],
+            "the table was searched, not addressed");
+
+        # delete addresses the same way
+        rest.reset();
+        assertEq(1, notes.deleteRecords(logic(DP_OP_AND, (
+            eq("space.key", "docs"), eq("note_id", "n_1")))));
+        assertEq("DELETE", rest.methods[0]);
+        assertEq("/api/spaces/docs/notes/n_1", rest.paths[0]);
+
+        # a record missing a part of its own identity cannot be addressed, and says which part
+        rest.reset();
+        RestSchemaTableDataProvider broken = table(AllNotesTable, \rest,
+            auto sub (string method, string path) {
+                *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+                return m[0].toInt() == 1 ? ({"note_id": "n_9", "title": "no space"},) : ();
+            });
+        assertThrows("UPDATE-RECORDS-ERROR", "carries no \"space.key\"", \broken.updateRecords(),
+            ({"title": "x"}, <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_REGEX,
+                "args": (<DataProviderFieldReference>{"field": "note_id"}, "^n_"),
+            }));
     }
 
     recordTypeTest() {

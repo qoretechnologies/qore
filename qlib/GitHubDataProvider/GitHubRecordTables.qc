@@ -47,8 +47,13 @@ public namespace GitHubDataProvider {
 
     @section githubrecord_scope The Repository Is a Search and Create Option
 
-    A table is scoped to one repository, and \c owner and \c repo are therefore required search and create
-    options rather than connection settings - exactly as in the application this module replaces.
+    The \c issues, \c pulls and \c releases tables are each scoped to one repository, and \c owner and
+    \c repo are therefore required search and create options rather than connection settings - exactly as in
+    the application this module replaces.
+
+    \c repositories is the exception, because its records **are** the repositories: its listing spans every
+    owner the credential can see, so it has no scope at all and names each record by its owner and its name
+    instead.
 
     @section githubrecord_number The Identity Is the Number, Not the ID
 
@@ -73,11 +78,12 @@ public namespace GitHubDataProvider {
     do not describe the same set.  Its \c milestone argument takes a milestone number, while the column is the
     milestone's title.  Sending either would answer a search with records that do not match it.
 
-    @section githubrecord_nodelete There Is No Delete
+    @section githubrecord_nodelete Only a Repository Can Be Deleted
 
     GitHub's REST API cannot delete an issue or a pull request - both are closed rather than removed - and it
-    exports no delete for a release either.  So the tables support read, create and update, and the record
-    delete action is not registered: an action that could only fail is worse than no action.
+    exports no delete for a release either, so those three tables support read, create and update and say so.
+    A **repository** can be deleted, and permanently, so the record delete action is registered and refuses
+    the tables that cannot honour it rather than pretending.
 
     @section githubrecord_lag A New Record Is Not Immediately Listed
 
@@ -274,20 +280,66 @@ public class GitHubRecordTables {
             "to_wire": \GitHubRecordTables::toWire(),
         };
 
+        #! The repositories table
+        /** The one table in this application whose records are **not** scoped to a repository, because they
+            are the repositories: the listing spans every owner the credential can see.
+
+            @section githubrecord_repos_id Its Identity Has Two Parts
+
+            GitHub addresses a repository by its \c {owner} **and** its \c {repo}, both path variables, so a
+            record is addressed by two values rather than one - see
+            @ref RestSchemaActions::RestSchemaRecordTableInfo::id_parts "id_parts".  The record carries the
+            second as \c name and the first as \c "owner.login", because a repository's \c owner is a user
+            object rather than a string.
+
+            The owner cannot be a scope option here even though it is one on every other GitHub table: a
+            scope is the same for every record in a search, and this listing returns repositories belonging
+            to different owners in one response.
+
+            @section githubrecord_repos_nocreate There Is No Create
+
+            GitHub creates a repository under an organisation - \c "repos-create-in-org" - or under the
+            authenticated user, and the two are different operations with different scopes; neither is the
+            collection this table lists.  Creating one stays an action, and the table reads, updates and
+            deletes.
+
+            @section githubrecord_repos_nofilter Nothing Is Pushed Down
+
+            GitHub's repository listing takes \c visibility, \c affiliation and \c type, and **\c type may
+            not be combined with either of the others** - a request carrying both is rejected.  Wiring a
+            predicate to \c visibility would therefore turn a search into a 422 for any caller who had also
+            set \c type, so all three stay ordinary search options that a caller sets deliberately, and a
+            predicate is evaluated here.
+        */
+        const RepositoriesTable = <RestSchemaRecordTableInfo>{
+            "name": "repositories",
+            "display_name": "Repositories",
+            "short_desc": "the repositories the credential can see",
+            "desc": "The repositories the credential can see, as records; a repository is addressed by its "
+                "owner and its name",
+            "list_action": "repos-list-for-authenticated-user",
+            "get_action": "repos-get",
+            "update_action": "repos-update",
+            "delete_action": "repos-delete",
+            "id_parts": {"owner": "owner.login", "repo": "name"},
+            "paging": Paging,
+            "search_options": ("visibility", "affiliation", "type", "sort", "direction", "since", "before"),
+        };
+
         #! Every table, in presentation order
-        const Tables = (IssuesTable, PullsTable, ReleasesTable);
+        const Tables = (IssuesTable, PullsTable, ReleasesTable, RepositoriesTable);
 
         #! The IDs the record-based actions are registered under
-        /** These are the IDs the superseded TypeScript application registered, so a workflow that already
-            calls them keeps working.  GitHub cannot delete an issue, a pull request or a release, so no
-            delete action is registered.
+        /** The first three are the IDs the superseded TypeScript application registered, so a workflow
+            that already calls them keeps working; \c update and \c delete are new and take the
+            conventional names.
         */
         const RecordActionIds = <RestSchemaRecordActionIds>{
             "search_records": "search",
             "search_single_record": "search-single",
             "create_records": "create",
             "update_records": "update",
-            "delete_records": NOTHING,
+            "delete_records": "delete",
         };
     }
 
