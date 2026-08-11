@@ -71,10 +71,6 @@ module ConfluenceDataProvider {
                 "- **Content**: list labels and attachments
 
 "
-                "Actions are generated from Confluence's own OpenAPI 3 description of its v2 API, so the "
-                "fields an action offers and the shape it returns are the ones Atlassian documents.
-
-"
                 "**The site is the connection**: set `cloud_id` for the OAuth2 flow or `site` with an API "
                 "token, and the target URL is derived from whichever is set.
 

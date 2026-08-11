@@ -62,8 +62,6 @@ module BitbucketDataProvider {
                 "- **Deployments**: read what was deployed, where, and in what state\n"
                 "- **Workspaces**: read workspaces, their members and their projects\n"
                 "- **Search**: search code across a workspace's repositories\n\n"
-                "Actions are generated from Bitbucket's own OpenAPI 3 description, so the fields an "
-                "action offers and the shape it returns are the ones Bitbucket documents.\n\n"
                 "**Authentication** is a repository, project or workspace access token, an app password, "
                 "or the OAuth2 authorization code flow — the first two of which need no OAuth consumer "
                 "and so no workspace administrator.\n\n"

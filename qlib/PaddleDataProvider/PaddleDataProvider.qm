@@ -64,8 +64,6 @@ module PaddleDataProvider {
                 "- **Billing**: raise transactions, bill them, and read what was actually collected\n"
                 "- **Subscriptions**: read subscriptions and what they are billing for\n"
                 "- **Reporting**: request a report and download the CSV Paddle generates\n\n"
-                "Actions are generated from Paddle's own OpenAPI 3.1 description, so the fields an action "
-                "offers and the shape it returns are the ones Paddle documents.\n\n"
                 "Authentication is a Paddle API key, granted an explicit set of permissions in the Paddle "
                 "dashboard. **Sandbox and production are separate environments** with separate data and "
                 "separate keys.\n\n"

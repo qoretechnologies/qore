@@ -271,8 +271,8 @@ public class GitHubRestConnection inherits RestClient::RestConnection {
                     "default_value": GitHubRestClientBase::DefaultHeaders,
                     "desc": "Headers sent with every request.\n\n"
                         "`X-GitHub-Api-Version` pins the REST API version and should be left alone unless "
-                        "you mean to move to a different one; the vendored API description this "
-                        "application generates its actions from describes **that** version.",
+                        "you mean to move to a different one: this application's actions describe the "
+                        "fields and responses of **that** version.",
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{

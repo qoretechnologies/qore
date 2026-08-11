@@ -73,10 +73,6 @@ module XeroDataProvider {
                 "- **Payroll**: find and create employees in the organisation's regional payroll
 
 "
-                "Actions are generated from Xero's own OpenAPI 3 descriptions, so the fields an action "
-                "offers and the shape it returns are the ones Xero documents.
-
-"
                 "**The organisation is the connection**: a Xero credential can reach several organisations "
                 "and every call has to name one, so `tenant_id` belongs to the connection rather than to "
                 "each action.

@@ -74,10 +74,6 @@ module GitHubDataProvider {
                 "- **Actions**: list workflows and write encrypted secrets
 
 "
-                "Actions are generated from GitHub's own OpenAPI 3 description of its REST API, so the "
-                "fields an action offers and the shape it returns are the ones GitHub documents.
-
-"
                 "**Seven webhook events** report new issues, pull requests, reviews, commits, branches, "
                 "releases and commit comments; each registers a hook on one repository and **verifies the "
                 "signature** on every delivery.

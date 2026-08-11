@@ -409,11 +409,10 @@ public class StripeRestConnection inherits RestClient::RestConnection {
                         "request.\n\n"
                         "Stripe changes response shapes between versions, so requests are pinned to a "
                         "version explicitly rather than following the account's default. The default "
-                        "here is the version of the API schema that the **Stripe** application's "
-                        "actions are generated from.\n\n"
-                        "**Change this only together with a matching schema**: pointing the connection "
-                        "at a different version makes the declared response types disagree with what "
-                        "Stripe actually returns.",
+                        "here is the version the **Stripe** application's actions describe.\n\n"
+                        "**Changing this is not supported**: pointing the connection at a different "
+                        "version makes the declared response types disagree with what Stripe actually "
+                        "returns.",
                 },
             },
         };
