@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -84,7 +84,15 @@ void ThreadResourceList::purge(const QoreProgram* pgm, ExceptionSink* xsink) {
             trset.erase(j);
 
             atr->cleanup(xsink);
-            atr->deref();
+            // this reference can be the last one: a resource whose owning object was destroyed
+            // while this thread still held it outlives that object, and then only the purge can
+            // free it.  A resource that has to release something when it is freed - a datasource
+            // has to close its connection - can only do that with an ExceptionSink to report
+            // errors to, so the resource is dereferenced with the one this purge already has.  The
+            // parameterless deref() has nowhere to report anything, which is why
+            // ManagedDatasource::deref() asserts there that it is never the last reference: that
+            // holds for remove() below, where the caller owns a reference, and not here.
+            atr->deref(xsink);
         } else {
             ++i;
         }

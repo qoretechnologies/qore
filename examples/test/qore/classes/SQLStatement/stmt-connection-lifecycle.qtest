@@ -27,6 +27,8 @@ public class StmtConnectionLifecycleTest inherits QUnit::Test {
         addTestCase("bound statement then close", \boundStatementCloseTest());
         addTestCase("bound statement in another thread", \boundStatementThreadTest());
         addTestCase("destroyed datasource cleanup", \destroyedDatasourceCleanupTest());
+        addTestCase("datasource deleted while another thread holds it",
+            \crossThreadDeleteTest());
         addTestCase("open transaction still rolls back", \openTransactionCloseTest());
 
         set_return_value(main());
@@ -132,6 +134,56 @@ public class StmtConnectionLifecycleTest inherits QUnit::Test {
         # driver's rollback against the connection its datasource had already closed - which
         # crashed the process before the fix
         assertEq("dbitest", driver);
+    }
+
+    #! a datasource deleted while another thread holds its connection is freed by that thread
+    /** The destructor cannot close a connection another thread holds, so it reports that and leaves
+        the datasource alone - and with the object gone, the only reference left to it is the one in
+        the holding thread's resource list.  That thread's exit purge therefore owns the last
+        reference and has to close the connection and free the datasource, which is why the purge
+        dereferences with an ExceptionSink.  With the parameterless deref() it asserted "the
+        reference count cannot reach 0" in a debug build, and in a release build freed nothing and
+        left the connection open.
+    */
+    crossThreadDeleteTest() {
+        Datasource ds = getDs();
+        Counter held(1);
+        Counter release(1);
+        Counter done(1);
+        bool completed = False;
+        *hash<ExceptionInfo> deleted;
+
+        background sub () {
+            on_exit done.dec();
+            SQLStatement stmt(ds);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            # this thread now holds the connection with no transaction in progress
+            held.dec();
+            release.waitForZero();
+            completed = True;
+            # and it exits here, still holding it, with the object already deleted
+        }();
+        held.waitForZero();
+
+        # the delete runs in its own thread so that the datasource's local reference here cannot
+        # keep the object alive past it
+        background sub () {
+            on_exit release.dec();
+            try {
+                delete ds;
+            } catch (hash<ExceptionInfo> ex) {
+                deleted = ex;
+            }
+        }();
+        done.waitForZero();
+
+        assertEq("DATASOURCE-ERROR", deleted.err);
+        assertRegex("holding the transaction lock", deleted.desc);
+        assertTrue(completed, "the holding thread ran to completion");
+        # the object really is gone, so the datasource that the purge freed was unreachable from
+        # everywhere except that thread's resource list
+        assertFalse(exists ds, "the datasource object was deleted");
     }
 
     #! closing with a real transaction open must still roll it back and report it

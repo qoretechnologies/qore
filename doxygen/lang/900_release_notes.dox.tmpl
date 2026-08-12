@@ -2774,6 +2774,17 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       class, so objects that outlive the @ref Qore::Program "Program" that created them (such as objects held in
       class constants by binary modules) no longer refer to freed memory when destroyed
 
+    - fixed a crash cleaning up a thread that still held a @ref Qore::SQL::Datasource "Datasource" connection when
+      the @ref Qore::SQL::Datasource "Datasource" object itself was already destroyed (for example when another
+      thread deleted it while this one held the connection).  The datasource is registered as a thread resource
+      whenever a thread acquires its connection, and with the object gone that registration holds the last
+      reference to the datasource, so freeing it at thread exit is the last opportunity to close the connection.
+      Purging a thread's resources now frees them in a context that can report errors, so the connection is closed
+      and the datasource freed with any exception raised while closing reported normally; a debug build aborted on
+      an assertion here, and a release build leaked the datasource with its connection open.
+      Closing a datasource also removes the thread resource unconditionally now, instead of only when the
+      datasource is still open, so no close path can leave one behind
+
     - @ref reflectionintro "reflection" module
       - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy
         (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)

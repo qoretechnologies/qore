@@ -82,6 +82,10 @@ void ManagedDatasource::destructor(ExceptionSink* xsink) {
         // closeUnlocked will throw an exception if a transaction is in progress (and release the transaction lock if held)
         closeUnlocked(xsink);
     else
+        // the connection is held by another thread, so it cannot be closed here, and that thread's
+        // resource - which is registered in its thread resource list and not reachable from this one
+        // - is left holding the last reference to this datasource.  Its thread-exit purge closes the
+        // connection and frees the datasource; see ThreadResourceList::purge()
         xsink->raiseException("DATASOURCE-ERROR", "%s:%s@%s: TID %d deleted Datasource while TID %d is holding the " \
             "transaction lock", getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), q_gettid(), tid);
 }
@@ -93,9 +97,10 @@ void ManagedDatasource::deref(ExceptionSink *xsink) {
     }
 }
 
-// this function is only called by remove_thread_resource()
-// during a call, meaning that the reference count cannot reach 0,
-// meaning that the close method will never be run here
+// this function is only called by ThreadResourceList::remove(), from remove_thread_resource(),
+// where the caller holds a reference of its own, meaning that the reference count cannot reach 0,
+// meaning that the close method will never be run here.  The thread-exit purge, which can hold the
+// last reference, uses deref(ExceptionSink*) instead so that the connection is still closed
 void ManagedDatasource::deref() {
 #ifdef DEBUG
    assert(!ROdereference());
@@ -430,15 +435,18 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
 
     //printd(5, "ManagedDatasource::closeUnlocked() this: %p priv: %p %s:%s@%s open: %d trans: %d\n", this, qore_ds_private::get(*this), getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), isOpen(), isInTransaction());
 
+    // the thread resource is registered whenever this thread acquires the connection, which a
+    // prepared statement does when it is bound, with or without a transaction in progress.  It
+    // tracks the connection this thread holds and not the state of the datasource, so it is removed
+    // on every close, including the close of a datasource that is already closed.  Two things go
+    // wrong when one is left registered: Datasource::close() below frees the driver's connection
+    // data, so the resource would run cleanup() - and the driver's rollback - against a closed
+    // connection; and the resource outlives the datasource object, which leaves the thread-exit
+    // purge holding the last reference to a datasource nobody can reach any more.
+    const bool held = !remove_thread_resource(this);
+
     if (isOpen()) {
         const bool in_transaction = isInTransaction();
-
-        // the thread resource is registered whenever this thread acquires the connection, which a
-        // prepared statement does when it is bound, with or without a transaction in progress.  It
-        // must be removed on every close: Datasource::close() below frees the driver's connection
-        // data, so a resource left registered would run cleanup() - and the driver's rollback -
-        // against a closed connection
-        const bool held = !remove_thread_resource(this);
 
         if (in_transaction) {
             if (!wasConnectionAborted()) {
@@ -457,6 +465,11 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
         }
 
         Datasource::close();
+    } else if (held) {
+        // the connection this thread was holding is already gone, so the lock has to go with it:
+        // leaving it held by a thread that may be about to exit would keep every other thread from
+        // reopening the datasource
+        forceReleaseLockIntern();
     }
 
     return rc;
