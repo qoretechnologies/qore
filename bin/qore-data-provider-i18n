@@ -210,22 +210,43 @@ class QoreDataProviderI18nCmd {
 
         int stale = 0;
         int translation_count = 0;
+        hash<string, list<hash<auto>>> domain_roots;
         foreach hash<auto> root in (roots) {
-            hash<auto> catalog = I18n::load_native_catalog(root.path);
-            I18n::MessageCatalog validated(catalog,
-                {"literal_messages": True});
-            if (sort(keys catalog.locales)
-                    != (DataProviderPresentation::RootLocale,)) {
-                ++stale;
-                stderr.printf("%s %s must contain only locale %y\n",
-                    color.error("STALE:"), root.path,
-                    DataProviderPresentation::RootLocale);
-                continue;
+            domain_roots{root.domain} += root;
+        }
+        foreach string domain in (sort(keys domain_roots)) {
+            hash<auto> root_messages;
+            foreach hash<auto> root in (domain_roots{domain}) {
+                hash<auto> catalog = I18n::load_native_catalog(root.path);
+                I18n::MessageCatalog validated(catalog,
+                    {"literal_messages": True});
+                if (sort(keys catalog.locales)
+                        != (DataProviderPresentation::RootLocale,)) {
+                    ++stale;
+                    stderr.printf("%s %s must contain only locale %y\n",
+                        color.error("STALE:"), root.path,
+                        DataProviderPresentation::RootLocale);
+                    continue;
+                }
+                foreach hash<auto> entry in (
+                        catalog.locales.root.messages.pairIterator()) {
+                    if (exists root_messages{entry.key}
+                            && root_messages{entry.key} != entry.value) {
+                        ++stale;
+                        stderr.printf("%s %s: conflicting owner fragment for message %y\n",
+                            color.error("STALE:"), root.path, entry.key);
+                        continue;
+                    }
+                    root_messages{entry.key} = entry.value;
+                }
+                if (verbose) {
+                    printf("verified %s\n", color.key(root.path));
+                }
             }
             hash<auto> result =
                 DataProviderPresentation::inspectTranslationCatalogs(
-                    root.domain, catalog.locales.root.messages,
-                    {"search_path": (root.search_root,)});
+                    domain, root_messages,
+                    {"search_path": (domain_roots{domain}[0].search_root,)});
             translation_count += result.translation_count;
             foreach hash<auto> issue in (result.issues) {
                 ++stale;
@@ -233,15 +254,12 @@ class QoreDataProviderI18nCmd {
                     issue.path, issue.message_id.val()
                         ? ": " + issue.message_id : "", issue.reason);
             }
-            if (verbose) {
-                printf("verified %s\n", color.key(root.path));
-            }
         }
         if (stale) {
             exit(2);
         }
         printf("verified %d catalog domain(s), %d translation(s)\n",
-            roots.size(), translation_count);
+            domain_roots.size(), translation_count);
     }
 
     private checkSourceTree(string output, list<string> extra_modules,
@@ -512,6 +530,21 @@ class QoreDataProviderI18nCmd {
                 sprintf("catalog tree %y is not a directory", path);
         }
         string name = basename(path);
+        if (name == DataProviderPresentation::RootLocale) {
+            string domain = basename(dirname(path));
+            if (domain.startsWith(
+                    DataProviderPresentation::CatalogDomainPrefix)) {
+                foreach string fragment in (glob(path + DirSep + "*.json")) {
+                    if (is_file(fragment)) {
+                        roots += {
+                            "domain": domain,
+                            "path": fragment,
+                            "search_root": dirname(dirname(path)),
+                        };
+                    }
+                }
+            }
+        }
         string nested_root = path + DirSep
             + DataProviderPresentation::RootLocale + ".json";
         if (name.startsWith(DataProviderPresentation::CatalogDomainPrefix)

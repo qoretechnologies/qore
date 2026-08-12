@@ -475,17 +475,27 @@ public class DataProviderPresentation {
                 continue;
             }
             foreach string search_root in (search_path) {
-                foreach string path in ((
-                        search_root + DirSep + domain + DirSep + locale
-                            + ".json",
-                        search_root + DirSep + domain + "." + locale
-                            + ".json")) {
+                list<string> paths = (
+                    search_root + DirSep + domain + DirSep + locale
+                        + ".json",
+                    search_root + DirSep + domain + "." + locale
+                        + ".json"
+                );
+                *list<string> fragments = glob(search_root + DirSep
+                    + domain + DirSep + locale + DirSep + "*.json");
+                if (fragments) {
+                    paths += sort(fragments);
+                }
+                foreach string path in (paths) {
                     if (!is_file(path)) {
                         continue;
                     }
                     # Parse once, then validate the in-memory native catalog.
                     # Provider prose is opaque: braces are literal rather
-                    # than format placeholders.
+                    # than format placeholders. Exact-locale enumeration is
+                    # intentional: native discovery also returns root and
+                    # parent-locale fallbacks, which are not translations for
+                    # the locale currently being inspected.
                     hash<auto> catalog = I18n::load_native_catalog(path);
                     I18n::MessageCatalog validated(catalog,
                         {"literal_messages": True});

@@ -619,6 +619,48 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 ("DataProvider",)),
             "source-tree verification accepts identical brands and cognates");
 
+        string fragment_output = make_tmp_dir(
+            "data-provider-i18n-fragment-check-");
+        on_exit remove_tree(fragment_output);
+        string fragment_domain = fragment_output + DirSep + domain;
+        mkdir(fragment_domain);
+        mkdir(fragment_domain + DirSep + "root");
+        writeJson(fragment_domain + DirSep + "root" + DirSep
+                + "OwnerOne.json", catalogs{domain});
+        writeJson(fragment_domain + DirSep + "root" + DirSep
+                + "OwnerTwo.json", catalogs{domain});
+        mkdir(fragment_domain + DirSep + "cs");
+        string fragment_translation = fragment_domain + DirSep + "cs"
+            + DirSep + "OwnerOne.json";
+        writeJson(fragment_translation, {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                id: {"source": source, "message": source},
+            }}},
+        });
+        assertEq(0, runCatalogTreeCheck(root, qore_bin, fragment_output),
+            "catalog-tree verification composes owner-qualified root and translation fragments");
+        writeJson(fragment_translation, {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                id: {"source": "outdated", "message": source},
+            }}},
+        });
+        assertEq(2, runCatalogTreeCheck(root, qore_bin, fragment_output),
+            "catalog-tree verification rejects stale owner-qualified translations");
+        writeJson(fragment_translation, {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                id: {"source": source, "message": source},
+            }}},
+        });
+        hash<auto> conflicting_root = catalogs{domain};
+        conflicting_root.locales.root.messages{id}.source = "conflicting";
+        writeJson(fragment_domain + DirSep + "root" + DirSep
+                + "OwnerTwo.json", conflicting_root);
+        assertEq(2, runCatalogTreeCheck(root, qore_bin, fragment_output),
+            "catalog-tree verification rejects conflicting root owner fragments");
+
         writeJson(output + DirSep + domain + DirSep + "cs.json", {
             "schema_version": I18n::get_catalog_schema_version(),
             "locales": {"cs": {"messages": {
