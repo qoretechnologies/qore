@@ -252,6 +252,19 @@ public const hash<string, string> ActionCodeFlagMap = {
 #! List of app action flags
 public const AppActionFlags = ActionCodeFlagMap.values();
 
+#! HTTP methods whose protocol semantics establish that an action is read-only
+/** Comparisons must use normalized protocol tokens.  Action names, descriptions, and translated presentation text
+    are never evidence of mutation behavior.  Methods not listed here fail closed as potentially mutating.
+
+    @since %DataProvider 3.7
+*/
+public const hash<string, bool> DataProviderReadOnlyHttpMethods = {
+    "GET": True,
+    "HEAD": True,
+    "OPTIONS": True,
+    "TRACE": True,
+};
+
 #! Maps DPAT_* action type codes to a data provider attribute string
 public const hash<string, string> ActionAttrMap = {
     DPAT_EVENT: "supports_observable",

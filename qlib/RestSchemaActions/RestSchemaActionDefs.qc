@@ -67,12 +67,7 @@ public const RestSchemaActionLocations = {
 
     @since %RestSchemaActions 1.0
 */
-public const RestSchemaReadOnlyHttpMethods = {
-    "GET": True,
-    "HEAD": True,
-    "OPTIONS": True,
-    "TRACE": True,
-};
+public const RestSchemaReadOnlyHttpMethods = DataProviderReadOnlyHttpMethods;
 
 #! Describes where one flattened action option belongs in the outgoing HTTP request
 /** This is the reverse map that makes flattening lossless; it is the contract tested by

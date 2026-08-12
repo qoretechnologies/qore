@@ -43,6 +43,7 @@ public class GmailDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("GmailDataProviderTest Test", "1.0", \ARGV, MyOpts) {
         addTestCase("gmail test", \gmailTest());
+        addTestCase("Google discovery request effects", \googleDiscoveryRequestEffectsTest());
         addTestCase("gmail watch poll interval from data context", \gmailWatchPollIntervalFromDataContextTest());
         addTestCase("gmail watch poll interval default", \gmailWatchPollIntervalDefaultTest());
         addTestCase("gmail message clearing actions", \gmailMessageClearingActionTest());
@@ -70,6 +71,21 @@ public class GmailDataProviderTest inherits QUnit::Test {
         }
 
         assertEq("gmail", gdp.getName());
+    }
+
+    googleDiscoveryRequestEffectsTest() {
+        RestClientIo rest({"url": "https://example.com"});
+        GoogleApiDataProvider read_provider(rest, "gmail", "users/messages/get", NOTHING);
+        hash<DataProviderInfo> read_info = read_provider.getInfo();
+        assertEq(NT_BOOLEAN, read_info.mutates_state.typeCode(),
+            "the Discovery GET contract publishes a typed request effect");
+        assertFalse(read_info.mutates_state, "the exact GET protocol method is read-only");
+
+        GoogleApiDataProvider delete_provider(rest, "gmail", "users/messages/delete", NOTHING);
+        hash<DataProviderInfo> delete_info = delete_provider.getInfo();
+        assertEq(NT_BOOLEAN, delete_info.mutates_state.typeCode(),
+            "the Discovery DELETE contract publishes a typed request effect");
+        assertTrue(delete_info.mutates_state, "the exact DELETE protocol method is consequential");
     }
 
     gmailWatchPollIntervalFromDataContextTest() {
