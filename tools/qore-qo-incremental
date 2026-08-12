@@ -71,9 +71,21 @@ batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
 batch_script="$single_script_dir/qcc-batch.sh"
 
 # The component this recipe actually builds, resolved once.
+#
+# `component_key` is the only durable name for it.  A component index is a
+# function of the graph -- the decomposition is numbered by lowest member node,
+# so one required edge appearing or disappearing renumbers every component above
+# it -- and the build's own depfiles contribute required edges.  An index
+# resolved in one process and used in the next can therefore name a different
+# component, which is how a compile ends up publishing against the wrong
+# generation or, worse, compiling against another component's preload.  The key
+# is a digest of the member output set, so it either names the same members or
+# does not resolve at all.
 component_index=
 component_key=
+component_selector=
 component_size=0
+component_lock=
 component_lock_hint=${QORE_QCC_COMPONENT_LOCK:-}
 planned_stale=${QORE_QCC_PLANNED_STALE:-0}
 
@@ -88,6 +100,28 @@ run_source_order() {
 
 have_source_order() {
     [ -x "$source_order_tool" ] && [ -f "$context_file" ]
+}
+
+#! Resolves the component that publishes OUTPUT from the current graph.
+resolve_component_from_graph() {
+    if ! have_source_order; then
+        return 1
+    fi
+    component_line=$(run_source_order --scc-for "$context_file" "$output") || return 1
+    component_index=$(printf '%s' "$component_line" | cut -f1)
+    component_key=$(printf '%s' "$component_line" | cut -f2)
+    component_size=$(printf '%s' "$component_line" | cut -f3)
+    case "$component_size" in
+        ''|*[!0-9]*)
+            echo "$0: cannot read component size for $output: $component_line" >&2
+            return 1
+            ;;
+    esac
+    if [ -z "$component_index" ] || [ -z "$component_key" ]; then
+        return 1
+    fi
+    component_selector=$component_key
+    return 0
 }
 
 #! Resolves the component that publishes OUTPUT.
@@ -108,22 +142,19 @@ resolve_component() {
         component_index=$QORE_QCC_COMPONENT_INDEX
         component_key=$QORE_QCC_COMPONENT_KEY
         component_size=$QORE_QCC_COMPONENT_SIZE
+        component_selector=$component_key
         return 0
     fi
-    if ! have_source_order; then
-        return 1
-    fi
-    component_line=$(run_source_order --scc-for "$context_file" "$output") || return 1
-    component_index=$(printf '%s' "$component_line" | cut -f1)
-    component_key=$(printf '%s' "$component_line" | cut -f2)
-    component_size=$(printf '%s' "$component_line" | cut -f3)
-    case "$component_size" in
-        ''|*[!0-9]*)
-            echo "$0: cannot read component size for $output: $component_line" >&2
-            return 1
-            ;;
-    esac
-    [ -n "$component_index" ] && [ -n "$component_key" ]
+    resolve_component_from_graph
+}
+
+#! Re-resolves component identity after the dependency graph transitioned.
+#  Everything the planner passed describes the superseded decomposition, so it
+#  is discarded rather than mixed with the identity read from the current graph.
+resolve_component_live() {
+    component_lock_hint=
+    component_lock=
+    resolve_component_from_graph
 }
 
 #! The identity of the component's member sources, before anything is compiled.
@@ -132,7 +163,7 @@ resolve_component() {
 #  Comparing full tokens across a compile would report "inputs moved" on every
 #  build that changes a depfile.
 component_source_token() {
-    run_source_order --scc-source-token "$context_file" "$component_index"
+    run_source_order --scc-source-token "$context_file" "$component_selector"
 }
 
 cleanup_stage_dir() {
@@ -217,8 +248,8 @@ select_preload_outputs() {
     if [ -n "$compile_plan_file" ]; then
         awk -F '\t' '$1 == "preload" { print substr($0, index($0, "\t") + 1) }' \
             "$compile_plan_file" > "$requested_file"
-    elif have_source_order && [ -n "$component_index" ]; then
-        if ! run_source_order --scc-preload "$context_file" "$component_index" \
+    elif have_source_order && [ -n "$component_selector" ]; then
+        if ! run_source_order --scc-preload "$context_file" "$component_selector" \
                 > "$requested_file"; then
             rm -f "$requested_file"
             return 1
@@ -341,14 +372,14 @@ compile_single_member() {
 }
 
 component_is_current() {
-    if ! have_source_order || [ -z "$component_index" ]; then
+    if ! have_source_order || [ -z "$component_selector" ]; then
         return 1
     fi
     if [ -n "$batch_bootstrap_stamp" ]; then
         run_source_order --scc-current --batch-stamp "$batch_bootstrap_stamp" \
-            "$context_file" "$component_index"
+            "$context_file" "$component_selector"
     else
-        run_source_order --scc-current "$context_file" "$component_index"
+        run_source_order --scc-current "$context_file" "$component_selector"
     fi
 }
 
@@ -358,10 +389,25 @@ prepare_component_compile_plan() {
     if [ -n "$batch_bootstrap_stamp" ]; then
         run_source_order --scc-compile-plan \
             --batch-stamp "$batch_bootstrap_stamp" \
-            "$context_file" "$component_index" > "$compile_plan_file"
+            "$context_file" "$component_selector" > "$compile_plan_file"
     else
         run_source_order --scc-compile-plan \
-            "$context_file" "$component_index" > "$compile_plan_file"
+            "$context_file" "$component_selector" > "$compile_plan_file"
+    fi
+}
+
+#! Commits the compiled component, refusing to publish against a moved input.
+#  \a 1 is the member-source token the compile was planned from and \a 2 the
+#  dependency-graph generation its preload was selected from; an empty graph
+#  generation means the caller had no plan to compare against, which is the
+#  context-less fallback rather than a permissive publish.
+publish_component() {
+    if [ -n "$2" ]; then
+        run_source_order --scc-publish --expect "$1" --expect-graph "$2" \
+            "$context_file" "$component_selector"
+    else
+        run_source_order --scc-publish --expect "$1" \
+            "$context_file" "$component_selector"
     fi
 }
 
@@ -410,6 +456,7 @@ with_component_lock() (
     selected_preload_file=
     manifest_input_file=
     compile_plan_file=
+    expected_graph=
 
     # Release only the generation this process acquired: a lock whose record no
     # longer names our token belongs to a successor, and removing it would
@@ -522,9 +569,20 @@ with_component_lock() (
     # transitive preload, and direct manifest inputs from one graph snapshot.
     # Starting the source-order helper separately for each answer makes a large
     # group rescan every member depfile several times for one tiny rebuild.
-    if have_source_order && [ -n "$component_index" ]; then
+    if have_source_order && [ -n "$component_selector" ]; then
         compile_plan_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-compile-plan.XXXXXX")
-        prepare_component_compile_plan "$compile_plan_file" || exit 1
+        # The plan fails with 76 when the component key no longer names a
+        # component, which is a graph transition rather than a bad argument, so
+        # its status is propagated instead of being flattened to a generic
+        # failure the caller cannot act on.
+        if prepare_component_compile_plan "$compile_plan_file"; then
+            plan_rc=0
+        else
+            plan_rc=$?
+        fi
+        if [ "$plan_rc" -ne 0 ]; then
+            exit "$plan_rc"
+        fi
         plan_current=$(awk -F '\t' '$1 == "current" { print $2; exit }' \
             "$compile_plan_file")
         case "$plan_current" in
@@ -539,6 +597,13 @@ with_component_lock() (
                     echo "$0: compile plan omitted the source token for $output" >&2
                     exit 1
                 fi
+                # The graph the preload below was selected from.  Publication
+                # refuses to commit against any other one, so an artifact
+                # compiled against a superseded preload cannot be published as
+                # if it had been planned against the graph that replaced it.
+                expected_graph=$(awk -F '\t' \
+                    '$1 == "graph-generation" { print $2; exit }' \
+                    "$compile_plan_file")
                 ;;
             *)
                 echo "$0: invalid compile plan for $output" >&2
@@ -574,11 +639,10 @@ with_component_lock() (
         exit "$compile_rc"
     fi
 
-    if ! have_source_order || [ -z "$component_index" ]; then
+    if ! have_source_order || [ -z "$component_selector" ]; then
         exit 0
     fi
-    if run_source_order --scc-publish --expect "$expected_sources" \
-            "$context_file" "$component_index" >&2; then
+    if publish_component "$expected_sources" "$expected_graph" >&2; then
         publish_rc=0
     else
         publish_rc=$?
@@ -618,12 +682,12 @@ build_prerequisites() {
     if [ "${QORE_QCC_PREREQUISITES_READY:-0}" = 1 ] \
             || [ "${QORE_QCC_PREREQUISITES_ORDERED:-0}" = 1 ] \
             || ! have_source_order \
-            || [ -z "$component_index" ]; then
+            || [ -z "$component_selector" ]; then
         return 0
     fi
 
     prerequisite_map=$(mktemp "${TMPDIR:-/tmp}/qore-qo-prerequisites.XXXXXX")
-    if ! run_source_order --scc-prerequisites "$context_file" "$component_index" \
+    if ! run_source_order --scc-prerequisites "$context_file" "$component_selector" \
             > "$prerequisite_map"; then
         rm -f "$prerequisite_map"
         return 1
@@ -632,9 +696,12 @@ build_prerequisites() {
     tab=$(printf '\t')
     rc=0
     while IFS="$tab" read -r prerequisite_index prerequisite_key; do
-        [ -n "$prerequisite_index" ] || continue
+        [ -n "$prerequisite_key" ] || continue
+        # The key, not the index: each member lookup is a separate process, and
+        # a prerequisite compiled by an earlier iteration rewrites its depfile,
+        # which can renumber every component the remaining iterations name.
         member_line=$(run_source_order --scc-members "$context_file" \
-            "$prerequisite_index" | head -1) || { rc=1; break; }
+            "$prerequisite_key" | head -1) || { rc=1; break; }
         prerequisite_source=$(printf '%s' "$member_line" | cut -f1)
         prerequisite_output=$(printf '%s' "$member_line" | cut -f2)
         [ -n "$prerequisite_source" ] || continue
@@ -653,47 +720,99 @@ build_prerequisites() {
     return "$rc"
 }
 
-#! Makes the component current, rebuilding the whole component at most once more.
-#  The single rebuild is not a convergence loop: it is the response to an input
-#  that an agent outside the build mutated while qcc was reading it, which no
-#  amount of analysis can order.  Sibling artifacts cannot cause it, because one
-#  lock covers every member of the component.
-build_component() {
-    if [ "$component_size" -gt 1 ]; then
-        build_group_batch
-        return $?
-    fi
-
+#! The lock covering every member of the component this recipe publishes.
+#  Resolving it is itself a graph query, so it can report a transition (76) just
+#  as the compile plan and the publication can; that status is propagated rather
+#  than flattened, because the caller's response to it is to re-resolve.
+resolve_component_lock() {
     component_lock="$output.lock"
     if [ -n "$component_lock_hint" ]; then
         component_lock=$component_lock_hint
-    elif have_source_order && [ -n "$component_index" ]; then
-        component_lock=$(run_source_order --scc-lock "$context_file" \
-            "$component_index") || return 1
+        return 0
     fi
-
-    if with_component_lock "$component_lock" "$@"; then
-        rc=0
+    if ! have_source_order || [ -z "$component_selector" ]; then
+        return 0
+    fi
+    if resolved_lock=$(run_source_order --scc-lock "$context_file" \
+            "$component_selector"); then
+        component_lock=$resolved_lock
+        return 0
     else
-        rc=$?
+        return $?
     fi
-    if [ "$rc" -ne 75 ]; then
-        return "$rc"
-    fi
+}
 
-    echo "$0: inputs of component $component_key moved during compilation;" \
-        "rebuilding the component once"
-    if with_component_lock "$component_lock" "$@"; then
-        rc=0
-    else
-        rc=$?
-    fi
-    if [ "$rc" -eq 75 ]; then
-        echo "$0: inputs of component $component_key moved during its rebuild;" \
-            "the sources are being changed by something other than this build" >&2
-        return 1
-    fi
-    return "$rc"
+#! Makes the component current, rebuilding the whole component at most once more.
+#  The single rebuild is not a convergence loop.  It answers one of exactly two
+#  conditions, which are deliberately reported apart because they have nothing in
+#  common but their timing:
+#
+#    75  an agent outside the build mutated a member source while qcc was
+#        reading it, which no amount of analysis can order;
+#    76  the build's own dependency graph moved between planning and
+#        publication, so the compile may have used a preload the current graph
+#        would not have chosen.  Identity is re-resolved from the current graph
+#        before the retry, because everything resolved from the superseded one
+#        -- key, size, lock -- may now name a different unit of work.
+#
+#  Neither is retried more than once: a second occurrence means the input is
+#  changing faster than the build can read it, and repeating the compile would
+#  only make correctness depend on winning a race.
+build_component() {
+    attempt=1
+    while :; do
+        if [ "$component_size" -gt 1 ]; then
+            build_group_batch
+            return $?
+        fi
+        if resolve_component_lock; then
+            rc=0
+        else
+            rc=$?
+        fi
+        if [ "$rc" -eq 0 ]; then
+            # `$?` after a completed `if` is the status of the compound command,
+            # which is 0 whenever an unmatched condition ran no branch -- so the
+            # build status has to be captured in an else branch, never read back
+            # after the `if` that tested it.
+            if with_component_lock "$component_lock" "$@"; then
+                rc=0
+            else
+                rc=$?
+            fi
+            if [ "$rc" -eq 0 ]; then
+                return 0
+            fi
+        fi
+        if [ "$rc" -ne 75 ] && [ "$rc" -ne 76 ]; then
+            return "$rc"
+        fi
+        if [ "$attempt" -ge 2 ]; then
+            if [ "$rc" -eq 75 ]; then
+                echo "$0: inputs of component $component_key moved during its" \
+                    "rebuild; the sources are being changed by something other" \
+                    "than this build" >&2
+            else
+                echo "$0: the dependency graph moved again while component" \
+                    "$component_key was rebuilt; the build's own depfiles are not" \
+                    "stable for the duration of a compile" >&2
+            fi
+            return 1
+        fi
+        if [ "$rc" -eq 75 ]; then
+            echo "$0: inputs of component $component_key moved during compilation;" \
+                "rebuilding the component once"
+        else
+            echo "$0: the dependency graph changed while component $component_key" \
+                "was compiled; re-resolving its identity and rebuilding it once"
+            # The loop head re-checks the member count and re-resolves the lock
+            # from whatever this reports, so a component that gained members in
+            # the transition is handed to the shared parse rather than compiled
+            # as a singleton it no longer is.
+            resolve_component_live || return 1
+        fi
+        attempt=$((attempt + 1))
+    done
 }
 
 run_main() {
@@ -704,7 +823,7 @@ run_main() {
     # prerequisite queries here reloads the same graph without adding a
     # correctness check; the locked compile plan below still handles a builder
     # that won the race and published this component first.
-    if [ "$planned_stale" = 1 ] && [ -n "$component_index" ]; then
+    if [ "$planned_stale" = 1 ] && [ -n "$component_selector" ]; then
         build_component "$@"
         exit $?
     fi

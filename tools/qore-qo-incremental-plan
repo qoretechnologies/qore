@@ -110,8 +110,13 @@ while [ "$phase" -le 2 ]; do
 
     echo "$0: compiling $stale_count stale component(s) incrementally"
     tab=$(printf '\t')
+    # Each row was resolved from the graph as it stood before this loop began,
+    # and every compile in the loop rewrites a depfile that contributes required
+    # edges.  The component key survives that -- it names a member set -- while
+    # the index does not, so the key is what the builder is given to address its
+    # component with.
     while IFS="$tab" read -r component_index component_key component_size source output; do
-        [ -n "$component_index" ] || continue
+        [ -n "$component_key" ] || continue
         component_lock=$(dirname "$output")/.qcc-scc/$component_key.lock
         if ! QORE_QCC_PLANNED_STALE=1 \
                 QORE_QCC_COMPONENT_INDEX="$component_index" \

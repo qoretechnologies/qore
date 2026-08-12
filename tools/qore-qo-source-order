@@ -1303,6 +1303,20 @@ class SourceOrderEngine {
         hash<string, string> contract_digests = {};
         *string loaded_graph_context;
         *hash<SourceOrderGraph> loaded_graph;
+        #! The depfile-derived required edges the loaded graph was built from.
+        /** The summary half of the graph is a function of source content, which
+            every token already covers.  The depfile half is not: the build
+            writes it, so it is the one part of the graph that can transition
+            while a component is being compiled.  Keeping it lets a publication
+            state which graph it was planned against.
+        */
+        *list<list<int>> depfile_contract_edges;
+        #! The name of that edge set, computed on first use.
+        /** Most commands -- currency probes above all, which a large group runs
+            once per object -- never need it, and naming the set costs a digest
+            over every edge.  Deriving it lazily keeps that off the hot path.
+        */
+        *string depfile_edge_generation;
     }
 
     private list<hash<string, bool>> emptyGraph(int count) {
@@ -1876,8 +1890,14 @@ class SourceOrderEngine {
         return values;
     }
 
-    private addDepfileContractEdges(list<string> outputs,
-            reference<hash<SourceOrderGraph>> graph) {
+    #! The required edges the group's current depfiles record, as node pairs.
+    /** Each pair is \c (provider, consumer): qcc records the compile contract of
+        every provider a source was actually compiled against, so a consumer's
+        depfile names its providers.  These edges are the part of the graph the
+        build writes, which is why they are collected separately from the
+        content-derived summary edges rather than folded straight into it.
+    */
+    private list<list<int>> collectDepfileContractEdges(list<string> outputs) {
         const string Suffix = ".compile-contract.stamp";
         hash<string, int> output_indexes = {};
         for (int index = 0; index < outputs.size(); ++index) {
@@ -1885,6 +1905,7 @@ class SourceOrderEngine {
             output_indexes{absoluteNormalized(outputs[index])} = index;
         }
         *hash<string, int> canonical_output_indexes;
+        list<list<int>> edges = ();
         for (int consumer = 0; consumer < outputs.size(); ++consumer) {
             string depfile = outputs[consumer] + ".d";
             if (!is_file(depfile)) {
@@ -1910,11 +1931,38 @@ class SourceOrderEngine {
                     continue;
                 }
                 if (provider != consumer) {
-                    addEdge(\graph.outgoing, \graph.incoming, \graph.required,
-                        provider, consumer, True);
+                    push edges, (provider, consumer);
                 }
             }
         }
+        return edges;
+    }
+
+    private applyContractEdges(list<list<int>> edges,
+            reference<hash<SourceOrderGraph>> graph) {
+        foreach list<int> edge in (edges) {
+            addEdge(\graph.outgoing, \graph.incoming, \graph.required,
+                edge[0], edge[1], True);
+        }
+    }
+
+    #! Names one depfile-derived edge set by content rather than by node numbering.
+    /** Like a component key, this has to survive a context whose source list was
+        reordered, so the edges are named by the output paths they connect and
+        not by the node indexes CMake happened to emit.
+    */
+    private string contractEdgeGeneration(list<list<int>> edges,
+            list<string> outputs) {
+        list<string> normalized = ();
+        foreach string output in (outputs) {
+            push normalized, absoluteNormalized(output);
+        }
+        list<string> lines = ();
+        foreach list<int> edge in (edges) {
+            push lines, normalized[edge[0]] + "\t" + normalized[edge[1]];
+        }
+        return "graph-" + digest("sha256",
+            join("\n", sort(lines)) + "\n").toHex().substr(0, 16);
     }
 
     private hash<SourceOrderGraph> loadOrBuildGraph(string context_path,
@@ -1938,7 +1986,9 @@ class SourceOrderEngine {
                 context_info.parse_defines, graph);
         }
         int depfile_started = clock_getmicros_monotonic();
-        addDepfileContractEdges(context_info.outputs, \graph);
+        depfile_contract_edges = collectDepfileContractEdges(context_info.outputs);
+        depfile_edge_generation = NOTHING;
+        applyContractEdges(depfile_contract_edges, \graph);
         if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
             stderr.printf("depfile contract edges=%d us\n",
                 clock_getmicros_monotonic() - depfile_started);
@@ -1946,6 +1996,20 @@ class SourceOrderEngine {
         loaded_graph_context = graph_context;
         loaded_graph = graph;
         return graph;
+    }
+
+    #! The identity of the depfile-derived edge set the loaded graph was built from.
+    /** Loading the graph is what produces the edge set, so the graph is loaded
+        first rather than making every caller remember to do so.
+    */
+    string graphGeneration(string context_path,
+            hash<SourceOrderContext> context_info) {
+        loadOrBuildGraph(context_path, context_info);
+        if (!exists depfile_edge_generation) {
+            depfile_edge_generation = contractEdgeGeneration(
+                depfile_contract_edges ?? (), context_info.outputs);
+        }
+        return depfile_edge_generation;
     }
 
     private bool requiredEdge(hash<SourceOrderGraph> graph, int provider,
@@ -2439,6 +2503,14 @@ class SourceOrderEngine {
         A component's member sources are the only part of its identity an agent
         outside the build can change while qcc is reading them, so they are the
         only part a "did this move under me" check may look at.
+
+        The component key is deliberately absent from the preimage. It is a
+        digest of the same member output paths the preimage already names, so it
+        adds no identity -- but it does make an internal graph transition that
+        changed component membership indistinguishable from an external source
+        edit, which is the one thing this token exists to tell apart. A caller
+        that addresses its component by key already holds membership fixed;
+        a caller whose key no longer resolves is told that specifically.
     */
     string componentSourceToken(hash<SourceOrderComponents> components,
             hash<SourceOrderContext> context_info, int component) {
@@ -2454,7 +2526,6 @@ class SourceOrderEngine {
         });
         return digest("sha256", make_json((
             "format": 1,
-            "scc": components.component_keys[component],
             "members": members,
         ))).toHex();
     }
@@ -2776,20 +2847,32 @@ class SourceOrderEngine {
         This compare-and-swap on one identity replaces the per-file before/after
         snapshot comparison that the retry loop used to drive.
 
+        \a expected_graph is the depfile-edge generation the caller planned
+        against. A mismatch is not an external edit: it means the build's own
+        dependency graph moved between planning and publication, so the compile
+        may have used a preload that the current graph would not have chosen.
+        That is reported as its own condition rather than as moved sources,
+        because the two have entirely different causes and remedies.
+
         The record itself stores the full generation token, recomputed here, so it
         names the graph the artifacts were actually published against.
 
-        \return \c "published", \c "moved" when \a expected no longer holds, or
+        \return \c "published", \c "moved" when \a expected no longer holds,
+        \c "graph-transition" when \a expected_graph no longer holds, or
         \c "incomplete: PATH" naming the first artifact the component did not
         leave behind.
     */
     string publishGeneration(hash<SourceOrderContext> context_info,
             string context_path, hash<SourceOrderComponents> components, int component,
-            *string expected) {
+            *string expected, *string expected_graph = NOTHING) {
         if (exists expected
                 && expected != componentSourceToken(components, context_info,
                     component)) {
             return "moved";
+        }
+        if (exists expected_graph
+                && expected_graph != graphGeneration(context_path, context_info)) {
+            return "graph-transition";
         }
         hash<auto> generation = componentGeneration(components, context_info, component);
         list<string> outputs = ();
@@ -2810,6 +2893,12 @@ class SourceOrderEngine {
                 "format": 1,
                 "scc": components.component_keys[component],
                 "generation": generation.token,
+                # Which dependency graph the artifacts were published against.
+                # Currency deliberately does not compare it: a depfile edge set
+                # that changed elsewhere in the group is not a reason to
+                # recompile this component. It is recorded so a completed build
+                # can be checked for having published one coherent graph.
+                "graph_generation": graphGeneration(context_path, context_info),
                 "members": sort(outputs),
                 "manifest": parse_json(generation.manifest),
             )) + "\n");
@@ -2887,13 +2976,22 @@ sub usage(*string error = NOTHING, bool success = False) {
         "           |--scc-record|--scc-lock|--scc-compile-plan]\n"
         "           [--batch-stamp STAMP] CONTEXT SCC\n"
         "       %s --scc-current [--batch-stamp STAMP] CONTEXT SCC\n"
-        "       %s --scc-publish [--expect TOKEN] CONTEXT SCC\n"
+        "       %s --scc-publish [--expect TOKEN] [--expect-graph GENERATION]\n"
+        "           CONTEXT SCC\n"
+        "       %s --scc-graph-generation CONTEXT\n"
         "\n"
         "SCC selects a strongly connected component of the required-edge graph by\n"
-        "its index or by its key. --scc-publish exits 75 when the member sources\n"
-        "moved away from the --expect source token, which means the compiled\n"
-        "artifacts are not publishable.\n",
-        name, name, name, name, name, name, name, name, name, name, name, name, name);
+        "its index or by its key. Only a key is stable across a build: component\n"
+        "indexes are a function of the graph, which the build's own depfiles\n"
+        "change.\n"
+        "\n"
+        "Exit 75 means the member sources moved away from the --expect source\n"
+        "token -- an agent outside the build edited them. Exit 76 means the\n"
+        "dependency graph moved away from --expect-graph, or that a component key\n"
+        "no longer names a component; the compiled artifacts are not publishable\n"
+        "in either case, but only 75 implicates anything outside the build.\n",
+        name, name, name, name, name, name, name, name, name, name, name, name, name,
+        name);
     if (success) {
         printf("%s", text);
     } else {
@@ -3064,6 +3162,7 @@ int sub main() {
     *string component_map_prefix;
     *string component_generation_map;
     *string expected_generation;
+    *string expected_graph_generation;
     *string direct_map_prefix;
     *string build_direct_map_prefix;
     *string source_symbol_manifest;
@@ -3089,7 +3188,7 @@ int sub main() {
                 || arg == "--scc-lock" || arg == "--scc-preload"
                 || arg == "--scc-current-all" || arg == "--scc-source-token"
                 || arg == "--scc-stale" || arg == "--scc-source-stale"
-                || arg == "--scc-compile-plan") {
+                || arg == "--scc-compile-plan" || arg == "--scc-graph-generation") {
             string requested = arg.substr(6);
             if (exists component_command && component_command != requested) {
                 usage(sprintf("--scc-%s conflicts with --scc-%s",
@@ -3118,17 +3217,22 @@ int sub main() {
             } else {
                 batch_bootstrap_stamp = ARGV[index];
             }
-        } else if (arg == "--expect" || arg == "--batch-stamp") {
+        } else if (arg == "--expect" || arg == "--expect-graph"
+                || arg == "--batch-stamp") {
             if (++index >= ARGV.size()) {
                 usage(sprintf("argument expected after %s", arg));
             }
             if (arg == "--expect") {
                 expected_generation = ARGV[index];
+            } else if (arg == "--expect-graph") {
+                expected_graph_generation = ARGV[index];
             } else {
                 batch_bootstrap_stamp = ARGV[index];
             }
         } else if (arg.startsWith("--expect=")) {
             expected_generation = arg.substr(9);
+        } else if (arg.startsWith("--expect-graph=")) {
+            expected_graph_generation = arg.substr(15);
         } else if (arg.startsWith("--batch-stamp=")) {
             batch_bootstrap_stamp = arg.substr(14);
         } else if (arg.startsWith("--scc-map-cmake=")) {
@@ -3229,7 +3333,8 @@ int sub main() {
         if (component_command == "map" || component_command == "publish-all"
                 || component_command == "generation-dir"
                 || component_command == "current-all" || component_command == "stale"
-                || component_command == "source-stale") {
+                || component_command == "source-stale"
+                || component_command == "graph-generation") {
             if (positional.size() != 1) {
                 usage(sprintf("--scc-%s accepts only a context argument",
                     component_command));
@@ -3241,6 +3346,9 @@ int sub main() {
                     return 0;
                 case "generation-dir":
                     printf("%s\n", engine.generationDir(context_info, context_path));
+                    return 0;
+                case "graph-generation":
+                    printf("%s\n", engine.graphGeneration(context_path, context_info));
                     return 0;
                 case "current-all":
                     # One invocation for the whole group: a per-output probe
@@ -3303,9 +3411,21 @@ int sub main() {
         } else {
             component = findComponent(components, positional[1]);
             if (component < 0) {
-                stderr.printf("%s: no such strongly connected component: %s\n",
-                    get_script_name(), positional[1]);
-                return 1;
+                # A key that no longer names a component is a graph transition,
+                # not a bad argument: the build's own depfiles changed the SCC
+                # decomposition since the caller resolved its identity. An index
+                # that does not resolve really is a bad argument, because an
+                # index is never a durable name for a component.
+                if (positional[1] =~ /^[0-9]+$/) {
+                    stderr.printf("%s: no such strongly connected component: %s\n",
+                        get_script_name(), positional[1]);
+                    return 1;
+                }
+                stderr.printf("%s: component %s is not present in the current "
+                    "dependency graph %s; the decomposition changed since it was "
+                    "resolved\n", get_script_name(), positional[1],
+                    engine.graphGeneration(context_path, context_info));
+                return 76;
             }
         }
         switch (component_command) {
@@ -3377,6 +3497,12 @@ int sub main() {
                 printf("current\t0\n");
                 printf("source-token\t%s\n",
                     engine.componentSourceToken(components, context_info, component));
+                # The graph this plan's preload and prerequisite closure were
+                # selected from. Publication refuses to commit against a
+                # different one, so the compile cannot be published as if it had
+                # been planned from the graph that superseded it.
+                printf("graph-generation\t%s\n",
+                    engine.graphGeneration(context_path, context_info));
                 foreach int prerequisite in (
                         engine.componentPrerequisites(components, component)) {
                     foreach int node in (components.members[prerequisite]) {
@@ -3394,14 +3520,24 @@ int sub main() {
                     component, batch_bootstrap_stamp) ? 0 : 1;
             case "publish": {
                 string result = engine.publishGeneration(context_info, context_path,
-                    components, component, expected_generation);
+                    components, component, expected_generation,
+                    expected_graph_generation);
                 if (result == "published") {
                     return 0;
                 }
+                if (result == "graph-transition") {
+                    stderr.printf("%s: cannot publish component %s: planned against "
+                        "dependency graph %s but the current graph is %s\n",
+                        get_script_name(), components.component_keys[component],
+                        expected_graph_generation,
+                        engine.graphGeneration(context_path, context_info));
+                    return 76;
+                }
                 stderr.printf("%s: cannot publish component %s: %s\n",
                     get_script_name(), components.component_keys[component], result);
-                # 75 is the build's established "inputs moved, this attempt is
-                # not publishable" signal; anything else is a real failure.
+                # 75 is the build's established "member sources moved, this
+                # attempt is not publishable" signal; 76 is its internal
+                # counterpart above; anything else is a real failure.
                 return result == "moved" ? 75 : 1;
             }
         }

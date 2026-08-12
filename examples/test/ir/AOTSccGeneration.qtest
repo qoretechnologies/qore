@@ -618,9 +618,16 @@ class AOTSccGenerationTest inherits QUnit::Test {
             "an out-of-range component index is diagnosed: "
                 + unknown_component.output);
 
+        # A key that does not resolve is not a malformed argument: a key names a
+        # member set, so its absence means the decomposition changed under the
+        # caller.  That is the build's own doing and has its own exit status, so
+        # a builder can re-resolve instead of blaming an external source edit.
         hash<auto> unknown_key = runOrder(context_path, ("--scc-generation", "scc-000000"));
-        assertEq(1, unknown_key.rc,
-            "an unknown component key fails: " + unknown_key.output);
+        assertEq(76, unknown_key.rc,
+            "an unknown component key is a graph transition: " + unknown_key.output);
+        assertTrue(unknown_key.output.find("decomposition changed") != -1,
+            "an unknown component key is diagnosed as a transition: "
+                + unknown_key.output);
 
         hash<auto> unknown_output = runOrder(context_path,
             ("--scc-for", tmp.path + "/qo/missing.qo"));

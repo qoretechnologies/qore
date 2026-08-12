@@ -1,0 +1,345 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Drives qore-qo-incremental against a fabricated object group whose compiler
+# changes the dependency graph while it runs.
+#
+# This is the failure the SCC scheduler exists to survive: a compile rewrites
+# its own depfile, qore-qo-source-order promotes depfile entries to required
+# edges, and the strongly connected components are renumbered underneath every
+# other builder.  A driver that carries a component index from one helper
+# process to the next then compiles one source against another component's
+# preload and publishes the result as if it were current.  These tests hold the
+# driver to the two properties that prevent it: it addresses its component by a
+# name that survives the transition, and it reports a transition as its own
+# doing rather than as an external source edit.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires json
+
+%exec-class AOTSccIncrementalDriverTest
+
+class AOTSccIncrementalDriverTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string tools_dir;
+        string source_order_tool;
+        string incremental_tool;
+
+        const MemberArtifactSuffixes = (
+            "", ".status.json", ".content.stamp", ".compile-contract.stamp",
+            ".aggregate-contract.stamp", ".stamp", ".source.manifest.json",
+            ".source-parse-defines",
+        );
+    }
+
+    constructor() : QUnit::Test("AOTSccIncrementalDriverTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        tools_dir = normalize_dir(get_script_dir() + "/../../../tools");
+        source_order_tool = tools_dir + DirSep + "qore-qo-source-order";
+        incremental_tool = tools_dir + DirSep + "qore-qo-incremental";
+
+        addTestCase("a stale component compiles and publishes exactly once",
+            \testPublishesOnceWithoutRetry());
+        addTestCase("a graph transition is survived without blaming the sources",
+            \testGraphTransitionIsSurvivedAndAttributed());
+        addTestCase("a compile is preloaded from its own component's predecessors",
+            \testPreloadFollowsTheComponentNotTheIndex());
+        addTestCase("an external source edit is still reported as one",
+            \testExternalSourceEditIsReported());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    private string read(string path) {
+        return is_file(path) ? ReadOnlyFile::readTextFile(path) : "";
+    }
+
+    private string isolatedSource(string name) {
+        return sprintf("%%new-style\nstring sub %sFunc() {\n    return \"%s\";\n}\n",
+            name, name);
+    }
+
+    #! Writes NAME's depfile so that it records a compile against \a providers.
+    private writeDepfile(string qo_dir, string name, softlist<string> providers) {
+        list<string> deps = (dirname(qo_dir) + "/src/" + name + ".qc",);
+        foreach string provider in (providers) {
+            push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
+        }
+        write(qo_dir + "/" + name + ".qo.d",
+            qo_dir + "/" + name + ".qo.stamp:"
+            + join("", (map " \\\n    " + $1, deps)) + "\n");
+    }
+
+    private writeArtifacts(string qo_dir, string name) {
+        foreach string suffix in (MemberArtifactSuffixes) {
+            write(qo_dir + "/" + name + ".qo" + suffix, name + suffix + "\n");
+        }
+        write(qo_dir + "/" + name + ".qo.idx.json",
+            make_json(("source_parse_defines": ())) + "\n");
+    }
+
+    #! A group of four independent sources whose only edges come from depfiles.
+    /** a and b are made mutually dependent, so they condense into one component
+        and the decomposition is {a,b}, {c}, {d}.  Dropping one of those two
+        depfile edges splits the pair and renumbers everything after it.
+    */
+    private hash<auto> fixture(string root, *softlist<string> compiled) {
+        string src_dir = root + "/src";
+        string qo_dir = root + "/qo";
+        mkdir(src_dir, 0777, True);
+        mkdir(qo_dir, 0777, True);
+        list<string> names = ("a", "b", "c", "d");
+        list<string> lines = ("format=1", "kind=qcc-object-group",
+            "group=scc-driver-test");
+        foreach string name in (names) {
+            write(src_dir + "/" + name + ".qc", isolatedSource(name));
+        }
+        foreach string name in (names) {
+            push lines, "input=" + src_dir + "/" + name + ".qc";
+        }
+        foreach string name in (names) {
+            push lines, "output=" + qo_dir + "/" + name + ".qo";
+        }
+        write(qo_dir + "/.qcc-context", join("\n", lines) + "\n");
+        foreach string name in (names) {
+            writeArtifacts(qo_dir, name);
+        }
+        writeDepfile(qo_dir, "a", "b");
+        writeDepfile(qo_dir, "b", "a");
+        writeDepfile(qo_dir, "c", "a");
+        writeDepfile(qo_dir, "d", ());
+        # A component only counts as published once it has a generation record,
+        # so the members that are meant to start out current get one.
+        foreach string name in (compiled ?? ()) {
+            hash<auto> component = componentFor(qo_dir, name);
+            runTool(("--scc-publish", qo_dir + "/.qcc-context", component.key));
+        }
+        return ("root": root, "src_dir": src_dir, "qo_dir": qo_dir,
+            "context": qo_dir + "/.qcc-context", "names": names);
+    }
+
+    #! Writes the stand-in for qcc-single.sh that the driver invokes.
+    /** \a mutation is a shell fragment run once, on the first compile only,
+        while the driver believes a compile is in progress.  That is the window
+        a real qcc occupies when it rewrites its own depfile.
+    */
+    private string writeCompiler(hash<auto> fx, *string mutation) {
+        string script = fx.qo_dir + "/qcc-single.sh";
+        string log = fx.qo_dir + "/compiles.log";
+        string once = fx.qo_dir + "/mutation.pending";
+        string body = "#!/bin/sh\nset -e\n"
+            + "src=$1\nout=$2\npreload_dir=$3\n"
+            + "printf '%s %s\\n' \"$(basename \"$src\")\" \"$(basename \"$out\")\" >> "
+            + sprintf("%y", log) + "\n"
+            + "( cd \"$preload_dir\" && ls ) > \"$out.preload.observed\" 2>/dev/null "
+            + "|| : > \"$out.preload.observed\"\n";
+        if (exists mutation) {
+            write(once, "pending\n");
+            body += "if [ -f " + sprintf("%y", once) + " ]; then\n"
+                + "    rm -f " + sprintf("%y", once) + "\n"
+                + mutation + "\nfi\n";
+        }
+        foreach string suffix in (MemberArtifactSuffixes) {
+            body += "printf 'compiled\\n' > \"$out" + suffix + "\"\n";
+        }
+        body += "printf '%s\\n' '{\"source_parse_defines\": []}' > \"$out.idx.json\"\n";
+        write(script, body);
+        chmod(script, 0755);
+        return script;
+    }
+
+    private hash<auto> runTool(softlist<string> args) {
+        list<string> command = (sprintf("%y", qore_bin), sprintf("%y", source_order_tool));
+        foreach string arg in (args) {
+            push command, sprintf("%y", arg);
+        }
+        string output = backquote("{ " + join(" ", command) + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        return ("output": output.substr(0, marker),
+            "rc": output.substr(marker + 3).toInt());
+    }
+
+    private hash<auto> componentFor(string qo_dir, string name) {
+        hash<auto> result = runTool(("--scc-for", qo_dir + "/.qcc-context",
+            qo_dir + "/" + name + ".qo"));
+        assertEq(0, result.rc, "--scc-for " + name + ": " + result.output);
+        list<string> fields = trim(result.output).split("\t");
+        return ("index": fields[0], "key": fields[1], "size": fields[2]);
+    }
+
+    private string graphGeneration(hash<auto> fx) {
+        hash<auto> result = runTool(("--scc-graph-generation", fx.context));
+        assertEq(0, result.rc, "--scc-graph-generation: " + result.output);
+        return trim(result.output);
+    }
+
+    #! Runs the driver the way qore-qo-incremental-plan runs it for a stale component.
+    private hash<auto> drive(hash<auto> fx, string name, hash<auto> component) {
+        string qo_dir = fx.qo_dir;
+        string command = sprintf(
+            "QORE_QCC_PLANNED_STALE=1 QORE_QCC_COMPONENT_INDEX=%y "
+            "QORE_QCC_COMPONENT_KEY=%y QORE_QCC_COMPONENT_SIZE=%y "
+            "QORE_QCC_COMPONENT_LOCK=%y QORE_QCC_PREREQUISITES_READY=1 "
+            "QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_SOURCE_ORDER_HELPER=%y %y %y %y %y",
+            component.index, component.key, component.size,
+            qo_dir + "/.qcc-scc/" + component.key + ".lock",
+            qore_bin, source_order_tool, incremental_tool,
+            qo_dir + "/" + name + ".qo", fx.src_dir + "/" + name + ".qc",
+            qo_dir + "/qcc-single.sh");
+        string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        return ("output": output.substr(0, marker),
+            "rc": output.substr(marker + 3).toInt());
+    }
+
+    private *hash<auto> record(hash<auto> fx, string key) {
+        string path = fx.qo_dir + "/.qcc-scc/" + key + ".generation.json";
+        return is_file(path) ? parse_json(read(path)) : NOTHING;
+    }
+
+    private list<string> compiles(hash<auto> fx) {
+        list<string> result = ();
+        foreach string line in (read(fx.qo_dir + "/compiles.log").split("\n")) {
+            if (line) {
+                push result, line;
+            }
+        }
+        return result;
+    }
+
+    testPublishesOnceWithoutRetry() {
+        TmpDir tmp("qore-aot-driver-once-");
+        hash<auto> fx = fixture(tmp.path);
+        writeCompiler(fx);
+
+        hash<auto> component = componentFor(fx.qo_dir, "d");
+        string generation = graphGeneration(fx);
+        hash<auto> result = drive(fx, "d", component);
+
+        assertEq(0, result.rc, "the driver succeeds: " + result.output);
+        assertEq(("d.qc d.qo",), compiles(fx),
+            "the component is compiled exactly once");
+        assertEq(-1, result.output.find("moved"),
+            "no source movement is reported: " + result.output);
+        assertEq(-1, result.output.find("rebuilding"),
+            "no rebuild is required: " + result.output);
+        *hash<auto> published = record(fx, component.key);
+        assertTrue(exists published, "the component's generation record is published");
+        assertEq(component.key, published.scc, "the record names the component");
+        assertEq(generation, published.graph_generation,
+            "the record names the graph the compile was planned against");
+    }
+
+    testGraphTransitionIsSurvivedAndAttributed() {
+        TmpDir tmp("qore-aot-driver-transition-");
+        hash<auto> fx = fixture(tmp.path, ("a", "c"));
+        string qo_dir = fx.qo_dir;
+
+        hash<auto> before = componentFor(qo_dir, "d");
+        hash<auto> neighbour = componentFor(qo_dir, "c");
+        assertNeq(before.key, neighbour.key, "d and c are distinct components");
+
+        # While d compiles, b stops depending on a.  The cycle splits, every
+        # component after it is renumbered, and d's old index comes to name c.
+        writeCompiler(fx, "printf '%s' " + sprintf("%y",
+            qo_dir + "/b.qo.stamp: " + fx.src_dir + "/b.qc\n") + " > "
+            + sprintf("%y", qo_dir + "/b.qo.d"));
+        string neighbour_generation = record(fx, neighbour.key).generation;
+
+        hash<auto> result = drive(fx, "d", before);
+        assertEq(0, result.rc, "the driver converges: " + result.output);
+
+        hash<auto> after = componentFor(qo_dir, "d");
+        assertEq(before.key, after.key, "d keeps its component key");
+        assertNeq(before.index, after.index,
+            "the transition really did renumber the components");
+        assertEq(before.index, componentFor(qo_dir, "c").index,
+            "d's old index now names c, which is what an index-addressed driver "
+                "would have published");
+
+        # The driver must have said what actually happened.
+        assertTrue(result.output.find("dependency graph changed") >= 0,
+            "the transition is reported as a graph change: " + result.output);
+        assertEq(-1, result.output.find("something other than this build"),
+            "nothing outside the build is blamed: " + result.output);
+        assertEq(("d.qc d.qo", "d.qc d.qo"), compiles(fx),
+            "only d is compiled, once per attempt, and c is never compiled");
+
+        # Publication landed on d, and c -- the component that inherited d's old
+        # index -- was not republished behind its own back.
+        *hash<auto> published = record(fx, after.key);
+        assertTrue(exists published, "d's generation record is published");
+        assertEq(graphGeneration(fx), published.graph_generation,
+            "d is published against the graph that superseded the plan");
+        assertEq(neighbour_generation, record(fx, neighbour.key).generation,
+            "c's published generation is untouched");
+    }
+
+    testPreloadFollowsTheComponentNotTheIndex() {
+        TmpDir tmp("qore-aot-driver-preload-");
+        hash<auto> fx = fixture(tmp.path, ("a",));
+        string qo_dir = fx.qo_dir;
+
+        # c requires a, which is in the a<->b component, so c must be compiled
+        # against both members of that component and nothing else.
+        hash<auto> component = componentFor(qo_dir, "c");
+        writeCompiler(fx);
+        assertEq(0, drive(fx, "c", component).rc, "c compiles");
+
+        list<string> preloaded = ();
+        foreach string line in (read(qo_dir + "/c.qo.preload.observed").split("\n")) {
+            if (line) {
+                push preloaded, line;
+            }
+        }
+        assertEq(("a.qo", "a.qo.compile-contract.stamp", "a.qo.idx.json",
+            "b.qo", "b.qo.compile-contract.stamp", "b.qo.idx.json"),
+            sort(preloaded),
+            "the preload holds every member of c's one predecessor component");
+    }
+
+    testExternalSourceEditIsReported() {
+        TmpDir tmp("qore-aot-driver-edit-");
+        hash<auto> fx = fixture(tmp.path);
+        string qo_dir = fx.qo_dir;
+
+        # An agent outside the build rewrites the member source while the
+        # compiler is reading it, every time.  No amount of rebuilding can order
+        # that, so the driver must stop and say so.
+        string compiler = writeCompiler(fx);
+        write(compiler, read(compiler)
+            + "printf '# edited %s\\n' \"$$\" >> " + sprintf("%y",
+                fx.src_dir + "/d.qc") + "\n");
+
+        hash<auto> component = componentFor(qo_dir, "d");
+        hash<auto> result = drive(fx, "d", component);
+
+        assertEq(1, result.rc, "the driver fails: " + result.output);
+        assertTrue(result.output.find("moved during compilation") >= 0,
+            "the first attempt reports moved sources: " + result.output);
+        assertTrue(result.output.find("something other than this build") >= 0,
+            "the second attempt names the external agent: " + result.output);
+        assertEq(-1, result.output.find("dependency graph"),
+            "the build does not blame its own graph: " + result.output);
+        assertEq(2, compiles(fx).size(),
+            "the component is rebuilt exactly once before the driver gives up");
+        assertFalse(exists record(fx, component.key),
+            "nothing is published from an unpublishable compile");
+    }
+}
