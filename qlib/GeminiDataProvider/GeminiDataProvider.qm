@@ -74,6 +74,7 @@ module GeminiDataProvider {
                 "or the `contents` field for multi-turn conversations and multimodal input. Supports system "
                 "instructions, generation configuration, and safety settings",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiGenerateContentDataProvider::RequestType.getFields(){"model",}, {
                     "required": True,
@@ -104,6 +105,7 @@ module GeminiDataProvider {
             "desc": "Chat with a Gemini model by sending a single message and receiving a single reply. "
                 "Simplifies the API by handling message formatting automatically",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiSimpleChatDataProvider::RequestType.getFields(){"model", "content"}, {
                     "required": True,
@@ -160,6 +162,7 @@ module GeminiDataProvider {
             "desc": "Generate an embedding vector for the given content using a Gemini embedding model. "
                 "Use the `text` field for simple text input, or `content` for multimodal input",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiEmbedContentDataProvider::RequestType.getFields(){"model",}, {
                     "required": True,
@@ -191,6 +194,7 @@ module GeminiDataProvider {
             "short_desc": "Generate embeddings for multiple content items in a single request",
             "desc": "Generate embeddings for multiple content items in a single batch request",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiBatchEmbedContentsDataProvider::RequestType.getFields(){"model", "requests"}, {
                     "required": True,
@@ -210,6 +214,7 @@ module GeminiDataProvider {
             "desc": "Count the number of tokens that a model would use to process the given content. "
                 "Use the `prompt` field for simple text, or `contents` for multi-turn input",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiCountTokensDataProvider::RequestType.getFields(){"model",}, {
                     "required": True,
@@ -235,6 +240,7 @@ module GeminiDataProvider {
             "short_desc": "Upload a file for use with the Gemini API",
             "desc": "Upload a file for use with the Gemini API for multimodal content generation",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiFileUploadDataProvider::RequestType.getFields(){"file",}, {
                     "required": True,
@@ -255,6 +261,7 @@ module GeminiDataProvider {
             "short_desc": "Delete a file stored on Google Gemini",
             "desc": "Delete a file stored on Google Gemini",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiFileDeleteDataProvider::RequestType.getFields()
             ),
@@ -273,6 +280,7 @@ module GeminiDataProvider {
                 "latency and cost. Use the `prompt` field for simple text, or `contents` for multi-turn "
                 "or multimodal content",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiCachedContentCreateDataProvider::RequestType.getFields(){"model",}, {
                     "required": True,
@@ -304,6 +312,7 @@ module GeminiDataProvider {
             "short_desc": "Delete cached content",
             "desc": "Delete cached content that is no longer needed",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiCachedContentDeleteDataProvider::RequestType.getFields()
             ),
@@ -320,6 +329,7 @@ module GeminiDataProvider {
             "short_desc": "Update the expiration of cached content",
             "desc": "Update the expiration time or TTL of existing cached content",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiCachedContentUpdateDataProvider::RequestType.getFields(), {
                     "preselected": True,
@@ -338,6 +348,7 @@ module GeminiDataProvider {
             "short_desc": "Create an empty file search store",
             "desc": "Create an empty file search store for organizing and searching files",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiFileSearchStoreCreateDataProvider::RequestType.getFields(), {
                     "preselected": True,
@@ -356,6 +367,7 @@ module GeminiDataProvider {
             "short_desc": "Delete a file search store",
             "desc": "Delete a file search store and its contents",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiFileSearchStoreDeleteDataProvider::RequestType.getFields()
             ),
@@ -373,6 +385,7 @@ module GeminiDataProvider {
             "desc": "Import an uploaded file into a file search store for retrieval-augmented generation. "
                 "Select the target store and the file to import from dropdowns",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GeminiFileSearchStoreImportFileDataProvider::RequestType.getFields()
             ),

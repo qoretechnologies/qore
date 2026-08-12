@@ -85,6 +85,7 @@ module BedrockDataProvider {
                 "Amazon Titan / Nova, DeepSeek). Supports text, image, and "
                 "document content blocks, tool use, and Bedrock Guardrails.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Chat",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BedrockConverseRequestDataType::Fields{"modelId", "messages"}, {
@@ -110,6 +111,7 @@ module BedrockDataProvider {
                 "auto-routes to the correct request body shape based on the "
                 "model ID prefix.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BedrockEmbedRequestDataType::Fields{"modelId",}, {

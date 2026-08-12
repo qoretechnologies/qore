@@ -194,6 +194,14 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
         assertEq("/chat-completion", chat.path);
         assertTrue(chat.options.deployment.required);
         assertTrue(chat.options.messages.required);
+        foreach string action_name in (("chat-completion", "embedding")) {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+                AzureOpenAiDataProvider::AppName, action_name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(),
+                action_name + " publishes a typed mutation effect");
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action),
+                action_name + " is pure inference by its producer contract");
+        }
     }
 
     private chatCompletionTest() {

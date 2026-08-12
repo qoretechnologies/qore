@@ -291,6 +291,9 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             assertEq(cast<int>(DPAT_API), cast<int>(a.action_code));
             assertEq("/" + AbstractDataProvider::GenericApiCallChildName, a.path);
             assertEq("Make an API call", a.display_name);
+            assertEq(NT_BOOLEAN, a.mutates_state.typeCode());
+            assertTrue(DataProviderActionCatalog::actionMutatesState(a),
+                "the arbitrary-method action fails closed as mutating");
 
             # the action exposes the call-level options only, not connection-level clutter
             hash<string, bool> opts = map {$1: True}, keys a.options;

@@ -91,6 +91,8 @@ module DbDataProvider {
             "short_desc": "Execute an SQL statement",
             "desc": "Execute an SQL statement",
             "action_code": DPAT_API,
+            # The submitted SQL is opaque and can contain DDL or DML, so this action must fail closed.
+            "mutates_state": True,
             "data_dependent_options": True,
             "data_provider_info": DbDataProvider::ProviderInfo,
         });

@@ -214,6 +214,13 @@ public class VertexAiDataProviderTest inherits QUnit::Test {
         assertEq("/generate-content", gc.path);
         assertTrue(gc.options.model.required);
         assertTrue(gc.options.contents.required);
+        assertEq(NT_BOOLEAN, gc.mutates_state.typeCode());
+        assertFalse(DataProviderActionCatalog::actionMutatesState(gc));
+
+        hash<DataProviderActionInfo> embed = DataProviderActionCatalog::getAppActionEx(
+            VertexAiDataProvider::AppName, "embed");
+        assertEq(NT_BOOLEAN, embed.mutates_state.typeCode());
+        assertFalse(DataProviderActionCatalog::actionMutatesState(embed));
     }
 
     private chatTest() {

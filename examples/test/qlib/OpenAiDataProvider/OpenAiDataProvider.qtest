@@ -213,6 +213,30 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq(DPAT_EVENT, action.action_code);
         assertEq(OpenAiDataProvider::EVENT_OPENAI_RESPONSE_STREAM, action.action_val);
         assertEq(OpenAiResponseStreamEventDataType, action.output_type);
+
+        # Safety-sensitive consumers must never need action names or English descriptions to determine effects.
+        foreach hash<DataProviderActionInfo> api_action in (
+                DataProviderActionCatalog::getActionsEx(OpenAiDataProvider::AppName)) {
+            if (api_action.action_code == DPAT_API) {
+                assertEq(NT_BOOLEAN, api_action.mutates_state.typeCode(),
+                    api_action.action + " publishes a typed mutation effect");
+            }
+        }
+        foreach string read_only_action in (("multi-chat", "simple-chat", "get-conversation",
+                "list-conversation-items", "get-conversation-item", "list-response-input-items",
+                "create-image")) {
+            assertFalse(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(OpenAiDataProvider::AppName, read_only_action)),
+                read_only_action + " is read-only by its producer contract");
+        }
+        foreach string mutating_action in (("upload-file", "delete-file", "create-assistant",
+                "update-assistant", "delete-assistant", "create-thread", "update-thread", "delete-thread",
+                "create-response", "create-conversation", "update-conversation", "delete-conversation",
+                "create-conversation-items", "delete-conversation-item", "cancel-response")) {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(OpenAiDataProvider::AppName, mutating_action)),
+                mutating_action + " is mutating by its producer contract");
+        }
     }
 
     test() {

@@ -263,6 +263,14 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     #! Does the data provider support the request API?
     bool supports_request = False;
 
+    #! Whether the request API can change provider or external state
+    /** Producers must derive this value from implementation or protocol semantics.  Names, descriptions, and
+        translated presentation text are not valid evidence.  An unset value must be treated conservatively.
+
+        @since %DataProvider 3.7
+    */
+    *bool mutates_state;
+
     #! Does the data provider support children?
     bool supports_children = False;
 
@@ -985,6 +993,14 @@ public hashdecl DataProviderInfo {
     /** @note this is a static attribute; it is the same for all data providers of the same type
     */
     bool supports_request = False;
+
+    #! Whether the request API can change provider or external state
+    /** Producers must derive this value from implementation or protocol semantics.  Names, descriptions, and
+        translated presentation text are not valid evidence.  An unset value must be treated conservatively.
+
+        @since %DataProvider 3.7
+    */
+    *bool mutates_state;
 
     #! Does the data provider support children?
     /** @note this is a static attribute; it is the same for all data providers of the same type

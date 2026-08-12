@@ -3,6 +3,7 @@
 
 %modern
 %exec-class GeminiDataProviderTest
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires GeminiDataProvider
 %requires GeminiRestClient
@@ -63,6 +64,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("GeminiDataProviderTest", "1.0") {
         addTestCase("provider structure", \providerStructureTest());
+        addTestCase("action effects", \actionEffectsTest());
         addTestCase("data types", \dataTypesTest());
         addTestCase("generate content", \generateContentTest());
         addTestCase("simple chat", \simpleChatTest());
@@ -104,6 +106,29 @@ class GeminiDataProviderTest inherits QUnit::Test {
         assertEq(True, (children.contains("delete-file-search-store")));
         assertEq(True, (children.contains("import-file-to-store")));
         assertEq(True, (children.contains("update-cached-content")));
+    }
+
+    actionEffectsTest() {
+        foreach hash<DataProviderActionInfo> action in (
+                DataProviderActionCatalog::getActionsEx(GeminiDataProvider::AppName)) {
+            if (action.action_code == DPAT_API) {
+                assertEq(NT_BOOLEAN, action.mutates_state.typeCode(),
+                    action.action + " publishes a typed mutation effect");
+            }
+        }
+        foreach string action_name in (("generate-content", "simple-chat", "embed-content", "batch-embed",
+                "count-tokens")) {
+            assertFalse(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(GeminiDataProvider::AppName, action_name)),
+                action_name + " is pure inference by its producer contract");
+        }
+        foreach string action_name in (("upload-file", "delete-file", "create-cached-content",
+                "delete-cached-content", "update-cached-content", "create-file-search-store",
+                "delete-file-search-store", "import-file-to-store")) {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(GeminiDataProvider::AppName, action_name)),
+                action_name + " changes provider state by its producer contract");
+        }
     }
 
     dataTypesTest() {

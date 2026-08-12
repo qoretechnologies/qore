@@ -91,6 +91,7 @@ module VertexAiDataProvider {
                 "`generationConfig`, `tools`, `safetySettings`, "
                 "`cachedContent`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Chat",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 VertexAiGenerateContentRequestDataType::Fields{"model", "contents"}, {
@@ -115,6 +116,7 @@ module VertexAiDataProvider {
                 "a single request; supports the `outputDimensionality` "
                 "parameter on `text-embedding-005` for shorter vectors.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 VertexAiEmbedRequestDataType::Fields{"model", "instances"}, {

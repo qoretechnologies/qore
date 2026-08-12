@@ -71,6 +71,7 @@ module AnthropicDataProvider {
             "desc": "Send a structured message to an Anthropic Claude model and receive a complete response. "
                 "Supports text, images, structured output, and extended thinking.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Messages",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicMessageRequestDataType::Fields{"model", "messages", "max_tokens"}, {
@@ -124,6 +125,7 @@ module AnthropicDataProvider {
             "desc": "Count the number of input tokens that would be used by a message request without actually "
                 "creating the message. Useful for estimating costs and managing context windows.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Messages",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicCountTokensRequestDataType::Fields{"model", "messages"}, {
@@ -154,6 +156,7 @@ module AnthropicDataProvider {
             "desc": "Retrieve details for a specific Anthropic model including capabilities, context window size, "
                 "and max output tokens.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicModelIdRequestDataType::Fields{"model_id",}, {
@@ -174,6 +177,7 @@ module AnthropicDataProvider {
             "desc": "List all available Anthropic models including their capabilities, context window sizes, "
                 "and max output tokens.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicModelListRequestDataType::Fields{"limit",}, {
@@ -195,6 +199,7 @@ module AnthropicDataProvider {
             "desc": "Submit a batch of message requests for asynchronous processing at 50% reduced cost. "
                 "Batches are processed within 24 hours.",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Batches",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicCreateBatchRequestDataType::Fields{"requests",}, {
@@ -215,6 +220,7 @@ module AnthropicDataProvider {
             "desc": "Retrieve the status and metadata of a specific message batch. Use this to poll for "
                 "batch completion.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Batches",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicBatchIdRequestDataType::Fields{"batch_id",}, {
@@ -234,6 +240,7 @@ module AnthropicDataProvider {
             "short_desc": "List all message batches in the workspace",
             "desc": "List all message batches with pagination support.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Batches",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicBatchListRequestDataType::Fields{"limit",}, {
@@ -255,6 +262,7 @@ module AnthropicDataProvider {
             "desc": "Cancel a message batch. The batch enters a `canceling` state; already-processed requests "
                 "are not undone.",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Batches",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicBatchIdRequestDataType::Fields{"batch_id",}, {
@@ -275,6 +283,7 @@ module AnthropicDataProvider {
             "desc": "Upload a file that can be referenced in multiple API calls. Supports PDF, text, and "
                 "image files up to 500 MB. Requires the Files API beta.",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicUploadFileRequestDataType::Fields, {
@@ -295,6 +304,7 @@ module AnthropicDataProvider {
             "desc": "List all files that have been uploaded to the workspace with pagination support. "
                 "Requires the Files API beta.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicFileListRequestDataType::Fields{"limit",}, {
@@ -315,6 +325,7 @@ module AnthropicDataProvider {
             "short_desc": "Get metadata for a specific file (Beta)",
             "desc": "Retrieve metadata for a specific uploaded file. Requires the Files API beta.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicFileIdRequestDataType::Fields{"file_id",}, {
@@ -335,6 +346,7 @@ module AnthropicDataProvider {
             "desc": "Download the content of a previously uploaded file. Only available for files created by "
                 "skills or code execution where `downloadable` is `True`. Requires the Files API beta.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicFileIdRequestDataType::Fields{"file_id",}, {
@@ -354,6 +366,7 @@ module AnthropicDataProvider {
             "short_desc": "Delete a file from the workspace (Beta)",
             "desc": "Delete a file that was previously uploaded. Requires the Files API beta.",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicFileIdRequestDataType::Fields{"file_id",}, {
@@ -375,6 +388,7 @@ module AnthropicDataProvider {
                 "A SKILL.md file is auto-generated from the provided name, description, and "
                 "instructions. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Skills",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicSkillRequestDataType::Fields{"name", "display_title", "description"}, {
@@ -399,6 +413,7 @@ module AnthropicDataProvider {
             "desc": "List all available skills including custom and Anthropic-provided skills with pagination "
                 "and source filtering. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Skills",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicSkillListRequestDataType::Fields{"limit",}, {
@@ -423,6 +438,7 @@ module AnthropicDataProvider {
             "short_desc": "Get details for a specific skill (Beta)",
             "desc": "Retrieve details for a specific skill by ID. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Skills",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicSkillIdRequestDataType::Fields{"skill_id",}, {
@@ -442,6 +458,7 @@ module AnthropicDataProvider {
             "short_desc": "Delete a custom skill (Beta)",
             "desc": "Delete a custom skill by ID. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Skills",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicSkillIdRequestDataType::Fields{"skill_id",}, {
@@ -461,6 +478,7 @@ module AnthropicDataProvider {
             "short_desc": "Update an existing skill (Beta)",
             "desc": "Update an existing custom skill. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Skills",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicSkillIdRequestDataType::Fields{"skill_id",}, {

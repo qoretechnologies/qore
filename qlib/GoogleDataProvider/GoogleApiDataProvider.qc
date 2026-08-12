@@ -47,6 +47,9 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
 
         #! Data provider type name
         string type;
+
+        #! Normalized HTTP method from the Google Discovery contract
+        string http_method;
     }
 
     #! Creates the object
@@ -59,6 +62,7 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
         (category, name) = (resource_action =~ x/([^\/]+)\/([^\/]+)/);
         desc = sprintf("Google %s %s provider for `%s`", api, resource_action, rest.getSafeUrl());
         type = sprintf("Google%s%s%sDataProvider", cap(api), cap(category), cap(name));
+        http_method = getMethodForSchema(api, resource_action).upr();
     }
 
     #! Returns the data provider name
@@ -86,7 +90,7 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
         hash<auto> req_info = prepareRequestForSchema(req);
         try {
             hash<RestClient::RestResponseInfo> resp = rest.restDoRequest(
-                getMethodForSchema(api, resource_action), req_info.pathstr, req_info.body);
+                http_method, req_info.pathstr, req_info.body);
             return getResponseTypeImpl().acceptsValue(resp.body);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
@@ -179,6 +183,7 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
             "desc": desc,
             "type": type,
             "supports_request": True,
+            "mutates_state": !DataProviderReadOnlyHttpMethods{http_method},
         };
     }
 }

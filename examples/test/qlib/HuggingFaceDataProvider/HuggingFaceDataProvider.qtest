@@ -114,6 +114,7 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
     constructor() : Test("HuggingFaceDataProvider", "1.0", \ARGV, MyOpts) {
         # unit tests (always run)
         addTestCase("test provider tree", \testProviderTree());
+        addTestCase("test action effects", \testActionEffects());
         addTestCase("test list models", \testListModels());
         addTestCase("test list models pipeline_tag", \testListModelsPipelineTag());
         addTestCase("test get model", \testGetModel());
@@ -161,6 +162,28 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
     setUp() {
         fake_rest = new FakeHuggingFaceRestClientIo();
         provider = new HuggingFaceDataProvider::HuggingFaceDataProvider(fake_rest);
+    }
+
+    testActionEffects() {
+        foreach hash<DataProviderActionInfo> action in (
+                DataProviderActionCatalog::getActionsEx(HuggingFaceDataProvider::AppName)) {
+            if (action.action_code == DPAT_API) {
+                assertEq(NT_BOOLEAN, action.mutates_state.typeCode(),
+                    action.action + " publishes a typed mutation effect");
+            }
+        }
+        foreach string action_name in (("list-models", "get-model", "list-datasets", "get-dataset",
+                "list-spaces", "get-space", "chat-completions")) {
+            assertFalse(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(HuggingFaceDataProvider::AppName, action_name)),
+                action_name + " is read-only by its producer contract");
+        }
+        foreach string action_name in (("create-model", "update-model", "delete-model", "create-dataset",
+                "update-dataset", "delete-dataset", "create-space", "update-space", "delete-space")) {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(HuggingFaceDataProvider::AppName, action_name)),
+                action_name + " changes provider state by its producer contract");
+        }
     }
 
     private usageIntern() {

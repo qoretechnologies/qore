@@ -167,6 +167,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("nested reference data fields", \nestedReferenceDataTest());
         addTestCase("a value that follows another option", \valueFromTest());
         addTestCase("action registration", \actionRegistrationTest());
+        addTestCase("action mutation effects", \actionMutationEffectTest());
         addTestCase("provider execution", \providerExecutionTest());
         addTestCase("provider paths", \providerPathTest());
         addTestCase("a header the connection owns", \connectionHeaderTest());
@@ -828,6 +829,32 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
             "subtype": "widgets",
         });
         map assertEq("widgets", $1.subtype), with_common;
+    }
+
+    actionMutationEffectTest() {
+        # Safe-method classification is based only on exact, normalized HTTP protocol tokens.  Action IDs and
+        # translated presentation text are deliberately irrelevant.
+        assertEq({"GET": True, "HEAD": True, "OPTIONS": True, "TRACE": True},
+            RestSchemaReadOnlyHttpMethods);
+
+        RestSchemaActionSet aset = makeSet((
+            entry("importante-resumen", "get", "/status"),
+            entry("sendvič-nabídka", "POST", "/widgets"),
+        ));
+        list<hash<DataProviderActionInfo>> actions = aset.getActionInfoList("WidgetStore");
+        assertFalse(actions[0].mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(actions[0]));
+        assertTrue(actions[1].mutates_state);
+        assertTrue(DataProviderActionCatalog::actionMutatesState(actions[1]));
+
+        # Generic API actions without producer metadata fail closed, while exact record-read types remain
+        # available independent of their identifiers or prose.
+        hash<DataProviderActionInfo> unknown = actions[0];
+        unknown.action = "restorelser";
+        unknown.mutates_state = NOTHING;
+        assertTrue(DataProviderActionCatalog::actionMutatesState(unknown));
+        unknown.action_code = DPAT_FIND;
+        assertFalse(DataProviderActionCatalog::actionMutatesState(unknown));
     }
 
     providerExecutionTest() {
