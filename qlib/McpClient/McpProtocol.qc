@@ -57,6 +57,23 @@ public const MCP_MetaProgressToken = "progressToken";
 #! Identifier of the official MCP Tasks extension
 public const MCP_ExtensionTasks = "io.modelcontextprotocol/tasks";
 
+/** @defgroup mcp_task_support MCP Tool Task Support
+    A tool declares whether it can be executed as a task with
+    \c execution.taskSupport in its registration metadata.  A tool that declares nothing is
+    treated as @ref MCP_TaskSupportOptional: the client decides per request by sending the
+    \c task augmentation with \c tools/call.
+*/
+#/@{
+#! The tool cannot be executed as a task; a call requesting one is rejected
+public const MCP_TaskSupportForbidden = "forbidden";
+
+#! The client decides per request by sending the \c task call augmentation
+public const MCP_TaskSupportOptional = "optional";
+
+#! Every call runs as a task, whether or not the client asked for one
+public const MCP_TaskSupportRequired = "required";
+#/@}
+
 /** @defgroup mcp_apps MCP Apps Extension
     The MCP Apps extension (SEP-1865, spec revision \c 2026-01-26) lets a server ship an
     interactive HTML user interface alongside a tool.  A tool opts in by referencing a

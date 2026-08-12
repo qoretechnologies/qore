@@ -52,6 +52,11 @@ class TestHandler inherits McpServerHandler {
             {"execution": {"taskSupport": "required"}}, NOTHING);
         registerTool("boom", "task that fails", NOTHING, \boomTool(), NOTHING,
             {"execution": {"taskSupport": "required"}}, NOTHING);
+        registerTool("optional", "runs as a task when the client asks", NOTHING, \slowTool(),
+            NOTHING, {"execution": {"taskSupport": McpClient::MCP_TaskSupportOptional}},
+            NOTHING);
+        registerTool("notask", "cannot run as a task", NOTHING, \slowTool(), NOTHING,
+            {"execution": {"taskSupport": McpClient::MCP_TaskSupportForbidden}}, NOTHING);
 
         registerResource("file:///a.txt", "a", "resource a", "text/plain", \readA());
         registerResource("file:///b.txt", "b", "resource b", "text/plain", \readA());
@@ -216,6 +221,7 @@ public class McpModernProtocolTest inherits QUnit::Test {
         addTestCase("MRTR request state test", \mrtrRequestStateTest());
         addTestCase("subscriptions/listen test", \subscriptionsTest());
         addTestCase("tasks extension test", \tasksExtensionTest());
+        addTestCase("client-requested task test", \clientRequestedTaskTest());
         addTestCase("tasks input required test", \tasksInputRequiredTest());
         addTestCase("modern-only server test", \modernOnlyServerTest());
         addTestCase("MCP Apps capability test", \uiCapabilityTest());
@@ -809,6 +815,75 @@ public class McpModernProtocolTest inherits QUnit::Test {
         assertEq(400, unknown.status, "an unknown task ID is rejected");
         assertEq(JsonRpcHandler::JRE_InvalidParams, unknown.body.error.code,
             "an unknown task ID is an invalid-parameter error");
+    }
+
+    #! A client that sends the task augmentation asks for task execution itself
+    /** The server policy in shouldCreateTask() covers only tools that require a task; a tool
+        that merely permits one runs as a task when the client requests it.  A modern request
+        carries no session, so this must be served from the session-free task store. */
+    clientRequestedTaskTest() {
+        hash<auto> tasks_caps = {
+            McpClient::MCP_MetaClientCapabilities: {
+                "extensions": {McpClient::MCP_ExtensionTasks: {}},
+            },
+        };
+
+        # the server's own policy leaves an "optional" tool synchronous
+        hash<auto> sync = post("tools/call", {"name": "optional"}, {"meta": tasks_caps});
+        assertEq(McpClient::McpResultType::Complete, sync.body.result.resultType,
+            "an optional tool runs synchronously when the client does not ask for a task");
+
+        # the client asks for a task explicitly
+        hash<auto> created = post("tools/call",
+            {"name": "optional", "task": {"ttl": 60000}}, {"meta": tasks_caps});
+        assertEq(200, created.status, sprintf(
+            "a client-requested task must not fail: %y", created.body));
+        assertEq(McpClient::McpResultType::Task, created.body.result.resultType,
+            "an optional tool runs as a task when the client asks for one");
+        hash<auto> task = created.body.result.task;
+        assertTrue(task.taskId.val(), "the client-requested task carries a task ID");
+        assertEq(60000, task.ttlMs, "the requested ttl is honored");
+
+        # the handle's timestamps are valid ISO-8601 instants, not format-mask literals
+        foreach string field in (("createdAt", "lastUpdatedAt")) {
+            assertEq(NT_DATE, date(task{field}).typeCode(), sprintf(
+                "task %s is a valid ISO-8601 timestamp: %y", field, task{field}));
+            assertFalse(task{field} =~ /ss/, sprintf(
+                "task %s carries seconds, not a literal mask: %y", field, task{field}));
+        }
+
+        hash<auto> done = pollTask(task.taskId, tasks_caps);
+        assertEq("completed", done.status, "the client-requested task completes");
+        assertEq("slow done", done.result.content[0].text,
+            "the completed task carries what the call would have returned");
+
+        # an augmentation carrying no options is still a request for a task
+        hash<auto> bare = post("tools/call", {"name": "optional", "task": {}},
+            {"meta": tasks_caps});
+        assertEq(McpClient::McpResultType::Task, bare.body.result.resultType,
+            "an empty task augmentation still requests task execution");
+
+        # a tool with no execution metadata permits tasks
+        hash<auto> plain = post("tools/call", {"name": "zebra", "task": {}},
+            {"meta": tasks_caps});
+        assertEq(McpClient::McpResultType::Task, plain.body.result.resultType,
+            "a tool that declares no task support accepts a client-requested task");
+
+        # a tool that forbids tasks refuses rather than silently answering synchronously
+        hash<auto> refused = post("tools/call", {"name": "notask", "task": {}},
+            {"meta": tasks_caps});
+        assertEq(400, refused.status, "a forbidden task request is rejected");
+        assertEq(JsonRpcHandler::JRE_InvalidParams, refused.body.error.code,
+            "a forbidden task request is an invalid-parameter error");
+        assertTrue(refused.body.error.message =~ /notask/,
+            "the refusal names the tool");
+
+        # a client that did not declare the extension must not receive a task handle
+        hash<auto> undeclared = post("tools/call", {"name": "optional", "task": {}});
+        assertEq(400, undeclared.status,
+            "a task request without the declared extension is rejected");
+        assertEq(JsonRpcHandler::JRE_InvalidParams, undeclared.body.error.code,
+            "an undeclared task request is an invalid-parameter error");
     }
 
     tasksInputRequiredTest() {
