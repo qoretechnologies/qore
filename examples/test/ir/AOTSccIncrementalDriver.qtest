@@ -575,6 +575,11 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
 
         Nothing here waits on a timer.  The workers are started together and
         joined, so the check is deterministic rather than a sampled race.
+
+        Every worker is held to its own exit status and its own log, and both are
+        reported for every worker that fails: a concurrent failure that is only
+        visible as a missing generation record cannot be told apart from any of
+        the other ways one recipe can fail.
     */
     testConcurrentRecipesPublishOneGeneration() {
         TmpDir tmp("qore-aot-driver-parallel-");
@@ -604,32 +609,51 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         }
         list<string> workers = ();
         foreach string name in (fx.names) {
-            push workers, sprintf("{ %s; } > %y 2>&1 &",
+            # Every worker's status is written where the test can read it. `wait`
+            # with no operands reports success whatever its children did, so a
+            # status taken from it says nothing at all: a worker that fails -- or
+            # is killed -- has to be visible as itself, and named.
+            push workers, sprintf("{ %s; echo \"rc=$?\" > %y; } > %y 2>&1 &",
                 driveCommand(fx, name, components{name},
                     fx.context + ".graph-snapshot.json"),
+                fx.qo_dir + "/" + name + ".worker.rc",
                 fx.qo_dir + "/" + name + ".worker.log");
         }
-        string output = backquote(join("\n", workers) + "\nwait\necho \"rc=$?\"");
-        assertTrue(output.find("rc=0") >= 0,
-            "every concurrent worker exits successfully: " + output);
+        backquote(join("\n", workers) + "\nwait");
 
         assertEq(fx.names.size(), components.size(),
             "each source has its own component");
         assertEq(sort((map $1 + ".qc " + $1 + ".qo", fx.names)), sort(compiles(fx)),
             "every component is compiled exactly once");
 
+        # Failures are collected rather than asserted per worker, because the
+        # first one to fail is not necessarily the only one, and knowing whether
+        # one worker or all of them failed is most of the diagnosis.
+        list<string> failed = ();
+        list<string> unpublished = ();
         string generation = trim(frozen.output);
         foreach string name in (fx.names) {
             string log = read(fx.qo_dir + "/" + name + ".worker.log");
+            if (trim(read(fx.qo_dir + "/" + name + ".worker.rc")) != "rc=0") {
+                push failed, name;
+            }
             assertEq(-1, log.find("moved"), name + " reports no moved sources: " + log);
             assertEq(-1, log.find("rebuilding"), name + " needs no rebuild: " + log);
             assertEq(-1, log.find("dependency graph"),
                 name + " sees no graph transition: " + log);
             *hash<auto> committed = record(fx, components{name}.key);
-            assertTrue(exists committed, name + " is published");
+            if (!exists committed) {
+                push unpublished, name;
+                continue;
+            }
             assertEq(generation, committed.graph_generation,
                 name + " is published against the one frozen graph");
         }
+        assertEq((), failed,
+            "every concurrent worker exits successfully" + workerReport(fx, failed));
+        assertEq((), unpublished,
+            "every component publishes a generation record"
+                + workerReport(fx, unpublished));
 
         # The mutation has to have actually happened, or the run above proves
         # nothing: the live graph must now differ from the one every worker
@@ -638,6 +662,32 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(0, live.rc, "the live graph is readable");
         assertNeq(generation, trim(live.output),
             "a worker really did move the graph while the others were running");
+    }
+
+    #! Everything the named workers know about why they failed.
+    /** A driver that fails after its compile succeeded says why in its own log:
+        publication refuses with a diagnostic naming the condition, and a worker
+        that is killed outright leaves nothing but its exit status.  A run that
+        reports neither can only say that a generation record is missing, which
+        is the symptom shared by every one of those causes -- so the report
+        carries the status, the log, and which records the group did publish.
+    */
+    private string workerReport(hash<auto> fx, list<string> names) {
+        if (!names) {
+            return "";
+        }
+        string report = "";
+        foreach string name in (names) {
+            report += sprintf("\n--- %s (%s) ---\n%s", name,
+                trim(read(fx.qo_dir + "/" + name + ".worker.rc")),
+                read(fx.qo_dir + "/" + name + ".worker.log"));
+        }
+        # glob() answers NOTHING rather than an empty list when the directory does
+        # not exist, which is exactly the case a report is wanted for
+        list<string> records = map basename($1),
+            (glob(fx.qo_dir + "/.qcc-scc/*.generation.json") ?? ());
+        return report + sprintf("--- published records (%d) ---\n%s\n",
+            records.size(), join("\n", sort(records)));
     }
 
     #! The shell command for one scheduled recipe, without running it.
