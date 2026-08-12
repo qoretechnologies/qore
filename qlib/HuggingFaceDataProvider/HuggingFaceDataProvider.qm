@@ -70,6 +70,7 @@ module HuggingFaceDataProvider {
             "short_desc": "List Hugging Face models",
             "desc": "List models on Hugging Face Hub with optional search, filtering, and sorting",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceModelListRequestDataType::Fields{"search", "author", "pipeline_tag"}, {
@@ -90,6 +91,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Get details for a specific model",
             "desc": "Retrieve detailed information for a specific model by its repository ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceModelIdRequestDataType::Fields{"repo_id",}, {
@@ -108,6 +110,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Create a new model repository",
             "desc": "Create a new model repository on Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceRepoCreateRequestDataType::Fields{"name",}, {
@@ -130,6 +133,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Update model repository settings",
             "desc": "Update settings for an existing model repository on Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceModelUpdateRequestDataType::Fields{"repo_id",}, {
@@ -154,6 +158,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Delete a model repository",
             "desc": "Delete a model repository from Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceModelDeleteRequestDataType::Fields{"repo_id",}, {
@@ -174,6 +179,7 @@ module HuggingFaceDataProvider {
             "short_desc": "List Hugging Face datasets",
             "desc": "List datasets on Hugging Face Hub with optional search, filtering, and sorting",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceListRequestDataType::Fields{"search", "author"}, {
@@ -194,6 +200,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Get details for a specific dataset",
             "desc": "Retrieve detailed information for a specific dataset by its repository ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceDatasetIdRequestDataType::Fields{"repo_id",}, {
@@ -212,6 +219,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Create a new dataset repository",
             "desc": "Create a new dataset repository on Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceRepoCreateRequestDataType::Fields{"name",}, {
@@ -234,6 +242,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Update dataset repository settings",
             "desc": "Update settings for an existing dataset repository on Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceDatasetUpdateRequestDataType::Fields{"repo_id",}, {
@@ -258,6 +267,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Delete a dataset repository",
             "desc": "Delete a dataset repository from Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceDatasetDeleteRequestDataType::Fields{"repo_id",}, {
@@ -278,6 +288,7 @@ module HuggingFaceDataProvider {
             "short_desc": "List Hugging Face Spaces",
             "desc": "List Spaces on Hugging Face Hub with optional search, filtering, and sorting",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceListRequestDataType::Fields{"search", "author"}, {
@@ -298,6 +309,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Get details for a specific Space",
             "desc": "Retrieve detailed information for a specific Space by its repository ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceIdRequestDataType::Fields{"repo_id",}, {
@@ -316,6 +328,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Create a new Space",
             "desc": "Create a new Space on Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceCreateRequestDataType::Fields{"name", "space_sdk"}, {
@@ -340,6 +353,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Update Space settings",
             "desc": "Update settings for an existing Space on Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceUpdateRequestDataType::Fields{"repo_id",}, {
@@ -364,6 +378,7 @@ module HuggingFaceDataProvider {
             "short_desc": "Delete a Space",
             "desc": "Delete a Space from Hugging Face Hub",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceDeleteRequestDataType::Fields{"repo_id",}, {
@@ -385,6 +400,7 @@ module HuggingFaceDataProvider {
             "desc": "Send a chat completion request to a model hosted on Hugging Face via the "
                 "Inference API. Compatible with the OpenAI chat completions format.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Inference",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceChatCompletionsRequestDataType::Fields{"model", "messages"}, {

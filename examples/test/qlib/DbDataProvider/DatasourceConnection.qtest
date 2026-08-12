@@ -553,6 +553,10 @@ public class DatasourceConnectionTest inherits QUnit::Test {
             assertTrue(action_map{action_name}.data_dependent_options,
                 sprintf("action %y has data_dependent_options", action_name));
         }
+        assertEq(NT_BOOLEAN, action_map{"exec-sql"}.mutates_state.typeCode(),
+            "opaque SQL execution publishes a typed mutation effect");
+        assertTrue(DataProviderActionCatalog::actionMutatesState(action_map{"exec-sql"}),
+            "opaque SQL execution fails closed as mutating");
     }
 
     testMinimalUrl() {

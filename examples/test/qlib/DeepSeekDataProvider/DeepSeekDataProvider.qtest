@@ -122,6 +122,10 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         assertEq("chat-completion", actions[0].action);
         assertEq("/chat-completion", actions[0].path);
         assertEq(DPAT_API, actions[0].action_code);
+        assertEq(NT_BOOLEAN, actions[0].mutates_state.typeCode(),
+            "chat-completion publishes a typed mutation effect");
+        assertFalse(DataProviderActionCatalog::actionMutatesState(actions[0]),
+            "chat-completion is pure inference by its producer contract");
         # `messages` and `model` must be present and required
         assertTrue(exists actions[0].options.messages);
         assertTrue(actions[0].options.messages.required);

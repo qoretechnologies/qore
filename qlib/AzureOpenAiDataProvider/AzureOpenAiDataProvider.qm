@@ -86,6 +86,7 @@ module AzureOpenAiDataProvider {
                 "the body is otherwise identical to the public OpenAI "
                 "chat-completions API.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Chat",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AzureOpenAiChatCompletionRequestDataType::Fields{"deployment", "messages"}, {
@@ -110,6 +111,7 @@ module AzureOpenAiDataProvider {
                 "embedding; supports the `dimensions` knob on "
                 "`text-embedding-3-*` models for shorter (cheaper) vectors.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AzureOpenAiEmbeddingRequestDataType::Fields{"deployment", "input"}, {

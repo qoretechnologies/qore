@@ -169,6 +169,14 @@ public class BedrockDataProviderTest inherits QUnit::Test {
             DataProviderActionCatalog::getAppActionEx(BedrockDataProvider::AppName, "converse");
         assertEq(DPAT_API, conv.action_code);
         assertEq("/converse", conv.path);
+        foreach string action_name in (("converse", "embed")) {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+                BedrockDataProvider::AppName, action_name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(),
+                action_name + " publishes a typed mutation effect");
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action),
+                action_name + " is pure inference by its producer contract");
+        }
     }
 
     private converseTest() {

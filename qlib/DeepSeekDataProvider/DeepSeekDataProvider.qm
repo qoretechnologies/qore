@@ -82,6 +82,7 @@ module DeepSeekDataProvider {
                 "- Tool-calling agents (pass `tools` and `tool_choice` in the request)\n"
                 "- Structured extraction (pass `response_format` with a JSON schema)",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Chat",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 DeepSeekChatCompletionRequestDataType::Fields{"messages", "model",}, {

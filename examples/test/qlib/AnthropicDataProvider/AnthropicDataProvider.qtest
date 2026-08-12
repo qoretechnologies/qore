@@ -375,6 +375,27 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq("/skills/delete", action.path);
         assertEq(DPAT_API, action.action_code);
         assertEq(("Skills",), action.groups);
+
+        foreach hash<DataProviderActionInfo> api_action in (
+                DataProviderActionCatalog::getActionsEx(AnthropicDataProvider::AppName)) {
+            if (api_action.action_code == DPAT_API) {
+                assertEq(NT_BOOLEAN, api_action.mutates_state.typeCode(),
+                    api_action.action + " publishes a typed mutation effect");
+            }
+        }
+        foreach string action_name in (("create-message", "count-tokens", "get-model", "list-models",
+                "get-batch", "list-batches", "list-files", "get-file", "get-file-content", "list-skills",
+                "get-skill")) {
+            assertFalse(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(AnthropicDataProvider::AppName, action_name)),
+                action_name + " is read-only by its producer contract");
+        }
+        foreach string action_name in (("create-batch", "cancel-batch", "upload-file", "delete-file",
+                "create-skill", "delete-skill", "update-skill")) {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                    DataProviderActionCatalog::getAppActionEx(AnthropicDataProvider::AppName, action_name)),
+                action_name + " changes provider state by its producer contract");
+        }
     }
 
     childProvidersTest() {
