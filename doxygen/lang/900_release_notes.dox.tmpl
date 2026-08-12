@@ -1683,7 +1683,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - installing catalogs reconciles each catalog root against the fragments the installed sources own, so an
         application that moves from one owner module to another no longer leaves the previous owner's fragment
         behind for catalog composition to reject; removals are scoped to a per-project manifest, leaving fragments
-        installed into a shared catalog root by other products untouched
+        installed into a shared catalog root by other products untouched. Products that install their own catalogs
+        get the same guarantee by calling the new \c QORE_FINALIZE_CATALOG_INSTALL() CMake helper once, after all
+        \c QORE_INSTALL_USER_MODULE_CATALOGS() calls
       - message catalogs can treat non-plural entries as literal text, allowing producer descriptions with JSON
         examples and path templates to be localized without interpreting braces as placeholders
       - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a
