@@ -418,6 +418,7 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test generator union type schemas", \testGeneratorUnionTypeSchemas());
         addTestCase("Test getTypeForReference/replaceTypeForReference", \testTypeForReference());
         addTestCase("Test multiple object-valued query parameters", \testMultipleObjectQueryParams());
+        addTestCase("Test typed array query parameters", \testArrayQueryParamElementTypes());
         addTestCase("Test server URL scheme", \testServerUrlScheme());
         addTestCase("Test form-encoded request body encoding", \testFormUrlEncodedBody());
         addTestCase("Test response header references", \testResponseHeaderReference());
@@ -476,6 +477,53 @@ public class OpenApi3Test inherits QUnit::Test {
         # and none at all is still fine
         assertTrue(exists loadWithQueryParams((plain,)),
             "an operation with no object-valued query parameter loads");
+    }
+
+    #! Every element of an array-valued query parameter is converted to the type declared for it
+    /** A query argument travels in the URI as a string and is read back out of it as one, and the element
+        schema of an array is checked **strictly**, so an array of integers was rejected for holding the
+        strings it must be sent as: \c {invalid type "string" (should be "integer")}.  A scalar integer
+        parameter was converted and worked, which is why this went unnoticed - only the arrays failed.
+
+        The parameter was therefore unusable through any client, and a record search on a list of
+        identifiers failed outright rather than returning the records asked for.
+    */
+    testArrayQueryParamElementTypes() {
+        checkModules();
+
+        OpenApi3Schema so = loadWithQueryParams((
+            {"name": "ids", "in": "query", "schema": {"type": "array", "items": {"type": "integer"}}},
+            {"name": "keys", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}},
+            {"name": "rates", "in": "query", "schema": {"type": "array", "items": {"type": "number"}}},
+            {"name": "flags", "in": "query", "schema": {"type": "array", "items": {"type": "boolean"}}},
+            {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+        ));
+
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = so.parseRequest("GET",
+            "/preview?ids=1&ids=2&keys=a&keys=b&rates=1.5&flags=true&limit=10", NOTHING, \hdr);
+        on_error printf("req: %y\n", req);
+
+        # the elements are integers, not the strings they travelled as
+        assertEq((1, 2), req.query.ids);
+        # a string array is unchanged, and a scalar integer keeps working as it did
+        assertEq(("a", "b"), req.query.keys);
+        assertEq(10, req.query.limit);
+        # a one-element array arrives as a scalar and is still both listified and converted
+        assertEq(NT_LIST, req.query.rates.typeCode());
+        assertEq(1.5, req.query.rates[0]);
+        assertEq((True,), req.query.flags);
+
+        # a comma-separated array is split and every element converted
+        req = so.parseRequest("GET", "/preview?ids=3,4,5", NOTHING, \hdr);
+        assertEq((3, 4, 5), req.query.ids);
+
+        # an element that cannot be read as the declared type is still an error, and names the parameter
+        assertThrows("SCHEMA-VALIDATION-ERROR", "ids",
+            sub () {
+                hash<auto> h;
+                so.parseRequest("GET", "/preview?ids=1&ids=xyz", NOTHING, \h);
+            });
     }
 
     testServerUrlScheme() {

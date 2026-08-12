@@ -1490,6 +1490,116 @@ public namespace RestSchemaValidator {
 
         #! Returns the schema for this parameter, if any
         abstract *AbstractSchemaObject getSchema();
+
+        #! Converts one query argument to the type its schema declares for it
+        /** A query argument travels in the URI as a string and is read back out of it as one, so a
+            parameter declared as anything else has to be converted before it is checked, or every request
+            carrying it is rejected for sending the value in the only form a URI can carry.
+
+            An **array** is converted element by element as well.  The element schema is checked strictly,
+            so an array of integers would otherwise be rejected for holding the strings it must be sent as,
+            and the parameter would be unusable: this is what made a search on a list of identifiers fail
+            with <tt>invalid type "string" (should be "integer")</tt>.
+
+            @param type the schema type to convert to
+            @param format the schema format, where the type alone does not say what the value is
+            @param items the element schema, required when \a type is \c "array"
+            @param path the URI path, for error messages
+            @param method the HTTP method, for error messages
+            @param name the parameter name, for error messages
+            @param value the value to convert
+
+            @return the converted value; a value the schema does not describe is returned unchanged
+
+            @throw SCHEMA-VALIDATION-ERROR the value cannot be read as the type declared for it
+
+            @since RestSchemaValidator 2.5
+        */
+        static auto convertQueryArg(*string type, *string format, *AbstractSchemaObject items, string path,
+                string method, string name, auto value) {
+            if (type != "array") {
+                return AbstractParameterObject::convertQueryScalar(type, format, path, method, name, value);
+            }
+            switch (value.typeCode()) {
+                case NT_STRING:
+                    value = value.split(",");
+                    break;
+                case NT_LIST:
+                    break;
+                default:
+                    value = exists value ? (value,) : ();
+                    break;
+            }
+            if (!items) {
+                return value;
+            }
+            list<auto> rv = ();
+            foreach auto v in (value) {
+                rv += AbstractParameterObject::convertQueryScalar(items.type, items.format, path, method,
+                    name, v);
+            }
+            return rv;
+        }
+
+        #! Converts one scalar query argument value to the type its schema declares for it
+        /** @see @ref convertQueryArg()
+        */
+        private static auto convertQueryScalar(*string type, *string format, string path, string method,
+                string name, auto value) {
+            switch (type) {
+                case "integer": {
+                    if (value.typeCode() == NT_STRING) {
+                        if (value =~ /[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-2][0-9]:[0-5][0-9]:[0-5][0-9])?/) {
+                            return date(value).getEpochSeconds();
+                        }
+                        if (value !~ /^([+-])?[0-9]+$/) {
+                            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method "
+                                "%y of type \"integer\" is invalid; value provided: %y", name, path, method,
+                                value);
+                        }
+                        return value.toInt();
+                    }
+                    break;
+                }
+                case "number":
+                    if (value.typeCode() == NT_STRING) {
+                        return value.toNumber();
+                    }
+                    break;
+                case "string":
+                    switch (format) {
+                        case "date":
+                        case "date-time":
+                            try {
+                                return date(value);
+                            } catch (hash<ExceptionInfo> ex) {
+                                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and "
+                                    "method %y of type \"date\" is invalid; value provided: %y (%s)", name,
+                                    path, method, value, ex.desc);
+                            }
+                        case "binary":
+                            try {
+                                return binary(value);
+                            } catch (hash<ExceptionInfo> ex) {
+                                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and "
+                                    "method %y of type \"binary\" is invalid; value provided: %y (%s)",
+                                    name, path, method, value, ex.desc);
+                            }
+                        case "byte":
+                            try {
+                                return parse_base64_string(value);
+                            } catch (hash<ExceptionInfo> ex) {
+                                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and "
+                                    "method %y of type \"binary\" is invalid; value provided: %y (%s)",
+                                    name, path, method, value, ex.desc);
+                            }
+                    }
+                    break;
+                case "boolean":
+                    return parse_boolean(value);
+            }
+            return value;
+        }
     }
 
     #! Abstract base class for response objects

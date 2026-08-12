@@ -396,6 +396,7 @@ public class SwaggerTest inherits QUnit::Test {
         addTestCase("Test examples", \testExamples());
         addTestCase("Test real msgs", \testRealMessages());
         addTestCase("Test getTypeForReference/replaceTypeForReference", \testTypeForReference());
+        addTestCase("Test typed array query parameters", \testArrayQueryParamElementTypes());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -419,6 +420,55 @@ public class SwaggerTest inherits QUnit::Test {
         # an unrecognized format still maps to a plain string type
         assertEq("string", schema.getType("p", "string").getBaseTypeName(),
             "no format maps to a string type");
+    }
+
+    #! Every element of an array-valued query parameter is converted to the type declared for it
+    /** A query argument travels in the URI as a string and is read back out of it as one, and the element
+        schema of an array is checked **strictly**, so an array of integers was rejected for holding the
+        strings it must be sent as: \c {invalid type "string" (should be "integer")}.  A scalar integer
+        parameter was converted and worked, which is why this went unnoticed - only the arrays failed.
+    */
+    testArrayQueryParamElementTypes() {
+        checkModules();
+
+        hash<auto> soh = ValidSwaggerSchema + {
+            "paths": {
+                "/preview": {
+                    "get": {
+                        "operationId": "preview",
+                        "parameters": (
+                            {"name": "ids", "in": "query", "type": "array", "items": {"type": "integer"}},
+                            {"name": "keys", "in": "query", "type": "array", "items": {"type": "string"}},
+                            {"name": "limit", "in": "query", "type": "integer"},
+                        ),
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        SwaggerSchema so("", soh);
+
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = so.parseRequest("GET",
+            "/preview?ids=1&ids=2&keys=a&keys=b&limit=10", NOTHING, \hdr);
+        on_error printf("req: %y\n", req);
+
+        # the elements are integers, not the strings they travelled as
+        assertEq((1, 2), req.query.ids);
+        # a string array is unchanged, and a scalar integer keeps working as it did
+        assertEq(("a", "b"), req.query.keys);
+        assertEq(10, req.query.limit);
+
+        # a comma-separated array is split and every element converted
+        req = so.parseRequest("GET", "/preview?ids=3,4,5", NOTHING, \hdr);
+        assertEq((3, 4, 5), req.query.ids);
+
+        # an element that cannot be read as the declared type is still an error, and names the parameter
+        assertThrows("SCHEMA-VALIDATION-ERROR", "ids",
+            sub () {
+                hash<auto> h;
+                so.parseRequest("GET", "/preview?ids=1&ids=xyz", NOTHING, \h);
+            });
     }
 
     testTypeForReference() {
