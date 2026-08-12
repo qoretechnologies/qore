@@ -381,6 +381,47 @@ hashdecl TypedRecordIteratorRow {
     string name;
 }
 
+#! An iterator that records how many records were pulled out of it
+/** A record iterator wrapping a service reads a record at a time and each one can cost a request, so what
+    matters is not only which records a search returns but how many it had to read to answer.
+*/
+class CountingIterator inherits AbstractIterator {
+    public {
+        #! How many times next() was called and returned a record
+        /** Class-static, because DefaultRecordIterator deletes the iterator it wraps as soon as that
+            iterator is exhausted, so a counter on the object cannot be read afterwards.
+        */
+        static int pulled = 0;
+    }
+
+    private {
+        list<auto> l;
+        int idx = -1;
+    }
+
+    constructor(list<auto> records) {
+        l = records;
+    }
+
+    bool next() {
+        if (idx >= (l.size() - 1)) {
+            idx = l.size();
+            return False;
+        }
+        ++idx;
+        ++pulled;
+        return True;
+    }
+
+    auto getValue() {
+        return l[idx];
+    }
+
+    bool valid() {
+        return idx >= 0 && idx < l.size();
+    }
+}
+
 class TypedRecordIterator inherits AbstractIterator<hash<TypedRecordIteratorRow>> {
     private {
         bool available = True;
@@ -839,6 +880,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("filtered hash map type hint test", \filteredHashMapTypeHintTest());
         addTestCase("optional typed hash field test", \optionalTypedHashFieldTest());
         addTestCase("generic record iterator test", \genericRecordIteratorTest());
+        addTestCase("record iterator limit and offset", \recordIteratorLimitTest());
         addTestCase("processor shape API test", \processorShapeApiTest());
         addTestCase("bulk provider shape API test", \bulkProviderShapeApiTest());
         addTestCase("wrapped exception cause test", \wrappedExceptionCauseTest());
@@ -882,6 +924,75 @@ public class DataProviderTest inherits QUnit::Test {
         assertTrue(filtered.next());
         assertEq(1, filtered.getValue().id);
         assertFalse(filtered.next());
+    }
+
+    #! A limit is honored without reading records that can never be returned
+    /** The wrapped iterator is counted, because a record iterator over a service reads a record at a time
+        and each one can cost a request: a search that stops at the right record but reads past it first is
+        still wrong for the caller paying for those reads.
+
+        A \c limit of zero is the case that was wrong: with an offset, the limit was tested as
+        <tt>(count - offset) == limit</tt>, which is negative until the whole offset has been read, so a
+        search asking for no records read the offset first and then returned nothing.
+    */
+    recordIteratorLimitTest() {
+        list<auto> records = ();
+        foreach int id in (xrange(1, 11)) {
+            records += {"id": id};
+        }
+        assertEq(10, records.size());
+
+        # no limit: everything is read
+        CountingIterator::pulled = 0;
+        CountingIterator all(records);
+        DefaultRecordIterator plain(all);
+        assertEq(10, (map $1, plain).size());
+        assertEq(10, CountingIterator::pulled);
+
+        # a limit of zero returns nothing and reads nothing
+        CountingIterator::pulled = 0;
+        CountingIterator none(records);
+        DefaultRecordIterator zero(none, NOTHING, {"limit": 0});
+        assertEq((), map $1, zero);
+        assertEq(0, CountingIterator::pulled, "a limit of zero reads nothing");
+
+        # ...and still reads nothing when an offset is given, which is what was wrong: skipping to the
+        # offset can only produce records the limit already excludes
+        CountingIterator::pulled = 0;
+        CountingIterator none_off(records);
+        DefaultRecordIterator zero_off(none_off, NOTHING, {"limit": 0, "offset": 5});
+        assertEq((), map $1, zero_off);
+        assertEq(0, CountingIterator::pulled, "a limit of zero with an offset reads nothing");
+
+        # a limit stops the walk as soon as it is met rather than draining the iterator
+        CountingIterator::pulled = 0;
+        CountingIterator two(records);
+        DefaultRecordIterator limited(two, NOTHING, {"limit": 2});
+        assertEq((1, 2), map $1.id, limited);
+        assertEq(2, CountingIterator::pulled, "a limit of two reads two records");
+
+        # an offset is skipped and the limit counts records returned after it
+        CountingIterator::pulled = 0;
+        CountingIterator off(records);
+        DefaultRecordIterator windowed(off, NOTHING, {"limit": 2, "offset": 3});
+        assertEq((4, 5), map $1.id, windowed);
+        assertEq(5, CountingIterator::pulled, "three records are skipped and two returned");
+
+        # a negative limit means no limit
+        CountingIterator::pulled = 0;
+        CountingIterator neg(records);
+        DefaultRecordIterator unlimited(neg, NOTHING, {"limit": -1});
+        assertEq(10, (map $1, unlimited).size());
+
+        # the limit counts MATCHING records, not records read
+        hash<DataProviderExpression> even = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_GT,
+            "args": (<DataProviderFieldReference>{"field": "id"}, 6),
+        };
+        CountingIterator::pulled = 0;
+        CountingIterator matching(records);
+        DefaultRecordIterator filtered(matching, even, {"limit": 2});
+        assertEq((7, 8), map $1.id, filtered);
     }
 
     processorShapeApiTest() {

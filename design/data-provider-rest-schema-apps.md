@@ -134,6 +134,14 @@ Three properties of the pinned schema are load-bearing:
   Stripe additionally records the `api_version` its schema describes, because `StripeRestClient` sends
   that version with every request and the two must move together.
 
+- **A vendored schema is never edited by hand, and house style does not apply to it.** It is generated
+  output: the next import rewrites the file, so an edit is silently temporary and shows up as drift in
+  the meantime. This is not hypothetical - a repository-wide em-dash sweep reached
+  `stripe-openapi3.json` and turned Stripe's "no longer recommended—use the Payment Intents API" into
+  "recommended-use", which reads as a typo in every rendered description and would have been reverted by
+  the next import. Vendor text is quoted, not written here; a formatting rule that applies to our own
+  prose stops at the vendored artifacts, the generated i18n catalogs and anything else a tool produces.
+
 - **The schema is parsed on first use, behind a `Mutex`, into a `static` member** - not when the module
   loads. A program that only needs the connection never pays for it, and the action set is built once
   per process regardless of how many providers are constructed.

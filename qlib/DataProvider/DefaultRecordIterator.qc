@@ -129,20 +129,15 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
         }
         while (i.next()) {
             if (!where_cond || (where_cond && matchGeneric(i.getValue(), where_cond, template_context))) {
-                if (search_options.offset > 0) {
-                    if (exists search_options.limit && search_options.limit >= 0
-                        && (count - search_options.offset) == search_options.limit) {
-                        delete i;
-                        return False;
-                    }
-                    if (count < search_options.offset) {
-                        ++count;
-                        continue;
-                    }
-                } else if (exists search_options.limit && search_options.limit >= 0 &&
-                    count == search_options.limit) {
+                # the limit is tested before the offset, so that a limit already reached stops the walk
+                # rather than skipping records to an offset that can produce nothing
+                if (atLimit()) {
                     delete i;
                     return False;
+                }
+                if (count < search_options.offset) {
+                    ++count;
+                    continue;
                 }
                 ++count;
                 return True;
@@ -155,9 +150,16 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
     }
 
     #! Returns True if as many records have been returned as the search options allow
+    /** A limit of zero is reached before anything is read, whatever the offset.  Answering that with the
+        offset arithmetic would compare a negative count against zero and read the whole offset first, which
+        for a service-backed iterator is a search that fetches records it was never going to return.
+    */
     private bool atLimit() {
         if (!exists search_options.limit || search_options.limit < 0) {
             return False;
+        }
+        if (!search_options.limit) {
+            return True;
         }
         return search_options.offset > 0
             ? (count - search_options.offset) == search_options.limit
