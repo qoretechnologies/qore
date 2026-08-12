@@ -55,6 +55,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testPreloadFollowsTheComponentNotTheIndex());
         addTestCase("an external source edit is still reported as one",
             \testExternalSourceEditIsReported());
+        addTestCase("a frozen graph removes the transition entirely",
+            \testFrozenGraphRemovesTheTransition());
+        addTestCase("the coordinator plans, compiles and verifies against one graph",
+            \testCoordinatorConvergesInOneInvocation());
 
         set_return_value(main());
     }
@@ -99,7 +103,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         and the decomposition is {a,b}, {c}, {d}.  Dropping one of those two
         depfile edges splits the pair and renumbers everything after it.
     */
-    private hash<auto> fixture(string root, *softlist<string> compiled) {
+    private hash<auto> fixture(string root, *softlist<string> compiled,
+            bool cyclic = True) {
         string src_dir = root + "/src";
         string qo_dir = root + "/qo";
         mkdir(src_dir, 0777, True);
@@ -120,8 +125,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         foreach string name in (names) {
             writeArtifacts(qo_dir, name);
         }
-        writeDepfile(qo_dir, "a", "b");
-        writeDepfile(qo_dir, "b", "a");
+        writeDepfile(qo_dir, "a", cyclic ? "b" : ());
+        writeDepfile(qo_dir, "b", cyclic ? "a" : ());
         writeDepfile(qo_dir, "c", "a");
         writeDepfile(qo_dir, "d", ());
         # A component only counts as published once it has a generation record,
@@ -190,18 +195,51 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! Runs the driver the way qore-qo-incremental-plan runs it for a stale component.
-    private hash<auto> drive(hash<auto> fx, string name, hash<auto> component) {
+    private hash<auto> drive(hash<auto> fx, string name, hash<auto> component,
+            *string snapshot) {
         string qo_dir = fx.qo_dir;
         string command = sprintf(
             "QORE_QCC_PLANNED_STALE=1 QORE_QCC_COMPONENT_INDEX=%y "
             "QORE_QCC_COMPONENT_KEY=%y QORE_QCC_COMPONENT_SIZE=%y "
             "QORE_QCC_COMPONENT_LOCK=%y QORE_QCC_PREREQUISITES_READY=1 "
-            "QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_SOURCE_ORDER_HELPER=%y %y %y %y %y",
+            "QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_SOURCE_ORDER_HELPER=%y ",
             component.index, component.key, component.size,
             qo_dir + "/.qcc-scc/" + component.key + ".lock",
-            qore_bin, source_order_tool, incremental_tool,
+            qore_bin, source_order_tool);
+        if (exists snapshot) {
+            command += sprintf("QORE_QCC_GRAPH_SNAPSHOT=%y ", snapshot);
+        }
+        command += sprintf("%y %y %y %y", incremental_tool,
             qo_dir + "/" + name + ".qo", fx.src_dir + "/" + name + ".qc",
             qo_dir + "/qcc-single.sh");
+        string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        return ("output": output.substr(0, marker),
+            "rc": output.substr(marker + 3).toInt());
+    }
+
+    #! Runs the group coordinator the way the build's plan target does.
+    private hash<auto> plan(hash<auto> fx) {
+        string qo_dir = fx.qo_dir;
+        # The coordinator refuses to start without a batch script; this one is
+        # never invoked, and says so loudly if the plan ever reaches for it.
+        write(qo_dir + "/qcc-batch.sh",
+            "#!/bin/sh\necho 'the plan should not have needed the batch' >&2\nexit 9\n");
+        chmod(qo_dir + "/qcc-batch.sh", 0755);
+        # A component published before the group's last shared parse is stale by
+        # definition, so the stamp that dates that parse has to exist for any
+        # component to be able to reach currency at all.
+        if (!is_file(qo_dir + "/.qcc-batch-bootstrap.stamp")) {
+            write(qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        }
+        string command = sprintf("QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_GRAPH_SNAPSHOT=%y "
+            "%y %y %y %y %y %y %y %y %y",
+            qore_bin, fx.context + ".graph-snapshot.json",
+            tools_dir + DirSep + "qore-qo-incremental-plan",
+            fx.context, qo_dir + "/.qcc-incremental-plan.stamp",
+            qo_dir + "/.qcc-batch-bootstrap.stamp", qo_dir + "/qcc-batch.sh",
+            qo_dir + "/qcc-single.sh", source_order_tool, incremental_tool,
+            tools_dir + DirSep + "qore-qo-batch-bootstrap");
         string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
         int marker = output.rfind("rc=");
         return ("output": output.substr(0, marker),
@@ -341,5 +379,83 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "the component is rebuilt exactly once before the driver gives up");
         assertFalse(exists record(fx, component.key),
             "nothing is published from an unpublishable compile");
+    }
+
+    #! The same race as above, with the graph frozen for the build step.
+    /** Surviving a transition is the fallback.  Not having one is the fix: while
+        the graph is frozen, a compile's own depfile rewrite is invisible to
+        every other worker until the coordinator crosses to the next generation,
+        so one invocation succeeds with no retry and no diagnostic.
+    */
+    testFrozenGraphRemovesTheTransition() {
+        TmpDir tmp("qore-aot-driver-frozen-");
+        hash<auto> fx = fixture(tmp.path, ("a", "c"));
+        string qo_dir = fx.qo_dir;
+        string snapshot = tmp.path + "/graph-snapshot.json";
+
+        hash<auto> frozen = runTool(("--scc-freeze-graph", snapshot, fx.context));
+        assertEq(0, frozen.rc, "the graph freezes: " + frozen.output);
+
+        hash<auto> component = componentFor(qo_dir, "d");
+        writeCompiler(fx, "printf '%s' " + sprintf("%y",
+            qo_dir + "/b.qo.stamp: " + fx.src_dir + "/b.qc\n") + " > "
+            + sprintf("%y", qo_dir + "/b.qo.d"));
+
+        hash<auto> result = drive(fx, "d", component, snapshot);
+        assertEq(0, result.rc, "the driver succeeds: " + result.output);
+        assertEq(("d.qc d.qo",), compiles(fx),
+            "the mid-compile depfile rewrite costs no rebuild");
+        assertEq(-1, result.output.find("dependency graph"),
+            "no transition is reported at all: " + result.output);
+        assertEq(-1, result.output.find("moved"),
+            "and nothing is reported as moved: " + result.output);
+        assertEq(trim(frozen.output), record(fx, component.key).graph_generation,
+            "publication names the frozen graph, not the one the compile left");
+    }
+
+    testCoordinatorConvergesInOneInvocation() {
+        TmpDir tmp("qore-aot-driver-plan-");
+        # Every component a singleton, so the plan stays on the incremental path
+        # instead of delegating to the shared parse.
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeCompiler(fx);
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertTrue(is_file(fx.qo_dir + "/.qcc-incremental-plan.stamp"),
+            "the plan stamp is written");
+        assertTrue(is_file(fx.context + ".graph-snapshot.json"),
+            "the coordinator leaves the graph it verified against frozen");
+        assertTrue(result.output.find("scheduling against dependency graph") >= 0,
+            "the coordinator says which graph it scheduled against: " + result.output);
+
+        assertEq(("a.qc a.qo", "b.qc b.qo", "c.qc c.qo", "d.qc d.qo"),
+            sort(compiles(fx)),
+            "every stale component is compiled exactly once");
+        assertEq(-1, result.output.find("moved"),
+            "no source movement is reported: " + result.output);
+        assertEq(-1, result.output.find("rebuilding"),
+            "no component needs a rebuild: " + result.output);
+
+        # Requirement of a coherent build: every published record names the one
+        # graph generation the coordinator finished on.
+        hash<auto> generation = runTool(("--scc-graph-generation", fx.context));
+        assertEq(0, generation.rc, "the graph generation is readable");
+        int published = 0;
+        foreach string name in (fx.names) {
+            hash<auto> component = componentFor(fx.qo_dir, name);
+            *hash<auto> committed = record(fx, component.key);
+            assertTrue(exists committed, name + " is published");
+            assertEq(trim(generation.output), committed.graph_generation,
+                name + " is published against the coordinator's final graph");
+            ++published;
+        }
+        assertEq(4, published, "all four components are published");
+
+        # A second invocation with nothing changed must do nothing at all.
+        hash<auto> again = plan(fx);
+        assertEq(0, again.rc, "the second invocation succeeds: " + again.output);
+        assertEq(4, compiles(fx).size(),
+            "a no-op build compiles nothing: " + again.output);
     }
 }

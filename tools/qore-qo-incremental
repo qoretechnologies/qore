@@ -669,6 +669,10 @@ build_group_batch() {
             "generation" >&2
         return 1
     fi
+    # No frozen graph: the batch compiles every member of every component under
+    # the group lock, so nothing can be reading a decomposition it invalidates,
+    # and it must publish against the graph its own compiles produce.
+    QORE_QCC_GRAPH_SNAPSHOT= \
     QORE_QCC_REQUIRE_BATCH=1 \
         QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
         "$batch_bootstrap_tool" "$context_file" "$batch_bootstrap_stamp" \

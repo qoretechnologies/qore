@@ -1965,6 +1965,84 @@ class SourceOrderEngine {
             join("\n", sort(lines)) + "\n").toHex().substr(0, 16);
     }
 
+    #! Names the context's output list, so a snapshot cannot outlive its context.
+    private string outputsDigest(list<string> outputs) {
+        list<string> normalized = ();
+        foreach string output in (outputs) {
+            push normalized, absoluteNormalized(output);
+        }
+        return digest("sha256", join("\n", normalized) + "\n").toHex();
+    }
+
+    #! Freezes the current depfile-derived edge set as one named generation.
+    /** This is the transition point the build schedules against.  Every helper
+        invocation that runs while part of a group is compiling reads this file
+        instead of the live depfiles, so the decomposition, component numbering,
+        preload closures and publication targets a worker resolves cannot be
+        changed by another worker's compile.
+
+        Freezing deliberately reads the live depfiles: it is only ever performed
+        by the group coordinator, between phases, with no compile in flight.
+
+        \return the name of the frozen generation.
+    */
+    string writeGraphSnapshot(string snapshot_path,
+            hash<SourceOrderContext> context_info) {
+        list<list<int>> edges = collectDepfileContractEdges(context_info.outputs);
+        string generation = contractEdgeGeneration(edges, context_info.outputs);
+        atomicWriteIfChanged(snapshot_path, make_json((
+            "format": 1,
+            "generation": generation,
+            "outputs_digest": outputsDigest(context_info.outputs),
+            "edges": edges,
+        )) + "\n");
+        return generation;
+    }
+
+    #! The frozen edge set, or NOTHING when there is none to apply.
+    /** A missing or unreadable snapshot is not an error: the first build of a
+        group has none, and every caller outside a build step wants the live
+        graph anyway.  Falling back to a live scan is exactly what those callers
+        did before a snapshot existed.
+
+        A snapshot whose \c outputs_digest no longer matches is discarded rather
+        than trusted: the context's source list only changes through a CMake
+        reconfigure, which starts a new build whose first freeze replaces it.
+    */
+    private *list<list<int>> loadGraphSnapshot(list<string> outputs) {
+        *string snapshot_path = ENV.QORE_QCC_GRAPH_SNAPSHOT;
+        if (!snapshot_path || !is_file(snapshot_path)) {
+            return NOTHING;
+        }
+        try {
+            auto data = parse_json(ReadOnlyFile::readTextFile(snapshot_path));
+            if (data.typeCode() != NT_HASH) {
+                return NOTHING;
+            }
+            hash<auto> snapshot = data;
+            if (snapshot.format != 1 || snapshot.edges.typeCode() != NT_LIST
+                    || snapshot.outputs_digest != outputsDigest(outputs)) {
+                return NOTHING;
+            }
+            list<list<int>> edges = ();
+            foreach auto raw_edge in (snapshot.edges) {
+                if (raw_edge.typeCode() != NT_LIST || raw_edge.size() != 2) {
+                    return NOTHING;
+                }
+                int provider = raw_edge[0];
+                int consumer = raw_edge[1];
+                if (provider < 0 || provider >= outputs.size()
+                        || consumer < 0 || consumer >= outputs.size()) {
+                    return NOTHING;
+                }
+                push edges, (provider, consumer);
+            }
+            return edges;
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+    }
+
     private hash<SourceOrderGraph> loadOrBuildGraph(string context_path,
             hash<SourceOrderContext> context_info) {
         string graph_context = absoluteNormalized(context_path);
@@ -1986,12 +2064,21 @@ class SourceOrderEngine {
                 context_info.parse_defines, graph);
         }
         int depfile_started = clock_getmicros_monotonic();
-        depfile_contract_edges = collectDepfileContractEdges(context_info.outputs);
+        # One JSON read replaces reading and scanning every member depfile in the
+        # group.  That is not only what makes the graph immutable for the
+        # duration of a build step: a large group runs a currency probe per
+        # object, and each of those probes used to rescan every depfile, which
+        # is quadratic in the source count for a build that compiles nothing.
+        *list<list<int>> frozen = loadGraphSnapshot(context_info.outputs);
+        depfile_contract_edges = exists frozen
+            ? frozen
+            : collectDepfileContractEdges(context_info.outputs);
         depfile_edge_generation = NOTHING;
         applyContractEdges(depfile_contract_edges, \graph);
         if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
-            stderr.printf("depfile contract edges=%d us\n",
-                clock_getmicros_monotonic() - depfile_started);
+            stderr.printf("depfile contract edges=%d us (%s)\n",
+                clock_getmicros_monotonic() - depfile_started,
+                exists frozen ? "frozen snapshot" : "live scan");
         }
         loaded_graph_context = graph_context;
         loaded_graph = graph;
@@ -2979,6 +3066,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --scc-publish [--expect TOKEN] [--expect-graph GENERATION]\n"
         "           CONTEXT SCC\n"
         "       %s --scc-graph-generation CONTEXT\n"
+        "       %s --scc-freeze-graph SNAPSHOT CONTEXT\n"
         "\n"
         "SCC selects a strongly connected component of the required-edge graph by\n"
         "its index or by its key. Only a key is stable across a build: component\n"
@@ -2989,9 +3077,15 @@ sub usage(*string error = NOTHING, bool success = False) {
         "token -- an agent outside the build edited them. Exit 76 means the\n"
         "dependency graph moved away from --expect-graph, or that a component key\n"
         "no longer names a component; the compiled artifacts are not publishable\n"
-        "in either case, but only 75 implicates anything outside the build.\n",
+        "in either case, but only 75 implicates anything outside the build.\n"
+        "\n"
+        "--scc-freeze-graph records the current depfile-derived edge set as one\n"
+        "named generation and prints its name. While QORE_QCC_GRAPH_SNAPSHOT names\n"
+        "a readable snapshot for the current context, every command reads the graph\n"
+        "from it instead of from the live depfiles, so a compile cannot change the\n"
+        "decomposition another builder resolved against.\n",
         name, name, name, name, name, name, name, name, name, name, name, name, name,
-        name);
+        name, name);
     if (success) {
         printf("%s", text);
     } else {
@@ -3161,6 +3255,7 @@ int sub main() {
     *string component_command;
     *string component_map_prefix;
     *string component_generation_map;
+    *string graph_snapshot_output;
     *string expected_generation;
     *string expected_graph_generation;
     *string direct_map_prefix;
@@ -3200,7 +3295,8 @@ int sub main() {
                 || arg == "--source-symbol-manifest"
                 || arg == "--batch-artifact-current"
                 || arg == "--scc-map-cmake"
-                || arg == "--scc-generation-map") {
+                || arg == "--scc-generation-map"
+                || arg == "--scc-freeze-graph") {
             if (++index >= ARGV.size()) {
                 usage(sprintf("argument expected after %s", arg));
             }
@@ -3214,6 +3310,8 @@ int sub main() {
                 source_symbol_manifest = ARGV[index];
             } else if (arg == "--scc-generation-map") {
                 component_generation_map = ARGV[index];
+            } else if (arg == "--scc-freeze-graph") {
+                graph_snapshot_output = ARGV[index];
             } else {
                 batch_bootstrap_stamp = ARGV[index];
             }
@@ -3245,6 +3343,8 @@ int sub main() {
             source_symbol_manifest = arg.substr(25);
         } else if (arg.startsWith("--scc-generation-map=")) {
             component_generation_map = arg.substr(21);
+        } else if (arg.startsWith("--scc-freeze-graph=")) {
+            graph_snapshot_output = arg.substr(19);
         } else if (arg.startsWith("--batch-artifact-current=")) {
             batch_bootstrap_stamp = arg.substr(25);
         } else if (arg.startsWith("-")) {
@@ -3306,6 +3406,18 @@ int sub main() {
     }
 
     SourceOrderEngine engine();
+    if (exists graph_snapshot_output) {
+        if (positional.size() != 1) {
+            usage("--scc-freeze-graph accepts only a context argument");
+        }
+        # Freezing reads the live depfiles by definition, so it must run where
+        # no compile is in flight: the group coordinator performs it between
+        # phases, and the whole-group batch -- which holds the group lock and
+        # rewrites every depfile -- runs without a snapshot at all.
+        printf("%s\n",
+            engine.writeGraphSnapshot(graph_snapshot_output, context_info));
+        return 0;
+    }
     if (exists component_generation_map) {
         if (positional.size() != 1) {
             usage("--scc-generation-map accepts only a context argument");

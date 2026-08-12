@@ -695,6 +695,21 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     # leave a prunable stale record rather than an unrecognized file.
     set(_qore_qcc_scc_prefix "QORE_QCC_SCC_${_qore_qcc_group_id}")
     set(_qore_qcc_scc_cmake "${_QORE_QCO_SCRIPT_DIR}/scc-map.cmake")
+
+    # The dependency graph a build step schedules against, frozen by the
+    # incremental planner before anything compiles.
+    #
+    # qcc records the compile contract of every provider a source was compiled
+    # against, and qore-qo-source-order promotes those depfile entries to
+    # required edges, so a compile changes the strongly connected components
+    # that decide other objects' preloads, locks and publication targets. Every
+    # recipe that runs while part of the group is compiling therefore reads the
+    # graph from this snapshot instead of from the live depfiles.
+    #
+    # It is deliberately NOT set for the batch bootstrap: that target compiles
+    # the whole group under the group lock and must publish against the graph
+    # its own compiles produce. The planner re-freezes immediately afterwards.
+    set(_qore_qcc_graph_snapshot "${_qore_qcc_context_path}.graph-snapshot.json")
     execute_process(
         COMMAND ${_qore_qcc_source_order_command}
             --cmake-plan
@@ -926,8 +941,10 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             "qore_qcc_${_qore_qcc_group_id}_incremental_plan")
         add_custom_command(
             OUTPUT ${_qore_qcc_incremental_plan_stamp}
+            BYPRODUCTS ${_qore_qcc_graph_snapshot}
             COMMAND ${CMAKE_COMMAND} -E env
                 "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
+                "QORE_QCC_GRAPH_SNAPSHOT=${_qore_qcc_graph_snapshot}"
                 ${_qore_qcc_incremental_plan_helper}
                     ${_qore_qcc_context_path}
                     ${_qore_qcc_incremental_plan_stamp}
@@ -1077,6 +1094,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     "QORE_QCC_BATCH_BOOTSTRAP_STAMP=${_qore_qcc_bootstrap_stamp}"
                     "QORE_QCC_PREREQUISITES_ORDERED=1"
                     "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
+                    "QORE_QCC_GRAPH_SNAPSHOT=${_qore_qcc_graph_snapshot}"
                     ${_qore_qcc_incremental_helper}
                         ${_qore_qcc_output}
                         ${_qore_qcc_source}
@@ -1137,6 +1155,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         BYPRODUCTS ${_qore_qcc_generation_map}
         COMMAND ${CMAKE_COMMAND} -E env
             "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
+            "QORE_QCC_GRAPH_SNAPSHOT=${_qore_qcc_graph_snapshot}"
             ${_qore_qcc_source_order_command}
                 --scc-generation-map ${_qore_qcc_generation_map}
                 ${_qore_qcc_context_path}
@@ -1174,6 +1193,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     list(APPEND _qore_qcc_managed_files
         "${_qore_qcc_context_path}"
         "${_qore_qcc_context_path}.source-order-v2.json"
+        "${_qore_qcc_graph_snapshot}"
         "${_qore_qcc_source_content_map}"
         "${_qore_qcc_source_content_stamp}"
         ${_qore_qcc_source_content_digests}

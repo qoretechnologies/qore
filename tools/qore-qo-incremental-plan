@@ -69,13 +69,49 @@ esac
 mkdir -p "$(dirname "$plan_stamp")"
 stale_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-incremental-plan.XXXXXX")
 
+# The dependency graph this plan is scheduled against.
+#
+# A compile rewrites its own depfile, qore-qo-source-order promotes depfile
+# entries to required edges, and those edges decide component membership,
+# numbering, preload closures and publication targets.  Reading them live means
+# every helper process sees a different graph, so a plan resolved before a
+# compile can no longer be executed after it -- and that is true of this
+# coordinator's own serial loop, not only of the parallel object recipes that
+# follow it.
+#
+# Freezing the edge set makes the graph immutable for the whole phase.  The
+# freeze itself must see the live depfiles, so it happens only here, between
+# phases, with no compile in flight; the whole-group batch runs with no snapshot
+# because it holds the group lock and rewrites every depfile in the group.
+graph_snapshot=${QORE_QCC_GRAPH_SNAPSHOT:-$context.graph-snapshot.json}
+
+# A variable assignment written as a prefix to a SHELL FUNCTION may outlive the
+# call, so each of these sets the snapshot inside a subshell instead; only an
+# external command's prefix assignment is reliably scoped to that command.
+freeze_graph() {
+    frozen=$(
+        QORE_QCC_GRAPH_SNAPSHOT=
+        export QORE_QCC_GRAPH_SNAPSHOT
+        run_source_order --scc-freeze-graph "$graph_snapshot" "$context"
+    ) || return 1
+    echo "$0: scheduling against dependency graph $frozen"
+}
+
 write_stale_plan() {
-    run_source_order --scc-source-stale --batch-stamp "$bootstrap_stamp" \
-        "$context" > "$stale_file"
+    (
+        QORE_QCC_GRAPH_SNAPSHOT=$graph_snapshot
+        export QORE_QCC_GRAPH_SNAPSHOT
+        run_source_order --scc-source-stale --batch-stamp "$bootstrap_stamp" \
+            "$context"
+    ) > "$stale_file"
 }
 
 run_group_batch() {
     echo "$0: broad incremental invalidation; selecting the shared-parse batch"
+    # No snapshot: the batch compiles every member of every component under the
+    # group lock, so nothing can be reading a graph it invalidates, and the next
+    # freeze records exactly the graph it published against.
+    QORE_QCC_GRAPH_SNAPSHOT= \
     QORE_QCC_FORCE_BATCH=1 \
     QORE_QCC_REQUIRE_BATCH=1 \
         QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
@@ -84,11 +120,17 @@ run_group_batch() {
 }
 
 # Normally one pass is enough.  The second pass handles a source that an
-# external editor replaced while a small plan was compiling; if that still does
+# external editor replaced while a small plan was compiling, and the dependency
+# graph transition the first pass's own compiles produced; if that still does
 # not converge, the batch helper's established compare-and-rebuild protocol is
 # the single authoritative fallback.
+#
+# Each pass begins by freezing the graph, so a pass is planned, executed and
+# verified against one immutable decomposition, and a new required edge that a
+# compile discovered is crossed at a defined point rather than mid-pass.
 phase=1
 while [ "$phase" -le 2 ]; do
+    freeze_graph || exit 1
     write_stale_plan
     stale_count=$(awk 'END { print NR + 0 }' "$stale_file")
     if [ "$stale_count" -eq 0 ]; then
@@ -99,6 +141,11 @@ while [ "$phase" -le 2 ]; do
     if [ "$stale_count" -ge "$batch_threshold" ] \
             || awk -F '\t' '$3 > 1 { found = 1 } END { exit !found }' "$stale_file"; then
         run_group_batch
+        # The batch rewrote every depfile in the group, so the frozen generation
+        # no longer describes it.  Re-freeze before verifying, and leave the
+        # object recipes that follow this target the graph the batch published
+        # against rather than the one it superseded.
+        freeze_graph || exit 1
         write_stale_plan
         if [ -s "$stale_file" ]; then
             echo "$0: shared-parse incremental build left stale components" >&2
@@ -128,6 +175,7 @@ while [ "$phase" -le 2 ]; do
                 QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
                 QORE_QCC_SOURCE_ORDER_HELPER="$source_order_tool" \
                 QORE_QCC_BATCH_BOOTSTRAP_HELPER="$batch_bootstrap_tool" \
+                QORE_QCC_GRAPH_SNAPSHOT="$graph_snapshot" \
                 "$incremental_tool" "$output" "$source" "$single_script"; then
             echo "$0: cannot build stale component $component_key" >&2
             exit 1
@@ -136,9 +184,11 @@ while [ "$phase" -le 2 ]; do
     phase=$((phase + 1))
 done
 
+freeze_graph || exit 1
 write_stale_plan
 if [ -s "$stale_file" ]; then
     run_group_batch
+    freeze_graph || exit 1
     write_stale_plan
 fi
 if [ -s "$stale_file" ]; then

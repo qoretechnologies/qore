@@ -67,13 +67,25 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
             \testPublishedRecordsNameOneGraphGeneration());
         addTestCase("the compile plan names the graph it was selected from",
             \testCompilePlanNamesItsGraph());
+        addTestCase("a frozen graph holds the decomposition still",
+            \testFrozenGraphHoldsTheDecompositionStill());
+        addTestCase("a frozen graph is discarded when it cannot apply",
+            \testFrozenGraphIsDiscardedWhenItCannotApply());
 
         set_return_value(main());
     }
 
     #! Runs the helper with \a args verbatim and returns its output and status.
-    private hash<auto> run(softlist<string> args) {
-        list<string> command = (sprintf("%y", qore_bin), sprintf("%y", source_order_tool));
+    /** \a snapshot, when set, is the frozen dependency graph the invocation must
+        read instead of the live depfiles.
+    */
+    private hash<auto> run(softlist<string> args, *string snapshot) {
+        list<string> command = ();
+        if (exists snapshot) {
+            push command, "QORE_QCC_GRAPH_SNAPSHOT=" + sprintf("%y", snapshot);
+        }
+        push command, sprintf("%y", qore_bin);
+        push command, sprintf("%y", source_order_tool);
         foreach string arg in (args) {
             push command, sprintf("%y", arg);
         }
@@ -86,11 +98,17 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
     }
 
     #! Runs the helper and asserts that it succeeded, returning trimmed output.
-    private string ok(softlist<string> args) {
-        hash<auto> result = run(args);
+    private string ok(softlist<string> args, *string snapshot) {
+        hash<auto> result = run(args, snapshot);
         assertEq(0, result.rc, sprintf("qore-qo-source-order %y failed: %s",
             args, result.output));
         return trim(result.output);
+    }
+
+    #! Freezes the current edge set and returns the snapshot path and its name.
+    private hash<auto> freeze(string context_path, string snapshot) {
+        return ("path": snapshot,
+            "generation": ok(("--scc-freeze-graph", snapshot, context_path)));
     }
 
     private write(string path, string body) {
@@ -161,15 +179,20 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
         return ("index": fields[0], "key": fields[1], "size": fields[2].toInt());
     }
 
-    #! The member outputs of the component named by \a selector.
-    private list<string> members(string context_path, string selector) {
+    #! The member output basenames in one --scc-members result.
+    private list<string> memberNames(string members_output) {
         list<string> names = ();
-        foreach string line in (ok(("--scc-members", context_path, selector)).split("\n")) {
+        foreach string line in (members_output.split("\n")) {
             if (line) {
                 push names, basename(line.split("\t")[1]);
             }
         }
         return sort(names);
+    }
+
+    #! The member outputs of the component named by \a selector.
+    private list<string> members(string context_path, string selector) {
+        return memberNames(ok(("--scc-members", context_path, selector)));
     }
 
     private string graphGeneration(string context_path) {
@@ -429,5 +452,100 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
             "the plan names the graph its preload was selected from");
         assertEq(sourceToken(context_path, key), plan."source-token",
             "the plan names the component's source token");
+    }
+
+    testFrozenGraphHoldsTheDecompositionStill() {
+        TmpDir tmp("qore-aot-scc-frozen-");
+        hash<auto> fixture = cyclicFixture(tmp.path);
+        string context_path = fixture.context;
+        string qo_dir = fixture.qo_dir;
+        string snapshot = tmp.path + "/graph-snapshot.json";
+
+        hash<auto> frozen = freeze(context_path, snapshot);
+        assertTrue(is_file(snapshot), "freezing writes the snapshot");
+        assertEq(graphGeneration(context_path), frozen.generation,
+            "the frozen generation names the edge set that was live when it froze");
+
+        hash<auto> d_before = componentFor(context_path, qo_dir, "d");
+
+        # A compile elsewhere in the group rewrites its depfile.  Without the
+        # snapshot this renumbers every component after the split; with it, the
+        # decomposition every other worker resolves against does not move.
+        splitCycle(qo_dir);
+        assertNeq(frozen.generation, graphGeneration(context_path),
+            "the live graph really did move");
+
+        assertEq(frozen.generation,
+            ok(("--scc-graph-generation", context_path), snapshot),
+            "a frozen invocation still reports the frozen generation");
+        assertEq(("a.qo", "b.qo"),
+            memberNames(ok(("--scc-members", context_path, "0"), snapshot)),
+            "the frozen decomposition still holds the cycle together");
+        list<string> frozen_for_d = ok(("--scc-for", context_path,
+            qo_dir + "/d.qo"), snapshot).split("\t");
+        assertEq(d_before.index, frozen_for_d[0],
+            "a component keeps its index for as long as the graph is frozen");
+        assertEq(d_before.key, frozen_for_d[1], "and keeps its key");
+
+        # Publication against the frozen graph is what makes a whole build step
+        # commit against one decomposition.
+        assertEq(0, run(("--scc-publish", "--expect-graph", frozen.generation,
+            context_path, d_before.key), snapshot).rc,
+            "a frozen worker publishes against the graph it planned with");
+        assertEq(76, run(("--scc-publish", "--expect-graph", frozen.generation,
+            context_path, d_before.key)).rc,
+            "an unfrozen worker sees the moved graph and refuses");
+
+        # Re-freezing is the deterministic transition: it is the only point at
+        # which the build crosses from one decomposition to the next.
+        hash<auto> refrozen = freeze(context_path, snapshot);
+        assertNeq(frozen.generation, refrozen.generation,
+            "re-freezing adopts the new edge set");
+        assertEq(("a.qo",),
+            memberNames(ok(("--scc-members", context_path, "0"), snapshot)),
+            "the re-frozen decomposition reflects the split");
+    }
+
+    testFrozenGraphIsDiscardedWhenItCannotApply() {
+        TmpDir tmp("qore-aot-scc-frozen-stale-");
+        hash<auto> fixture = cyclicFixture(tmp.path);
+        string context_path = fixture.context;
+        string qo_dir = fixture.qo_dir;
+        string snapshot = tmp.path + "/graph-snapshot.json";
+        string live = graphGeneration(context_path);
+
+        # A snapshot naming a different context's outputs cannot be applied to
+        # this one: node indexes only mean anything against the output list they
+        # were recorded from.  Silently falling back to the live graph is right,
+        # because that is what every caller outside a build step wants anyway.
+        string other_root = tmp.path + "/other";
+        mkdir(other_root, 0777, True);
+        string other_context = writeContext(other_root, ("a", "b"));
+        freeze(other_context, snapshot);
+        assertEq(live, ok(("--scc-graph-generation", context_path), snapshot),
+            "a snapshot from another context is discarded for the live graph");
+
+        # So is one that is missing outright, or corrupt.
+        assertEq(live,
+            ok(("--scc-graph-generation", context_path), tmp.path + "/absent.json"),
+            "a missing snapshot falls back to the live graph");
+        write(snapshot, "{ not json\n");
+        assertEq(live, ok(("--scc-graph-generation", context_path), snapshot),
+            "an unreadable snapshot falls back to the live graph");
+
+        # An edge naming a node the context does not have would silently
+        # mis-attribute a dependency, so the whole snapshot is rejected even
+        # though it is otherwise addressed to this context.
+        string valid = tmp.path + "/valid.json";
+        freeze(context_path, valid);
+        write(snapshot, make_json((
+            "format": 1,
+            "generation": "graph-0000000000000000",
+            "outputs_digest":
+                parse_json(ReadOnlyFile::readTextFile(valid)).outputs_digest,
+            "edges": ((0, 99),),
+        )) + "\n");
+        assertEq(live, ok(("--scc-graph-generation", context_path), snapshot),
+            "a snapshot with an out-of-range node is discarded");
     }
 }
