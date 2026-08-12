@@ -47,14 +47,36 @@ run_source_order() {
     fi
 }
 
+#! Removes PATH, tolerating a remover that got there first.
+#  Every lock-reclaim caller below wants a state -- PATH gone -- rather than the
+#  act of removing it, and two waiters inspecting the same abandoned lock decide
+#  to drop it independently.  `rm -f` alone does not express that: it swallows a
+#  path that was already missing when it looked, but busybox reports an ENOENT
+#  unlink that follows a successful lstat and exits non-zero, so the waiter that
+#  loses the race by microseconds fails -- and under `set -e` that ends the
+#  build.  GNU coreutils ignores the same errno, which is why this shape only
+#  ever fails on musl/busybox hosts.  A removal that fails for any other reason
+#  is still an error and is still reported.
+remove_raced_path() {
+    if rm -f "$1" 2>/dev/null; then
+        return 0
+    fi
+    if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+        return 0
+    fi
+    # Still there, so this was not the race: repeat the removal without
+    # suppressing it, and let the utility say why it cannot be done.
+    rm -f "$1"
+}
+
 cleanup() {
     if [ -n "$outputs_file" ]; then
         rm -f "$outputs_file"
     fi
     if [ "$lock_owned" = true ]; then
-        rm -f "$lock_path"
+        remove_raced_path "$lock_path"
     fi
-    rm -f "$lock_candidate"
+    remove_raced_path "$lock_candidate"
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -84,13 +106,13 @@ while ! ln "$lock_candidate" "$lock_path" 2>/dev/null; do
         fi
         case "$owner" in
             *[!0-9]*|'')
-                rm -f "$lock_path/pid"
+                remove_raced_path "$lock_path/pid"
                 rmdir "$lock_path" 2>/dev/null || true
                 continue
                 ;;
             *)
                 if ! kill -0 "$owner" 2>/dev/null; then
-                    rm -f "$lock_path/pid"
+                    remove_raced_path "$lock_path/pid"
                     rmdir "$lock_path" 2>/dev/null || true
                     continue
                 fi
@@ -101,7 +123,7 @@ while ! ln "$lock_candidate" "$lock_path" 2>/dev/null; do
         IFS= read -r owner < "$lock_path" || true
         case "$owner" in
             *[!0-9]*|'')
-                rm -f "$lock_path"
+                remove_raced_path "$lock_path"
                 continue
                 ;;
             *)
@@ -113,7 +135,8 @@ while ! ln "$lock_candidate" "$lock_path" 2>/dev/null; do
                     current_owner=
                     IFS= read -r current_owner < "$lock_path" || true
                     if [ "$current_owner" = "$owner" ]; then
-                        rm -f "$lock_path" "$lock_path.$owner"
+                        remove_raced_path "$lock_path"
+                        remove_raced_path "$lock_path.$owner"
                     fi
                     continue
                 fi
@@ -123,7 +146,7 @@ while ! ln "$lock_candidate" "$lock_path" 2>/dev/null; do
         # A dangling or otherwise unreadable legacy lock cannot name a live
         # owner.
         if [ -e "$lock_path" ] || [ -L "$lock_path" ]; then
-            rm -f "$lock_path"
+            remove_raced_path "$lock_path"
             continue
         fi
     fi

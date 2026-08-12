@@ -179,6 +179,27 @@ single `rename(2)`. The temporary is named after its target, so concurrent batch
 threads cannot collide, and it does not end in `.d`, so a scan for depfiles cannot
 pick one up mid-write.
 
+## Reclaiming a lock asks for a state, not for an act
+
+A component lock is a hard link whose owner record names a pid and a generation
+token, and a waiter that finds it abandoned reclaims it: it re-reads the record,
+confirms it still names the owner it inspected, and removes it. Nothing makes
+that decision exclusive — every waiter behind the same abandoned lock reaches it
+independently — so two of them removing the same path is normal operation, not an
+error, and the second one has still got what it asked for.
+
+`rm -f` does not say that. GNU coreutils absorbs an `unlink(2)` that returns
+`ENOENT`, but busybox consults `-f` only when the preceding `lstat(2)` failed:
+when the path was there a moment ago and is gone by the time it is unlinked, the
+removal is reported and the command exits non-zero. Under `set -e` that ended the
+build, and the failure surfaced as a component that was compiled but never
+published, with nothing in the log but a `rm` diagnostic — only ever on musl
+hosts, because the same code is silent under coreutils.
+
+Every reclaim path therefore removes through `remove_raced_path`, which succeeds
+when the path is gone, whoever removed it, and still reports a removal that
+failed for any other reason.
+
 ## Invariants
 
 1. Identity crossing a process boundary is a component **key**, never an index.
@@ -192,6 +213,7 @@ pick one up mid-write.
    scheduler's own rule.
 7. No convergence loops. Every unpublishable outcome is rebuilt at most once,
    and repetition is a reported failure rather than a strategy.
+8. Removing a lock succeeds when the lock is gone, whoever removed it.
 
 ## Tests
 

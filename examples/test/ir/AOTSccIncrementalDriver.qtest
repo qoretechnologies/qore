@@ -34,6 +34,9 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         string source_order_tool;
         string incremental_tool;
 
+        #! Above pid_max on every platform these tests run on, so it is dead.
+        const DeadPid = 2147483647;
+
         const MemberArtifactSuffixes = (
             "", ".status.json", ".content.stamp", ".compile-contract.stamp",
             ".aggregate-contract.stamp", ".stamp", ".source.manifest.json",
@@ -65,6 +68,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testScheduledRecipeRefusesToStartTheBatch());
         addTestCase("concurrent recipes publish one coherent generation",
             \testConcurrentRecipesPublishOneGeneration());
+        addTestCase("a stale lock survives losing the race to reclaim it",
+            \testStaleLockReclaimSurvivesARacingRemover());
 
         set_return_value(main());
     }
@@ -165,8 +170,17 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             + "|| : > \"$out.preload.observed\"\n";
         if (exists mutation) {
             write(once, "pending\n");
-            body += "if [ -f " + sprintf("%y", once) + " ]; then\n"
-                + "    rm -f " + sprintf("%y", once) + "\n"
+            # The claim is one rename, not a test followed by a removal.  These
+            # compiles run concurrently, so two of them can pass the same
+            # existence test; the loser then removes a file that is already
+            # gone, and `rm -f` does not make that harmless everywhere --
+            # busybox reports an ENOENT unlink that follows a successful lstat
+            # and exits non-zero, which under `set -e` fails that compile
+            # instead of running the mutation once.  GNU coreutils ignores the
+            # same errno, which is why only the musl/busybox jobs ever saw it.
+            # rename(2) has exactly one winner and cannot fail that way.
+            body += "if mv " + sprintf("%y", once) + " "
+                + sprintf("%y", once + ".taken") + " 2>/dev/null; then\n"
                 + mutation + "\nfi\n";
         }
         foreach string suffix in (MemberArtifactSuffixes) {
@@ -203,11 +217,57 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         return trim(result.output);
     }
 
+    #! Writes a `rm` that loses the race to remove a lock, and says so.
+    /** Reclaiming an abandoned lock is a decision followed by a removal, and
+        two waiters that inspected the same lock both decide to remove it.  The
+        loser unlinks a path that is already gone, and what it reports is not
+        the same everywhere: GNU coreutils absorbs an ENOENT unlink under
+        \c -f, while busybox reports it and exits non-zero, because \c -f is
+        consulted only when the preceding \c lstat(2) failed.  The race is not
+        schedulable, so this stands in for the loser's view of it: the lock is
+        removed and then reported missing, exactly as busybox would.
+
+        \return the directory to prepend to PATH.
+    */
+    private string writeRacingRemover(hash<auto> fx) {
+        string dir = fx.root + "/racing-bin";
+        mkdir(dir, 0777, True);
+        # The shim must call the real utility by absolute path, or it re-enters
+        # itself through the PATH it was installed on.
+        string real = trim(backquote("command -v rm"));
+        if (!real.startsWith("/")) {
+            real = "/bin/rm";
+        }
+        write(dir + "/rm",
+            "#!/bin/sh\n"
+            + "for arg in \"$@\"; do\n"
+            + "    case $arg in\n"
+            + "        *.lock)\n"
+            + "            if [ -e \"$arg\" ]; then\n"
+            + "                " + sprintf("%y", real) + " -f \"$arg\"\n"
+            + "                echo \"rm: can't remove '$arg': "
+                + "No such file or directory\" >&2\n"
+            + "                exit 1\n"
+            + "            fi\n"
+            + "            ;;\n"
+            + "    esac\n"
+            + "done\n"
+            + "exec " + sprintf("%y", real) + " \"$@\"\n");
+        chmod(dir + "/rm", 0755);
+        return dir;
+    }
+
     #! Runs the driver the way qore-qo-incremental-plan runs it for a stale component.
+    /** \a path_prefix is prepended to PATH, which is how a test replaces one of
+        the utilities the driver shells out to.
+    */
     private hash<auto> drive(hash<auto> fx, string name, hash<auto> component,
-            *string snapshot) {
+            *string snapshot, *string path_prefix) {
         string qo_dir = fx.qo_dir;
-        string command = sprintf(
+        string command = exists path_prefix
+            ? sprintf("PATH=%y ", path_prefix + ":" + ENV.PATH)
+            : "";
+        command += sprintf(
             "QORE_QCC_PLANNED_STALE=1 QORE_QCC_COMPONENT_INDEX=%y "
             "QORE_QCC_COMPONENT_KEY=%y QORE_QCC_COMPONENT_SIZE=%y "
             "QORE_QCC_COMPONENT_LOCK=%y QORE_QCC_PREREQUISITES_READY=1 "
@@ -662,6 +722,43 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(0, live.rc, "the live graph is readable");
         assertNeq(generation, trim(live.output),
             "a worker really did move the graph while the others were running");
+    }
+
+    #! A builder that loses the reclaim race still acquires the lock it reclaimed.
+    /** Losing that race means the lock is gone, which is the state the reclaim
+        asked for -- so the builder must continue.  It used to fail instead,
+        because the removal reported the loss and the driver runs under
+        \c "set -e"; a whole component then went unbuilt and unpublished with
+        nothing in the log but a `rm` diagnostic.  Only musl/busybox hosts could
+        show it, which is why it read as an unexplained alpine-only failure.
+    */
+    testStaleLockReclaimSurvivesARacingRemover() {
+        TmpDir tmp("qore-aot-driver-reclaim-");
+        hash<auto> fx = fixture(tmp.path);
+        writeCompiler(fx);
+
+        hash<auto> component = componentFor(fx.qo_dir, "d");
+        string lock = fx.qo_dir + "/.qcc-scc/" + component.key + ".lock";
+        mkdir(fx.qo_dir + "/.qcc-scc", 0777, True);
+        # A well-formed record naming a pid that cannot be running: the acquire
+        # loop can only get past it by reclaiming it, which is the path under
+        # test.  The number is above every pid_max this runs on, and the test
+        # says so rather than assuming it.
+        assertNeq(0, system("kill -0 " + DeadPid + " 2>/dev/null"),
+            sprintf("pid %d names no process", DeadPid));
+        write(lock, sprintf("%d abandoned\n", DeadPid));
+
+        hash<auto> result = drive(fx, "d", component, NOTHING,
+            writeRacingRemover(fx));
+
+        assertEq(0, result.rc,
+            "the driver survives losing the reclaim race: " + result.output);
+        assertEq(("d.qc d.qo",), compiles(fx),
+            "the component is compiled exactly once");
+        *hash<auto> published = record(fx, component.key);
+        assertTrue(exists published, "the component's generation record is published");
+        assertEq(component.key, published.scc, "the record names the component");
+        assertFalse(is_file(lock), "no lock is left behind");
     }
 
     #! Everything the named workers know about why they failed.

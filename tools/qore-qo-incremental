@@ -471,6 +471,28 @@ read_output_lock_owner() {
     printf '%s\n' "$_lock_line"
 }
 
+#! Removes PATH, tolerating a remover that got there first.
+#  Every lock-reclaim caller below wants a state -- PATH gone -- rather than the
+#  act of removing it, and two waiters inspecting the same abandoned lock decide
+#  to drop it independently.  `rm -f` alone does not express that: it swallows a
+#  path that was already missing when it looked, but busybox reports an ENOENT
+#  unlink that follows a successful lstat and exits non-zero, so the waiter that
+#  loses the race by microseconds fails -- and under `set -e` that ends the
+#  build.  GNU coreutils ignores the same errno, which is why this shape only
+#  ever fails on musl/busybox hosts.  A removal that fails for any other reason
+#  is still an error and is still reported.
+remove_raced_path() {
+    if rm -f "$1" 2>/dev/null; then
+        return 0
+    fi
+    if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+        return 0
+    fi
+    # Still there, so this was not the race: repeat the removal without
+    # suppressing it, and let the utility say why it cannot be done.
+    rm -f "$1"
+}
+
 #! Builds the component under its generation lock.
 #  One lock covers every member, so no sibling can publish a new compile
 #  contract while this compile runs — the condition the retry loop existed to
@@ -504,7 +526,7 @@ with_component_lock() (
         if [ -n "$output_lock_token" ]; then
             held=$(read_output_lock_owner "$output_lock") || held=
             if [ "$held" = "$$ $output_lock_token" ]; then
-                rm -f "$output_lock"
+                remove_raced_path "$output_lock"
             fi
         fi
     }
@@ -527,10 +549,10 @@ with_component_lock() (
     # match one.
     reclaim_foreign_output_lock() {
         if [ -d "$output_lock" ]; then
-            rm -f "$output_lock/pid"
+            remove_raced_path "$output_lock/pid"
             rmdir "$output_lock" 2>/dev/null || true
         elif [ -e "$output_lock" ] && [ ! -s "$output_lock" ]; then
-            rm -f "$output_lock"
+            remove_raced_path "$output_lock"
         fi
     }
 
@@ -550,7 +572,7 @@ with_component_lock() (
         # shape first; this protocol never publishes a directory here, so
         # removing one is unconditionally safe.
         if [ -d "$output_lock" ]; then
-            rm -f "$output_lock/pid"
+            remove_raced_path "$output_lock/pid"
             rmdir "$output_lock" 2>/dev/null || true
         fi
         if ln "$output_lock_record" "$output_lock" 2>/dev/null; then
@@ -570,7 +592,7 @@ with_component_lock() (
                 # A malformed record cannot be attributed to a live builder;
                 # drop it only if it is still the record we inspected.
                 if [ "$(read_output_lock_owner "$output_lock" || true)" = "$owner" ]; then
-                    rm -f "$output_lock"
+                    remove_raced_path "$output_lock"
                 fi
                 continue
                 ;;
@@ -580,7 +602,7 @@ with_component_lock() (
             # while it still names the dead generation we inspected.  A new
             # owner has a different token, so its lock is left alone.
             if [ "$(read_output_lock_owner "$output_lock" || true)" = "$owner" ]; then
-                rm -f "$output_lock"
+                remove_raced_path "$output_lock"
             fi
             continue
         fi
