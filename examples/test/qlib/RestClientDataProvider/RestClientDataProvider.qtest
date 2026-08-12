@@ -119,6 +119,10 @@ public class RestClientDataProviderTest inherits QUnit::Test {
         assertTrue(exists actions, "GenericRest app actions must be registered");
         *hash<DataProviderActionInfo> call_action = actions.call;
         assertTrue(exists call_action, "GenericRest call action must be registered");
+        assertEq(NT_BOOLEAN, call_action.mutates_state.typeCode(),
+            "GenericRest call action publishes a typed mutation effect");
+        assertTrue(DataProviderActionCatalog::actionMutatesState(call_action),
+            "GenericRest call action fails closed for caller-selected methods");
         assertTrue(exists call_action.options.openapi3,
             "GenericRest call action must expose the openapi3 option");
         assertFalse(exists call_action.options.swagger,

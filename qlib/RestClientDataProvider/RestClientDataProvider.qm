@@ -93,6 +93,9 @@ module RestClientDataProvider {
                         "Use this action for endpoints that are not yet exposed as first-class actions "
                         "on this app.", app.display_name),
                     "action_code": DPAT_API,
+                    # The caller selects the HTTP method and target, so the generic action must fail closed even
+                    # when a particular invocation uses a safe method.
+                    "mutates_state": True,
                     # the body field's effective type depends on body_type; getRequestTypeWithOptionsImpl
                     # / getRequestTypeWithDataImpl on GenericApiCallProvider re-types it at form-render
                     # time
@@ -216,6 +219,7 @@ module RestClientDataProvider {
             "short_desc": "Make a call to a REST server or webhook",
             "desc": "Make a call to a REST server or a webhook and return the response",
             "action_code": DPAT_API,
+            "mutates_state": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 RestClientCallWithMethodRequestDataType::Fields{"method",}, {
                     "preselected": True,
