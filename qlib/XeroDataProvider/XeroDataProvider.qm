@@ -195,9 +195,14 @@ module XeroDataProvider {
 
     @section xerodataprovider_records Record-Based Tables
 
-    Seven of Xero's collections are exposed under \c tables for record-based reading and writing:
-    \c invoices, \c contacts, \c bank-transactions, \c items and \c payments from the accounting
-    description, and \c projects and \c project-tasks from the projects one.
+    Eleven of Xero's collections are exposed under \c tables: \c invoices, \c contacts,
+    \c bank-transactions, \c items, \c payments, \c invoice-history, \c accounts, \c tax-rates and
+    \c purchase-orders from the accounting description, and \c projects and \c project-tasks from the
+    projects one.
+
+    \c accounts, \c tax-rates and \c purchase-orders are **read only**: this application exports no create,
+    update or delete for any of them, so those tables declare none rather than offering an action that could
+    only fail.
 
     Each table takes the standard search expressions.  Where a table's API publishes a filter expression
     language the whole expression is rendered into it and the service does the searching, and that table

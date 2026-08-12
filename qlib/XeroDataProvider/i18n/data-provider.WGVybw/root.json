@@ -2148,8 +2148,8 @@
           "message": "The name of the table to work with"
         },
         "app.WGVybw.action.c2VhcmNo.option.dGFibGU.desc": {
-          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`",
-          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`"
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`"
         },
         "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
           "source": "Find a Single Record",
@@ -2172,8 +2172,8 @@
           "message": "The name of the table to work with"
         },
         "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
-          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`",
-          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`"
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`"
         },
         "app.WGVybw.action.Y3JlYXRl.display_name": {
           "source": "Create Records",
@@ -2196,8 +2196,8 @@
           "message": "The name of the table to work with"
         },
         "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`",
-          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`"
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`"
         },
         "app.WGVybw.action.dXBkYXRl.display_name": {
           "source": "Update Records",
@@ -2220,8 +2220,8 @@
           "message": "The name of the table to work with"
         },
         "app.WGVybw.action.dXBkYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`",
-          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `projects` or `project-tasks`"
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
           "source": "Find Employees",

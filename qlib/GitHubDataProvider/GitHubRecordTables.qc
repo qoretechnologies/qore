@@ -95,6 +95,29 @@ public namespace GitHubDataProvider {
     So a workflow that creates a record and then searches for it will not find it, and should use what
     \c createRecord() returned rather than reading it back.  This is GitHub's behaviour, not this module's;
     there is nothing to poll or retry that would make it appear sooner, and the record is not lost.
+
+    @section githubrecord_readonly Three Collections Are Read Only
+
+    \c labels, \c collaborators and \c contributors list and are never written: this application exports no
+    create, update or delete for any of them, and a table naming an action the manifest does not export
+    could only ever fail.  They declare none, and the record-based create, update and delete actions refuse
+    them by name rather than pretending.
+
+    Unlike the four tables above, these three publish **GitHub's own record shape** rather than a
+    projection: there is no predecessor whose column names have to be preserved, and a derived type cannot
+    drift from the contract the actions use.
+
+    Each is named by what GitHub's paths take - a label by its \c name, a collaborator and a contributor by
+    their \c login - and none of them is a numeric \c id, though every one of those records carries one.
+
+    @section githubrecord_readonly_nofilter Nothing Is Pushed Down From Them
+
+    The collaborator listing takes \c affiliation and \c permission and the contributor listing takes
+    \c anon, and all three stay ordinary search options.  Neither of the first two is a predicate on a
+    column this table publishes: \c affiliation describes how a user reaches the repository and appears in
+    no record, and \c permission takes a permission level while the record carries a \c role_name, so the
+    two do not name the same value.  Wiring either to a predicate would answer a search with records that do
+    not match it.
 */
 public class GitHubRecordTables {
     public {
@@ -326,8 +349,60 @@ public class GitHubRecordTables {
             "search_options": ("visibility", "affiliation", "type", "sort", "direction", "since", "before"),
         };
 
+        #! The labels table
+        /** GitHub addresses a label by its \c name in every path that reads, edits or applies one, and
+            never by the \c id it also returns, so the name is the identity here.
+
+            @see @ref githubrecord_readonly
+        */
+        const LabelsTable = <RestSchemaRecordTableInfo>{
+            "name": "labels",
+            "display_name": "Labels",
+            "short_desc": "the labels defined in one repository",
+            "desc": "The labels defined in one repository, as records; a label is named by its name.  "
+                "Labels are read only here",
+            "list_action": "issues-list-labels-for-repo",
+            "id_field": "name",
+            "scope_options": ("owner", "repo"),
+            "paging": Paging,
+        };
+
+        #! The collaborators table
+        /** @see @ref githubrecord_readonly, @ref githubrecord_readonly_nofilter
+        */
+        const CollaboratorsTable = <RestSchemaRecordTableInfo>{
+            "name": "collaborators",
+            "display_name": "Collaborators",
+            "short_desc": "the users with access to one repository",
+            "desc": "The users with access to one repository, as records; a collaborator is named by their "
+                "login.  Collaborators are read only here",
+            "list_action": "repos-list-collaborators",
+            "id_field": "login",
+            "scope_options": ("owner", "repo"),
+            "search_options": ("affiliation", "permission"),
+            "paging": Paging,
+        };
+
+        #! The contributors table
+        /** @see @ref githubrecord_readonly, @ref githubrecord_readonly_nofilter
+        */
+        const ContributorsTable = <RestSchemaRecordTableInfo>{
+            "name": "contributors",
+            "display_name": "Contributors",
+            "short_desc": "the users who have contributed to one repository",
+            "desc": "The users who have contributed to one repository, as records, with the number of "
+                "contributions each has made; a contributor is named by their login.  Contributors are "
+                "read only here",
+            "list_action": "repos-list-contributors",
+            "id_field": "login",
+            "scope_options": ("owner", "repo"),
+            "search_options": ("anon",),
+            "paging": Paging,
+        };
+
         #! Every table, in presentation order
-        const Tables = (IssuesTable, PullsTable, ReleasesTable, RepositoriesTable);
+        const Tables = (IssuesTable, PullsTable, ReleasesTable, RepositoriesTable, LabelsTable,
+            CollaboratorsTable, ContributorsTable);
 
         #! The IDs the record-based actions are registered under
         /** The first three are the IDs the superseded TypeScript application registered, so a workflow

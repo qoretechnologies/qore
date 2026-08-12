@@ -2436,8 +2436,8 @@
           "message": "The name of the table to work with"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.desc": {
-          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`",
-          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`"
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
           "source": "Find a Single Record",
@@ -2460,8 +2460,8 @@
           "message": "The name of the table to work with"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
-          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`",
-          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`"
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
           "source": "Create Records",
@@ -2484,8 +2484,8 @@
           "message": "The name of the table to work with"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`",
-          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`"
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
           "source": "Update Records",
@@ -2508,8 +2508,8 @@
           "message": "The name of the table to work with"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`",
-          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`"
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
           "source": "Delete Records",
@@ -2532,8 +2532,8 @@
           "message": "The name of the table to work with"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`",
-          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments` or `commit-comments`"
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
           "source": "New Commit",

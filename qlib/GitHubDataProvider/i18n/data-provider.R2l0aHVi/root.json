@@ -5212,8 +5212,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.c2VhcmNo.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
-          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
+          "source": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`",
+          "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.display_name": {
           "source": "Find a Single Record",
@@ -5236,8 +5236,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
-          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
+          "source": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`",
+          "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.display_name": {
           "source": "Create Records",
@@ -5260,8 +5260,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
-          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
+          "source": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`",
+          "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.dXBkYXRl.display_name": {
           "source": "Update Records",
@@ -5284,8 +5284,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.dXBkYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
-          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
+          "source": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`",
+          "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.ZGVsZXRl.display_name": {
           "source": "Delete Records",
@@ -5308,8 +5308,8 @@
           "message": "The name of the table to work with"
         },
         "app.R2l0aHVi.action.ZGVsZXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `issues`, `pulls`, `releases` or `repositories`",
-          "message": "The table to work with: `issues`, `pulls`, `releases` or `repositories`"
+          "source": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`",
+          "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfaXNzdWU.display_name": {
           "source": "New Issue",

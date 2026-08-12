@@ -168,8 +168,13 @@ module ConfluenceDataProvider {
 
     @section confluencedataprovider_records Record-Based Tables
 
-    Three of Confluence's collections are exposed under \c tables for record-based reading and writing:
-    \c pages, \c blogposts and \c tasks.
+    Six of Confluence's collections are exposed under \c tables: \c pages, \c blogposts and \c tasks for
+    record-based reading and writing, and \c spaces, \c labels and \c attachments for reading.
+
+    The last three are **read only**: a space is created through a long-running job, a label is applied to
+    content rather than created on its own, and an attachment is uploaded to a page, so this application
+    exports no write for any of them and those tables declare none rather than offering an action that could
+    only fail.
 
     Each table takes the standard search expressions.  What the listing's own arguments can express is sent
     to the service, and the rest is evaluated against each record as it arrives; the listing is paged until

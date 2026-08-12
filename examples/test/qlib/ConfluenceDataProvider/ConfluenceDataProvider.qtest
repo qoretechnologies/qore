@@ -301,6 +301,7 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
         addTestCase("event providers", \eventProviderTest());
         addTestCase("event polling", \eventPollingTest());
         addTestCase("record tables", \recordTableTest());
+        addTestCase("read-only record tables", \readOnlyTableTest());
         set_return_value(main());
     }
 
@@ -846,5 +847,92 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
                 sprintf("%y resolves its options from the chosen table", i.key));
             assertTrue(i.value.data_provider_info.has_record);
         }
+    }
+
+    #! The three read-only tables declare what Confluence actually offers, and no more
+    /** A space is created through a long-running job, a label is applied to content rather than created on
+        its own, and an attachment is uploaded to a page, so this application exports no write for any of
+        them and the tables declare none.
+    */
+    private readOnlyTableTest() {
+        FakeConfluenceRestClient rest();
+        ConfluenceDataProvider::ConfluenceDataProvider dp(rest);
+        AbstractDataProvider tables =
+            dp.getChildProviderEx(ConfluenceDataProvider::ConfluenceDataProvider::TablesChildName);
+
+        foreach string name in (("spaces", "labels", "attachments")) {
+            hash<DataProviderInfo> info = tables.getChildProviderEx(name).getInfo();
+            assertFalse(info.supports_create, sprintf("table %y creates nothing", name));
+            assertFalse(info.supports_update, sprintf("table %y updates nothing", name));
+            assertFalse(info.supports_delete, sprintf("table %y deletes nothing", name));
+            assertTrue(info.supports_read, sprintf("table %y is readable", name));
+            # Confluence publishes no filter expression language, however many arguments a listing takes
+            assertFalse(info.supports_native_search, sprintf("table %y has no query language", name));
+        }
+
+        # a listing returns a projection and a single read returns the record: spaces has both, so the
+        # richer one is published and a column only the listing declares is added rather than lost
+        hash<string, AbstractDataField> srt = tables.getChildProviderEx("spaces").getRecordType();
+        map assertTrue(exists srt{$1}, sprintf("spaces publish %y, which only the single read describes", $1)),
+            ("labels", "operations", "permissions", "properties");
+        assertTrue(exists srt.currentActiveAlias,
+            "and the column only the listing describes is added rather than lost");
+
+        # labels and attachments have no single read: Confluence publishes no path that reads one of either
+        assertNothing(ConfluenceRecordTables::LabelsTable.get_action);
+        assertNothing(ConfluenceRecordTables::AttachmentsTable.get_action);
+
+        # every field a filter names has to be a column, or the predicate could never reach the table
+        foreach hash<RestSchemaRecordTableInfo> t in ((ConfluenceRecordTables::SpacesTable,
+                ConfluenceRecordTables::LabelsTable, ConfluenceRecordTables::AttachmentsTable)) {
+            hash<string, AbstractDataField> rt = tables.getChildProviderEx(t.name).getRecordType();
+            list<string> missing = ();
+            map missing += $1.field, t.filters, !exists rt{$1.field};
+            assertEq((), missing, sprintf("every filtered field of %y is a column", t.name));
+        }
+
+        # an attachment's file name is its title, and that is the predicate Confluence's "filename"
+        # argument answers
+        RestSchemaRecordFilter af(ConfluenceRecordTables::AttachmentsTable);
+        hash<RestSchemaRecordFilterSplit> s = af.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "title"}, "header.jpg"),
+        });
+        assertEq({"filename": "header.jpg"}, s.options);
+        assertNothing(s.client, "the filter is exact, so the predicate is not evaluated twice");
+
+        # a space is narrowed by its key, which travels in an argument taking a list of them
+        RestSchemaRecordFilter sf(ConfluenceRecordTables::SpacesTable);
+        s = sf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "key"}, "DEV"),
+        });
+        assertEq({"keys": "DEV"}, s.options);
+        s = sf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "key"}, ("DEV", "OPS")),
+        });
+        assertEq({"keys": ("DEV", "OPS")}, s.options, "a list of keys is sent whole");
+
+        # a label is narrowed by its prefix, and by the identity Confluence takes as an integer list
+        RestSchemaRecordFilter lf(ConfluenceRecordTables::LabelsTable);
+        s = lf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, ("229467", "229468")),
+        });
+        assertEq({"label-id": ("229467", "229468")}, s.options);
+        s = lf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "prefix"}, "my"),
+        });
+        assertEq({"prefix": "my"}, s.options);
+
+        # a predicate Confluence cannot express is answered as the records arrive
+        s = af.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "fileSize"}, 1024),
+        });
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
     }
 }

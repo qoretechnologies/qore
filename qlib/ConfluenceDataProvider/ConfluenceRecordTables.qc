@@ -54,6 +54,20 @@ public namespace ConfluenceDataProvider {
     siblings as **inclusive** and as epoch **milliseconds**, so they carry \c >= and \c <= exactly, and a
     value that cannot be read as a point in time is not sent at all rather than sent in the wrong unit.
 
+    @section confluencerecord_readonly Three Collections Are Read Only
+
+    \c spaces, \c labels and \c attachments list and are never written: a space is created through a
+    long-running job rather than through this collection, a label is applied to content rather than created
+    on its own, and an attachment is uploaded to a page.  This application exports no create, update or
+    delete for any of them, and a table naming an action the manifest does not export could only ever fail,
+    so they declare none.
+
+    \c spaces has the single-record read the other tables have, so a search naming one space reads that one
+    space, and the record type is the richer of the two descriptions.  \c labels and \c attachments have
+    none: Confluence publishes no path that reads one of either.
+
+    An attachment's file name is its \c title, which is what Confluence's \c filename argument filters on.
+
     @section confluencerecord_version An Update Needs the Version Number
 
     Confluence rejects an update that does not carry the record's current \c version, which is its optimistic
@@ -202,8 +216,115 @@ public class ConfluenceRecordTables {
             "search_options": ("body-format", "include-blank-tasks"),
         };
 
+        #! The spaces table
+        /** @see @ref confluencerecord_readonly
+        */
+        const SpacesTable = <RestSchemaRecordTableInfo>{
+            "name": "spaces",
+            "display_name": "Spaces",
+            "short_desc": "Confluence spaces as records",
+            "desc": "Confluence spaces as records; a search narrows them by key, by type and by status.  "
+                "Spaces are read only here",
+            "list_action": "getSpaces",
+            "get_action": "getSpaceById",
+            "id_field": "id",
+            "records_path": ("results",),
+            "paging": Paging,
+            "filters": (
+                <RestSchemaRecordFilterInfo>{
+                    "field": "id", "operator": DP_SEARCH_OP_EQ, "option": "ids", "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "id", "operator": DP_SEARCH_OP_IN, "option": "ids", "multi": True,
+                    "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "key", "operator": DP_SEARCH_OP_EQ, "option": "keys", "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "key", "operator": DP_SEARCH_OP_IN, "option": "keys", "multi": True,
+                    "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "type", "operator": DP_SEARCH_OP_EQ, "option": "type", "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "status", "operator": DP_SEARCH_OP_EQ, "option": "status", "exact": True,
+                },
+            ),
+            "search_options": ("sort", "labels", "favorited-by", "not-favorited-by", "description-format",
+                "include-icon"),
+        };
+
+        #! The labels table
+        /** @see @ref confluencerecord_readonly
+        */
+        const LabelsTable = <RestSchemaRecordTableInfo>{
+            "name": "labels",
+            "display_name": "Labels",
+            "short_desc": "the labels defined in the site",
+            "desc": "The labels defined in the site, as records; a search narrows them by prefix.  Labels "
+                "are read only here - a label is applied to content rather than created on its own",
+            "list_action": "getLabels",
+            "id_field": "id",
+            "records_path": ("results",),
+            "paging": Paging,
+            "filters": (
+                <RestSchemaRecordFilterInfo>{
+                    "field": "id", "operator": DP_SEARCH_OP_EQ, "option": "label-id", "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "id", "operator": DP_SEARCH_OP_IN, "option": "label-id", "multi": True,
+                    "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "prefix", "operator": DP_SEARCH_OP_EQ, "option": "prefix", "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "prefix", "operator": DP_SEARCH_OP_IN, "option": "prefix", "multi": True,
+                    "exact": True,
+                },
+            ),
+            "search_options": ("sort",),
+        };
+
+        #! The attachments table
+        /** An attachment's file name is its \c title, which is what Confluence's \c filename argument
+            filters on, so a predicate on \c title is the one that is sent.
+
+            @see @ref confluencerecord_readonly
+        */
+        const AttachmentsTable = <RestSchemaRecordTableInfo>{
+            "name": "attachments",
+            "display_name": "Attachments",
+            "short_desc": "the attachments in the site",
+            "desc": "The attachments in the site, as records; a search narrows them by status, by media "
+                "type and by file name.  Attachments are read only here - an attachment is uploaded to a "
+                "page or a blog post",
+            "list_action": "getAttachments",
+            "id_field": "id",
+            "records_path": ("results",),
+            "paging": Paging,
+            "filters": (
+                <RestSchemaRecordFilterInfo>{
+                    "field": "status", "operator": DP_SEARCH_OP_EQ, "option": "status", "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "status", "operator": DP_SEARCH_OP_IN, "option": "status", "multi": True,
+                    "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "mediaType", "operator": DP_SEARCH_OP_EQ, "option": "mediaType", "exact": True,
+                },
+                <RestSchemaRecordFilterInfo>{
+                    "field": "title", "operator": DP_SEARCH_OP_EQ, "option": "filename", "exact": True,
+                },
+            ),
+            "search_options": ("sort",),
+        };
+
         #! Every table, in presentation order
-        const Tables = (PagesTable, BlogPostsTable, TasksTable);
+        const Tables = (PagesTable, BlogPostsTable, TasksTable, SpacesTable, LabelsTable, AttachmentsTable);
 
         #! The IDs the record-based actions are registered under
         /** Confluence is a new application rather than a replacement, so these are the conventional IDs.

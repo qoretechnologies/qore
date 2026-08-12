@@ -639,6 +639,22 @@ the slug column that table could read and never write: a repository record carri
 `full_name`, Bitbucket documents `{repo_slug}` as accepting a brace-wrapped UUID, and that does not survive
 this transport - a path variable is percent-encoded and `%7B...%7D` answers 404.
 
+**A listing sometimes returns a membership rather than the thing it names, and the answer is still to
+publish the API's shape.** Bitbucket's `/user/workspaces` and `/workspaces/{workspace}/members` answer with
+`{type, administrator, workspace}` and `{type, links, user, workspace}` - the slug, the display name and the
+account UUID a caller is actually after are one level down. Flattening that with a `to_record` projection
+looks tempting and costs more than it looks: the layer requires `to_record` and `to_wire` **together**, so a
+table that never writes would declare a conversion that can never run, and a projection also replaces the
+derived record type with a hand-written one that goes stale when the vendor adds a field. Publish the shape
+the vendor returns, say in the table's description where the useful values are, and let a mapper read
+`workspace.slug` as a nested path. A projection is for preserving a predecessor's column names, which is a
+product commitment; it is not a way to improve on an API's shape.
+
+**A collection with no identity of its own is still a table.** Neither membership above has an identifier,
+and neither vendor publishes a path that reads one, so those tables declare no identity and no single-record
+read, and a search is answered by reading the listing. That is the same shape as Xero's `invoice-history`,
+an append-only log. The layer only needs an identity when something addresses a record by it.
+
 **A record path that does not resolve fails silently.** Paddle's manifest already unwraps `data` on a single
 read, so the tables unwrapping it again read one record as *nothing*, and no test that only searches ever
 noticed. `checkTables()` now resolves every `records_path`, `record_path` and `write_record_path` against

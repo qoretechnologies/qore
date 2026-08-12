@@ -3212,8 +3212,8 @@
           "message": "The name of the table to work with"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.option.dGFibGU.desc": {
-          "source": "The table to work with: `pages`, `blogposts` or `tasks`",
-          "message": "The table to work with: `pages`, `blogposts` or `tasks`"
+          "source": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`",
+          "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.display_name": {
           "source": "Find a Single Record",
@@ -3236,8 +3236,8 @@
           "message": "The name of the table to work with"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
-          "source": "The table to work with: `pages`, `blogposts` or `tasks`",
-          "message": "The table to work with: `pages`, `blogposts` or `tasks`"
+          "source": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`",
+          "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.display_name": {
           "source": "Create Records",
@@ -3260,8 +3260,8 @@
           "message": "The name of the table to work with"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `pages`, `blogposts` or `tasks`",
-          "message": "The table to work with: `pages`, `blogposts` or `tasks`"
+          "source": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`",
+          "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.display_name": {
           "source": "Update Records",
@@ -3284,8 +3284,8 @@
           "message": "The name of the table to work with"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `pages`, `blogposts` or `tasks`",
-          "message": "The table to work with: `pages`, `blogposts` or `tasks`"
+          "source": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`",
+          "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.display_name": {
           "source": "Delete Records",
@@ -3308,8 +3308,8 @@
           "message": "The name of the table to work with"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.option.dGFibGU.desc": {
-          "source": "The table to work with: `pages`, `blogposts` or `tasks`",
-          "message": "The table to work with: `pages`, `blogposts` or `tasks`"
+          "source": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`",
+          "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
           "source": "New Page",

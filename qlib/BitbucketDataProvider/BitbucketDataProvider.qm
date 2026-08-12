@@ -182,8 +182,14 @@ module BitbucketDataProvider {
 
     @section bitbucketdataprovider_records Record-Based Tables
 
-    Four of Bitbucket's collections are exposed under \c tables for record-based reading and writing:
-    \c repositories, \c pullrequests, \c pullrequest-comments and \c commit-comments.
+    Eight of Bitbucket's collections are exposed under \c tables: \c repositories, \c pullrequests,
+    \c pullrequest-comments and \c commit-comments for record-based reading and writing, and \c workspaces,
+    \c workspace-members, \c commits and \c branches for reading.
+
+    The last four are **read only**: Bitbucket creates none of them through these paths - a commit arrives
+    by pushing it - and this application exports no write for any of them, so those tables declare none
+    rather than offering an action that could only fail.  \c workspaces and \c workspace-members publish
+    **memberships**, which carry the workspace and the user as nested objects, as Bitbucket returns them.
 
     Each table takes the standard search expressions.  Where a table's API publishes a filter expression
     language the whole expression is rendered into it and the service does the searching, and that table

@@ -71,6 +71,20 @@ public namespace XeroDataProvider {
     tables are built on that set rather than on the accounting one.  They page with \c page and \c pageSize
     like the accounting collections, but they have no filter expression language: a project is filtered by
     contact and state, and a task by charge type.
+
+    @section xerorecord_readonly Three Collections Are Read Only
+
+    \c accounts, \c tax-rates and \c purchase-orders list and are never written: this application exports no
+    create, update or delete for any of them, and a table naming an action the manifest does not export
+    could only ever fail.  They declare none, and the record-based create, update and delete actions refuse
+    them by name rather than pretending.
+
+    Two of the three take Xero's \c where clause and therefore search natively;
+    \c purchase-orders does not - it narrows its listing with \c Status, \c DateFrom and \c DateTo as query
+    arguments, which is a different claim and is declared as one.
+
+    A tax rate has no identifier of its own: Xero addresses one by its \c TaxType, which is what a tax rate
+    is, so that is the identity the table declares.
 */
 public class XeroRecordTables {
     public {
@@ -271,9 +285,106 @@ public class XeroRecordTables {
             "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_NONE},
         };
 
+        #! The accounts table
+        /** Xero's account listing takes no paging arguments at all: it answers with the whole chart of
+            accounts.
+
+            Every field declared below was verified against the live API to be one Xero will accept in a
+            \c where clause, including the booleans - Xero answers <tt>EnablePaymentsToAccount==false</tt>
+            with exactly the accounts that have it unset.
+
+            @see @ref xerorecord_readonly
+        */
+        const AccountsTable = <RestSchemaRecordTableInfo>{
+            "name": "accounts",
+            "display_name": "Accounts",
+            "short_desc": "the accounts in the Xero chart of accounts",
+            "desc": "The accounts in the Xero chart of accounts, as records; Xero evaluates a search over "
+                "them itself, and returns the whole chart in one response rather than paging it.  Accounts "
+                "are read only here",
+            "list_action": "getAccounts",
+            "id_field": "AccountID",
+            "records_path": ("Accounts",),
+            "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_NONE},
+            "search_options": ("order",),
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "where",
+                "syntax": Where,
+                "fields": {
+                    "AccountID": True, "Code": True, "Name": True, "Type": True, "Class": True,
+                    "Status": True, "TaxType": True, "BankAccountType": True, "BankAccountNumber": True,
+                    "CurrencyCode": True, "SystemAccount": True, "Description": True,
+                    "EnablePaymentsToAccount": True, "ShowInExpenseClaims": True, "ReportingCode": True,
+                    "AddToWatchlist": True, "HasAttachments": True, "UpdatedDateUTC": True,
+                },
+            },
+        };
+
+        #! The tax rates table
+        /** Xero's tax rate listing takes no paging arguments either, and a tax rate has no identifier of
+            its own: it **is** its \c TaxType, which is what every Xero document names to apply one.
+
+            @see @ref xerorecord_readonly
+        */
+        const TaxRatesTable = <RestSchemaRecordTableInfo>{
+            "name": "tax-rates",
+            "display_name": "Tax Rates",
+            "short_desc": "the tax rates the organisation can apply",
+            "desc": "The tax rates the organisation can apply, as records; Xero evaluates a search over "
+                "them itself, and returns them all in one response rather than paging them.  Tax rates are "
+                "read only here, and a tax rate is named by its tax type",
+            "list_action": "getTaxRates",
+            "id_field": "TaxType",
+            "records_path": ("TaxRates",),
+            "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_NONE},
+            "search_options": ("order",),
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "where",
+                "syntax": Where,
+                "fields": {
+                    "TaxType": True, "Name": True, "Status": True, "ReportTaxType": True,
+                    "CanApplyToAssets": True, "CanApplyToEquity": True, "CanApplyToExpenses": True,
+                    "CanApplyToLiabilities": True, "CanApplyToRevenue": True, "DisplayTaxRate": True,
+                    "EffectiveRate": True,
+                },
+            },
+        };
+
+        #! The purchase orders table
+        /** The one accounting collection here with no \c where clause: Xero narrows it with \c Status,
+            \c DateFrom and \c DateTo as query arguments instead, so this table declares \c filters and no
+            filter expression language, and does not claim native search.
+
+            \c Status is declared **inexact**: it narrows what has to be read and the predicate is applied
+            again to what comes back, which is correct whether or not Xero matches a status exactly.
+
+            The records are under \c PurchaseOrders.  Xero declares a \c Warnings array on the same
+            envelope, so a scan for the first array-valued field finds the wrong one.
+
+            @see @ref xerorecord_readonly
+        */
+        const PurchaseOrdersTable = <RestSchemaRecordTableInfo>{
+            "name": "purchase-orders",
+            "display_name": "Purchase Orders",
+            "short_desc": "Xero purchase orders as records",
+            "desc": "Xero purchase orders as records; a search narrows them by status and by date range, "
+                "and the rest of a search is evaluated as the records arrive.  Purchase orders are read "
+                "only here",
+            "list_action": "getPurchaseOrders",
+            "id_field": "PurchaseOrderID",
+            "records_path": ("PurchaseOrders",),
+            "paging": AccountingPaging,
+            "search_options": ("Status", "DateFrom", "DateTo", "order"),
+            "filters": (
+                <RestSchemaRecordFilterInfo>{
+                    "field": "Status", "operator": DP_SEARCH_OP_EQ, "option": "Status",
+                },
+            ),
+        };
+
         #! Every accounting table, in presentation order
         const AccountingTables = (InvoicesTable, ContactsTable, BankTransactionsTable, ItemsTable,
-            PaymentsTable, InvoiceHistoryTable);
+            PaymentsTable, InvoiceHistoryTable, AccountsTable, TaxRatesTable, PurchaseOrdersTable);
 
         #! The projects table
         /** The projects API has no filter expression language: a project is filtered by contact and state.

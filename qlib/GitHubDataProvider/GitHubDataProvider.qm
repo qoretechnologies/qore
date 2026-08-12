@@ -242,11 +242,16 @@ module GitHubDataProvider {
 
     @section githubdataprovider_records Record-Based Tables
 
-    Four tables - \c issues, \c pulls, \c releases and \c repositories - are exposed under \c tables for
-    record-based reading and writing.  They are **flattened, writable projections** rather than GitHub's response
-    shapes: an issue's labels are names, its assignee a login, a pull request's base and head branch names.
-    \c owner and \c repo are required search and create options, because a table is scoped to one
-    repository.
+    Seven tables are exposed under \c tables.  \c issues, \c pulls, \c releases and \c repositories are
+    read and written, and are **flattened, writable projections** rather than GitHub's response shapes: an
+    issue's labels are names, its assignee a login, a pull request's base and head branch names.  \c owner
+    and \c repo are required search and create options, because a table is scoped to one repository.
+
+    \c labels, \c collaborators and \c contributors are **read only**: this application exports no create,
+    update or delete for any of them, so those tables declare none rather than offering an action that could
+    only fail.  They publish GitHub's own record shape, having no predecessor whose column names have to be
+    preserved, and each is named by what GitHub's paths take - a label by its \c name, a collaborator and a
+    contributor by their \c login.
 
     Five actions reach them, each naming its table in the path (\c "tables/{table}"):
 
@@ -262,8 +267,8 @@ module GitHubDataProvider {
     The first three action IDs are those of the application this module replaces.
 
     \c delete applies to \c repositories alone: GitHub's REST API cannot delete an issue, a pull request or a
-    release - an issue is closed rather than removed, which is an update - and the other three tables report
-    that they cannot rather than pretending.  **Deleting a repository cannot be undone.**
+    release - an issue is closed rather than removed, which is an update - and every other table reports that
+    it cannot rather than pretending.  **Deleting a repository cannot be undone.**
 
     \c repositories is also the one table with no repository scope, because its records are the repositories.
     GitHub names one by its \c {owner} and its \c {repo}, so a record there is addressed by two values: the

@@ -288,6 +288,7 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         addTestCase("webhook action filtering", \webhookFilteringTest());
         addTestCase("record action registration", \recordActionRegistrationTest());
         addTestCase("record tables", \recordTableTest());
+        addTestCase("read-only record tables", \readOnlyTableTest());
         addTestCase("record search", \recordSearchTest());
         addTestCase("record search pushdown", \recordPushdownTest());
         addTestCase("a record limit counts matches", \recordLimitTest());
@@ -1152,5 +1153,58 @@ public class GitHubDataProviderTest inherits QUnit::Test {
         AbstractDataProvider releases = table(rest, "releases");
         assertThrows("INVALID-OPERATION", \releases.updateRecords(), ({"name": "x"}, {"id": 1},
             {"owner": "o", "repo": "r"}));
+    }
+
+    #! The three read-only tables publish GitHub's own shape and are named by what its paths take
+    /** Unlike the tables that replace a TypeScript application, these have no predecessor whose column
+        names have to be preserved, so the record type is the schema's and cannot drift from it.
+    */
+    private readOnlyTableTest() {
+        FakeGitHubRestClient rest();
+        GitHubDataProvider::GitHubDataProvider dp(rest);
+        AbstractDataProvider tables =
+            dp.getChildProviderEx(GitHubDataProvider::GitHubDataProvider::TablesChildName);
+
+        foreach string name in (("labels", "collaborators", "contributors")) {
+            hash<DataProviderInfo> info = tables.getChildProviderEx(name).getInfo();
+            assertFalse(info.supports_create, sprintf("table %y creates nothing", name));
+            assertFalse(info.supports_update, sprintf("table %y updates nothing", name));
+            assertFalse(info.supports_delete, sprintf("table %y deletes nothing", name));
+            assertTrue(info.supports_read, sprintf("table %y is readable", name));
+            # a repository is the collection, so the caller supplies it and the listing requires it
+            map assertTrue(info.search_options{$1}.required,
+                sprintf("table %y requires the %y scope option", name, $1)), ("owner", "repo");
+            # none of them takes a filter expression, whatever query arguments the listing has
+            assertFalse(info.supports_native_search, sprintf("table %y has no query language", name));
+        }
+
+        # the identity is what GitHub's paths take, not the numeric ID every one of these records carries
+        assertEq("name", GitHubRecordTables::LabelsTable.id_field);
+        assertEq("login", GitHubRecordTables::CollaboratorsTable.id_field);
+        assertEq("login", GitHubRecordTables::ContributorsTable.id_field);
+        hash<string, AbstractDataField> lrt = tables.getChildProviderEx("labels").getRecordType();
+        assertTrue(exists lrt.name, "the identity is a column");
+        assertTrue(exists lrt.id, "and the global ID is published as well");
+
+        # the record type is GitHub's own, not a projection
+        assertNothing(GitHubRecordTables::CollaboratorsTable.record_type);
+        assertNothing(GitHubRecordTables::CollaboratorsTable.to_record);
+        hash<string, AbstractDataField> crt = tables.getChildProviderEx("collaborators").getRecordType();
+        map assertTrue(exists crt{$1}, sprintf("collaborators publish %y", $1)),
+            ("login", "role_name", "permissions", "site_admin");
+        assertTrue(exists tables.getChildProviderEx("contributors").getRecordType().contributions,
+            "a contributor carries the number of contributions made");
+
+        # neither of the collaborator listing's arguments describes a column, so neither is pushed down:
+        # "affiliation" appears in no record and "permission" is not the record's "role_name"
+        assertNothing(GitHubRecordTables::CollaboratorsTable.filters);
+        assertEq(("affiliation", "permission"), GitHubRecordTables::CollaboratorsTable.search_options);
+        RestSchemaRecordFilter cf(GitHubRecordTables::CollaboratorsTable);
+        hash<RestSchemaRecordFilterSplit> s = cf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "role_name"}, "admin"),
+        });
+        assertEq({}, s.options, "a role predicate is not sent as a permission argument");
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp, "it is answered as the records arrive");
     }
 }

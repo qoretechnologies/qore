@@ -321,6 +321,7 @@ public class XeroDataProviderTest inherits QUnit::Test {
         addTestCase("xero timestamps", \timestampTest());
         addTestCase("event polling", \eventPollingTest());
         addTestCase("record tables", \recordTableTest());
+        addTestCase("read-only record tables", \readOnlyTableTest());
         set_return_value(main());
     }
 
@@ -977,5 +978,85 @@ public class XeroDataProviderTest inherits QUnit::Test {
             assertTrue(i.value.data_provider_info.has_record);
         }
         assertNothing(by_action.delete, "no table in this application can delete a record");
+    }
+
+    #! The three read-only accounting tables declare what Xero actually offers, and no more
+    /** Two of them take Xero's \c where clause and search natively; the third narrows its listing with
+        query arguments and says so.  None of them is written: this application exports no create, update or
+        delete for any of them.
+    */
+    private readOnlyTableTest() {
+        FakeXeroRestClient rest();
+        XeroDataProvider::XeroDataProvider dp(rest);
+        AbstractDataProvider tables = dp.getChildProviderEx(XeroDataProvider::XeroDataProvider::TablesChildName);
+
+        foreach string name in (("accounts", "tax-rates", "purchase-orders")) {
+            hash<DataProviderInfo> info = tables.getChildProviderEx(name).getInfo();
+            assertFalse(info.supports_create, sprintf("table %y creates nothing", name));
+            assertFalse(info.supports_update, sprintf("table %y updates nothing", name));
+            assertFalse(info.supports_delete, sprintf("table %y deletes nothing", name));
+            assertTrue(info.supports_read, sprintf("table %y is readable", name));
+        }
+
+        # Xero answers these two listings with the whole collection: declaring paging they do not have would
+        # send arguments Xero ignores and then loop waiting for a short page
+        assertEq(RSRP_NONE, XeroRecordTables::AccountsTable.paging.mode);
+        assertEq(RSRP_NONE, XeroRecordTables::TaxRatesTable.paging.mode);
+        assertEq(RSRP_PAGE, XeroRecordTables::PurchaseOrdersTable.paging.mode);
+
+        # ...and evaluates a whole search expression over both of them
+        assertTrue(tables.getChildProviderEx("accounts").getInfo().supports_native_search);
+        assertTrue(tables.getChildProviderEx("tax-rates").getInfo().supports_native_search);
+        # purchase orders take query arguments instead, which is a different claim
+        assertFalse(tables.getChildProviderEx("purchase-orders").getInfo().supports_native_search);
+
+        # a tax rate has no identifier of its own: Xero addresses one by its tax type
+        assertEq("TaxType", XeroRecordTables::TaxRatesTable.id_field);
+        hash<string, AbstractDataField> trt = tables.getChildProviderEx("tax-rates").getRecordType();
+        assertTrue(exists trt.TaxType, "the identity is a column");
+
+        # every field declared queryable is a column, or a predicate on it could never be sent
+        foreach hash<RestSchemaRecordTableInfo> t in ((XeroRecordTables::AccountsTable,
+                XeroRecordTables::TaxRatesTable)) {
+            hash<string, AbstractDataField> rt = tables.getChildProviderEx(t.name).getRecordType();
+            list<string> missing = ();
+            map missing += $1, keys t.query.fields, !exists rt{$1};
+            assertEq((), missing, sprintf("every queryable field of %y is a column", t.name));
+        }
+
+        # a predicate Xero indexes is rendered into "where" and Xero does the searching
+        RestSchemaRecordFilter af(XeroRecordTables::AccountsTable);
+        hash<RestSchemaRecordFilterSplit> s = af.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "Status"}, "ACTIVE"),
+        });
+        assertEq({"where": "Status == \"ACTIVE\""}, s.options);
+        assertNothing(s.client, "Xero evaluates it, so nothing is left for the client side");
+
+        # a field Xero does not index is evaluated here instead of being sent and turned into an error
+        s = af.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "ReportingCodeName"}, "Sale of goods"),
+        });
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        # the purchase order records are under "PurchaseOrders"; Xero declares a "Warnings" array on the
+        # same envelope, so a scan for the first array-valued field finds the wrong one
+        assertEq(("PurchaseOrders",), XeroRecordTables::PurchaseOrdersTable.records_path);
+        hash<string, AbstractDataField> port = tables.getChildProviderEx("purchase-orders").getRecordType();
+        assertTrue(exists port.PurchaseOrderID, "the records path resolves to the purchase orders");
+        assertTrue(exists port.Status);
+        # a warning is one field of its own, so a record type read from the wrong array would be tiny
+        assertGt(10, port.size(), "the record is the purchase order, not the warning on the same envelope");
+
+        # the status filter narrows the listing and the predicate is answered here as well
+        RestSchemaRecordFilter pf(XeroRecordTables::PurchaseOrdersTable);
+        s = pf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "Status"}, "AUTHORISED"),
+        });
+        assertEq({"Status": "AUTHORISED"}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp, "the rule is not exact, so the predicate is kept");
     }
 }

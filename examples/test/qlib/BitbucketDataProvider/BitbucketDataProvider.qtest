@@ -255,6 +255,7 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
         addTestCase("event providers", \eventProviderTest());
         addTestCase("event polling", \eventPollingTest());
         addTestCase("record tables", \recordTableTest());
+        addTestCase("read-only record tables", \readOnlyTableTest());
         set_return_value(main());
     }
 
@@ -738,5 +739,94 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
         assertEq(1, updated);
         assertEq("PUT", rest.last().method);
         assertEq("/2.0/repositories/qoretechnologies/qore-test", rest.last().path);
+    }
+
+    #! The four read-only tables declare what Bitbucket actually offers, and no more
+    /** Each of them lists and is never written, two of them publish a membership rather than the thing it
+        names, and two need columns Bitbucket returns and describes nowhere.
+    */
+    private readOnlyTableTest() {
+        FakeBitbucketRestClient rest();
+        BitbucketDataProvider::BitbucketDataProvider dp(rest);
+        AbstractDataProvider tables =
+            dp.getChildProviderEx(BitbucketDataProvider::BitbucketDataProvider::TablesChildName);
+
+        # an action that could only fail is worse than no action: Bitbucket writes none of these
+        foreach string name in (("workspaces", "workspace-members", "commits", "branches")) {
+            hash<DataProviderInfo> info = tables.getChildProviderEx(name).getInfo();
+            assertFalse(info.supports_create, sprintf("table %y creates nothing", name));
+            assertFalse(info.supports_update, sprintf("table %y updates nothing", name));
+            assertFalse(info.supports_delete, sprintf("table %y deletes nothing", name));
+            assertTrue(info.supports_read, sprintf("table %y is readable", name));
+        }
+
+        # a membership is published as Bitbucket returns it, with the workspace and the user nested, and
+        # neither collection is addressable: a membership has no identifier of its own
+        AbstractDataProvider ws = tables.getChildProviderEx("workspaces");
+        hash<string, AbstractDataField> wsrt = ws.getRecordType();
+        assertEq(("type", "administrator", "workspace"), keys wsrt);
+        assertFalse(exists wsrt.id, "a workspace membership carries no identity of its own");
+        assertNothing(BitbucketRecordTables::WorkspacesTable.get_action);
+        assertEq(NT_HASH, wsrt.workspace.getType().getBaseTypeCode(),
+            "the workspace itself is a nested object");
+
+        hash<string, AbstractDataField> memrt = tables.getChildProviderEx("workspace-members").getRecordType();
+        assertEq(("type", "links", "user", "workspace"), keys memrt);
+        assertFalse(exists memrt.id, "a workspace member record carries no identity of its own");
+        # the workspace identifies the collection, so the listing requires it
+        assertTrue(tables.getChildProviderEx("workspace-members").getInfo().search_options.workspace.required);
+
+        # Bitbucket's "administrator" argument means what the column means, so it is sent - and the
+        # predicate is answered here as well, because the rule is not declared exact
+        RestSchemaRecordFilter wf(BitbucketRecordTables::WorkspacesTable);
+        hash<RestSchemaRecordFilterSplit> ws_split = wf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "administrator"}, True),
+        });
+        assertEq({"administrator": True}, ws_split.options);
+        assertEq(DP_SEARCH_OP_EQ, ws_split.client.exp, "the rule is not exact, so the predicate is kept");
+
+        # a commit is addressed by its hash, and the single read enriches the record type
+        hash<string, AbstractDataField> crt = tables.getChildProviderEx("commits").getRecordType();
+        assertEq("hash", BitbucketRecordTables::CommitsTable.id_field);
+        assertEq("commit", BitbucketRecordTables::CommitsTable.id_option);
+        assertTrue(exists crt.hash, "the identity is a column");
+        assertTrue(exists crt.participants, "a column only the single read describes is published");
+        # ...and two columns Bitbucket returns and describes in no schema
+        assertTrue(exists crt.links, "the links column is declared");
+        assertTrue(exists crt.rendered, "the rendered message column is declared");
+
+        # a branch is named by its name, and Bitbucket evaluates a query over that name itself
+        hash<string, AbstractDataField> brt = tables.getChildProviderEx("branches").getRecordType();
+        assertEq("name", BitbucketRecordTables::BranchesTable.id_field);
+        assertTrue(exists brt.name);
+        assertTrue(exists brt.sync_strategies, "a column Bitbucket returns and describes nowhere");
+        assertTrue(tables.getChildProviderEx("branches").getInfo().supports_native_search);
+
+        RestSchemaRecordFilter bf(BitbucketRecordTables::BranchesTable);
+        hash<RestSchemaRecordFilterSplit> s = bf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "name"}, "master"),
+        });
+        assertEq({"q": "name = \"master\""}, s.options, "a name predicate is rendered into BBQL");
+        assertNothing(s.client, "and Bitbucket evaluates it, so nothing is left for the client side");
+
+        # a predicate on any other field is answered here: Bitbucket rejects a query naming a field it does
+        # not index, so sending one would turn a search into an error
+        s = bf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "default_merge_strategy"}, "merge_commit"),
+        });
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        # commits have no query language and no filters, so a predicate is evaluated as records arrive
+        RestSchemaRecordFilter cf(BitbucketRecordTables::CommitsTable);
+        s = cf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "message"}, "x"),
+        });
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
     }
 }

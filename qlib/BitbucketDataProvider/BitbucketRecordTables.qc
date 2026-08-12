@@ -60,6 +60,43 @@ public namespace BitbucketDataProvider {
     Every Bitbucket collection answers with <tt>{values, page, pagelen, size, next}</tt>, and \c next is
     absent on the last page.  The tables page by number, because \c page is what the pruned document
     declares, and stop on a short page.
+
+    @section bitbucketrecord_readonly Four Collections Are Read Only
+
+    \c workspaces, \c workspace-members, \c commits and \c branches list and are never written: Bitbucket
+    creates none of them through these paths - a commit arrives by pushing it - and this application
+    exports no create, update or delete for any of them.  They declare none, and the record-based create,
+    update and delete actions refuse them by name rather than pretending.
+
+    @section bitbucketrecord_membership A Membership Is Not the Thing It Names
+
+    \c /user/workspaces and <tt>/workspaces/{workspace}/members</tt> both answer with **memberships**, not
+    with workspaces and not with users: a record is <tt>{type, administrator, workspace}</tt> or
+    <tt>{type, links, user, workspace}</tt>, and what a caller is usually after - a slug, a display name, an
+    account UUID - is one level down, under \c workspace or under \c user.
+
+    These tables publish that shape as Bitbucket returns it rather than flattening it, for the same reason
+    the rest of this file does: the record type is then the pinned description's own and cannot drift from
+    the contract the actions use, whereas a projection is a hand-written type that goes stale the moment
+    Bitbucket adds a field.  A mapper reads \c "workspace.slug" or \c "user.display_name" as a nested path.
+
+    Neither collection is addressable: a membership has no identifier of its own, Bitbucket exports no path
+    that reads one, and so neither table declares an identity or a single-record read.  A predicate is
+    answered as the records arrive.
+
+    @section bitbucketrecord_extra_readonly Columns Bitbucket Returns and Describes Nowhere
+
+    Two of the read-only collections need
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns" for the same reason the
+    repositories table does - a column the table does not declare cannot be searched at all:
+
+    |!Table|!Column|!What it carries
+    |\c commits|\c links|the URLs of the commit, its diff, its patch and its comments
+    |\c commits|\c rendered|the commit message in its raw and rendered forms
+    |\c branches|\c sync_strategies|the strategies the branch may be synchronized with
+
+    All three were found by reading the live API and comparing every key of a real record against the
+    declared columns.
 */
 public class BitbucketRecordTables {
     public {
@@ -257,8 +294,125 @@ public class BitbucketRecordTables {
             },
         };
 
+        #! The workspaces table
+        /** The workspaces the credential is a member of.  Bitbucket's \c administrator argument means
+            exactly what a predicate on the \c administrator column means, so it is sent - and the predicate
+            is applied again to what comes back, because only the \c true direction could be verified: the
+            credential this was read with administers every workspace it can see, so an empty answer to
+            <tt>administrator=false</tt> is the right answer and says nothing about how Bitbucket treats it.
+
+            @see @ref bitbucketrecord_membership, @ref bitbucketrecord_readonly
+        */
+        const WorkspacesTable = <RestSchemaRecordTableInfo>{
+            "name": "workspaces",
+            "display_name": "Workspaces",
+            "short_desc": "the workspaces the credential belongs to",
+            "desc": "The workspaces the credential belongs to, as records; a record is a membership and "
+                "carries the workspace itself under `workspace`, with its slug, its UUID and its links.  "
+                "Workspaces are read only here",
+            "list_action": "workspaces_get",
+            "records_path": ("values",),
+            "paging": Paging,
+            "search_options": ("sort", "administrator"),
+            "filters": (
+                <RestSchemaRecordFilterInfo>{
+                    "field": "administrator", "operator": DP_SEARCH_OP_EQ, "option": "administrator",
+                },
+            ),
+        };
+
+        #! The workspace members table
+        /** The members of one workspace.  A record is a membership and carries the member under \c user.
+
+            @see @ref bitbucketrecord_membership, @ref bitbucketrecord_readonly
+        */
+        const WorkspaceMembersTable = <RestSchemaRecordTableInfo>{
+            "name": "workspace-members",
+            "display_name": "Workspace Members",
+            "short_desc": "the members of one workspace",
+            "desc": "The members of one workspace, as records; a record is a membership and carries the "
+                "member under `user`, with their display name and their account UUID.  Members are read "
+                "only here",
+            "list_action": "workspaces_workspace_members_get",
+            "scope_options": ("workspace",),
+            "records_path": ("values",),
+            "paging": Paging,
+        };
+
+        #! The commits table
+        /** A commit is addressed by its \c hash, which is what <tt>{commit}</tt> takes in every path, and
+            the single read the manifest exports both answers \c readOne() and enriches the record type:
+            Bitbucket describes a listed commit with eight fields and a read one with ten.
+
+            @see @ref bitbucketrecord_readonly, @ref bitbucketrecord_extra_readonly
+        */
+        const CommitsTable = <RestSchemaRecordTableInfo>{
+            "name": "commits",
+            "display_name": "Commits",
+            "short_desc": "the commits in one repository",
+            "desc": "The commits in one repository, as records; a commit is named by its hash.  Commits "
+                "are read only here - a commit arrives by pushing it",
+            "list_action": "repositories_workspace_repo_slug_commits_get",
+            "get_action": "repositories_workspace_repo_slug_commit_commit_get",
+            "id_field": "hash",
+            "id_option": "commit",
+            "scope_options": ("workspace", "repo_slug"),
+            "records_path": ("values",),
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "links",
+                    "desc": "the URLs of the commit, its diff, its patch and its comments",
+                    "type": "*hash",
+                },
+                {
+                    "name": "rendered",
+                    "desc": "the commit message in its raw and rendered forms",
+                    "type": "*hash",
+                },
+            )),
+            "paging": Paging,
+        };
+
+        #! The branches table
+        /** Bitbucket declares \c q on this listing, so it evaluates a search over branch names itself.  A
+            branch is named by its \c name, which is what every branch path takes.
+
+            \c name is the one field declared queryable here: Bitbucket rejects a query naming a field it
+            does not index, and a predicate on anything else is answered as the records arrive.
+
+            @see @ref bitbucketrecord_readonly, @ref bitbucketrecord_extra_readonly
+        */
+        const BranchesTable = <RestSchemaRecordTableInfo>{
+            "name": "branches",
+            "display_name": "Branches",
+            "short_desc": "the branches in one repository",
+            "desc": "The branches in one repository, as records; Bitbucket evaluates a search over their "
+                "names itself.  Branches are read only here",
+            "list_action": "repositories_workspace_repo_slug_refs_branches_get",
+            "id_field": "name",
+            "scope_options": ("workspace", "repo_slug"),
+            "records_path": ("values",),
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "sync_strategies",
+                    "desc": "the strategies the branch may be synchronized with",
+                    "type": "*list",
+                },
+            )),
+            "paging": Paging,
+            "search_options": ("sort",),
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": Bbql,
+                "inexact_ops": BbqlInexact,
+                # Bitbucket rejects a query naming a field it does not index
+                "fields": {"name": True},
+            },
+        };
+
         #! Every table, in presentation order
-        const Tables = (RepositoriesTable, PullRequestsTable, PullRequestCommentsTable, CommitCommentsTable);
+        const Tables = (RepositoriesTable, PullRequestsTable, PullRequestCommentsTable, CommitCommentsTable,
+            WorkspacesTable, WorkspaceMembersTable, CommitsTable, BranchesTable);
 
         #! The IDs the record-based actions are registered under
         /** Bitbucket is a new application rather than a replacement, so these are the conventional IDs.
