@@ -36,8 +36,9 @@ public namespace QoreLlmUtils {
       ("I wonder if we could go ahead and delete the broken one")
 
     This class delegates the decision to an LLM and exposes a single
-    canonical taxonomy (@ref IntentReadOnly, @ref IntentActionRequested)
-    plus the prompt / parser pieces callers need to integrate it:
+    canonical taxonomy (@ref IntentReadOnly, @ref IntentActionRequested,
+    @ref IntentConfirmationRequired) plus the prompt / parser pieces callers
+    need to integrate it:
 
     - @ref getPromptFragment() returns the instruction block a caller can
       embed inside their own classification prompt (e.g., alongside a
@@ -128,7 +129,7 @@ public class ActionIntentClassifier {
         #! System prompt prepended to the single-turn classification call
         const StandaloneSystemPrompt = "You are an intent classifier for an "
             "LLM-driven agent.  Output ONLY a single line starting with "
-            "`INTENT: ` followed by one of the two labels defined below.  Do "
+            "`INTENT: ` followed by one of the three labels defined below.  Do "
             "NOT include any other text, explanation, reasoning, or "
             "formatting.\n\n";
     }
@@ -148,14 +149,11 @@ public class ActionIntentClassifier {
 
         The returned fragment tells the model:
 
-        - Which two labels are valid (and that anything else is a bug)
+        - Which three labels are valid (and that anything else is a bug)
         - What each label means with typical phrasings in both English
           and abstract language-agnostic terms
         - That how-to and status-check phrasings map to read-only even
           when they contain destructive verb words mid-sentence
-        - That the safety gate keys on this label, so an incorrect
-          \c action-requested on a how-to question is a real bug
-
         @return prompt fragment as a raw string (no leading/trailing
             newlines — caller controls whitespace)
     */
@@ -196,11 +194,10 @@ public class ActionIntentClassifier {
 
     #! Extracts the intent label from an arbitrary LLM response body
     /** Scans the text for a line matching the canonical
-        \c "INTENT: <label>" format (case-insensitive) and returns the
-        matched label in lowercase.  Returns NOTHING when the line is
-        absent or the label doesn't match the known taxonomy — callers
-        then apply their own fallback (e.g., a word-list backup or a
-        default-block policy).
+        \c "INTENT: <label>" format and returns the exact matched label.
+        The marker and label are case-sensitive closed protocol values;
+        translated, case-altered, embedded, and otherwise malformed variants
+        return NOTHING. Callers then apply their own fail-closed policy.
 
         @param response_text the LLM's full response body
         @return one of \c "read-only", \c "action-requested", or
@@ -209,11 +206,11 @@ public class ActionIntentClassifier {
     */
     public static *string parseIntentFromResponse(string response_text) {
         *list<auto> match = (response_text =~
-            x/INTENT:\s*(read-only|action-requested|confirmation-required)/i);
+            x/^INTENT:[ \t]*(read-only|action-requested|confirmation-required)[ \t]*\r?$/m);
         if (!match[0].val()) {
             return;
         }
-        return match[0].lwr();
+        return match[0];
     }
 
     #! Classifies a single user message via a dedicated LLM round-trip

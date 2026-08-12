@@ -113,6 +113,8 @@ printf("Structured output: %s\n", result.content);
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
       HTTP/OpenAI-compatible, Anthropic, Gemini, and callback gateway modes
+    - Intent classification accepts only exact, line-framed closed protocol
+      markers and values; case-altered or embedded variants fail closed
     - Added @ref QoreLlmUtils::PromptSecretProtector
       "PromptSecretProtector" for generic prompt credential placeholders and
       redaction support, including execution-boundary redaction of restored

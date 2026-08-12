@@ -150,6 +150,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \requestClassifierBlockListModeTest());
         addTestCase("ActionIntentClassifier disables reasoning budget",
             \actionIntentClassifierBudgetTest());
+        addTestCase("ActionIntentClassifier accepts exact closed codes",
+            \actionIntentClassifierExactProtocolTest());
         addTestCase("CitationValidator validates supplied source ids",
             \citationValidatorTest());
         addTestCase("GroundedAnswerVerifier combines grounding and citations",
@@ -801,6 +803,32 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         # cannot drain the output budget and return empty content.
         assertEq(0, captured.reasoning_token_budget,
             "action-intent classifier disables the reasoning/thinking budget");
+    }
+
+    actionIntentClassifierExactProtocolTest() {
+        foreach string intent in (("read-only", "action-requested",
+                "confirmation-required")) {
+            assertEq(intent,
+                QoreLlmUtils::ActionIntentClassifier::parseIntentFromResponse(
+                        "opaque preface\nINTENT:\t" + intent
+                            + "  \r\nopaque suffix"),
+                "exact closed intent parses from its own protocol line");
+        }
+        foreach string malformed in ((
+                "INTENT: Read-Only",
+                "intent: action-requested",
+                "INTENT: ACTION-REQUESTED",
+                "INTENT: confirmation_required",
+                "INTENT: read-only please",
+                "NOT_INTENT: read-only",
+                "opaque INTENT: read-only",
+                "INTENT: lectura")) {
+            assertEq(NOTHING,
+                QoreLlmUtils::ActionIntentClassifier::parseIntentFromResponse(
+                    malformed),
+                "noncanonical intent has no protocol authority: "
+                    + malformed);
+        }
     }
 
     requestClassifierBlockListModeTest() {
