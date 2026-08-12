@@ -63,6 +63,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testScheduledRecipeSharesTheCoordinatorsRule());
         addTestCase("a scheduled recipe refuses to start the group's shared parse",
             \testScheduledRecipeRefusesToStartTheBatch());
+        addTestCase("concurrent recipes publish one coherent generation",
+            \testConcurrentRecipesPublishOneGeneration());
 
         set_return_value(main());
     }
@@ -108,12 +110,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         depfile edges splits the pair and renumbers everything after it.
     */
     private hash<auto> fixture(string root, *softlist<string> compiled,
-            bool cyclic = True) {
+            bool cyclic = True, *list<string> extra) {
         string src_dir = root + "/src";
         string qo_dir = root + "/qo";
         mkdir(src_dir, 0777, True);
         mkdir(qo_dir, 0777, True);
-        list<string> names = ("a", "b", "c", "d");
+        list<string> names = ("a", "b", "c", "d") + (extra ?? ());
         list<string> lines = ("format=1", "kind=qcc-object-group",
             "group=scc-driver-test");
         foreach string name in (names) {
@@ -133,6 +135,9 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         writeDepfile(qo_dir, "b", cyclic ? "a" : ());
         writeDepfile(qo_dir, "c", "a");
         writeDepfile(qo_dir, "d", ());
+        foreach string name in (extra ?? ()) {
+            writeDepfile(qo_dir, name, ());
+        }
         # A component only counts as published once it has a generation record,
         # so the members that are meant to start out current get one.
         foreach string name in (compiled ?? ()) {
@@ -559,5 +564,96 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq((), compiles(fx), "and it compiles nothing");
         assertFalse(exists record(fx, component.key),
             "nothing is published");
+    }
+
+    #! Every component of a group compiled at once, as a parallel build does it.
+    /** The reported failure needed concurrency to become visible, so the fix is
+        held to it: eighteen workers resolve identity, take locks, select
+        preloads, compile and publish simultaneously, and one of them rewrites
+        another component's depfile in the middle of it -- the mutation that
+        renumbered the decomposition under everybody else.
+
+        Nothing here waits on a timer.  The workers are started together and
+        joined, so the check is deterministic rather than a sampled race.
+    */
+    testConcurrentRecipesPublishOneGeneration() {
+        TmpDir tmp("qore-aot-driver-parallel-");
+        list<string> extra = ();
+        for (int i = 0; i < 14; ++i) {
+            push extra, sprintf("p%02d", i);
+        }
+        # Every component a singleton, so all of them are eligible to run at
+        # once; the a<->b cycle would otherwise be one unit of work.
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
+        # c is the only component with a predecessor, so dropping its contract
+        # edge is a real change to the live graph and to c's own preload.
+        writeCompiler(fx, "printf '%s' " + sprintf("%y",
+            fx.qo_dir + "/c.qo.stamp: " + fx.src_dir + "/c.qc\n") + " > "
+            + sprintf("%y", fx.qo_dir + "/c.qo.d"));
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+
+        hash<auto> frozen = runTool(("--scc-freeze-graph",
+            fx.context + ".graph-snapshot.json", fx.context));
+        assertEq(0, frozen.rc, "the graph freezes: " + frozen.output);
+
+        # Resolve every component's identity from the frozen graph first, the
+        # way the coordinator hands work out, then start the workers together.
+        hash<string, hash<auto>> components = {};
+        foreach string name in (fx.names) {
+            components{name} = componentFor(fx.qo_dir, name);
+        }
+        list<string> workers = ();
+        foreach string name in (fx.names) {
+            push workers, sprintf("{ %s; } > %y 2>&1 &",
+                driveCommand(fx, name, components{name},
+                    fx.context + ".graph-snapshot.json"),
+                fx.qo_dir + "/" + name + ".worker.log");
+        }
+        string output = backquote(join("\n", workers) + "\nwait\necho \"rc=$?\"");
+        assertTrue(output.find("rc=0") >= 0,
+            "every concurrent worker exits successfully: " + output);
+
+        assertEq(fx.names.size(), components.size(),
+            "each source has its own component");
+        assertEq(sort((map $1 + ".qc " + $1 + ".qo", fx.names)), sort(compiles(fx)),
+            "every component is compiled exactly once");
+
+        string generation = trim(frozen.output);
+        foreach string name in (fx.names) {
+            string log = read(fx.qo_dir + "/" + name + ".worker.log");
+            assertEq(-1, log.find("moved"), name + " reports no moved sources: " + log);
+            assertEq(-1, log.find("rebuilding"), name + " needs no rebuild: " + log);
+            assertEq(-1, log.find("dependency graph"),
+                name + " sees no graph transition: " + log);
+            *hash<auto> committed = record(fx, components{name}.key);
+            assertTrue(exists committed, name + " is published");
+            assertEq(generation, committed.graph_generation,
+                name + " is published against the one frozen graph");
+        }
+
+        # The mutation has to have actually happened, or the run above proves
+        # nothing: the live graph must now differ from the one every worker
+        # published against, and only the next freeze may adopt it.
+        hash<auto> live = runTool(("--scc-graph-generation", fx.context));
+        assertEq(0, live.rc, "the live graph is readable");
+        assertNeq(generation, trim(live.output),
+            "a worker really did move the graph while the others were running");
+    }
+
+    #! The shell command for one scheduled recipe, without running it.
+    private string driveCommand(hash<auto> fx, string name, hash<auto> component,
+            string snapshot) {
+        string qo_dir = fx.qo_dir;
+        return sprintf(
+            "QORE_QCC_PLANNED_STALE=1 QORE_QCC_COMPONENT_INDEX=%y "
+            "QORE_QCC_COMPONENT_KEY=%y QORE_QCC_COMPONENT_SIZE=%y "
+            "QORE_QCC_COMPONENT_LOCK=%y QORE_QCC_PREREQUISITES_READY=1 "
+            "QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_SOURCE_ORDER_HELPER=%y "
+            "QORE_QCC_GRAPH_SNAPSHOT=%y %y %y %y %y",
+            component.index, component.key, component.size,
+            qo_dir + "/.qcc-scc/" + component.key + ".lock",
+            qore_bin, source_order_tool, snapshot, incremental_tool,
+            qo_dir + "/" + name + ".qo", fx.src_dir + "/" + name + ".qc",
+            qo_dir + "/qcc-single.sh");
     }
 }
