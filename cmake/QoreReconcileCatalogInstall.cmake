@@ -18,6 +18,7 @@
 #   QORE_CATALOG_ROOT          catalog root to reconcile, with $ENV{DESTDIR} already applied
 #   QORE_CATALOG_MANIFEST      absolute path of this project's manifest below the root
 #   QORE_CATALOG_NEW_MANIFEST  build-tree manifest listing this generation's fragments
+#   QORE_CATALOG_OWNERS        fragment file names this project owns (<Module>.json)
 #   QORE_CATALOG_SWEEP_FLAT    TRUE to run the one-time obsolete flat-layout sweep
 #
 
@@ -94,6 +95,45 @@ foreach (_qore_catalog_rel IN LISTS _qore_catalog_old)
         list(APPEND _qore_catalog_removed "${_qore_catalog_path}")
     endif()
 endforeach()
+
+# Retire fragments this project owns by name but no longer installs.
+#
+# A fragment is named after the module that owns it, and one module name means
+# one module everywhere -- two modules of the same name cannot both be installed,
+# or %requires could not resolve either. So every <domain>/<locale>/<Module>.json
+# under this root belongs to whoever installs catalogs for <Module>, whether or
+# not a manifest ever recorded it.
+#
+# The manifest diff above cannot see fragments left by a generation that predates
+# the manifest, which is exactly the residue this mechanism exists to retire; the
+# owner name can. Running this on every install (not only the bootstrap
+# generation) also makes reconciliation self-healing when a manifest is lost, or
+# when an older package is installed over a newer one and then upgraded again.
+if (QORE_CATALOG_OWNERS)
+    file(GLOB _qore_catalog_owned_files "${QORE_CATALOG_ROOT}/*/*/*.json")
+    foreach (_qore_catalog_path IN LISTS _qore_catalog_owned_files)
+        if (IS_DIRECTORY "${_qore_catalog_path}")
+            continue()
+        endif()
+        get_filename_component(_qore_catalog_name "${_qore_catalog_path}" NAME)
+        list(FIND QORE_CATALOG_OWNERS "${_qore_catalog_name}" _qore_catalog_index)
+        if (_qore_catalog_index EQUAL -1)
+            continue()
+        endif()
+        # RELATIVE_PATH rather than string arithmetic: DESTDIR can leave the root
+        # with a doubled separator that the glob results do not reproduce
+        file(RELATIVE_PATH _qore_catalog_rel "${QORE_CATALOG_ROOT}"
+            "${_qore_catalog_path}")
+        list(FIND _qore_catalog_new "${_qore_catalog_rel}" _qore_catalog_index)
+        if (NOT _qore_catalog_index EQUAL -1)
+            continue()
+        endif()
+        get_filename_component(_qore_catalog_dir "${_qore_catalog_path}" DIRECTORY)
+        file(REMOVE "${_qore_catalog_path}")
+        list(APPEND _qore_catalog_removed "${_qore_catalog_path}")
+        list(APPEND _qore_catalog_prune_dirs "${_qore_catalog_dir}")
+    endforeach()
+endif()
 
 # One-time sweep of the obsolete flat layout.
 #

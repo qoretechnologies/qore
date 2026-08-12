@@ -37,6 +37,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testDownstreamCatalogInstallRoot());
         addTestCase("catalog install reconciles obsolete owner fragments",
             \testCatalogInstallReconciliation());
+        addTestCase("catalog reconciliation retires orphans it owns by name",
+            \testCatalogOwnedOrphanRetirement());
         addTestCase("catalog reconciliation refuses unsafe manifest entries",
             \testCatalogManifestEntryValidation());
         addTestCase("catalog reconciliation honours DESTDIR staging",
@@ -325,6 +327,54 @@ find_package(Qore REQUIRED)
             "an unchanged reinstall leaves the manifest byte-identical");
         assertTrue(is_file(other_project_fragment),
             "an unchanged reinstall preserves the other project's fragment");
+    }
+
+    testCatalogOwnedOrphanRetirement() {
+        TmpDir tmp("qore-cmake-catalog-orphan-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string install_dir = tmp.path + "/install";
+        string root = install_dir + "/share/qore/i18n";
+        string orphan_domain = catalogDomain("Retired");
+
+        # a fragment left by a generation that predates any manifest: no manifest
+        # diff can see it, so only the owner name identifies it as this project's
+        string orphan = root + "/" + orphan_domain + "/root/OldOwner.json";
+        mkdir(dirname(orphan), 0755, True);
+        write(orphan, make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                DataProviderPresentation::appMessageId("Retired", "short_desc"):
+                    "an app this owner no longer describes",
+            }}},
+        }) + "\n");
+
+        # a fragment of the same vintage owned by a module this project does not
+        # install catalogs for; it must survive, because its owner does
+        string foreign = root + "/" + orphan_domain + "/root/ForeignOwner.json";
+        write(foreign, make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                DataProviderPresentation::appMessageId("Retired", "desc"):
+                    "owned by a module from another project",
+            }}},
+        }) + "\n");
+
+        writeCatalogProject(src_dir, "QoreCatalogFixtureOrphan", {
+            "OldOwner": {"Example": {"short_desc": "current app"}},
+        });
+        string install = installCatalogProject(src_dir, build_dir, install_dir);
+        assertFalse(is_file(orphan),
+            "a fragment this project owns by name but no longer installs is "
+            "retired even on the first reconcile: " + install);
+        assertTrue(is_file(foreign),
+            "a fragment owned by another project's module survives");
+        assertTrue(is_file(root + "/" + catalogDomain("Example")
+            + "/root/OldOwner.json"),
+            "the current generation's fragment is installed");
+        assertEq("owned by a module from another project",
+            composedText(root, "Retired", "desc"),
+            "the surviving fragment still composes");
     }
 
     testCatalogManifestEntryValidation() {

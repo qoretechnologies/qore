@@ -1685,7 +1685,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         behind for catalog composition to reject; removals are scoped to a per-project manifest, leaving fragments
         installed into a shared catalog root by other products untouched. Products that install their own catalogs
         get the same guarantee by calling the new \c QORE_FINALIZE_CATALOG_INSTALL() CMake helper once, after all
-        \c QORE_INSTALL_USER_MODULE_CATALOGS() calls
+        \c QORE_INSTALL_USER_MODULE_CATALOGS() calls; because each fragment is named after the module that owns it,
+        the first such install also retires fragments left by earlier releases of the same modules, which no
+        installation manifest could have recorded
       - message catalogs can treat non-plural entries as literal text, allowing producer descriptions with JSON
         examples and path templates to be localized without interpreting braces as placeholders
       - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a

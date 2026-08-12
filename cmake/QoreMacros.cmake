@@ -2550,6 +2550,12 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 # record is kept per catalog root -- several projects install into one root by
 # design, and each may only ever remove its own fragments.
 #
+# The owner module's name is recorded too. A fragment is named after the module
+# that owns it, and a module name identifies exactly one module across every
+# repository -- otherwise %requires could not resolve it -- so the project
+# installing catalogs for a module owns every fragment of that name under the
+# root, including ones installed before any manifest existed.
+#
 # _root      catalog install root as written by the caller (absolute, or relative
 #            to the consuming project's CMAKE_INSTALL_PREFIX)
 # _component install component the fragment belongs to
@@ -2563,6 +2569,14 @@ FUNCTION (QORE_RECORD_INSTALLED_CATALOG_FRAGMENT _root _component _relative)
     endif()
     set_property(GLOBAL APPEND PROPERTY
         QORE_CATALOG_INSTALLED_FRAGMENTS_${_qore_catalog_root_key} "${_relative}")
+    get_filename_component(_qore_catalog_owner "${_relative}" NAME)
+    get_property(_qore_catalog_owners GLOBAL PROPERTY
+        QORE_CATALOG_INSTALL_OWNERS_${_qore_catalog_root_key})
+    list(FIND _qore_catalog_owners "${_qore_catalog_owner}" _qore_catalog_owner_index)
+    if (_qore_catalog_owner_index EQUAL -1)
+        set_property(GLOBAL APPEND PROPERTY
+            QORE_CATALOG_INSTALL_OWNERS_${_qore_catalog_root_key} "${_qore_catalog_owner}")
+    endif()
     get_property(_qore_catalog_components GLOBAL PROPERTY
         QORE_CATALOG_INSTALL_COMPONENTS_${_qore_catalog_root_key})
     list(FIND _qore_catalog_components "${_component}" _qore_catalog_component_index)
@@ -2708,6 +2722,10 @@ FUNCTION (QORE_FINALIZE_CATALOG_INSTALL)
             QORE_CATALOG_INSTALLED_FRAGMENTS_${_qore_catalog_root_key})
         list(REMOVE_DUPLICATES _qore_catalog_fragments)
         list(SORT _qore_catalog_fragments)
+        get_property(_qore_catalog_owners GLOBAL PROPERTY
+            QORE_CATALOG_INSTALL_OWNERS_${_qore_catalog_root_key})
+        list(REMOVE_DUPLICATES _qore_catalog_owners)
+        list(SORT _qore_catalog_owners)
 
         # The manifest of this generation is written at configure time and copied
         # into the catalog root by the reconciliation pass.  Its content is a pure
@@ -2763,6 +2781,7 @@ set(QORE_CATALOG_ROOT \"${_qore_catalog_root_expr}\")
 set(QORE_CATALOG_MANIFEST
     \"\${QORE_CATALOG_ROOT}/.qore-catalog-manifests/${_qore_catalog_project_key}.manifest\")
 set(QORE_CATALOG_NEW_MANIFEST \"${_qore_catalog_new_manifest}\")
+set(QORE_CATALOG_OWNERS \"${_qore_catalog_owners}\")
 set(QORE_CATALOG_SWEEP_FLAT ${_qore_catalog_sweep_flat})
 include(\"${QORE_CMAKE_DIR}/QoreReconcileCatalogInstall.cmake\")
 " ${_qore_catalog_component_args})

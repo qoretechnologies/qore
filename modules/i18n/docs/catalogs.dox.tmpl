@@ -69,7 +69,9 @@ I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
     once, and composition rejects conflicting definitions of the same message id. Projects installing catalogs with
     \c QORE_INSTALL_USER_MODULE_CATALOGS() therefore call \c QORE_FINALIZE_CATALOG_INSTALL() once, after all such
     calls, which reconciles each catalog root at install time against a per-project manifest kept in the
-    \c .qore-catalog-manifests directory below that root. Only the fragments recorded by the same project are ever
+    \c .qore-catalog-manifests directory below that root, and against the owner names of the modules it installs
+    catalogs for -- a fragment is named after the module that owns it, so fragments left by an earlier release of the
+    same module are retired even on the first such install. Only the fragments belonging to the same project are ever
     removed, so several projects can keep contributing to one shared catalog root.
 
     @code{.py}

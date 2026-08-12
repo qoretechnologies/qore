@@ -71,6 +71,28 @@ Two consequences worth stating plainly:
   Qore's side an unknown fragment and a legitimately-shared fragment are the
   same file.
 
+### What "its own" means
+
+Two things identify a project's fragments, and the second is what makes the
+mechanism work on a root that predates it:
+
+| Signal | Covers | Blind to |
+|---|---|---|
+| The project's manifest | Every fragment the last recorded generation installed | Anything installed before the project ever wrote a manifest |
+| The owner name in `<domain>/<locale>/<Module>.json` | Every fragment of a module this generation installs catalogs for | A module this project no longer ships at all |
+
+The owner name is decisive because a fragment is named after the module that
+owns it, and one module name means one module everywhere: two modules of the
+same name cannot both be installed, or `%requires` could not resolve either. So
+the project installing catalogs for `Foo` owns every `Foo.json` below the root,
+whether or not any manifest recorded it.
+
+That is what retires residue from generations that predate this mechanism —
+including, for a downstream module, apps it described before they migrated to a
+native provider. The two signals are used together: the manifest catches
+fragments whose owner module the project has dropped entirely, and the owner
+name catches fragments no manifest ever saw.
+
 The manifest project key defaults to `CMAKE_PROJECT_NAME` and is overridable
 (`QORE_FINALIZE_CATALOG_INSTALL(<key>)` or `QORE_CATALOG_MANIFEST_PROJECT`).
 Two projects sharing a root must not share a key: the key is the only thing
@@ -86,12 +108,20 @@ generated manifest of the current generation. At install time it, in order:
 1. reads the previous manifest, if any;
 2. removes the files it lists that the new manifest does not — files only, only
    below the root, and only entries that cannot escape it;
-3. performs the flat-layout sweep described below, on the bootstrap generation
+3. removes every `<domain>/<locale>/<Module>.json` below the root whose owner
+   module this generation installs catalogs for and whose path the new manifest
+   does not list;
+4. performs the flat-layout sweep described below, on the bootstrap generation
    only;
-4. prunes locale and domain directories the removals emptied;
-5. publishes the new manifest last, and atomically (staged copy + `rename`).
+5. prunes locale and domain directories the removals emptied;
+6. publishes the new manifest last, and atomically (staged copy + `rename`).
 
-Step 5 is last because a manifest that lists fragments whose removal never ran
+Step 3 runs on every install, not only the bootstrap generation: the invariant it
+rests on does not weaken over time, and running it always makes reconciliation
+self-healing when a manifest is lost, or when an older package is installed over
+a newer one and then upgraded again.
+
+Step 6 is last because a manifest that lists fragments whose removal never ran
 would strand them permanently: the next generation would diff against a
 generation that never happened. Atomicity gives the same guarantee against an
 interrupted install.
@@ -104,10 +134,10 @@ correct even though its reconciliation rule runs before them. Only the
 
 ## Why the flat sweep is safe
 
-A manifest alone does nothing on the first install after this change: there is
-no previous manifest, so nothing is removed, and every pre-existing orphan
-survives. The residue that motivated the work is precisely of that kind, so it
-needs a bootstrap rule.
+Owner adoption covers orphans in the *fragment* layout on the first install, but
+nothing identifies an owner in the flat layout: `<domain>/<locale>.json` carries
+no owner name at all. Those files need a rule of their own, or the residue that
+motivated this work survives every install.
 
 The rule is narrow and provable: **no current generation of
 `QORE_INSTALL_USER_MODULE_CATALOGS()` ever installs `<domain>/<locale>.json`**,
@@ -152,6 +182,10 @@ package build reconciles the staged tree and never touches the live prefix.
 - Fragments installed by another project are never removed, by design (above).
   A project that stops installing catalogs *entirely* also registers no catalog
   root, so its last generation's fragments stay until it installs catalogs again.
+- Owner adoption reaches only modules the current generation still installs
+  catalogs for. A module dropped from a project before that project ever wrote a
+  manifest leaves fragments neither signal can claim; they must be removed by
+  hand, once.
 - A component-scoped install (`cmake --install --component <c>`) reconciles with
   the manifest of the whole configured generation, not of that component alone.
   For a root fed by several components this can record a fragment the run did not
@@ -169,7 +203,10 @@ package build reconciles the staged tree and never touches the live prefix.
 fixture CMake projects into temporary prefixes and covers: an app migrating
 between owner modules; every installed domain composing afterwards; an unrelated
 app keeping its old owner's fragment; another project's fragment in the same root
-and the same domain surviving; the flat-layout sweep; an unchanged reinstall
+and the same domain surviving; an orphan retired by owner name on a first
+install that no manifest could have seen, alongside a same-vintage fragment of
+another project's module that survives it; the flat-layout sweep; an unchanged
+reinstall
 removing nothing and leaving a byte-identical manifest; a manifest entry that
 would reach outside the catalog root being refused; and `DESTDIR` staging
 reconciling the staged root only.
