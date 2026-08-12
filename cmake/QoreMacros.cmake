@@ -965,6 +965,17 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_incremental_helper}
                 ${_qore_qcc_source_order_helper}
                 ${_qore_qcc_batch_bootstrap_helper}
+                # Everything an object recipe treats as a build input, so that
+                # the planner is reached whenever any of them moves. Without
+                # these the planner could conclude that nothing is stale while
+                # the object recipes behind it each concluded otherwise, and
+                # then compile concurrently -- which is the very fan-out the
+                # planner exists to replace.
+                ${_QORE_QCO_STUBS}
+                ${_QORE_QCO_DEPENDS}
+                ${_qore_qcc_load_module_target_deps}
+                ${_qore_qcc_deps}
+                ${_QORE_QCO_MANIFEST_INPUTS}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Planning ${_QORE_QCO_GROUP} incremental qcc build"
             ${_qore_qcc_job_server_args}

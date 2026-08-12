@@ -2874,12 +2874,24 @@ class SourceOrderEngine {
         return True;
     }
 
+    #! True when the published generation of \a component matches its sources.
+    /** \a check_external_dependencies compares depfile inputs from outside the
+        group -- the toolchain, loaded modules, stubs, includes -- by mtime.  A
+        recipe running behind the group coordinator asks it not to: the
+        coordinator's plan target takes those same files as build dependencies,
+        so the build tool has already decided the question, and answering it a
+        second time with a different rule is what let a recipe conclude that its
+        component was stale after the coordinator concluded the whole group was
+        current.  Two schedulers with two criteria is how a group ends up with
+        one compile per object running at once.
+    */
     bool generationCurrent(hash<SourceOrderContext> context_info,
             string context_path, hash<SourceOrderComponents> components, int component,
-            *string bootstrap_stamp) {
+            *string bootstrap_stamp, bool check_external_dependencies = True) {
         *hash<string, bool> covered;
         return generationCurrentImpl(context_info, context_path, components, component,
-            bootstrap_stamp, \covered, True, contextGenerationTime(context_path));
+            bootstrap_stamp, \covered, check_external_dependencies,
+            contextGenerationTime(context_path));
     }
 
     #! True when every component is current, sharing the group-wide covered-path index.
@@ -3062,7 +3074,8 @@ sub usage(*string error = NOTHING, bool success = False) {
         "           |--scc-generation|--scc-generation-token|--scc-source-token\n"
         "           |--scc-record|--scc-lock|--scc-compile-plan]\n"
         "           [--batch-stamp STAMP] CONTEXT SCC\n"
-        "       %s --scc-current [--batch-stamp STAMP] CONTEXT SCC\n"
+        "       %s --scc-current [--batch-stamp STAMP] [--source-deps-only]\n"
+        "           CONTEXT SCC\n"
         "       %s --scc-publish [--expect TOKEN] [--expect-graph GENERATION]\n"
         "           CONTEXT SCC\n"
         "       %s --scc-graph-generation CONTEXT\n"
@@ -3078,6 +3091,11 @@ sub usage(*string error = NOTHING, bool success = False) {
         "dependency graph moved away from --expect-graph, or that a component key\n"
         "no longer names a component; the compiled artifacts are not publishable\n"
         "in either case, but only 75 implicates anything outside the build.\n"
+        "\n"
+        "--source-deps-only leaves build inputs from outside the group to the\n"
+        "build tool, which is what a recipe running behind the group coordinator\n"
+        "wants: the coordinator already took those files as dependencies, and a\n"
+        "second, stricter answer is what makes recipes compile behind its back.\n"
         "\n"
         "--scc-freeze-graph records the current depfile-derived edge set as one\n"
         "named generation and prints its name. While QORE_QCC_GRAPH_SNAPSHOT names\n"
@@ -3262,6 +3280,7 @@ int sub main() {
     *string build_direct_map_prefix;
     *string source_symbol_manifest;
     *string batch_bootstrap_stamp;
+    bool source_deps_only = False;
     list<string> positional = ();
     for (int index = 0; index < ARGV.size(); ++index) {
         string arg = ARGV[index];
@@ -3275,6 +3294,8 @@ int sub main() {
             artifact_current = True;
         } else if (arg == "--cmake-plan") {
             cmake_plan = True;
+        } else if (arg == "--source-deps-only") {
+            source_deps_only = True;
         } else if (arg == "--scc-map" || arg == "--scc-for" || arg == "--scc-members"
                 || arg == "--scc-prerequisites" || arg == "--scc-generation"
                 || arg == "--scc-generation-token" || arg == "--scc-generation-dir"
@@ -3602,7 +3623,7 @@ int sub main() {
                     return 1;
                 }
                 if (engine.generationCurrent(context_info, context_path, components,
-                        component, batch_bootstrap_stamp)) {
+                        component, batch_bootstrap_stamp, !source_deps_only)) {
                     printf("current\t1\n");
                     return 0;
                 }
@@ -3629,7 +3650,7 @@ int sub main() {
                 return 0;
             case "current":
                 return engine.generationCurrent(context_info, context_path, components,
-                    component, batch_bootstrap_stamp) ? 0 : 1;
+                    component, batch_bootstrap_stamp, !source_deps_only) ? 0 : 1;
             case "publish": {
                 string result = engine.publishGeneration(context_info, context_path,
                     components, component, expected_generation,

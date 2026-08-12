@@ -89,6 +89,22 @@ component_lock=
 component_lock_hint=${QORE_QCC_COMPONENT_LOCK:-}
 planned_stale=${QORE_QCC_PLANNED_STALE:-0}
 
+# True when the group coordinator ran ahead of this recipe.
+#
+# The coordinator is then the group's scheduler and this recipe is a verifier of
+# the same predicate: it must ask the currency question with the coordinator's
+# rule, not a stricter one.  Answering it differently is what let the
+# coordinator find a group current while every object recipe behind it found
+# its own component stale -- and then compile, concurrently, the fan-out the
+# coordinator exists to replace.  Build inputs from outside the group are the
+# build tool's business; the coordinator's plan target takes them as
+# dependencies, so it is reached whenever one of them moves.
+coordinator_scheduled=${QORE_QCC_PREREQUISITES_ORDERED:-0}
+currency_scope=
+if [ "$coordinator_scheduled" = 1 ]; then
+    currency_scope=--source-deps-only
+fi
+
 run_source_order() {
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
             && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
@@ -371,15 +387,26 @@ compile_single_member() {
     return 0
 }
 
+#! Runs a graph query, scoping currency the way this invocation is entitled to.
+#  `$currency_scope` is empty unless the group coordinator scheduled this
+#  recipe, and an empty word must not reach the helper as an argument.
+run_scoped_source_order() {
+    if [ -n "$currency_scope" ]; then
+        run_source_order "$currency_scope" "$@"
+    else
+        run_source_order "$@"
+    fi
+}
+
 component_is_current() {
     if ! have_source_order || [ -z "$component_selector" ]; then
         return 1
     fi
     if [ -n "$batch_bootstrap_stamp" ]; then
-        run_source_order --scc-current --batch-stamp "$batch_bootstrap_stamp" \
+        run_scoped_source_order --scc-current --batch-stamp "$batch_bootstrap_stamp" \
             "$context_file" "$component_selector"
     else
-        run_source_order --scc-current "$context_file" "$component_selector"
+        run_scoped_source_order --scc-current "$context_file" "$component_selector"
     fi
 }
 
@@ -387,11 +414,11 @@ component_is_current() {
 prepare_component_compile_plan() {
     compile_plan_file=$1
     if [ -n "$batch_bootstrap_stamp" ]; then
-        run_source_order --scc-compile-plan \
+        run_scoped_source_order --scc-compile-plan \
             --batch-stamp "$batch_bootstrap_stamp" \
             "$context_file" "$component_selector" > "$compile_plan_file"
     else
-        run_source_order --scc-compile-plan \
+        run_scoped_source_order --scc-compile-plan \
             "$context_file" "$component_selector" > "$compile_plan_file"
     fi
 }
@@ -657,6 +684,20 @@ with_component_lock() (
 #  lock (never a component lock, because it writes every component's members)
 #  and republishes every generation record.
 build_group_batch() {
+    # The batch takes the GROUP lock while a per-object recipe holds only a
+    # component lock, so a batch started from here would republish every
+    # component's generation record underneath compiles it does not exclude.
+    # The coordinator routes every stale multi-member component to the shared
+    # parse before any object recipe runs, so reaching this point behind it
+    # means the plan was wrong -- and starting an unsynchronised group compile
+    # is a worse answer to that than saying so.
+    if [ "$coordinator_scheduled" = 1 ]; then
+        echo "$0: component $component_key spans $component_size sources and is" \
+            "still stale after the group was planned; the shared parse cannot be" \
+            "started from a single object's recipe because it publishes the whole" \
+            "group" >&2
+        return 1
+    fi
     # Several members of one component can each reach this point before any of
     # them takes the group lock; only the holder compiles, and the rest find the
     # generation current. The batch itself reports the one compile that happens.

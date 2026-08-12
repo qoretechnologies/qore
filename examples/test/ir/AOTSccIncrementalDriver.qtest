@@ -59,6 +59,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testFrozenGraphRemovesTheTransition());
         addTestCase("the coordinator plans, compiles and verifies against one graph",
             \testCoordinatorConvergesInOneInvocation());
+        addTestCase("a scheduled recipe uses the coordinator's currency rule",
+            \testScheduledRecipeSharesTheCoordinatorsRule());
+        addTestCase("a scheduled recipe refuses to start the group's shared parse",
+            \testScheduledRecipeRefusesToStartTheBatch());
 
         set_return_value(main());
     }
@@ -457,5 +461,103 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(0, again.rc, "the second invocation succeeds: " + again.output);
         assertEq(4, compiles(fx).size(),
             "a no-op build compiles nothing: " + again.output);
+
+        # And the object recipes that run behind the coordinator must agree with
+        # it, or the group compiles a second time in parallel behind its back.
+        foreach string name in (fx.names) {
+            hash<auto> component = componentFor(fx.qo_dir, name);
+            hash<auto> verified = recipe(fx, name, component);
+            assertEq(0, verified.rc, name + " recipe succeeds: " + verified.output);
+        }
+        assertEq(4, compiles(fx).size(),
+            "no object recipe compiles behind the coordinator");
+    }
+
+    #! Runs the driver the way the build's per-object recipe runs it.
+    /** The distinguishing input is QORE_QCC_PREREQUISITES_ORDERED: it says the
+        group coordinator already scheduled this group, which makes the recipe a
+        verifier rather than a second scheduler.
+    */
+    private hash<auto> recipe(hash<auto> fx, string name, hash<auto> component) {
+        string qo_dir = fx.qo_dir;
+        string command = sprintf(
+            "QORE_QCC_PREREQUISITES_ORDERED=1 QORE_QCC_BATCH_BOOTSTRAP_STAMP=%y "
+            "QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_SOURCE_ORDER_HELPER=%y "
+            "QORE_QCC_BATCH_BOOTSTRAP_HELPER=%y QORE_QCC_GRAPH_SNAPSHOT=%y %y %y %y %y",
+            qo_dir + "/.qcc-batch-bootstrap.stamp", qore_bin, source_order_tool,
+            tools_dir + DirSep + "qore-qo-batch-bootstrap",
+            fx.context + ".graph-snapshot.json", incremental_tool,
+            qo_dir + "/" + name + ".qo", fx.src_dir + "/" + name + ".qc",
+            qo_dir + "/qcc-single.sh");
+        string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        return ("output": output.substr(0, marker),
+            "rc": output.substr(marker + 3).toInt());
+    }
+
+    #! A build input from outside the group must not split the two schedulers.
+    /** The coordinator leaves those files to the build tool, which takes them as
+        dependencies of its plan target.  A recipe that judged them itself would
+        find its component stale after the coordinator found the whole group
+        current, and every recipe in the group would reach that conclusion at
+        once -- the concurrent fan-out the coordinator exists to replace.
+    */
+    testScheduledRecipeSharesTheCoordinatorsRule() {
+        TmpDir tmp("qore-aot-driver-rule-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeCompiler(fx);
+        assertEq(0, plan(fx).rc, "the coordinator brings the group current");
+        assertEq(4, compiles(fx).size(), "one compile per component");
+
+        # A depfile input from outside the group, newer than every published
+        # object: the toolchain moving under a build that has already been
+        # planned.  CMake reaches the coordinator when this happens; the recipe
+        # must not reach a different verdict on its own.
+        string external = tmp.path + "/toolchain.stamp";
+        write(external, "newer\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.d",
+                ReadOnlyFile::readTextFile(fx.qo_dir + "/" + name + ".qo.d")
+                    + "    " + external + "\n");
+        }
+
+        hash<auto> component = componentFor(fx.qo_dir, "d");
+
+        # The two rules genuinely disagree here, which is what made the two
+        # schedulers diverge.  The stricter one remains available to callers
+        # entitled to schedule for themselves.
+        assertEq(1, runTool(("--scc-current", fx.context, component.key)).rc,
+            "an unscoped currency probe weighs external build inputs");
+        assertEq(0, runTool(("--source-deps-only", "--scc-current", fx.context,
+            component.key)).rc,
+            "the coordinator's rule leaves them to the build tool");
+
+        # The recipe must take the coordinator's side of that disagreement.
+        hash<auto> verified = recipe(fx, "d", component);
+        assertEq(0, verified.rc, "the scheduled recipe succeeds: " + verified.output);
+        assertEq(4, compiles(fx).size(),
+            "the scheduled recipe does not compile behind the coordinator");
+    }
+
+    testScheduledRecipeRefusesToStartTheBatch() {
+        TmpDir tmp("qore-aot-driver-nobatch-");
+        # a and b share a component, and nothing is published, so the recipe for
+        # a finds a stale two-member component -- which only the shared parse
+        # can compile, and which the coordinator routes there before any recipe
+        # runs.  Reaching it from a recipe means the plan was wrong.
+        hash<auto> fx = fixture(tmp.path);
+        writeCompiler(fx);
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+
+        hash<auto> component = componentFor(fx.qo_dir, "a");
+        assertEq("2", component.size, "a and b share one component");
+
+        hash<auto> result = recipe(fx, "a", component);
+        assertEq(1, result.rc, "the recipe fails rather than improvising");
+        assertTrue(result.output.find("cannot be started from a single object") >= 0,
+            "it says why the shared parse is not its to start: " + result.output);
+        assertEq((), compiles(fx), "and it compiles nothing");
+        assertFalse(exists record(fx, component.key),
+            "nothing is published");
     }
 }
