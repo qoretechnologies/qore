@@ -2542,6 +2542,36 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 # multiple modules contribute disjoint messages to one catalog domain without
 # overwriting each other; I18n::discover_catalog_files() composes fragments in
 # deterministic filename order.
+
+# Records one installed catalog fragment for QORE_FINALIZE_CATALOG_INSTALL().
+#
+# Catalog installation is additive by itself, so the reconciliation pass needs to
+# know exactly which fragments this project's current generation produces.  The
+# record is kept per catalog root -- several projects install into one root by
+# design, and each may only ever remove its own fragments.
+#
+# _root      catalog install root as written by the caller (absolute, or relative
+#            to the consuming project's CMAKE_INSTALL_PREFIX)
+# _component install component the fragment belongs to
+# _relative  installed path relative to the catalog root
+FUNCTION (QORE_RECORD_INSTALLED_CATALOG_FRAGMENT _root _component _relative)
+    string(MD5 _qore_catalog_root_key "${_root}")
+    get_property(_qore_catalog_known_roots GLOBAL PROPERTY QORE_CATALOG_INSTALL_ROOTS)
+    list(FIND _qore_catalog_known_roots "${_root}" _qore_catalog_root_index)
+    if (_qore_catalog_root_index EQUAL -1)
+        set_property(GLOBAL APPEND PROPERTY QORE_CATALOG_INSTALL_ROOTS "${_root}")
+    endif()
+    set_property(GLOBAL APPEND PROPERTY
+        QORE_CATALOG_INSTALLED_FRAGMENTS_${_qore_catalog_root_key} "${_relative}")
+    get_property(_qore_catalog_components GLOBAL PROPERTY
+        QORE_CATALOG_INSTALL_COMPONENTS_${_qore_catalog_root_key})
+    list(FIND _qore_catalog_components "${_component}" _qore_catalog_component_index)
+    if (_qore_catalog_component_index EQUAL -1)
+        set_property(GLOBAL APPEND PROPERTY
+            QORE_CATALOG_INSTALL_COMPONENTS_${_qore_catalog_root_key} "${_component}")
+    endif()
+ENDFUNCTION (QORE_RECORD_INSTALLED_CATALOG_FRAGMENT)
+
 FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
     unset(_qore_module_catalog_dir)
     if (ARGC GREATER 4)
@@ -2596,6 +2626,10 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
                         "${_qore_catalog_install_dir}/${_qore_catalog_domain}/${_qore_catalog_locale}"
                     RENAME "${_module_name}.json"
                     COMPONENT ${_qore_catalog_install_component})
+                QORE_RECORD_INSTALLED_CATALOG_FRAGMENT(
+                    "${_qore_catalog_install_dir}"
+                    "${_qore_catalog_install_component}"
+                    "${_qore_catalog_domain}/${_qore_catalog_locale}/${_module_name}.json")
             endforeach()
         endforeach()
 
@@ -2618,9 +2652,123 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
                     "${_qore_catalog_install_dir}/${_qore_catalog_domain}/${_qore_catalog_locale}"
                 RENAME "${_module_name}.json"
                 COMPONENT ${_qore_catalog_install_component})
+            QORE_RECORD_INSTALLED_CATALOG_FRAGMENT(
+                "${_qore_catalog_install_dir}"
+                "${_qore_catalog_install_component}"
+                "${_qore_catalog_domain}/${_qore_catalog_locale}/${_module_name}.json")
         endforeach()
     endif()
 ENDFUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS)
+
+# Emits the install-time reconciliation pass for every catalog root this project
+# installs into.
+#
+# Without it, catalog installation is additive forever: a fragment produced by an
+# earlier generation of the sources survives every later install, is still
+# discovered, and makes catalog composition fail as soon as the current
+# generation defines the same message id differently.  The reconciliation pass
+# removes the fragments this project installed before and no longer installs, and
+# nothing else -- see design/catalog-install-reconciliation.md.
+#
+# Call this once, after every call that installs catalogs (qore_user_module(),
+# QORE_EXTERNAL_USER_MODULE(), QORE_INSTALL_USER_MODULE_CATALOGS()), so all
+# fragments are recorded first.  install() rules run in declaration order, which
+# is what puts the manifest write after the fragments it describes.
+#
+# An optional argument, or the QORE_CATALOG_MANIFEST_PROJECT variable, overrides
+# the manifest project key, which defaults to CMAKE_PROJECT_NAME.  Two projects
+# sharing one catalog root must not share a key: the key is what keeps each
+# project's reconciliation confined to its own fragments.
+FUNCTION (QORE_FINALIZE_CATALOG_INSTALL)
+    if (ARGC GREATER 1)
+        message(FATAL_ERROR
+            "QORE_FINALIZE_CATALOG_INSTALL accepts at most a manifest project key")
+    endif()
+    set(_qore_catalog_project "${CMAKE_PROJECT_NAME}")
+    if (DEFINED QORE_CATALOG_MANIFEST_PROJECT
+            AND NOT "${QORE_CATALOG_MANIFEST_PROJECT}" STREQUAL "")
+        set(_qore_catalog_project "${QORE_CATALOG_MANIFEST_PROJECT}")
+    endif()
+    if (ARGC GREATER 0 AND NOT "${ARGV0}" STREQUAL "")
+        set(_qore_catalog_project "${ARGV0}")
+    endif()
+    # the key names a file in the installed tree, so keep it to a safe basename
+    string(REGEX REPLACE "[^A-Za-z0-9_.+-]" "_" _qore_catalog_project_key
+        "${_qore_catalog_project}")
+    if ("${_qore_catalog_project_key}" STREQUAL ""
+            OR "${_qore_catalog_project_key}" MATCHES "^\\.+$")
+        message(FATAL_ERROR
+            "QORE_FINALIZE_CATALOG_INSTALL requires a usable manifest project key; got '${_qore_catalog_project}'")
+    endif()
+
+    get_property(_qore_catalog_roots GLOBAL PROPERTY QORE_CATALOG_INSTALL_ROOTS)
+    foreach (_qore_catalog_root IN LISTS _qore_catalog_roots)
+        string(MD5 _qore_catalog_root_key "${_qore_catalog_root}")
+        get_property(_qore_catalog_fragments GLOBAL PROPERTY
+            QORE_CATALOG_INSTALLED_FRAGMENTS_${_qore_catalog_root_key})
+        list(REMOVE_DUPLICATES _qore_catalog_fragments)
+        list(SORT _qore_catalog_fragments)
+
+        # The manifest of this generation is written at configure time and copied
+        # into the catalog root by the reconciliation pass.  Its content is a pure
+        # function of the recorded fragment set, so an unchanged source tree
+        # installs a byte-identical manifest.
+        set(_qore_catalog_new_manifest
+            "${CMAKE_BINARY_DIR}/qore-catalog-manifests/${_qore_catalog_project_key}-${_qore_catalog_root_key}.manifest")
+        set(_qore_catalog_manifest_body
+            "# Qore i18n catalog install manifest -- generated, do not edit\n")
+        string(APPEND _qore_catalog_manifest_body
+            "# project: ${_qore_catalog_project}\n")
+        string(APPEND _qore_catalog_manifest_body
+            "# catalog root: ${_qore_catalog_root}\n")
+        string(APPEND _qore_catalog_manifest_body
+            "# paths are relative to the catalog root; entries dropped by a later\n")
+        string(APPEND _qore_catalog_manifest_body
+            "# generation of this project are removed when that generation installs\n")
+        foreach (_qore_catalog_fragment IN LISTS _qore_catalog_fragments)
+            string(APPEND _qore_catalog_manifest_body "${_qore_catalog_fragment}\n")
+        endforeach()
+        file(WRITE "${_qore_catalog_new_manifest}" "${_qore_catalog_manifest_body}")
+
+        # DESTDIR and relative-root handling as elsewhere in this file
+        if (IS_ABSOLUTE "${_qore_catalog_root}")
+            set(_qore_catalog_root_expr "\$ENV{DESTDIR}${_qore_catalog_root}")
+        else()
+            set(_qore_catalog_root_expr
+                "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_qore_catalog_root}")
+        endif()
+
+        # The obsolete flat layout can only exist below a Qore-managed catalog
+        # root: no current generation of this macro installs <domain>/<locale>.json
+        # anywhere, and the only thing that ever installed it there was Qore's own
+        # pre-fragment-layout macro.
+        set(_qore_catalog_sweep_flat FALSE)
+        if (DEFINED QORE_CATALOG_DIR AND NOT "${QORE_CATALOG_DIR}" STREQUAL ""
+                AND "${_qore_catalog_root}" STREQUAL "${QORE_CATALOG_DIR}")
+            set(_qore_catalog_sweep_flat TRUE)
+        endif()
+
+        # One pass per component: a component-scoped install must reconcile the
+        # fragments it installs, and repeating the pass is idempotent (the second
+        # run diffs the manifest the first one just wrote against the same set).
+        get_property(_qore_catalog_components GLOBAL PROPERTY
+            QORE_CATALOG_INSTALL_COMPONENTS_${_qore_catalog_root_key})
+        foreach (_qore_catalog_component IN LISTS _qore_catalog_components)
+            set(_qore_catalog_component_args "")
+            if (NOT "${_qore_catalog_component}" STREQUAL "")
+                set(_qore_catalog_component_args COMPONENT ${_qore_catalog_component})
+            endif()
+            install(CODE "
+set(QORE_CATALOG_ROOT \"${_qore_catalog_root_expr}\")
+set(QORE_CATALOG_MANIFEST
+    \"\${QORE_CATALOG_ROOT}/.qore-catalog-manifests/${_qore_catalog_project_key}.manifest\")
+set(QORE_CATALOG_NEW_MANIFEST \"${_qore_catalog_new_manifest}\")
+set(QORE_CATALOG_SWEEP_FLAT ${_qore_catalog_sweep_flat})
+include(\"${QORE_CMAKE_DIR}/QoreReconcileCatalogInstall.cmake\")
+" ${_qore_catalog_component_args})
+        endforeach()
+    endforeach()
+ENDFUNCTION (QORE_FINALIZE_CATALOG_INSTALL)
 
 # The module will be installed automatically in the 'make install' target.  For directory
 # modules every *.qm, *.qc, *.yaml, *.svg, and *.proto file under the module directory is

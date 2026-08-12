@@ -64,6 +64,14 @@ I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
     \c domain/locale/owner.json; fragments are composed in deterministic filename order after the direct catalog for
     the same domain and locale.
 
+    Because every discovered fragment is composed, an installation must not keep fragments that its current sources no
+    longer produce: an app that moves from one owner module to another would otherwise be described by both owners at
+    once, and composition rejects conflicting definitions of the same message id. Projects installing catalogs with
+    \c QORE_INSTALL_USER_MODULE_CATALOGS() therefore call \c QORE_FINALIZE_CATALOG_INSTALL() once, after all such
+    calls, which reconciles each catalog root at install time against a per-project manifest kept in the
+    \c .qore-catalog-manifests directory below that root. Only the fragments recorded by the same project are ever
+    removed, so several projects can keep contributing to one shared catalog root.
+
     @code{.py}
 list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
     "search_path": ("/opt/qore/catalogs",),

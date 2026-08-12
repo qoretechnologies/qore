@@ -7,6 +7,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+# catalog install reconciliation is verified by composing what it leaves installed
+%requires DataProvider
 
 %exec-class CMakeBuildHelpersTest
 
@@ -33,6 +35,12 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
         addTestCase("downstream catalog install root",
             \testDownstreamCatalogInstallRoot());
+        addTestCase("catalog install reconciles obsolete owner fragments",
+            \testCatalogInstallReconciliation());
+        addTestCase("catalog reconciliation refuses unsafe manifest entries",
+            \testCatalogManifestEntryValidation());
+        addTestCase("catalog reconciliation honours DESTDIR staging",
+            \testCatalogInstallDestdirStaging());
         addTestCase("generic qcc object helper builds standalone .qo files",
             \testGenericQccObjectHelpers());
         addTestCase("managed qcc outputs prune stale artifacts safely",
@@ -101,6 +109,300 @@ QORE_INSTALL_USER_MODULE_CATALOGS(OutsideModule
         string install_script = read(build_dir + "/cmake_install.cmake");
         assertTrue(install_script.find("share/downstream/i18n") != -1,
             "the generated install rule retains the downstream catalog root");
+    }
+
+    #! Writes a fixture project installing owner-qualified catalog fragments
+    /** @param src_dir project source directory; recreated from scratch, so
+            calling this again with fewer owners models a later source generation
+        @param project CMake project name, which is also the catalog manifest key
+        @param owners owner module -> app name -> presentation field -> source text
+
+        The fixture points \c QORE_CATALOG_DIR at its own install prefix, so its
+        catalog root is Qore-managed as far as the install rules are concerned --
+        that is what makes the obsolete flat-layout sweep apply to it.
+    */
+    private writeCatalogProject(string src_dir, string project,
+            hash<string, hash<string, hash<string, string>>> owners) {
+        if (is_dir(src_dir)) {
+            remove_tree(src_dir);
+        }
+        mkdir(src_dir, 0755, True);
+        string installs;
+        foreach hash<auto> owner in (owners.pairIterator()) {
+            foreach hash<auto> app in (owner.value.pairIterator()) {
+                hash<auto> messages = {};
+                foreach hash<auto> field in (app.value.pairIterator()) {
+                    messages{DataProviderPresentation::appMessageId(app.key,
+                        field.key)} = field.value;
+                }
+                string domain_dir = src_dir + "/catalogs/" + owner.key + "/"
+                    + catalogDomain(app.key);
+                mkdir(domain_dir, 0755, True);
+                write(domain_dir + "/root.json", make_json({
+                    "schema_version": I18n::get_catalog_schema_version(),
+                    "locales": {"root": {"messages": messages}},
+                }) + "\n");
+            }
+            installs += sprintf("QORE_INSTALL_USER_MODULE_CATALOGS(%s "
+                "\"${CMAKE_SOURCE_DIR}/catalogs/%s\" FixtureCatalogs)\n",
+                owner.key, owner.key);
+        }
+        write(src_dir + "/CMakeLists.txt", sprintf(
+"cmake_minimum_required(VERSION 3.16)
+project(%s NONE)
+set(QORE_CATALOG_DIR \"${CMAKE_INSTALL_PREFIX}/share/qore/i18n\")
+find_package(Qore REQUIRED)
+%sQORE_FINALIZE_CATALOG_INSTALL()
+", project, installs));
+    }
+
+    #! The catalog domain of an app, derived the same way the providers derive it
+    private string catalogDomain(string app) {
+        return DataProviderPresentation::appCatalogDomain({"name": app});
+    }
+
+    #! Configures and installs one generation of a fixture catalog project
+    /** @param src_dir project source directory
+        @param build_dir build directory, reused across generations
+        @param install_dir installation prefix owning the catalog root
+        @param destdir when set, stage the installation below this directory
+
+        @return the install output, so assertions can quote what the install did
+    */
+    private string installCatalogProject(string src_dir, string build_dir,
+            string install_dir, *string destdir) {
+        string configure = run(sprintf(
+            "cmake -S %s -B %s -DCMAKE_INSTALL_PREFIX=%s%s",
+            src_dir, build_dir, install_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/cmake_install.cmake"),
+            "catalog fixture project configures: " + configure);
+        return run(sprintf("%scmake --install %s --component FixtureCatalogs",
+            destdir ? "DESTDIR=" + destdir + " " : "", build_dir));
+    }
+
+    #! The fragment paths recorded in an installed catalog manifest
+    private list<string> manifestEntries(string path) {
+        list<string> rv = ();
+        foreach string line in (read(path).split("\n")) {
+            string entry = trim(line);
+            if (!entry.val() || entry =~ /^#/) {
+                continue;
+            }
+            rv += entry;
+        }
+        return rv;
+    }
+
+    #! Composes every installed catalog domain below \a root
+    /** This is what obsolete fragments break: discovery finds the current and
+        the obsolete definition of one message id and composition refuses to
+        choose between them.
+    */
+    private composeInstalledCatalogs(string root) {
+        Dir d();
+        d.chdir(root);
+        list<string> domains = d.listDirs();
+        assertTrue(domains.size() > 1,
+            "the fixture installs more than one catalog domain");
+        foreach string domain in (sort(domains)) {
+            if (domain == ".qore-catalog-manifests") {
+                continue;
+            }
+            list<string> files = I18n::discover_catalog_files(domain, "root",
+                {"search_path": (root,)});
+            assertTrue(files.size() > 0,
+                sprintf("domain %y has discoverable fragments", domain));
+            DataProviderPresentationCatalog catalog(domain, "root",
+                {"search_path": (root,)});
+            assertEq(DataProviderPresentation::RootLocale, catalog.getLocale(),
+                sprintf("domain %y composes after install", domain));
+        }
+    }
+
+    #! The composed text of one app presentation field below \a root
+    /** Returns \c "<absent>" when no discovered fragment defines the field, so a
+        fragment that reconciliation should have installed cannot pass unnoticed.
+    */
+    private string composedText(string root, string app, string field) {
+        list<string> files = I18n::discover_catalog_files(catalogDomain(app),
+            "root", {"search_path": (root,)});
+        I18n::MessageCatalog catalog(files, {"literal_messages": True});
+        return catalog.tc(DataProviderPresentation::appMessageId(app, field),
+            "<absent>", "root");
+    }
+
+    testCatalogInstallReconciliation() {
+        TmpDir tmp("qore-cmake-catalog-reconcile-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string other_src_dir = tmp.path + "/other-src";
+        string other_build_dir = tmp.path + "/other-build";
+        string install_dir = tmp.path + "/install";
+        string root = install_dir + "/share/qore/i18n";
+        string manifest = root
+            + "/.qore-catalog-manifests/QoreCatalogFixtureGeneration.manifest";
+        string example_domain = catalogDomain("Example");
+        string other_domain = catalogDomain("Other");
+
+        # residue of a pre-fragment-layout install of the same root: no current
+        # generation installs <domain>/<locale>.json, so it is obsolete by
+        # definition and only the bootstrap sweep can retire it
+        string flat_dir = root + "/" + catalogDomain("Legacy");
+        mkdir(flat_dir, 0755, True);
+        write(flat_dir + "/root.json", make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                DataProviderPresentation::appMessageId("Legacy", "short_desc"):
+                    "retired app",
+            }}},
+        }) + "\n");
+
+        # generation A: OldOwner owns both apps
+        writeCatalogProject(src_dir, "QoreCatalogFixtureGeneration", {
+            "OldOwner": {
+                "Example": {"short_desc": "generation A Example"},
+                "Other": {"short_desc": "unrelated app"},
+            },
+        });
+        string install_a = installCatalogProject(src_dir, build_dir, install_dir);
+        assertTrue(is_file(root + "/" + example_domain + "/root/OldOwner.json"),
+            "generation A installs its owner fragment: " + install_a);
+        assertFalse(is_file(flat_dir + "/root.json"),
+            "the obsolete flat catalog is swept on the first reconcile: "
+            + install_a);
+        assertFalse(is_dir(flat_dir),
+            "the domain directory emptied by the sweep is pruned");
+        assertEq((example_domain + "/root/OldOwner.json",
+            other_domain + "/root/OldOwner.json"), manifestEntries(manifest),
+            "the manifest records exactly what generation A installed");
+
+        # a different project contributes a disjoint fragment to the same domain
+        # in the same root -- the case the owner-qualified layout exists for
+        writeCatalogProject(other_src_dir, "QoreCatalogFixtureOtherProject", {
+            "OtherOwner": {"Example": {"desc": "owned by another project"}},
+        });
+        string install_other = installCatalogProject(other_src_dir,
+            other_build_dir, install_dir);
+        string other_project_fragment =
+            root + "/" + example_domain + "/root/OtherOwner.json";
+        assertTrue(is_file(other_project_fragment),
+            "another project installs into the same catalog root: "
+            + install_other);
+
+        # generation B: Example migrates to NewOwner with different presentation
+        writeCatalogProject(src_dir, "QoreCatalogFixtureGeneration", {
+            "OldOwner": {"Other": {"short_desc": "unrelated app"}},
+            "NewOwner": {"Example": {"short_desc": "generation B Example"}},
+        });
+        string install_b = installCatalogProject(src_dir, build_dir, install_dir);
+        assertFalse(is_file(root + "/" + example_domain + "/root/OldOwner.json"),
+            "the previous owner's fragment is removed: " + install_b);
+        assertTrue(is_file(root + "/" + example_domain + "/root/NewOwner.json"),
+            "the new owner's fragment is installed: " + install_b);
+        assertTrue(is_file(root + "/" + other_domain + "/root/OldOwner.json"),
+            "an app still owned by OldOwner keeps its fragment");
+        assertTrue(is_file(other_project_fragment),
+            "reconciliation never removes another project's fragment");
+        assertEq("generation B Example", composedText(root, "Example",
+            "short_desc"),
+            "the installed catalog composes to the current owner's text");
+        assertEq("owned by another project", composedText(root, "Example",
+            "desc"),
+            "the other project's contribution still composes into the domain");
+        composeInstalledCatalogs(root);
+        assertEq((example_domain + "/root/NewOwner.json",
+            other_domain + "/root/OldOwner.json"), manifestEntries(manifest),
+            "the manifest tracks the new generation's fragments");
+
+        # an unchanged source tree must reconcile to exactly the same state
+        string manifest_before = read(manifest);
+        string install_again = installCatalogProject(src_dir, build_dir,
+            install_dir);
+        assertEq(-1, install_again.find("removed"),
+            "an unchanged reinstall removes nothing: " + install_again);
+        assertEq(manifest_before, read(manifest),
+            "an unchanged reinstall leaves the manifest byte-identical");
+        assertTrue(is_file(other_project_fragment),
+            "an unchanged reinstall preserves the other project's fragment");
+    }
+
+    testCatalogManifestEntryValidation() {
+        TmpDir tmp("qore-cmake-catalog-manifest-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string install_dir = tmp.path + "/install";
+        string root = install_dir + "/share/qore/i18n";
+        string manifest = root
+            + "/.qore-catalog-manifests/QoreCatalogFixtureGuarded.manifest";
+        string domain = catalogDomain("Guarded");
+
+        writeCatalogProject(src_dir, "QoreCatalogFixtureGuarded", {
+            "OldOwner": {"Guarded": {"short_desc": "guarded app"}},
+        });
+        installCatalogProject(src_dir, build_dir, install_dir);
+        assertTrue(is_file(manifest), "the first install publishes a manifest");
+
+        # a manifest lives in the installed tree and names files the next install
+        # deletes, so entries that could reach outside the catalog root must be
+        # refused rather than followed
+        string outside = install_dir + "/share/outside.json";
+        write(outside, "{}\n");
+        write(manifest, read(manifest) + "../outside.json\n" + outside + "\n");
+
+        # generation B drops the app, so every manifest entry is a removal
+        # candidate, including the two injected ones
+        writeCatalogProject(src_dir, "QoreCatalogFixtureGuarded", {
+            "OldOwner": {"Other": {"short_desc": "unrelated app"}},
+        });
+        string install_b = installCatalogProject(src_dir, build_dir, install_dir);
+        assertTrue(is_file(outside),
+            "a manifest entry outside the catalog root is refused: " + install_b);
+        assertFalse(is_file(root + "/" + domain + "/root/OldOwner.json"),
+            "the safe entry is still reconciled: " + install_b);
+        assertEq((catalogDomain("Other") + "/root/OldOwner.json",),
+            manifestEntries(manifest),
+            "the republished manifest holds only this generation's fragments");
+    }
+
+    testCatalogInstallDestdirStaging() {
+        TmpDir tmp("qore-cmake-catalog-destdir-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string install_dir = tmp.path + "/install";
+        string stage_dir = tmp.path + "/stage";
+        string root = install_dir + "/share/qore/i18n";
+        string manifest = root
+            + "/.qore-catalog-manifests/QoreCatalogFixtureStaged.manifest";
+        string domain = catalogDomain("Staged");
+
+        writeCatalogProject(src_dir, "QoreCatalogFixtureStaged", {
+            "OldOwner": {"Staged": {"short_desc": "staged app"}},
+        });
+
+        # a package build must not touch the live prefix, so the file the sweep
+        # would otherwise remove is placed there to prove it survives
+        string flat_dir = root + "/" + catalogDomain("Legacy");
+        mkdir(flat_dir, 0755, True);
+        write(flat_dir + "/root.json", make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {}}},
+        }) + "\n");
+
+        string install = installCatalogProject(src_dir, build_dir, install_dir,
+            stage_dir);
+        string staged_root = stage_dir + root;
+        assertTrue(is_file(staged_root + "/" + domain + "/root/OldOwner.json"),
+            "the fragment installs below the staged root: " + install);
+        assertTrue(is_file(stage_dir + manifest),
+            "the manifest is written below the staged root");
+        assertFalse(is_file(manifest),
+            "DESTDIR staging writes no manifest into the live prefix");
+        assertTrue(is_file(flat_dir + "/root.json"),
+            "DESTDIR staging reconciles the staged root only");
+        assertEq((domain + "/root/OldOwner.json",),
+            manifestEntries(stage_dir + manifest),
+            "the staged manifest records the staged fragment");
     }
 
     #! The generation lock of the component that publishes \a object.

@@ -2955,7 +2955,7 @@ install(FILES ${QCC_FORMAT_STAMP}
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteSourceContentDigests.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
@@ -3686,6 +3686,12 @@ qore_user_module("qlib/OneRecordClient")
 qore_user_module("qlib/OneRecordServerHandler")
 
 qore_finalize_user_module_dependencies()
+
+# Reconcile the installed i18n catalog root against the fragments this source
+# generation owns.  This must come after every call that installs catalogs: those
+# calls record the fragment set, and install() rules run in declaration order,
+# which is what publishes the manifest after the fragments it describes.
+qore_finalize_catalog_install()
 
 get_property(QORE_QM_METADATA_TARGETS GLOBAL PROPERTY QORE_QM_METADATA_TARGETS)
 add_custom_target(qore-bootstrap
