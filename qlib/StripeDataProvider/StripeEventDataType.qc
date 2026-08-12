@@ -56,8 +56,8 @@ public class StripeEventDataTypeBase inherits HashDataType {
                 "short_desc": "The Stripe API version the payload is formatted to",
                 "type": StringOrNothingType,
                 "desc": "The Stripe API version the payload is formatted to.\n\n"
-                    "The webhook endpoint is created with an explicit version, so this is the version the "
-                    "application's actions were generated from rather than the account's default.",
+                    "The webhook endpoint is created with an explicit version, so this is the version this "
+                    "application works with rather than the account's default.",
             },
             "livemode": {
                 "display_name": "Live Mode",

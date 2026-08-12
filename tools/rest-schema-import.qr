@@ -1,0 +1,387 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file rest-schema-import.qr Imports a vendor REST schema into the pinned form an application ships
+
+/*  rest-schema-import.qr Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Util
+%requires FileLocationHandler
+%requires RestSchemaActions
+
+%requires json
+%requires yaml
+
+%exec-class RestSchemaImport
+
+#! Imports a vendor REST schema into the pinned, pruned document a schema-driven application ships
+/** The work is done by @ref RestSchemaActions::RestSchemaImporter "RestSchemaImporter"; this program is
+    the command-line front end for it, and adds the drift check that makes an update reviewable.
+
+    An application's committed schema is produced here rather than by hand, so that the checksum, the
+    counts and the pruning are the same every time and a re-import is a diff rather than an archaeology
+    exercise.
+
+    @par Module path
+
+    Modules are found on the usual search path.  When importing against modules that are not installed -
+    which is normally the case in this repository - set \c QORE_MODULE_DIR:
+
+    @code{.sh}
+QORE_MODULE_DIR=qlib tools/rest-schema-import.qr --spec qlib/PaddleDataProvider/paddle-import.yaml
+    @endcode
+*/
+class RestSchemaImport {
+    public {
+        #! Command-line options
+        const Opts = {
+            "spec": "spec,s=s",
+            "source": "source=s",
+            "output": "output,o=s",
+            "name": "name,n=s",
+            "ops": "ops=s",
+            "op": "op=s@",
+            "manifest": "manifest,m=s",
+            "provenance": "provenance,p=s",
+            "const_name": "const=s",
+            "drift": "drift,d=s",
+            "json": "json:b",
+            "yaml": "yaml:b",
+            "no_validate": "no-validate",
+            "dry_run": "dry-run",
+            "verbose": "verbose,v",
+            "help": "help,h",
+        };
+    }
+
+    private {
+        #! The parsed command line
+        hash<auto> opt;
+    }
+
+    #! Runs the import
+    constructor() {
+        GetOpt g(Opts);
+        opt = g.parse3(\ARGV);
+        if (opt.help) {
+            usage(0);
+        }
+        if (opt.json && opt.yaml) {
+            error("--json and --yaml are mutually exclusive");
+        }
+
+        list<hash<RestSchemaImportInfo>> docs;
+        # provenance targets, in step with "docs"
+        list<*hash<auto>> prov;
+        if (opt.spec.val()) {
+            if (opt.source.val() || opt.output.val() || opt.ops.val() || opt.op || opt.manifest.val()) {
+                error("--spec describes the documents to import, so it cannot be combined with --source, "
+                    "--output, --ops, --op or --manifest");
+            }
+            (docs, prov) = getSpecDocuments(opt.spec);
+        } else {
+            if (!opt.source.val() || !opt.output.val()) {
+                error("--source and --output are required unless --spec is given");
+            }
+            docs = (<RestSchemaImportInfo>{
+                "name": opt.name ?? basename(opt.output),
+                "source": opt.source,
+                "output": opt.output,
+                "operations": getOperations(opt.ops, opt.op, opt.manifest),
+                "json": opt.json ? True : (opt.yaml ? False : NOTHING),
+            },);
+            prov = (opt.provenance.val()
+                ? {"file": opt.provenance, "const": opt.const_name ?? "Provenance"}
+                : NOTHING,);
+        }
+
+        hash<auto> iopts = {
+            "validate": !opt.no_validate,
+            "dry_run": opt.dry_run ?? False,
+        };
+        list<hash<RestSchemaImportResultInfo>> res = RestSchemaImporter::importAll(docs, iopts);
+        printf("%s", RestSchemaImporter::getReport(res));
+
+        # every match that needed normalizing is a manifest that will not resolve at run time, so it is
+        # reported as a failure rather than a note, however successful the import itself was
+        int normalized = 0;
+        foreach hash<RestSchemaImportResultInfo> r in (res) {
+            map ++normalized, r.matches, $1.normalized;
+        }
+
+        foreach int i in (xrange(docs.size())) {
+            if (prov[i]) {
+                if (opt.dry_run) {
+                    printf("%s: would update the %s record in %s\n", res[i].name, prov[i]."const",
+                        prov[i].file);
+                } else {
+                    RestSchemaImporter::updateProvenanceFile(prov[i].file,
+                        RestSchemaImporter::getProvenance(res[i]), prov[i]."const");
+                    printf("%s: updated the %s record in %s\n", res[i].name, prov[i]."const", prov[i].file);
+                }
+            }
+        }
+
+        int breaking = opt.drift.val() ? checkDrift(opt.drift, res) : 0;
+
+        if (normalized) {
+            printf("\n%d operation(s) resolved only after normalizing the path; the manifest has to name "
+                "the path exactly as the document declares it, or the action set will not resolve it at "
+                "run time\n", normalized);
+        }
+        if (normalized || breaking) {
+            exit(1);
+        }
+    }
+
+    #! Compares the imported documents against an application's action set
+    /** @param spec \c "MODULE:EXPRESSION", where the expression yields a
+        @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet"; for a multi-document
+        application, one \c "MODULE:EXPRESSION" per document, separated by \c ","
+        @param res the import results
+
+        @return the number of breaking differences found
+    */
+    private int checkDrift(string spec, list<hash<RestSchemaImportResultInfo>> res) {
+        list<string> specs = split(",", spec);
+        if (specs.size() != res.size()) {
+            error("--drift names %d action set(s) but %d document(s) were imported; a multi-document "
+                "application needs one action set per document, in the same order", specs.size(),
+                res.size());
+        }
+        int breaking = 0;
+        foreach int i in (xrange(res.size())) {
+            RestSchemaActionSet aset = cast<RestSchemaActionSet>(evalInModule(specs[i]));
+            OpenApi3Schema candidate = OpenApi3Loader::fromString(make_json(res[i].schema), True);
+            list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset, candidate);
+            printf("\n%s drift vs %s:\n%s", res[i].name, specs[i], RestSchemaDrift::getReport(drift));
+            breaking += (RestSchemaDrift::getBreaking(drift) ?? ()).size();
+        }
+        if (breaking) {
+            printf("\n%d breaking difference(s); the import is written but must not be committed until "
+                "each has been reviewed\n", breaking);
+        }
+        return breaking;
+    }
+
+    #! Returns the documents and provenance targets described by a spec file
+    private list<auto> getSpecDocuments(string path) {
+        hash<auto> spec;
+        {
+            on_error rethrow $1.err, sprintf("%s (while reading the import spec %y)", $1.desc, path);
+            string text = FileLocationHandler::getTextFileFromLocation(path);
+            auto parsed = (text =~ x/^\s*(.)/)[0] == "{" ? parse_json(text) : parse_yaml(text);
+            if (parsed.typeCode() != NT_HASH) {
+                throw "REST-SCHEMA-IMPORT-ERROR", sprintf("%y is not an import spec", path);
+            }
+            spec = parsed;
+        }
+        if (!spec.documents) {
+            error("import spec %y declares no documents", path);
+        }
+        # paths in a spec are relative to the spec itself, so that a spec committed next to a module works
+        # wherever it is run from
+        string dir = dirname(absolute_path(path) ? path : getcwd() + DirSep + path);
+
+        list<hash<RestSchemaImportInfo>> docs = ();
+        list<*hash<auto>> prov = ();
+        foreach auto d in (spec.documents) {
+            if (d.typeCode() != NT_HASH) {
+                error("every entry of \"documents\" in %y must be a hash", path);
+            }
+            if (!d.source.val() || !d.output.val()) {
+                error("every document in %y needs \"source\" and \"output\"", path);
+            }
+            docs += <RestSchemaImportInfo>{
+                "name": d.name ?? basename(d.output),
+                "source": d.source,
+                "output": resolvePath(dir, d.output),
+                "operations": getOperations(d.ops.val() ? resolvePath(dir, d.ops) : NOTHING, d.op,
+                    d.manifest),
+                "normalize": getNormalizations(d.normalize, path),
+                "json": d.json,
+            };
+            prov += d.provenance.val()
+                ? {"file": resolvePath(dir, d.provenance), "const": d."const" ?? "Provenance"}
+                : NOTHING;
+        }
+        return (docs, prov);
+    }
+
+    #! Returns the declared repairs described by a spec file
+    /** @param normalize the \c "normalize" member of a document entry
+        @param path the spec file, for error messages
+
+        @return the repairs, or @ref nothing when none were declared
+    */
+    private *list<hash<RestSchemaNormalizationInfo>> getNormalizations(auto normalize, string path) {
+        if (!exists normalize) {
+            return;
+        }
+        if (normalize.typeCode() != NT_LIST) {
+            error("\"normalize\" in %y must be a list of repairs", path);
+        }
+        list<hash<RestSchemaNormalizationInfo>> rv = ();
+        foreach auto n in (normalize) {
+            if (n.typeCode() != NT_HASH) {
+                error("every entry of \"normalize\" in %y must be a hash", path);
+            }
+            if (!n.reason.val()) {
+                error("every entry of \"normalize\" in %y needs a \"reason\"", path);
+            }
+            if (!n.operations && !n.relax_oneof) {
+                error("the repair %y in %y does nothing: it names neither operations nor \"relax_oneof\" "
+                    "pointers", n.reason, path);
+            }
+            list<hash<auto>> params = ();
+            foreach auto p in (n.add_parameters ?? ()) {
+                if (p.typeCode() != NT_HASH) {
+                    error("every entry of \"add_parameters\" in the repair %y must be an OpenAPI "
+                        "parameter object", n.reason);
+                }
+                params += p;
+            }
+            list<string> relax = ();
+            foreach auto ptr in (n.relax_oneof ?? ()) {
+                relax += ptr.toString();
+            }
+            rv += <RestSchemaNormalizationInfo>{
+                "reason": n.reason,
+                "operations": n.operations ? RestSchemaImporter::parseOperations(n.operations) : (),
+                "add_parameters": params,
+                "relax_oneof": relax,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns the operations to keep, from whichever source was given
+    private list<hash<SchemaOperationInfo>> getOperations(*string ops_file, *softlist<string> ops,
+            *string manifest) {
+        list<string> specs = ();
+        if (ops_file.val()) {
+            specs += split("\n", FileLocationHandler::getTextFileFromLocation(ops_file));
+        }
+        if (ops) {
+            specs += ops;
+        }
+        list<hash<SchemaOperationInfo>> rv = specs ? RestSchemaImporter::parseOperations(specs) : ();
+        if (manifest.val()) {
+            auto v = evalInModule(manifest);
+            if (v.typeCode() != NT_LIST) {
+                error("%y yielded %s, not a manifest", manifest, v.type());
+            }
+            list<hash<RestSchemaActionInfo>> m = ();
+            foreach auto e in (v) {
+                m += cast<hash<RestSchemaActionInfo>>(e);
+            }
+            # a manifest may declare an operation the "--op" list also names; the importer deduplicates
+            rv += RestSchemaImporter::operationsFromManifest(m);
+        }
+        if (!rv) {
+            error("no operations were selected; give --ops, --op or --manifest");
+        }
+        hash<string, bool> seen = {};
+        list<hash<SchemaOperationInfo>> uniq = ();
+        foreach hash<SchemaOperationInfo> op in (rv) {
+            string key = op.method.upr() + " " + op.path;
+            if (seen{key}) {
+                continue;
+            }
+            seen{key} = True;
+            uniq += op;
+        }
+        return uniq;
+    }
+
+    #! Evaluates an expression in a program that has loaded the given module
+    /** @param spec \c "MODULE:EXPRESSION"
+
+        @return the value of the expression
+    */
+    private auto evalInModule(string spec) {
+        *list<*string> m = (spec =~ x/^([^:]+):(.+)$/);
+        if (!m) {
+            error("%y is not of the form \"MODULE:EXPRESSION\"", spec);
+        }
+        on_error rethrow $1.err, sprintf("%s (while evaluating %y in module %y)", $1.desc, m[1], m[0]);
+        Program p(PO_NEW_STYLE);
+        p.parse(sprintf("%%requires %s\nauto sub __rest_schema_import_get() { return %s; }\n", m[0], m[1]),
+            "<rest-schema-import>");
+        return p.callFunction("__rest_schema_import_get");
+    }
+
+    #! Returns a path resolved against the spec file's own directory
+    private static string resolvePath(string dir, string path) {
+        # a location with a scheme, and an absolute path, are both used as given
+        if (absolute_path(path) || path =~ /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//) {
+            return path;
+        }
+        return dir + DirSep + path;
+    }
+
+    #! Reports a usage error and exits
+    private static error(string fmt) {
+        stderr.printf("ERROR: %s\n", vsprintf(fmt, argv));
+        usage(1);
+    }
+
+    #! Prints usage and exits
+    private static usage(int status) {
+        printf(
+"usage: %s --source URL --output FILE (--ops FILE | --op OP | --manifest MOD:EXPR) [options]\n"
+"       %s --spec FILE [options]\n\n"
+"Imports a vendor REST schema, prunes it to the operations an application exports, writes the\n"
+"pruned document, and optionally updates the application's provenance record and reports drift.\n\n"
+"The document:\n"
+"  -s,--spec FILE       import every document described by a YAML or JSON spec file\n"
+"  --source URL|FILE    the upstream document to import\n"
+"  -o,--output FILE     where to write the pruned document\n"
+"  -n,--name NAME       a label for the document, used in messages\n"
+"  --json               write JSON; the default is the format of the source document\n"
+"  --yaml               write YAML; the default is the format of the source document\n\n"
+"The operations to keep:\n"
+"  --ops FILE           a file of \"METHOD /path\" lines; \"#\" comments are ignored\n"
+"                       a spec file may also declare \"normalize\" repairs, which add\n"
+"                       parameters a vendor documents but omits; see the module docs\n"
+"  --op \"METHOD /path\"  a single operation; may be repeated\n"
+"  -m,--manifest MOD:EXPR  take them from a manifest, ex:\n"
+"                       \"PaddleDataProvider:PaddleManifest::Manifest\"\n\n"
+"Provenance and review:\n"
+"  -p,--provenance FILE rewrite the provenance record in an <App>Schema.qc\n"
+"  --const NAME         the provenance constant name (default: Provenance)\n"
+"  -d,--drift MOD:EXPR  compare the pruned document against an action set, ex:\n"
+"                       \"PaddleDataProvider:PaddleSchema::getActionSet()\"; one per\n"
+"                       document, comma-separated, for a multi-document application\n\n"
+"Other:\n"
+"  --no-validate        do not re-parse the written document\n"
+"  --dry-run            do everything except write\n"
+"  -v,--verbose         report every operation, not only the normalized ones\n"
+"  -h,--help            show this help\n\n"
+"Set QORE_MODULE_DIR to import against modules that are not installed, ex:\n"
+"  QORE_MODULE_DIR=qlib %s --spec qlib/PaddleDataProvider/paddle-import.yaml\n",
+            get_script_name(), get_script_name(), get_script_name());
+        exit(status);
+    }
+}

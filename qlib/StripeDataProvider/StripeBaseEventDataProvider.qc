@@ -31,7 +31,7 @@ public namespace StripeDataProvider {
     @section stripeevent_verification Signature Verification
 
     A Stripe webhook endpoint is a URL anyone can post to.  Without verification it would accept a
-    fabricated \c charge.succeeded — enough to make an integration ship goods that were never paid for —
+    fabricated \c charge.succeeded - enough to make an integration ship goods that were never paid for -
     or a fabricated \c invoice.payment_failed, enough to suspend a paying customer's account.  So a
     delivery whose signature cannot be verified is **dropped**, and one that arrives before the endpoint
     has been created is dropped too; there is no configuration that turns this off.

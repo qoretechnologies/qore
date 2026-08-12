@@ -1,0 +1,445 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore BitbucketDataProvider module definition
+
+/*  BitbucketRecordTables.qc Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! contains all public definitions in the BitbucketDataProvider module
+public namespace BitbucketDataProvider {
+#! The Bitbucket record-based tables
+/** Bitbucket is one of the two applications in this family whose API publishes a real filter expression
+    language, so a whole search expression can be sent over the wire rather than a handful of query
+    arguments.  That is what
+    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" means, and the
+    \c repositories and \c commit-comments tables declare it because Bitbucket really does the searching.
+
+    @section bitbucketrecord_bbql BBQL
+
+    Bitbucket Query Language is passed in the \c q argument: an infix comparison per predicate, joined with
+    \c AND, \c OR and \c NOT, with string values double-quoted and timestamps written as bare ISO 8601.
+    @ref BitbucketRecordTables::Bbql "Bbql" declares it, and
+    @ref RestSchemaActions::RestSchemaRecordFilter "RestSchemaRecordFilter" renders the expression tree into
+    it.
+
+    Bitbucket rejects a query naming a field it does not index, so a predicate on any other field is
+    evaluated here instead of being sent and turned into an error.  The fields each table will accept are
+    declared with it.
+
+    \c ~ is rendered but is **not** taken as exact.  Bitbucket documents it as "contains" without saying
+    whether it is case-sensitive, so it narrows what has to be read and the predicate is applied again to
+    what comes back: the search stays correct either way, and still costs one request instead of a walk.
+
+    @section bitbucketrecord_pullrequests Pull Requests Cannot Be Queried
+
+    Bitbucket's published description declares \c q on its repository and commit-comment listings and
+    **not** on its pull request listing, though the API accepts it there.  An overlay cannot add a
+    parameter - that is structural rather than presentational - so the pull requests table filters on
+    \c state alone and evaluates the rest of a search here.  Repairing that belongs in the import
+    specification's \c normalize block, where the same gap in Bitbucket's pagination arguments was repaired.
+
+    @section bitbucketrecord_paging Paging
+
+    Every Bitbucket collection answers with <tt>{values, page, pagelen, size, next}</tt>, and \c next is
+    absent on the last page.  The tables page by number, because \c page is what the pruned document
+    declares, and stop on a short page.
+
+    @section bitbucketrecord_readonly Four Collections Are Read Only
+
+    \c workspaces, \c workspace-members, \c commits and \c branches list and are never written: Bitbucket
+    creates none of them through these paths - a commit arrives by pushing it - and this application
+    exports no create, update or delete for any of them.  They declare none, and the record-based create,
+    update and delete actions refuse them by name rather than pretending.
+
+    @section bitbucketrecord_membership A Membership Is Not the Thing It Names
+
+    \c /user/workspaces and <tt>/workspaces/{workspace}/members</tt> both answer with **memberships**, not
+    with workspaces and not with users: a record is <tt>{type, administrator, workspace}</tt> or
+    <tt>{type, links, user, workspace}</tt>, and what a caller is usually after - a slug, a display name, an
+    account UUID - is one level down, under \c workspace or under \c user.
+
+    These tables publish that shape as Bitbucket returns it rather than flattening it, for the same reason
+    the rest of this file does: the record type is then the pinned description's own and cannot drift from
+    the contract the actions use, whereas a projection is a hand-written type that goes stale the moment
+    Bitbucket adds a field.  A mapper reads \c "workspace.slug" or \c "user.display_name" as a nested path.
+
+    Neither collection is addressable: a membership has no identifier of its own, Bitbucket exports no path
+    that reads one, and so neither table declares an identity or a single-record read.  A predicate is
+    answered as the records arrive.
+
+    @section bitbucketrecord_extra_readonly Columns Bitbucket Returns and Describes Nowhere
+
+    Two of the read-only collections need
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns" for the same reason the
+    repositories table does - a column the table does not declare cannot be searched at all:
+
+    |!Table|!Column|!What it carries
+    |\c commits|\c links|the URLs of the commit, its diff, its patch and its comments
+    |\c commits|\c rendered|the commit message in its raw and rendered forms
+    |\c branches|\c sync_strategies|the strategies the branch may be synchronized with
+
+    All three were found by reading the live API and comparing every key of a real record against the
+    declared columns.
+*/
+public class BitbucketRecordTables {
+    public {
+        #! The action group the record-based actions belong to
+        const RecordGroup = "Record-Based";
+
+        #! Bitbucket Query Language, as sent in the \c q argument
+        /** \c ~ is declared in @ref RestSchemaRecordQueryInfo::inexact_ops "inexact_ops" by every table that
+            uses this syntax, because Bitbucket does not document whether it matches case-sensitively.
+        */
+        const Bbql = <RestSchemaQuerySyntaxInfo>{
+            "name": "BBQL",
+            "binary_ops": {
+                DP_SEARCH_OP_EQ: "=",
+                DP_SEARCH_OP_NE: "!=",
+                DP_SEARCH_OP_LT: "<",
+                DP_SEARCH_OP_LE: "<=",
+                DP_SEARCH_OP_GT: ">",
+                DP_SEARCH_OP_GE: ">=",
+                DP_OP_CONTAINS: "~",
+            },
+            "and_op": "AND",
+            "or_op": "OR",
+            "not_op": "NOT",
+            "render_value": \BitbucketRecordTables::renderValue(),
+        };
+
+        #! The operators BBQL spells without meaning exactly what they mean here
+        const BbqlInexact = {DP_OP_CONTAINS: True};
+
+        #! How every Bitbucket collection pages
+        /** \c pagelen is capped at **50**, not the 100 Bitbucket's pagination page implies.  The cap is not
+            uniform across its endpoints - the repository listing accepts 100 and the pull request listing
+            answers the same value with <tt>400 "Invalid pagelen"</tt> - so the tables ask for the largest
+            size every endpoint accepts rather than the largest any of them does.  Found against the live
+            API; nothing in the published description says it.
+        */
+        const Paging = <RestSchemaRecordPagingInfo>{
+            "mode": RSRP_PAGE,
+            "page_option": "page",
+            "size_option": "pagelen",
+            "max_size": 50,
+        };
+
+        #! The repositories table
+        /** @section bitbucketrecord_repos_slug Addressed by a Column Bitbucket Does Not Describe
+
+            Bitbucket addresses a repository by its **slug** - the \c {repo_slug} in every path - and its
+            description of a repository declares \c uuid and \c full_name ("workspace/slug") but no slug,
+            though every response carries one.
+
+            Bitbucket's documentation says \c {repo_slug} also accepts the brace-wrapped UUID, and that was
+            tried: it does not work through this transport, because a path variable is percent-encoded and
+            Bitbucket answers \c {...} spelled as \c %7B...%7D with 404.  Verified against the live API -
+            the same repository answers 200 by slug and 404 by UUID.
+
+            So the identity is the slug, and the column it is read from is declared with
+            @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns": the record
+            field is real, only the description is missing it, and a column the table does not declare
+            cannot even be searched.
+        */
+        const RepositoriesTable = <RestSchemaRecordTableInfo>{
+            "name": "repositories",
+            "display_name": "Repositories",
+            "short_desc": "the repositories in one workspace",
+            "desc": "The repositories in one workspace, as records; Bitbucket evaluates a search over them "
+                "itself",
+            "list_action": "repositories_workspace_get",
+            "get_action": "repositories_workspace_repo_slug_get",
+            "update_action": "repositories_workspace_repo_slug_put",
+            "delete_action": "repositories_workspace_repo_slug_delete",
+            # the slug, not the UUID: see @ref bitbucketrecord_repos_slug
+            "id_field": "slug",
+            "id_option": "repo_slug",
+            "scope_options": ("workspace",),
+            "records_path": ("values",),
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "slug",
+                    "desc": "the repository slug, which addresses it in every path; Bitbucket returns it "
+                        "in every response and declares it in no schema",
+                    "type": "*string",
+                },
+                {
+                    "name": "workspace",
+                    "desc": "the workspace the repository belongs to",
+                    "type": "*hash",
+                },
+                {
+                    "name": "website",
+                    "desc": "the repository's website URL",
+                    "type": "*string",
+                },
+                {
+                    "name": "override_settings",
+                    "desc": "which inherited workspace settings this repository overrides",
+                    "type": "*hash",
+                },
+                {
+                    "name": "enforced_signed_commits",
+                    "desc": "whether the repository requires commits to be signed",
+                    "type": "*bool",
+                },
+            )),
+            "paging": Paging,
+            "search_options": ("role", "sort"),
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": Bbql,
+                "inexact_ops": BbqlInexact,
+                # Bitbucket rejects a query naming a field it does not index
+                "fields": {
+                    "name": True, "full_name": True, "description": True, "language": True,
+                    "scm": True, "is_private": True, "fork_policy": True, "has_issues": True,
+                    "has_wiki": True, "created_on": True, "updated_on": True, "size": True, "uuid": True,
+                },
+            },
+        };
+
+        #! The pull requests table
+        /** Bitbucket's description does not declare \c q here, so a search filters on \c state and is
+            answered for the rest by reading the listing.
+        */
+        const PullRequestsTable = <RestSchemaRecordTableInfo>{
+            "name": "pullrequests",
+            "display_name": "Pull Requests",
+            "short_desc": "the pull requests in one repository",
+            "desc": "The pull requests in one repository, as records",
+            "list_action": "repositories_workspace_repo_slug_pullrequests_get",
+            "get_action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_get",
+            "create_action": "repositories_workspace_repo_slug_pullrequests_post",
+            "update_action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_put",
+            "id_field": "id",
+            "id_option": "pull_request_id",
+            "scope_options": ("workspace", "repo_slug"),
+            "records_path": ("values",),
+            # Bitbucket returns a pull request's description and declares it in no schema
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "description",
+                    "desc": "the pull request description",
+                    "type": "*string",
+                },
+            )),
+            "paging": Paging,
+            "search_options": ("state",),
+            "filters": (
+                <RestSchemaRecordFilterInfo>{
+                    "field": "state", "operator": DP_SEARCH_OP_EQ, "option": "state", "exact": True,
+                },
+            ),
+        };
+
+        #! The pull request comments table
+        const PullRequestCommentsTable = <RestSchemaRecordTableInfo>{
+            "name": "pullrequest-comments",
+            "display_name": "Pull Request Comments",
+            "short_desc": "the comments on one pull request",
+            "desc": "The comments on one pull request, as records",
+            "list_action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_get",
+            "get_action":
+                "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_get",
+            "create_action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_post",
+            "update_action":
+                "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_put",
+            "delete_action":
+                "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_comment_id_delete",
+            "id_field": "id",
+            "id_option": "comment_id",
+            "scope_options": ("workspace", "repo_slug", "pull_request_id"),
+            "records_path": ("values",),
+            "paging": Paging,
+        };
+
+        #! The commit comments table
+        /** Bitbucket declares \c q on this listing, so it evaluates a search over commit comments itself.
+        */
+        const CommitCommentsTable = <RestSchemaRecordTableInfo>{
+            "name": "commit-comments",
+            "display_name": "Commit Comments",
+            "short_desc": "the comments on one commit",
+            "desc": "The comments on one commit, as records; Bitbucket evaluates a search over them itself",
+            "list_action": "repositories_workspace_repo_slug_commit_commit_comments_get",
+            "create_action": "repositories_workspace_repo_slug_commit_commit_comments_post",
+            "id_field": "id",
+            "scope_options": ("workspace", "repo_slug", "commit"),
+            "records_path": ("values",),
+            "paging": Paging,
+            "search_options": ("sort",),
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": Bbql,
+                "inexact_ops": BbqlInexact,
+                "fields": {"id": True, "created_on": True, "updated_on": True, "deleted": True},
+            },
+        };
+
+        #! The workspaces table
+        /** The workspaces the credential is a member of.  Bitbucket's \c administrator argument means
+            exactly what a predicate on the \c administrator column means, so it is sent - and the predicate
+            is applied again to what comes back, because only the \c true direction could be verified: the
+            credential this was read with administers every workspace it can see, so an empty answer to
+            <tt>administrator=false</tt> is the right answer and says nothing about how Bitbucket treats it.
+
+            @see @ref bitbucketrecord_membership, @ref bitbucketrecord_readonly
+        */
+        const WorkspacesTable = <RestSchemaRecordTableInfo>{
+            "name": "workspaces",
+            "display_name": "Workspaces",
+            "short_desc": "the workspaces the credential belongs to",
+            "desc": "The workspaces the credential belongs to, as records; a record is a membership and "
+                "carries the workspace itself under `workspace`, with its slug, its UUID and its links.  "
+                "Workspaces are read only here",
+            "list_action": "workspaces_get",
+            "records_path": ("values",),
+            "paging": Paging,
+            "search_options": ("sort", "administrator"),
+            "filters": (
+                <RestSchemaRecordFilterInfo>{
+                    "field": "administrator", "operator": DP_SEARCH_OP_EQ, "option": "administrator",
+                },
+            ),
+        };
+
+        #! The workspace members table
+        /** The members of one workspace.  A record is a membership and carries the member under \c user.
+
+            @see @ref bitbucketrecord_membership, @ref bitbucketrecord_readonly
+        */
+        const WorkspaceMembersTable = <RestSchemaRecordTableInfo>{
+            "name": "workspace-members",
+            "display_name": "Workspace Members",
+            "short_desc": "the members of one workspace",
+            "desc": "The members of one workspace, as records; a record is a membership and carries the "
+                "member under `user`, with their display name and their account UUID.  Members are read "
+                "only here",
+            "list_action": "workspaces_workspace_members_get",
+            "scope_options": ("workspace",),
+            "records_path": ("values",),
+            "paging": Paging,
+        };
+
+        #! The commits table
+        /** A commit is addressed by its \c hash, which is what <tt>{commit}</tt> takes in every path, and
+            the single read the manifest exports both answers \c readOne() and enriches the record type:
+            Bitbucket describes a listed commit with eight fields and a read one with ten.
+
+            @see @ref bitbucketrecord_readonly, @ref bitbucketrecord_extra_readonly
+        */
+        const CommitsTable = <RestSchemaRecordTableInfo>{
+            "name": "commits",
+            "display_name": "Commits",
+            "short_desc": "the commits in one repository",
+            "desc": "The commits in one repository, as records; a commit is named by its hash.  Commits "
+                "are read only here - a commit arrives by pushing it",
+            "list_action": "repositories_workspace_repo_slug_commits_get",
+            "get_action": "repositories_workspace_repo_slug_commit_commit_get",
+            "id_field": "hash",
+            "id_option": "commit",
+            "scope_options": ("workspace", "repo_slug"),
+            "records_path": ("values",),
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "links",
+                    "desc": "the URLs of the commit, its diff, its patch and its comments",
+                    "type": "*hash",
+                },
+                {
+                    "name": "rendered",
+                    "desc": "the commit message in its raw and rendered forms",
+                    "type": "*hash",
+                },
+            )),
+            "paging": Paging,
+        };
+
+        #! The branches table
+        /** Bitbucket declares \c q on this listing, so it evaluates a search over branch names itself.  A
+            branch is named by its \c name, which is what every branch path takes.
+
+            \c name is the one field declared queryable here: Bitbucket rejects a query naming a field it
+            does not index, and a predicate on anything else is answered as the records arrive.
+
+            @see @ref bitbucketrecord_readonly, @ref bitbucketrecord_extra_readonly
+        */
+        const BranchesTable = <RestSchemaRecordTableInfo>{
+            "name": "branches",
+            "display_name": "Branches",
+            "short_desc": "the branches in one repository",
+            "desc": "The branches in one repository, as records; Bitbucket evaluates a search over their "
+                "names itself.  Branches are read only here",
+            "list_action": "repositories_workspace_repo_slug_refs_branches_get",
+            "id_field": "name",
+            "scope_options": ("workspace", "repo_slug"),
+            "records_path": ("values",),
+            "extra_columns": RestSchemaTableDataProvider::makeRecordType((
+                {
+                    "name": "sync_strategies",
+                    "desc": "the strategies the branch may be synchronized with",
+                    "type": "*list",
+                },
+            )),
+            "paging": Paging,
+            "search_options": ("sort",),
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": Bbql,
+                "inexact_ops": BbqlInexact,
+                # Bitbucket rejects a query naming a field it does not index
+                "fields": {"name": True},
+            },
+        };
+
+        #! Every table, in presentation order
+        const Tables = (RepositoriesTable, PullRequestsTable, PullRequestCommentsTable, CommitCommentsTable,
+            WorkspacesTable, WorkspaceMembersTable, CommitsTable, BranchesTable);
+
+        #! The IDs the record-based actions are registered under
+        /** Bitbucket is a new application rather than a replacement, so these are the conventional IDs.
+        */
+        const RecordActionIds = <RestSchemaRecordActionIds>{};
+    }
+
+    #! Renders one value as BBQL spells it
+    /** A string is double-quoted with its quotes and backslashes escaped, a timestamp is written bare in
+        ISO 8601, and a boolean is a bare keyword.  An unset value is \c null, which is how BBQL asks for a
+        property that is not set.
+    */
+    static string renderValue(auto value, string field) {
+        switch (value.typeCode()) {
+            case NT_NOTHING:
+            case NT_NULL:
+                return "null";
+            case NT_BOOLEAN:
+                return value ? "true" : "false";
+            case NT_DATE:
+                return value.format("YYYY-MM-DDTHH:mm:SSZ");
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return value.toString();
+        }
+        return "\"" + replace(replace(value.toString(), "\\", "\\\\"), "\"", "\\\"") + "\"";
+    }
+}
+}

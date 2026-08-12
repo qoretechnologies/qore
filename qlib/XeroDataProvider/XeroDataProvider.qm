@@ -1,0 +1,295 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file XeroDataProvider.qm Qore user module providing a data provider API for Xero
+
+/*  XeroDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires XeroRestClient
+%requires RestClientIo
+%requires Util
+
+%requires json
+%requires yaml
+
+
+module XeroDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Xero";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new XeroDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": XeroDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Xero",
+            "short_desc": "Work with Xero contacts, invoices, payments, projects and payroll",
+            "desc": "Provides access to [Xero](https://www.xero.com), the online accounting platform.
+
+"
+                "**Common use cases**:
+"
+                "- **Contacts**: find, create and update customers and suppliers
+"
+                "- **Invoices**: find, create and update sales invoices and bills, add notes and email them
+"
+                "- **Payments**: record payments, allocate credit notes and read bank transactions
+"
+                "- **Items and accounts**: read the chart of accounts and tax rates, and manage items
+"
+                "- **Projects**: find and create projects and their tasks
+"
+                "- **Payroll**: find and create employees in the organisation's regional payroll
+
+"
+                "**The organisation is the connection**: a Xero credential can reach several organisations "
+                "and every call has to name one, so `tenant_id` belongs to the connection rather than to "
+                "each action.
+
+"
+                "Xero is a trademark of Xero Limited.",
+            "scheme": "xero",
+            "logo": Priv::XeroLogo,
+            "logo_file_name": "xero-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp,),
+        });
+
+        # register every action of every set; each set routes itself, because a request's URI prefix comes
+        # from the base path of the schema its action was generated from
+        map $1.registerActions(XeroDataProvider::AppName), XeroSchema::getActionSets();
+
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(XeroDataProvider::AppName,
+            "/" + XeroDataProvider::TablesChildName, XeroSchema::getActionSets(),
+            XeroRecordTables::Tables, XeroRecordTables::RecordActionIds, {
+                "groups": (XeroRecordTables::RecordGroup,),
+            });
+
+        # register the hand-written employee actions
+        foreach string action in (XeroEmployeesDataProvider::ActionNames) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": XeroDataProvider::AppName,
+                "path": "/" + action,
+                "action": action,
+                "display_name": XeroEmployeesDataProvider::DisplayNames{action},
+                "short_desc": XeroEmployeesDataProvider::ShortDescs{action},
+                "desc": XeroEmployeesDataProvider::Descs{action},
+                "action_code": DPAT_API,
+                "groups": ("Payroll",),
+            });
+        }
+
+        # register the polling event actions
+        foreach hash<auto> i in (XeroEventsDataProvider::EventMap.pairIterator()) {
+            Class cls = i.value;
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": XeroDataProvider::AppName,
+                "path": "/" + XeroDataProvider::EventsChildName + "/" + i.key,
+                "action": i.key,
+                "display_name": cls.getConstant("DisplayName").getValue(),
+                "short_desc": cls.getConstant("ShortDesc").getValue(),
+                "desc": cls.getConstant("Desc").getValue(),
+                "action_code": DPAT_EVENT,
+                "action_val": i.key,
+                "groups": ("Events",),
+            });
+        }
+    };
+}
+
+/** @mainpage XeroDataProvider Module
+
+    @tableofcontents
+
+    @section xerodataproviderintro XeroDataProvider Introduction
+
+    The %XeroDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [Xero](https://www.xero.com)'s REST API.
+
+    @section xerodataprovider_generated Generated, Not Hand-Written
+
+    The actions this application exports are **generated from Xero's own OpenAPI 3 descriptions** by the
+    @ref restschemaactionsintro "RestSchemaActions" module; the presentation comes from an
+    application-owned manifest and UX overlay in @ref XeroDataProvider::XeroManifest "XeroManifest".
+
+    The two employee actions are the exception, and the reason is worth reading:
+    @ref XeroDataProvider::XeroEmployeesDataProvider "XeroEmployeesDataProvider".
+
+    @section xerodataprovider_documents Two Documents, One Application
+
+    Xero publishes one description per product rather than one per API, and this application exports
+    operations from two of them - accounting and projects - each served from a different path prefix on the
+    same host.  Each becomes its own action set, which is what makes the routing correct with no special
+    case, and the root provider merges them into one tree.  See
+    @ref XeroDataProvider::XeroSchema "XeroSchema".
+
+    @section xerodataprovider_pinned The Pinned Schemas
+
+    The schemas are committed to this module rather than fetched at run time, so an upstream change cannot
+    alter the contract of an action that existing workflows already call.  They are imported with
+    \c tools/rest-schema-import.qr from \c qlib/XeroDataProvider/xero-import.yaml, which imports both
+    documents in one run.
+
+    @section xerodataprovider_tenant The Organisation Is the Connection
+
+    A Xero credential is not scoped to an organisation: it is granted access to one or more of them, and
+    every call has to say which one it means.  \c tenant_id therefore belongs to the connection, and
+    \c GET /connections - the ping - is what lists the organisations a credential can reach.
+
+    @section xerodataprovider_actions Actions
+
+    27 actions are exported, in these groups:
+
+    |!Group|!What it covers
+    |Contacts|finding, creating and updating contacts
+    |Invoices|invoices and bills, their history and notes, quotes and repeating invoices
+    |Payments|payments, credit notes and their allocation, and bank transactions
+    |Items and Accounts|items, the chart of accounts and tax rates
+    |Purchasing|purchase orders
+    |Projects|projects, their tasks and their users
+    |Payroll|employees in the organisation's regional payroll
+
+    Five of them - \c getAccounts, \c getTaxRates, \c getCreditNotes, \c getBankTransactions and
+    \c getPayments - are exported that the superseded application did not, because it offered dropdowns and
+    triggers backed by endpoints it never exported.
+
+    @section xerodataprovider_envelopes Xero's Envelopes
+
+    A Xero accounting collection is an object with one array in it named after the type -
+    \c {Contacts: [...]} - and a create takes the same envelope, so creating one invoice means sending a
+    one-element \c Invoices array.  The projects API is different again: \c {items, pagination}, in
+    \c camelCase where accounting uses \c PascalCase.
+
+    @section xerodataprovider_records Record-Based Tables
+
+    Eleven of Xero's collections are exposed under \c tables: \c invoices, \c contacts,
+    \c bank-transactions, \c items, \c payments, \c invoice-history, \c accounts, \c tax-rates and
+    \c purchase-orders from the accounting description, and \c projects and \c project-tasks from the
+    projects one.
+
+    \c accounts, \c tax-rates and \c purchase-orders are **read only**: this application exports no create,
+    update or delete for any of them, so those tables declare none rather than offering an action that could
+    only fail.
+
+    Each table takes the standard search expressions.  Where a table's API publishes a filter expression
+    language the whole expression is rendered into it and the service does the searching, and that table
+    declares \c supports_native_search; where it does not, what the listing's own arguments can express is
+    sent and the rest is evaluated against each record as it arrives.  Either way the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    The accounting tables render a search into Xero's \c where clause, so Xero evaluates it.  A write takes a
+    list of documents and the same operation creates and updates - a document carrying its identity is an
+    update - so the identity travels inside the document rather than in a path variable.  Nothing is deleted:
+    an invoice is voided and a contact archived, and both are updates.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
+
+    @section xerodataprovider_events Events
+
+    Seven polling events are offered.  Xero's published webhook description declares two payload types and
+    no operations, and registering a webhook needs a subscription configured in the developer portal rather
+    than anything a connection can do, so these poll - with a **timestamp cursor** sent upstream as
+    \c If-Modified-Since, rather than the bounded in-memory set of delivered identities the superseded
+    application used.
+
+    @section xerodataprovider_examples Examples
+
+    @subsection xerodataprovider_ex_provider Getting the Data Provider
+
+    @code{.py}
+%requires ConnectionProvider
+%requires XeroDataProvider
+
+AbstractDataProvider xero = get_connection("xero").getDataProvider();
+    @endcode
+
+    @subsection xerodataprovider_ex_invoice Creating an Invoice
+
+    Note the envelope: one invoice is a one-element array.
+
+    @code{.py}
+hash<auto> res = xero.getChildProviderEx("updateOrCreateInvoices").doRequest({
+    "Invoices": ({
+        "Type": "ACCREC",
+        "Contact": {"ContactID": contact_id},
+        "LineItems": ({
+            "Description": "Consulting",
+            "Quantity": 10,
+            "UnitAmount": 150.00,
+            "AccountCode": "200",
+        },),
+        "Status": "AUTHORISED",
+    },),
+});
+printf("created %s\n", res.Invoices[0].InvoiceNumber);
+    @endcode
+
+    @subsection xerodataprovider_ex_page Paging Through a Listing
+
+    @code{.py}
+AbstractDataProvider find = xero.getChildProviderEx("getContacts");
+
+list<auto> all = ();
+for (int page = 1; True; ++page) {
+    hash<auto> res = find.doRequest({"page": page, "pageSize": 100});
+    if (!res.Contacts) {
+        break;
+    }
+    all += res.Contacts;
+}
+printf("%d contacts\n", all.size());
+    @endcode
+
+    @subsection xerodataprovider_ex_employees Listing Employees
+
+    Employees come from the payroll API of the connection's region, and the result is a plain list whichever
+    envelope that region uses:
+
+    @code{.py}
+list<auto> employees = xero.getChildProviderEx("getEmployees").doRequest({});
+printf("%d employees\n", employees.size());
+    @endcode
+
+    @section xerodataproviderrelnotes Release Notes
+
+    @subsection xerodataproviderv1_0 XeroDataProvider v1.0
+    - the initial version of the %XeroDataProvider module
+*/
+
+#! contains all public definitions in the XeroDataProvider module
+public namespace XeroDataProvider {
+}

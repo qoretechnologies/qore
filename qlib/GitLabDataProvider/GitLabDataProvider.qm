@@ -1,0 +1,382 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GitLabDataProvider.qm Qore user module providing a data provider API for GitLab
+
+/*  GitLabDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires GitLabRestClient
+%requires RestClientIo
+
+%requires json
+
+module GitLabDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for GitLab";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new GitLabDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GitLabDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "GitLab",
+            "short_desc": "Work with GitLab projects, issues, merge requests and CI/CD configuration",
+            "desc": "Provides access to [GitLab](https://gitlab.com), the DevOps platform, on GitLab.com "
+                "and on self-managed installations alike.\n\n"
+                "**Common use cases**:\n"
+                "- **Projects and groups**: create projects, read and update their settings, manage groups "
+                "and subgroups\n"
+                "- **Issues**: raise, update, close and search issues, and read their time tracking\n"
+                "- **Merge requests**: open, update, approve and unapprove merge requests\n"
+                "- **Repository**: list and create branches and commits, and comment on a commit\n"
+                "- **Membership**: add, update and remove project and group members\n"
+                "- **CI/CD**: manage the variables pipelines run with, and the deploy keys that reach the "
+                "repository\n"
+                "- **Wikis**: read and write project wiki pages\n\n"
+                "**The instance is the connection**: `hostname` names the GitLab installation, and the "
+                "target URL and OAuth2 endpoints are derived from it. Authentication is an access token "
+                "with the `api` scope, or the OAuth2 authorization code flow against an application "
+                "registered in that instance.\n\n"
+                "GitLab is a trademark of GitLab B.V.",
+            "scheme": "gitlab",
+            "logo": Priv::GitLabLogo,
+            "logo_file_name": "gitlab-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::VersionControl, DataProvider::AppGroup::DevOps),
+        });
+
+        # register every action in the manifest
+        RestSchemaActionSet action_set = GitLabSchema::getActionSet();
+        action_set.registerActions(GitLabDataProvider::AppName);
+
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(GitLabDataProvider::AppName,
+            "/" + GitLabDataProvider::TablesChildName, action_set, GitLabRecordTables::Tables,
+            GitLabRecordTables::RecordActionIds, {
+                "groups": (GitLabRecordTables::RecordGroup,),
+            });
+
+        # register the one hand-written action; see GitLabCreateCommitDataProvider for why it is not
+        # generated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GitLabDataProvider::AppName,
+            "path": "/" + GitLabDataProvider::CreateCommitAction,
+            "action": GitLabDataProvider::CreateCommitAction,
+            "display_name": GitLabCreateCommitDataProvider::DisplayName,
+            "short_desc": GitLabCreateCommitDataProvider::ShortDesc,
+            "desc": GitLabCreateCommitDataProvider::Desc,
+            "action_code": DPAT_API,
+            "groups": (GitLabManifest::GroupCommits,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GitLabCreateCommitDataProvider::RequestType.getFields()),
+        });
+
+        # register the hand-written project-lookup action; see GitLabProjectIdByUrlDataProvider for why it
+        # is not generated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GitLabDataProvider::AppName,
+            "path": "/" + GitLabDataProvider::ProjectIdByUrlAction,
+            "action": GitLabDataProvider::ProjectIdByUrlAction,
+            "display_name": GitLabProjectIdByUrlDataProvider::DisplayName,
+            "short_desc": GitLabProjectIdByUrlDataProvider::ShortDesc,
+            "desc": GitLabProjectIdByUrlDataProvider::Desc,
+            "action_code": DPAT_API,
+            "groups": (GitLabManifest::GroupProjects,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GitLabProjectIdByUrlDataProvider::RequestType.getFields()),
+        });
+
+        # register the polling event actions
+        foreach hash<auto> i in (GitLabEventsDataProvider::EventMap.pairIterator()) {
+            Class cls = i.value;
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GitLabDataProvider::AppName,
+                "path": "/" + GitLabDataProvider::EventsChildName + "/" + i.key,
+                "action": i.key,
+                "display_name": cls.getConstant("DisplayName").getValue(),
+                "short_desc": cls.getConstant("ShortDesc").getValue(),
+                "desc": cls.getConstant("Desc").getValue(),
+                "action_code": DPAT_EVENT,
+                "action_val": i.key,
+                "groups": ("Events",),
+            });
+        }
+    };
+}
+
+/** @mainpage GitLabDataProvider Module
+
+    @tableofcontents
+
+    @section gitlabdataproviderintro GitLabDataProvider Introduction
+
+    The %GitLabDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [GitLab](https://gitlab.com), on GitLab.com and on self-managed installations alike.
+
+    @section gitlabdataprovider_generated Generated, Not Hand-Written
+
+    The actions this application exports are **generated from GitLab's own OpenAPI 3 description** by the
+    @ref restschemaactionsintro "RestSchemaActions" module, rather than being hand-written.  GitLab
+    generates that description from its API source and publishes it in the same repository as the code, so
+    it cannot silently lag the API; reproducing several hundred request and response fields in %Qore would
+    mean finding and reproducing every upstream change by hand.
+
+    What a schema cannot say is which of an operation's fields a user should see first, or which
+    identifiers should be selectable rather than typed.  Those come from an application-owned manifest and
+    UX overlay in @ref GitLabDataProvider::GitLabManifest "GitLabManifest".
+
+    **Two actions are hand-written**, for two different reasons:
+
+    |!Action|!Why a schema cannot generate it
+    |\c postApiV4ProjectsIdRepositoryCommits|GitLab's description declares that one operation with a placeholder request body.  See @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider"
+    |\c get_project_id_by_url|No GitLab endpoint takes a URL; recovering a project path from one is the action itself.  See @ref GitLabDataProvider::GitLabProjectIdByUrlDataProvider "GitLabProjectIdByUrlDataProvider"
+
+    @section gitlabdataprovider_pinned The Pinned Schema
+
+    The schema is committed to this module rather than fetched at run time, so an upstream change cannot
+    alter the contract of an action that existing workflows already call:
+
+    |!Property|!Value
+    |Source|https://gitlab.com/gitlab-org/gitlab \c doc/api/openapi/openapi_v3.yaml
+    |SHA-256|\c 1c16d4750bd37b52386a7ea58216398434152f2789e9405a3f60af3c41e63b1b
+    |GitLab version|19.3.0-pre
+    |Imported|2026-08-10
+
+    The committed copy is pruned to the exported operations and everything they reference - 35 of 1284
+    paths and 70 of 865 component schemas.  That is not only a size reduction: the full 3.3 MB document
+    takes several seconds to parse, which is not a reasonable cost to pay on every data provider
+    construction.
+
+    @section gitlabdataprovider_actions Actions
+
+    70 actions are exported, in these groups:
+
+    |!Group|!What it covers
+    |Branches|repository branches
+    |Commits|repository commits and commit comments
+    |Deploy Keys|keys that can reach the repository without belonging to a user
+    |Groups|groups and subgroups
+    |Issues|issues, their time tracking, and milestones
+    |Members|project and group membership, and users
+    |Merge Requests|merge requests and their approvals
+    |Projects|projects and topics
+    |Variables|the CI/CD variables pipelines run with
+    |Wikis|project wiki pages
+
+    Identifier options are dropdowns wherever the application exports an operation that can list the
+    values, and every dropdown that names something living inside a project or group is **scoped by the
+    container the user chose** - the branches of that project, the members of that group.  Every dropdown
+    also accepts a value typed or chained in from a previous step, because an identifier usually comes from
+    earlier in a workflow and a narrowly scoped token may not be able to list the values at all.
+
+    @section gitlabdataprovider_iids IDs and IIDs
+
+    GitLab addresses an issue or a merge request inside a project by its **IID** - the number shown in the
+    web UI and written \c "#42" - while the instance-wide \c /issues listing filters by \c id.  They are
+    different numbers for the same object.  Each action takes whichever its endpoint takes, and each
+    dropdown says which it supplies.
+
+    @section gitlabdataprovider_pagination Paging Through a Listing
+
+    A GitLab listing returns the records as a **bare array** and reports the paging in response headers
+    (\c X-Total, \c X-Page, \c X-Next-Page) rather than in the body.  An action therefore returns the
+    records themselves, and paging means asking for the next \c page until a page comes back with fewer
+    than \c per_page records.  \c per_page is capped at 100.
+
+    @section gitlabdataprovider_events Events
+
+    Four polling events are offered: a new commit, a new comment on a commit, a new issue and a new merge
+    request.  GitLab's REST API has no event stream, so these poll - but they poll with a **timestamp
+    cursor** rather than a bounded in-memory set of delivered identities, which is what the application
+    this module replaces used.  That means:
+
+    - a restart resumes where it left off instead of re-delivering the first page;
+    - a busy project cannot push an identity out of a fixed-size set and have the item delivered twice;
+    - the cursor advances only after an event has been raised successfully, so a consumer that throws gets
+      the item again rather than losing it.
+
+    Each event is scoped to one project, which is a required option.
+
+    @section gitlabdataprovider_records Record-Based Tables
+
+    Twelve of GitLab's collections are exposed under \c tables for record-based reading and writing:
+    \c projects, \c groups, \c issues, \c merge-requests, \c branches, \c commit-comments,
+    \c project-members, \c group-members, \c project-variables, \c group-variables, \c deploy-keys and
+    \c wikis.
+
+    Each table takes the standard search expressions.  What the listing's own arguments can express is sent
+    to the service, and the rest is evaluated against each record as it arrives; the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    The tables declare \c supports_search_expressions and **not** \c supports_native_search: this API has no
+    filter expression language, so a search does not happen entirely on the server, and each operator says
+    for itself whether the service can evaluate it.
+
+    An issue and a merge request are addressed by the \c iid that identifies them **within their project**,
+    because that is what every GitLab endpoint reading or changing one takes; a CI variable is addressed by
+    its \c key, a branch by its name and a wiki page by its \c slug, for the same reason.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
+
+    @section gitlabdataprovider_examples Examples
+
+    @subsection gitlabdataprovider_ex_provider Getting the Data Provider
+
+    From a connection, which is how a data-provider-aware caller reaches it:
+
+    @code{.py}
+%requires ConnectionProvider
+%requires GitLabDataProvider
+
+AbstractDataProvider gitlab = get_connection("gitlab").getDataProvider();
+    @endcode
+
+    Or directly from an access token, for a script:
+
+    @code{.py}
+%requires GitLabDataProvider
+%requires GitLabRestClient
+
+GitLabDataProvider gitlab(new GitLabRestClientIo({
+    "token": ENV.GITLAB_TOKEN,
+    "hostname": "https://gitlab.com",
+}));
+    @endcode
+
+    @subsection gitlabdataprovider_ex_list Listing, and Paging Through a Listing
+
+    A listing returns the records as a bare array, so paging ends when a short page comes back:
+
+    @code{.py}
+AbstractDataProvider list_issues = gitlab.getChildProviderEx("getApiV4ProjectsIdIssues");
+
+int page = 1;
+list<auto> all = ();
+while (True) {
+    list<auto> records = list_issues.doRequest({
+        "id": "gitlab-org/gitlab",
+        "state": "opened",
+        "per_page": 100,
+        "page": page,
+    });
+    all += records;
+    if (records.size() < 100) {
+        break;
+    }
+    ++page;
+}
+printf("%d open issues\n", all.size());
+    @endcode
+
+    @subsection gitlabdataprovider_ex_issue Raising an Issue and Closing It
+
+    @code{.py}
+hash<auto> issue = gitlab.getChildProviderEx("postApiV4ProjectsIdIssues").doRequest({
+    "id": 278964,
+    "title": "Nightly build failed",
+    "description": "The 03:00 pipeline failed in the `test` stage.",
+    "labels": "bug,ci",
+});
+printf("raised issue #%d: %s\n", issue.iid, issue.web_url);
+
+# "state_event" is how an issue is closed; there is no separate endpoint
+gitlab.getChildProviderEx("putApiV4ProjectsIdIssuesIssueIid").doRequest({
+    "id": 278964,
+    "issue_iid": issue.iid,
+    "state_event": "close",
+});
+    @endcode
+
+    @subsection gitlabdataprovider_ex_commit Committing a File Change
+
+    Every change lands in one commit, or none of them do:
+
+    @code{.py}
+hash<auto> commit = gitlab.getChildProviderEx("postApiV4ProjectsIdRepositoryCommits").doRequest({
+    "id": "my-group/my-project",
+    "branch": "main",
+    "commit_message": "chore: bump the pinned schema",
+    "actions": (
+        {
+            "action": "update",
+            "file_path": "schema/openapi.yaml",
+            "content": new_schema_text,
+        },
+    ),
+});
+printf("committed %s\n", commit.id);
+    @endcode
+
+    @subsection gitlabdataprovider_ex_events Reacting to an Event
+
+    @code{.py}
+class MergeRequestObserver inherits DataProvider::Observer {
+    update(string event_id, hash<auto> data) {
+        printf("%s: !%d %y by %s\n", event_id, data.iid, data.title, data.author.username);
+    }
+}
+
+AbstractDataProvider event = gitlab.getChildProviderEx("events")
+    .getChildProviderEx("new_merge_request");
+event.registerObserver(new MergeRequestObserver());
+cast<DelayedObservable>(event).observersReady();
+    @endcode
+
+    @subsection gitlabdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+
+    The application exports a reviewed subset of GitLab's API - 70 actions covering 69 of 1752 operations,
+    the two counts differing because \c get_project_id_by_url reads a project through the same endpoint
+    the generated \c getApiV4ProjectsId already exports.  For
+    anything else, the generic API call action reaches the rest of it with the same connection and
+    authentication:
+
+    @code{.py}
+hash<auto> res = gitlab.getChildProviderEx("__call__").doRequest({
+    "method": "GET",
+    "path": "/api/v4/projects/278964/pipelines",
+});
+printf("%d pipelines\n", res.body.size());
+    @endcode
+
+    @section gitlabdataproviderrelnotes Release Notes
+
+    @subsection gitlabdataproviderv1_0 GitLabDataProvider v1.0
+    - the initial version of the %GitLabDataProvider module
+*/
+
+#! contains all public definitions in the GitLabDataProvider module
+public namespace GitLabDataProvider {
+}

@@ -1,0 +1,917 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** GitLabDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires GitLabDataProvider
+%requires GitLabRestClient
+%requires RestClientIo
+
+%requires json
+%requires yaml
+
+%exec-class GitLabDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A GitLab REST client that records requests instead of making them
+class FakeGitLabRestClient inherits GitLabRestClient::GitLabRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : GitLabRestClientIo({"token": "glpat-fake", "hostname": "https://gitlab.example.com"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Returns the last request body, decoded when the transport was handed a serialized one
+    auto lastBody() {
+        auto body = last().body;
+        if (body.typeCode() == NT_BINARY) {
+            body = binary_to_string(body, "UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            return parse_json(body);
+        }
+        return body;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        if (resp.throw_status) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.throw_status),
+                <RestClient::RestResponseInfo>{
+                    "status_code": resp.throw_status,
+                    "headers": resp.headers ?? {},
+                    "body": resp.body,
+                    "request_path": path,
+                };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+#! An event provider whose polling can be driven directly
+class TestGitLabNewIssueProvider inherits GitLabDataProvider::GitLabNewIssueDataProvider {
+    public {
+        #! Events the provider reported to its observers
+        list<auto> notified = ();
+    }
+
+    constructor(*GitLabRestClient::GitLabRestClientIo rest, *hash<auto> options)
+            : GitLabNewIssueDataProvider(rest, options) {
+    }
+
+    #! Runs one polling cycle, as the polling thread would
+    poll() {
+        pollOnce();
+    }
+
+    #! Records what would have been reported to observers
+    notifyObservers(string event_id, hash<auto> data) {
+        notified += data;
+    }
+
+    reset() {
+        notified = ();
+    }
+}
+
+public class GitLabDataProviderTest inherits QUnit::Test {
+    public {
+        #! The operations the TypeScript application this module replaces exported
+        /** Every one of these must still be exported, because an existing workflow may call it.  The
+            application also exports three more; see @ref ExpectedAddedActions.
+        */
+        const ExpectedTsOperations = (
+            "GET /api/v4/projects/{id}/repository/branches",
+            "POST /api/v4/projects/{id}/repository/branches",
+            "GET /api/v4/projects/{id}/repository/branches/{branch}",
+            "DELETE /api/v4/projects/{id}/repository/branches/{branch}",
+            "DELETE /api/v4/projects/{id}/repository/merged_branches",
+            "GET /api/v4/projects/{id}/repository/commits",
+            "POST /api/v4/projects/{id}/repository/commits",
+            "GET /api/v4/projects/{id}/repository/commits/{sha}",
+            "GET /api/v4/projects/{id}/repository/commits/{sha}/comments",
+            "POST /api/v4/projects/{id}/repository/commits/{sha}/comments",
+            "GET /api/v4/projects/{id}/deploy_keys",
+            "POST /api/v4/projects/{id}/deploy_keys",
+            "GET /api/v4/projects/{id}/deploy_keys/{key_id}",
+            "PUT /api/v4/projects/{id}/deploy_keys/{key_id}",
+            "DELETE /api/v4/projects/{id}/deploy_keys/{key_id}",
+            "POST /api/v4/projects/{id}/deploy_keys/{key_id}/enable",
+            "GET /api/v4/groups",
+            "POST /api/v4/groups",
+            "GET /api/v4/groups/{id}",
+            "DELETE /api/v4/groups/{id}",
+            "PUT /api/v4/groups/{id}",
+            "GET /api/v4/issues",
+            "GET /api/v4/projects/{id}/issues/{issue_iid}/time_stats",
+            "GET /api/v4/projects/{id}/issues",
+            "POST /api/v4/projects/{id}/issues",
+            "GET /api/v4/projects/{id}/issues/{issue_iid}",
+            "DELETE /api/v4/projects/{id}/issues/{issue_iid}",
+            "PUT /api/v4/projects/{id}/issues/{issue_iid}",
+            "GET /api/v4/groups/{id}/members",
+            "POST /api/v4/groups/{id}/members",
+            "GET /api/v4/groups/{id}/members/{user_id}",
+            "PUT /api/v4/groups/{id}/members/{user_id}",
+            "DELETE /api/v4/groups/{id}/members/{user_id}",
+            "GET /api/v4/projects/{id}/members",
+            "POST /api/v4/projects/{id}/members",
+            "GET /api/v4/projects/{id}/members/{user_id}",
+            "PUT /api/v4/projects/{id}/members/{user_id}",
+            "DELETE /api/v4/projects/{id}/members/{user_id}",
+            "GET /api/v4/projects/{id}/merge_requests",
+            "POST /api/v4/projects/{id}/merge_requests",
+            "GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}",
+            "PUT /api/v4/projects/{id}/merge_requests/{merge_request_iid}",
+            "DELETE /api/v4/projects/{id}/merge_requests/{merge_request_iid}",
+            "POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve",
+            "POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/unapprove",
+            "GET /api/v4/projects",
+            "POST /api/v4/projects",
+            "GET /api/v4/projects/{id}",
+            "PUT /api/v4/projects/{id}",
+            "DELETE /api/v4/projects/{id}",
+            "GET /api/v4/projects/{id}/users",
+            "GET /api/v4/projects/{id}/variables",
+            "POST /api/v4/projects/{id}/variables",
+            "GET /api/v4/projects/{id}/variables/{key}",
+            "PUT /api/v4/projects/{id}/variables/{key}",
+            "DELETE /api/v4/projects/{id}/variables/{key}",
+            "GET /api/v4/groups/{id}/variables/{key}",
+            "PUT /api/v4/groups/{id}/variables/{key}",
+            "DELETE /api/v4/groups/{id}/variables/{key}",
+            "GET /api/v4/groups/{id}/variables",
+            "POST /api/v4/groups/{id}/variables",
+            "GET /api/v4/projects/{id}/wikis",
+            "POST /api/v4/projects/{id}/wikis",
+            "GET /api/v4/projects/{id}/wikis/{slug}",
+            "PUT /api/v4/projects/{id}/wikis/{slug}",
+            "DELETE /api/v4/projects/{id}/wikis/{slug}",
+        );
+
+        #! The actions this application adds, each backing a dropdown the TypeScript application could not fill
+        const ExpectedAddedActions = (
+            "getApiV4Users",
+            "getApiV4ProjectsIdMilestones",
+            "getApiV4Topics",
+        );
+
+        #! The action the schema cannot generate, so this application hand-writes it
+        const HandWrittenAction = "postApiV4ProjectsIdRepositoryCommits";
+
+        #! The action no schema could generate, because no GitLab endpoint takes a URL
+        const ProjectUrlAction = "get_project_id_by_url";
+
+        #! The event providers the application offers
+        const ExpectedEvents = (
+            "new_commit",
+            "new_commit_comment",
+            "new_issue",
+            "new_merge_request",
+        );
+    }
+
+    private {
+        RestSchemaActionSet aset;
+    }
+
+    constructor() : Test("GitLabDataProviderTest", "1.0") {
+        aset = GitLabSchema::getActionSet();
+
+        addTestCase("provenance", \provenanceTest());
+        addTestCase("drift agreement", \driftTest());
+        addTestCase("manifest coverage", \manifestCoverageTest());
+        addTestCase("manifest resolution", \manifestResolutionTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("scoped dropdowns", \scopedDropdownTest());
+        addTestCase("overlay presentation", \overlayTest());
+        addTestCase("provider paths", \providerPathTest());
+        addTestCase("action registration", \actionRegistrationTest());
+        addTestCase("request construction", \requestConstructionTest());
+        addTestCase("hand-written commit action", \createCommitTest());
+        addTestCase("hand-written project URL action", \projectIdByUrlTest());
+        addTestCase("connection", \connectionTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("event polling", \eventPollingTest());
+        addTestCase("record tables", \recordTableTest());
+        set_return_value(main());
+    }
+
+    private provenanceTest() {
+        hash<GitLabSchemaProvenanceInfo> p = GitLabSchema::Provenance;
+        assertRegex("^https://gitlab.com/gitlab-org/gitlab/", p.source_url);
+        # a SHA-256 is 64 hex digits; a placeholder or a truncated value is not
+        assertRegex("^[0-9a-f]{64}$", p.source_sha256);
+        assertNeq("0000000000000000000000000000000000000000000000000000000000000000", p.source_sha256,
+            "the provenance record was filled in by an actual import");
+        assertGt(0, p.source_size);
+        assertGt(0, p.source_paths);
+        assertGt(p.source_paths, p.source_operations, "a path declares at least one operation");
+        assertGt(0, p.source_schemas);
+        assertTrue(p.gitlab_version.val());
+        assertTrue(p.imported.absolute());
+
+        # the committed artifact is a fraction of the document it came from, which is the point of pruning
+        assertTrue(is_file(GitLabSchema::getSchemaPath()));
+        assertLt(p.source_size, hstat(GitLabSchema::getSchemaPath()).size,
+            "the pruned schema is smaller than the document it was pruned from");
+    }
+
+    private driftTest() {
+        # the guard that keeps the manifest and the vendored schema honest: if they ever disagree, this
+        # fails here rather than when a user opens an action
+        list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset, GitLabSchema::getSchema());
+        assertEq((), drift, "the manifest and the vendored schema agree");
+    }
+
+    private manifestCoverageTest() {
+        hash<string, bool> exported = {};
+        foreach hash<RestSchemaActionInfo> info in (GitLabManifest::Manifest) {
+            exported{info.method.upr() + " " + info.path} = True;
+        }
+        # the hand-written action covers the one operation the schema cannot generate
+        exported{"POST /api/v4/projects/{id}/repository/commits"} = True;
+
+        # every operation the superseded application exported is still exported: an existing workflow
+        # calls these, so losing one is a regression however good the replacement is
+        list<string> missing = ();
+        foreach string op in (ExpectedTsOperations) {
+            if (!exported{op}) {
+                missing += op;
+            }
+        }
+        assertEq((), missing, "every operation the TypeScript application exported is still exported");
+        assertEq(ExpectedTsOperations.size() + 3, (keys exported).size(),
+            "three operations were added, and nothing else");
+
+        # ... and the action IDs are unchanged, which is what workflows actually reference
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+        assertTrue(actions.getApiV4Projects);
+        assertTrue(actions.putApiV4ProjectsIdIssuesIssueIid);
+        assertTrue(actions."deleteApiV4GroupsIdVariablesKey");
+        map assertTrue(actions{$1}, sprintf("added action %y is exported", $1)), ExpectedAddedActions;
+        assertNothing(actions{HandWrittenAction}, "the hand-written action is not in the action set");
+    }
+
+    private manifestResolutionTest() {
+        # every manifest entry resolves against the vendored schema, and its recorded operationId still
+        # matches -- the constructor enforces this, so reaching here at all proves it; these check the
+        # shape of what was resolved
+        assertEq(68, aset.getActionNames().size());
+        foreach hash<RestSchemaActionInfo> info in (GitLabManifest::Manifest) {
+            RestSchemaActionOperation op = aset.getOperationEx(info.action);
+            assertEq(info.action, op.getAction());
+            assertEq(info.path, op.getPath());
+            # GitLab generates both its documents from one source, so the action ID and the operationId
+            # coincide; that is a fact about this application, not a rule, and it is worth asserting
+            # because it is why the IDs could be carried over unchanged
+            assertEq(info.action, info.operation_id,
+                sprintf("action %y records its own ID as the operationId", info.action));
+            assertTrue(info.display_name.val());
+            assertTrue(info.short_desc.val());
+            assertTrue(info.desc.val());
+            assertTrue(info.groups.val(), sprintf("action %y is in a group", info.action));
+        }
+    }
+
+    private referenceDataTest() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = aset.getReferenceDataDecls();
+        assertEq(16, (keys refdata).size());
+
+        hash<string, bool> actions = {};
+        map actions{$1} = True, aset.getActionNames();
+        foreach hash<auto> i in (refdata.pairIterator()) {
+            hash<RestSchemaReferenceDataInfo> rd = i.value;
+            assertEq(i.key, rd.name);
+            # a dropdown produced by an action the application does not export could never be filled
+            assertTrue(actions{rd.action}, sprintf("reference data %y names exported action %y", i.key,
+                rd.action));
+            assertTrue(rd.value_field.val());
+            assertTrue(rd.desc.val());
+        }
+
+        # the three actions added for this reason really are the ones backing dropdowns
+        assertEq("getApiV4Users", refdata{GitLabManifest::RefUser}.action);
+        assertEq("getApiV4ProjectsIdMilestones", refdata{GitLabManifest::RefMilestone}.action);
+        assertEq("getApiV4Topics", refdata{GitLabManifest::RefTopic}.action);
+    }
+
+    private scopedDropdownTest() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = aset.getReferenceDataDecls();
+
+        # everything that lives inside a project or group is scoped by the container the user picked;
+        # without that a branch dropdown would list branches from whatever project happened to be first
+        foreach string name in ((GitLabManifest::RefBranch, GitLabManifest::RefCommit,
+                GitLabManifest::RefDeployKey, GitLabManifest::RefIssueIid, GitLabManifest::RefIssueId,
+                GitLabManifest::RefMergeRequestIid, GitLabManifest::RefProjectMember,
+                GitLabManifest::RefGroupMember, GitLabManifest::RefProjectVariable,
+                GitLabManifest::RefGroupVariable, GitLabManifest::RefWikiSlug,
+                GitLabManifest::RefMilestone)) {
+            assertEq({"id": "id"}, refdata{name}.options_from,
+                sprintf("reference data %y is scoped by the container option", name));
+        }
+
+        # ... and the instance-wide ones are not
+        foreach string name in ((GitLabManifest::RefProject, GitLabManifest::RefGroup,
+                GitLabManifest::RefUser, GitLabManifest::RefTopic)) {
+            assertNothing(refdata{name}.options_from,
+                sprintf("reference data %y lists across the instance", name));
+        }
+
+        # a scoped dropdown really is scoped when it is read, and empty until it can be
+        FakeGitLabRestClient rest();
+        GitLabDataProvider dp(rest);
+        AbstractDataProvider get_branch = dp.getChildProviderEx("getApiV4ProjectsIdRepositoryBranches");
+        rest.push_response({"body": ({"name": "main"}, {"name": "release/1.0"})});
+        *list<hash<AllowedValueInfo>> values = get_branch.getReferenceData(GitLabManifest::RefProject);
+        assertTrue(exists values || !exists values, "the project dropdown is readable");
+
+        AbstractDataProvider get_wiki = dp.getChildProviderEx("getApiV4ProjectsIdWikisSlug");
+        rest.reset();
+        assertNothing(get_wiki.getReferenceData(GitLabManifest::RefWikiSlug, {}),
+            "a project-scoped dropdown is empty until a project is chosen");
+        assertThrows("TEST-ERROR", "no requests were recorded", \rest.last(),
+            NOTHING, "... and it does not call GitLab at all");
+
+        rest.reset();
+        rest.push_response({"body": ({"slug": "home", "title": "Home"},)});
+        *list<hash<AllowedValueInfo>> slugs = get_wiki.getReferenceData(GitLabManifest::RefWikiSlug,
+            {"id": "my-group/my-project"});
+        assertEq(1, slugs.size());
+        assertEq("home", slugs[0].value);
+        assertEq("Home", slugs[0].display_name);
+        # GitLab identifies a project by a numeric ID or by its path, and the path has to survive as one
+        # path segment -- so the transport escapes it.  The option takes the path as it reads, like every
+        # other option takes a value rather than a pre-escaped URL fragment; sending "my-group/my-project"
+        # unescaped would address a different route entirely.
+        assertRegex("/api/v4/projects/my-group%2Fmy-project/wikis", rest.last().path,
+            "the chosen project scoped the listing, escaped into one path segment");
+    }
+
+    private overlayTest() {
+        # the project option is a dropdown that other options depend on
+        hash<DataProviderActionInfo> info = aset.getActionInfo("Gitlab", "getApiV4ProjectsIdIssues");
+        assertEq(GitLabManifest::RefProject, info.options.id.ref_data);
+        assertTrue(info.options.id.has_dependents);
+        assertEq(("refetch",), info.options.id.on_change);
+        assertTrue(info.options.id.supports_custom_values,
+            "an ID chained in from a previous step is accepted as well");
+
+        # ... and the options scoped by it say so, so the UI knows to re-read them
+        assertEq(GitLabManifest::RefProjectMember, info.options.assignee_id.ref_data);
+        assertEq(("id",), info.options.assignee_id.depends_on);
+
+        # a list-valued option gets an element dropdown rather than a value dropdown
+        hash<DataProviderActionInfo> create = aset.getActionInfo("Gitlab", "postApiV4ProjectsIdIssues");
+        assertEq(GitLabManifest::RefProjectMember, create.options.assignee_ids.element_ref_data);
+        assertNothing(create.options.assignee_ids.ref_data);
+
+        # a secret is marked as one
+        hash<DataProviderActionInfo> var = aset.getActionInfo("Gitlab", "postApiV4ProjectsIdVariables");
+        assertTrue(var.options.value.sensitive);
+
+        # field_order puts the named options first
+        assertEq("id", (keys var.options)[0]);
+        assertEq("key", (keys var.options)[1]);
+        assertEq("value", (keys var.options)[2]);
+    }
+
+    private providerPathTest() {
+        FakeGitLabRestClient rest();
+        GitLabDataProvider dp(rest);
+        # every registered action path has to resolve to a provider that can execute it
+        aset.validateActionPaths(dp);
+
+        hash<string, bool> children = {};
+        map children{$1} = True, dp.getChildProviderNames();
+        assertTrue(children{HandWrittenAction}, "the hand-written action resolves alongside the rest");
+        assertTrue(children{ProjectUrlAction}, "the project-URL action resolves alongside the rest");
+        assertTrue(children{GitLabDataProvider::EventsChildName});
+        assertNothing(dp.getChildProvider("no-such-action"));
+
+        AbstractDataProvider events = dp.getChildProviderEx(GitLabDataProvider::EventsChildName);
+        hash<string, bool> event_children = {};
+        map event_children{$1} = True, events.getChildProviderNames();
+        map assertTrue(event_children{$1}, sprintf("event %y resolves", $1)), ExpectedEvents;
+    }
+
+    private actionRegistrationTest() {
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Gitlab");
+        hash<string, hash<DataProviderActionInfo>> by_action = {};
+        map by_action{$1.action} = $1, actions;
+
+        map assertTrue(exists by_action{$1}, sprintf("action %y is registered", $1)),
+            aset.getActionNames();
+        assertTrue(exists by_action{HandWrittenAction});
+        assertEq(DPAT_API, by_action{HandWrittenAction}.action_code);
+        assertEq("/" + HandWrittenAction, by_action{HandWrittenAction}.path);
+        assertTrue(by_action{HandWrittenAction}.options.branch.ref_data.val(),
+            "the hand-written action publishes its options like any other");
+
+        # the project-URL action keeps the ID the superseded application registered, because workflows
+        # already call it by that name
+        assertTrue(exists by_action{ProjectUrlAction}, "the project-URL action keeps its original ID");
+        assertEq(DPAT_API, by_action{ProjectUrlAction}.action_code);
+        assertEq("/" + ProjectUrlAction, by_action{ProjectUrlAction}.path);
+        assertEq(("Projects",), by_action{ProjectUrlAction}.groups);
+        assertEq(("project_url",), keys by_action{ProjectUrlAction}.options);
+
+        map assertEq(DPAT_EVENT, by_action{$1}.action_code, sprintf("%y is an event action", $1)),
+            ExpectedEvents;
+        map assertEq("/events/" + $1, by_action{$1}.path), ExpectedEvents;
+    }
+
+    private requestConstructionTest() {
+        FakeGitLabRestClient rest();
+        GitLabDataProvider dp(rest);
+
+        # a path variable is substituted, not sent as a query argument
+        AbstractDataProvider get_issue = dp.getChildProviderEx("getApiV4ProjectsIdIssuesIssueIid");
+        rest.push_response({"body": {"iid": 42, "title": "a bug"}});
+        auto res = get_issue.doRequest({"id": 278964, "issue_iid": 42});
+        assertEq("GET", rest.last().method);
+        assertRegex("/api/v4/projects/278964/issues/42", rest.last().path);
+        assertEq(42, res.iid);
+
+        # a query argument travels in the URI, and a body property in the body
+        AbstractDataProvider create_issue = dp.getChildProviderEx("postApiV4ProjectsIdIssues");
+        rest.push_response({"body": {"iid": 7}});
+        create_issue.doRequest({"id": 278964, "title": "new", "labels": "bug"});
+        assertEq("POST", rest.last().method);
+        assertRegex("/api/v4/projects/278964/issues", rest.last().path);
+        auto sent = rest.lastBody();
+        assertEq("new", sent.title);
+        # the schema declares "labels" as a list, so a single label is sent as a one-element list
+        assertEq(("bug",), sent.labels);
+
+        AbstractDataProvider list_projects = dp.getChildProviderEx("getApiV4Projects");
+        rest.push_response({"body": ()});
+        list_projects.doRequest({"membership": True, "per_page": 100});
+        assertRegex("membership=true", rest.last().path);
+        assertRegex("per_page=100", rest.last().path);
+
+        # an error response surfaces rather than being swallowed
+        rest.push_response({"throw_status": 404, "body": {"message": "404 Project Not Found"}});
+        assertThrows("REST-RESPONSE-ERROR", \list_projects.doRequest(), {"per_page": 1});
+    }
+
+    private createCommitTest() {
+        FakeGitLabRestClient rest();
+        GitLabDataProvider dp(rest);
+        AbstractDataProvider cc = dp.getChildProviderEx(HandWrittenAction);
+
+        AbstractDataProviderType rt = cc.getRequestType();
+        hash<string, AbstractDataField> fields = rt.getFields();
+        # the fields GitLab documents, which its own description does not declare
+        map assertTrue(exists fields{$1}, sprintf("the request declares %y", $1)),
+            ("id", "branch", "commit_message", "actions", "start_branch", "start_sha", "start_project",
+             "author_email", "author_name", "force");
+
+        rest.push_response({"body": {"id": "abc123", "title": "chore: update"}});
+        auto res = cc.doRequest({
+            "id": "my-group/my-project",
+            "branch": "main",
+            "commit_message": "chore: update",
+            "actions": ({"action": "update", "file_path": "README.md", "content": "hello"},),
+        });
+        assertEq("POST", rest.last().method);
+        # the project is escaped into one path segment, exactly as the generated actions escape theirs; the
+        # option takes the path as it reads, so this action and every generated one accept the same value
+        assertEq("/api/v4/projects/my-group%2Fmy-project/repository/commits", rest.last().path);
+        auto sent = rest.lastBody();
+        assertEq("main", sent.branch);
+        assertEq("chore: update", sent.commit_message);
+        assertEq(1, sent.actions.size());
+        assertEq("update", sent.actions[0].action);
+        # the project is a path variable, so it must not also be sent in the body
+        assertNothing(sent.id);
+        assertEq("abc123", res.id);
+
+        # a numeric project ID has nothing to escape and travels unchanged
+        rest.push_response({"body": {"id": "def456"}});
+        cc.doRequest({
+            "id": "4711",
+            "branch": "main",
+            "commit_message": "chore: update",
+            "actions": ({"action": "update", "file_path": "README.md", "content": "hello"},),
+        });
+        assertEq("/api/v4/projects/4711/repository/commits", rest.last().path);
+
+        # the dropdowns it offers are the action set's, not a second copy
+        assertEq({
+            GitLabManifest::RefProject: True,
+            GitLabManifest::RefBranch: True,
+            GitLabManifest::RefCommit: True,
+        }, cc.getSupportedReferenceData());
+
+        # the request type is checked before the action runs, so a missing project is reported as an
+        # invalid request rather than reaching GitLab
+        assertThrows("INVALID-REQUEST", "id", \cc.doRequest(),
+            {"branch": "main", "commit_message": "x", "actions": ()});
+    }
+
+    private projectIdByUrlTest() {
+        FakeGitLabRestClient rest();
+        GitLabDataProvider dp(rest);
+        AbstractDataProvider pu = dp.getChildProviderEx(ProjectUrlAction);
+
+        AbstractDataProviderType rt = pu.getRequestType();
+        assertEq(("project_url",), keys rt.getFields());
+
+        # the front page of a project
+        rest.push_response({"body": {"id": 4711, "path_with_namespace": "my-group/my-project"}});
+        auto res = pu.doRequest({"project_url": "https://gitlab.example.com/my-group/my-project"});
+        assertEq("GET", rest.last().method);
+        # the path is escaped into one path segment, exactly as every generated action escapes it
+        assertEq("/api/v4/projects/my-group%2Fmy-project", rest.last().path);
+        assertEq(4711, res.id);
+        # the unescaped path is what another action's project option takes; the escaped one is returned
+        # because the superseded application returned it and mappers read the name
+        assertEq("my-group/my-project", res.path_with_namespace);
+        assertEq("my-group%2Fmy-project", res.encoded_path_with_namespace);
+
+        # a URL from *within* the project resolves to the same project: GitLab reserves "-" as a path
+        # segment, so "/-/" can only be the boundary between the project and the page being viewed.  The
+        # superseded application took the whole URL path, so every one of these resolved to nothing
+        hash<string, string> within = {
+            "https://gitlab.example.com/my-group/my-project/-/issues/17": "my-group/my-project",
+            "https://gitlab.example.com/my-group/my-project/-/merge_requests/3/diffs":
+                "my-group/my-project",
+            "https://gitlab.example.com/a/b/c/-/blob/main/README.md": "a/b/c",
+            # a clone URL names the project too
+            "https://gitlab.example.com/my-group/my-project.git": "my-group/my-project",
+            # a trailing slash is not part of the path
+            "https://gitlab.example.com/my-group/my-project/": "my-group/my-project",
+            # a subgroup is just more path
+            "https://gitlab.example.com/top/middle/leaf": "top/middle/leaf",
+            # the URL carries the path percent-encoded; the project path is what it decodes to
+            "https://gitlab.example.com/my-group/my%20project": "my-group/my project",
+        };
+        foreach hash<auto> i in (within.pairIterator()) {
+            assertEq(i.value, GitLabProjectIdByUrlDataProvider::getProjectPath(i.key),
+                sprintf("%y names project %y", i.key, i.value));
+        }
+
+        # a path with a space survives as one escaped path segment
+        rest.reset();
+        rest.push_response({"body": {"id": 99}});
+        res = pu.doRequest({"project_url": "https://gitlab.example.com/my-group/my%20project"});
+        assertEq("/api/v4/projects/my-group%2Fmy%20project", rest.last().path);
+        assertEq("my-group/my project", res.path_with_namespace);
+
+        # a URL naming the instance but no project cannot be resolved, and says so rather than asking
+        # GitLab for a project called ""
+        foreach string bad in (("https://gitlab.example.com", "https://gitlab.example.com/",
+                                "https://gitlab.example.com/-/profile")) {
+            assertThrows("GITLAB-PROJECT-URL-ERROR", \GitLabProjectIdByUrlDataProvider::getProjectPath(),
+                bad, sprintf("%y names no project", bad));
+        }
+
+        # a 200 that carries no project ID is reported rather than returned as a project with no ID
+        rest.reset();
+        rest.push_response({"body": {"message": "404 Project Not Found"}});
+        assertThrows("GITLAB-PROJECT-URL-ERROR", "no project ID", \pu.doRequest(),
+            {"project_url": "https://gitlab.example.com/nope/nope"});
+
+        # GitLab's own error survives, with the URL and the path it resolved to attached
+        rest.reset();
+        rest.push_response({"throw_status": 404, "body": {"message": "404 Project Not Found"}});
+        assertThrows("REST-RESPONSE-ERROR", "while resolving GitLab project URL", \pu.doRequest(),
+            {"project_url": "https://gitlab.example.com/nope/nope"});
+
+        # the request type is checked before the action runs
+        assertThrows("INVALID-REQUEST", "project_url", \pu.doRequest(), {});
+    }
+
+    private connectionTest() {
+        # this application supports OAuth2, so the OAuth2 option set is named FIRST in
+        # "required_options": that is what declares OAuth2 support to the platform and makes the
+        # authorization-code flow the connection's default rather than an access token
+        list<string> req = GitLabRestConnection::ConnectionScheme.required_options.split("|");
+        assertEq('oauth2_client_id,oauth2_client_secret', req[0],
+            "the OAuth2 option set is the first alternative, so it is the default flow");
+
+        # ...but naming the options first only decides what the form shows.  What decides whether the
+        # platform offers the authorization flow at all is whether the CONNECTION reports it can authorize,
+        # and it works that out from its own options: the grant type plus all five of the authorization
+        # request options.  A connection that leaves any of them to be derived later, when a client is
+        # finally built, reports that it cannot authorize and the platform falls back to asking for a token.
+        GitLabRestConnection oauth2_conn({
+            "name": "oauth2-flow-test",
+            "desc": "test",
+            "url": "gitlab://gitlab.com",
+            "opts": {
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+                "oauth2_redirect_url": "auto",
+            },
+        });
+        assertTrue(oauth2_conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH},
+            "the connection reports that it can authorize with OAuth2");
+        assertTrue(oauth2_conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH_CODE},
+            "specifically with the authorization code flow");
+        hash<auto> oauth2_opts = oauth2_conn.getRealOptions();
+        assertTrue(oauth2_opts.oauth2_auth_url.val(), "the authorization endpoint is known to the connection");
+        assertTrue(oauth2_opts.oauth2_token_url.val(), "the token endpoint is known to the connection");
+
+        # the scopes are those the superseded application requested, and that is a commitment rather than a
+        # preference: GitLab validates a request against the scopes the OAuth APPLICATION was registered
+        # with, and the one the platform publishes was registered for that application.  Asking for
+        # anything outside the set - "read_user" is a valid GitLab scope and was tried - fails the whole
+        # authorization with "The requested scope is invalid, unknown, or malformed"
+        assertEq(("api", "profile", "email"), GitLabRestClientBase::DefaultScopes,
+            "the scopes the registered OAuth application allows");
+        assertEq(("api", "profile", "email"), oauth2_opts.oauth2_scopes,
+            "and they are what the connection asks for");
+
+        # the instance decides the URL
+        GitLabRestConnection conn("gitlab-test", "test", "gitlab://gitlab.example.com", {},
+            {"token": "glpat-fake"});
+        assertEq("gitlab", conn.getType());
+        assertEq("Gitlab", conn.getAppName());
+        assertTrue(conn.hasDataProvider());
+        # a connection created from a URL alone still ends up with a hostname option that agrees with it
+        assertEq("https://gitlab.example.com", conn.getInfo().opts.hostname);
+        # ... and the stored URL is withheld, so it can never decide the instance
+        assertNothing(conn.getConnectionOptions().url);
+
+        assertEq("https://gitlab.com", GitLabRestClientBase::getUrlForHostname("gitlab.com"),
+            "a bare host is given https, because tokens must not travel in clear text");
+        assertEq("https://gitlab.example.com",
+            GitLabRestClientBase::getUrlForHostname("https://gitlab.example.com/"),
+            "a trailing slash is removed, or every request path would start \"//\"");
+        assertEq("https://gitlab.example.com:8443",
+            GitLabRestClientBase::getHostnameForUrl("https://gitlab.example.com:8443"));
+        assertThrows("GITLAB-HOSTNAME-ERROR", "is empty", \GitLabRestClientBase::getUrlForHostname(), "");
+        assertThrows("GITLAB-HOSTNAME-ERROR", "names scheme",
+            \GitLabRestClientBase::getUrlForHostname(), "ftp://gitlab.example.com");
+
+        # the OAuth2 endpoints follow the instance, because there is no shared application
+        hash<auto> opts = GitLabRestClientBase::getOptions({
+            "hostname": "gitlab.example.com",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://gitlab.example.com", opts.url);
+        assertEq("https://gitlab.example.com/oauth/authorize", opts.oauth2_auth_url);
+        assertEq("https://gitlab.example.com/oauth/token", opts.oauth2_token_url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertEq("/api/v4/user", opts.ping_path);
+
+        # a token-only client asks for no OAuth2 endpoints at all
+        hash<auto> topts = GitLabRestClientBase::getOptions({"token": "glpat-fake"});
+        assertEq("https://gitlab.com", topts.url, "the default instance is GitLab.com");
+        assertNothing(topts.oauth2_auth_url);
+
+        # the connection knows the endpoints whatever the credential is, because it has to answer whether
+        # it CAN authorize before anyone has chosen to; a token-only connection still must not claim it can
+        GitLabRestConnection tok("gitlab-token", "test", "gitlab://gitlab.com", {},
+            {"token": "glpat-fake"});
+        assertNothing(tok.getFeatures(){RestConnection::RCF_OAUTH2_AUTH},
+            "no client credentials, so the authorization flow is not offered");
+
+        # GitLab runs on-premises, so the endpoints belong to the instance and follow it
+        GitLabRestConnection onprem("gitlab-onprem", "test", "gitlab://gitlab.example.com", {}, {
+            "oauth2_client_id": "id", "oauth2_client_secret": "secret", "oauth2_redirect_url": "auto",
+        });
+        hash<auto> oopts = onprem.getRealOptions();
+        assertEq("https://gitlab.example.com/oauth/authorize", oopts.oauth2_auth_url);
+        assertEq("https://gitlab.example.com/oauth/token", oopts.oauth2_token_url);
+        assertTrue(onprem.getFeatures(){RestConnection::RCF_OAUTH2_AUTH});
+
+        # a stored endpoint from a previous instance is replaced rather than kept, or an authorization
+        # would be sent to the instance this connection no longer talks to
+        GitLabRestConnection moved("gitlab-moved", "test", "gitlab://gitlab.example.com", {}, {
+            "oauth2_client_id": "id", "oauth2_client_secret": "secret", "oauth2_redirect_url": "auto",
+            "oauth2_auth_url": "https://gitlab.com/oauth/authorize",
+            "oauth2_token_url": "https://gitlab.com/oauth/token",
+        });
+        assertEq("https://gitlab.example.com/oauth/authorize", moved.getRealOptions().oauth2_auth_url,
+            "the endpoint follows the instance, not the stored value");
+    }
+
+    private eventProviderTest() {
+        FakeGitLabRestClient rest();
+        GitLabEventsDataProvider events(rest);
+        hash<string, bool> names = {};
+        map names{$1} = True, events.getChildProviderNames();
+        map assertTrue(names{$1}, sprintf("event %y is offered", $1)), ExpectedEvents;
+        assertNothing(events.getChildProvider("no-such-event"));
+
+        # a child enumerated from the container is a template, so it must be constructible without the
+        # options a subscription supplies
+        AbstractDataProvider tmpl = events.getChildProviderEx("new_commit");
+        assertEq("new_commit", tmpl.getName());
+        hash<DataProviderInfo> info = tmpl.getInfo();
+        assertTrue(info.constructor_options.project.required);
+        assertEq(GitLabManifest::RefProject, info.constructor_options.project.ref_data);
+        assertEq(("project",), info.constructor_options.ref_name.depends_on);
+
+        # ... but subscribing without them is an error, rather than polling something arbitrary
+        assertThrows("GITLAB-EVENT-ERROR", "\"project\" option is required",
+            \cast<DelayedObservable>(tmpl).observersReady());
+
+        GitLabNewCommitCommentDataProvider comments(rest, {"project": "1"});
+        assertThrows("GITLAB-EVENT-ERROR", "\"commit\" option is required",
+            \comments.observersReady());
+    }
+
+    private eventPollingTest() {
+        FakeGitLabRestClient rest();
+        TestGitLabNewIssueProvider p(rest, {"project": "my-group/my-project", "since": 2026-01-01});
+
+        # the first cycle delivers everything at or after the configured start
+        rest.push_response({"body": (
+            {"id": 1, "iid": 1, "title": "first", "created_at": "2026-01-02T10:00:00Z"},
+            {"id": 2, "iid": 2, "title": "second", "created_at": "2026-01-03T10:00:00Z"},
+        )});
+        p.poll();
+        assertEq(2, p.notified.size());
+        # dispatched oldest-first, so a cursor cannot advance past an undelivered item
+        assertEq("first", p.notified[0].title);
+        assertEq("second", p.notified[1].title);
+        assertRegex("/api/v4/projects/my-group%2Fmy-project/issues", rest.last().path);
+        assertRegex("created_after=2026-01-01", rest.last().path,
+            "the cursor is pushed to the server, so a poll is one small request");
+
+        # the second cycle re-reads the boundary record and discards it: at-least-once, never twice
+        p.reset();
+        rest.push_response({"body": (
+            {"id": 2, "iid": 2, "title": "second", "created_at": "2026-01-03T10:00:00Z"},
+            {"id": 3, "iid": 3, "title": "third", "created_at": "2026-01-04T10:00:00Z"},
+        )});
+        p.poll();
+        assertEq(1, p.notified.size());
+        assertEq("third", p.notified[0].title);
+
+        # a record with no usable timestamp is skipped rather than stalling the feed
+        p.reset();
+        rest.push_response({"body": (
+            {"id": 4, "iid": 4, "title": "undated"},
+            {"id": 5, "iid": 5, "title": "fourth", "created_at": "2026-01-05T10:00:00Z"},
+        )});
+        p.poll();
+        assertEq(1, p.notified.size());
+        assertEq("fourth", p.notified[0].title);
+
+        # the project scopes the cursor: watching another project must not resume this one's position
+        GitLabNewIssueDataProvider other(rest, {"project": "other", "since": 2026-01-01});
+        assertNeq(p.getWatchStreamIdentity(), other.getWatchStreamIdentity());
+    }
+
+    #! Every record-based table resolves, and an action reaches it
+    /** A table is reached by an **action**; declaring the providers is only half of it, and a table no
+        action reaches is offered to nobody.
+    */
+    private recordTableTest() {
+        FakeGitLabRestClient rest();
+        GitLabDataProvider::GitLabDataProvider dp(rest);
+        AbstractDataProvider tables = dp.getChildProviderEx(GitLabDataProvider::GitLabDataProvider::TablesChildName);
+        assertEq((map $1.name, GitLabRecordTables::Tables), tables.getChildProviderNames());
+
+        # a table naming an action the manifest no longer exports, an option a listing does not declare, or
+        # a collection with no record type to derive fails here rather than when a user opens it
+        cast<RestSchemaTablesDataProvider>(tables).checkTables();
+
+        bool any_native = False;
+        foreach hash<RestSchemaRecordTableInfo> t in (GitLabRecordTables::Tables) {
+            AbstractDataProvider tp = tables.getChildProviderEx(t.name);
+            hash<DataProviderInfo> info = tp.getInfo();
+            assertTrue(info.has_record, sprintf("table %y is record-based", t.name));
+            assertTrue(info.supports_read, sprintf("table %y can be read", t.name));
+            # every table answers a search expression, whoever does the work
+            assertTrue(info.supports_search_expressions, sprintf("table %y takes search expressions", t.name));
+            assertTrue(exists info.expressions{DP_SEARCH_OP_EQ}, sprintf("table %y offers equality", t.name));
+            assertEq(t.create_action.val().toBool(), info.supports_create,
+                sprintf("table %y declares create only where the manifest exports one", t.name));
+            assertEq(t.update_action.val().toBool(), info.supports_update,
+                sprintf("table %y declares update only where the manifest exports one", t.name));
+            assertEq(t.delete_action.val().toBool(), info.supports_delete,
+                sprintf("table %y declares delete only where the manifest exports one", t.name));
+            # native search means the API evaluates a whole filter expression, not that it takes arguments
+            assertEq(exists t.query, info.supports_native_search,
+                sprintf("table %y declares native search only with a filter expression language", t.name));
+            if (exists t.query) {
+                any_native = True;
+            }
+            assertTrue(tp.getRecordType().size() > 0, sprintf("table %y has columns", t.name));
+            # a scope option identifies the collection and is required
+            map assertTrue(info.search_options{$1}.required,
+                sprintf("table %y requires the %y scope option", t.name, $1)), t.scope_options;
+        }
+        assertEq(False, any_native,
+            "the tables declare native search exactly where the API has a filter expression language");
+
+        # the record actions are what make the tables reachable
+        hash<string, hash<DataProviderActionInfo>> by_action = {};
+        map by_action{$1.action} = $1, (select DataProviderActionCatalog::getActions(
+            GitLabDataProvider::GitLabDataProvider::AppName), $1.path =~ /tables/);
+        assertEq(("search", "search-single", "create", "update", "delete"), keys by_action);
+        foreach hash<auto> i in (by_action.pairIterator()) {
+            assertEq("/" + GitLabDataProvider::GitLabDataProvider::TablesChildName + "/{table}", i.value.path);
+            assertTrue(exists i.value.path_vars.table, sprintf("%y takes a table", i.key));
+            assertTrue(i.value.data_dependent_options,
+                sprintf("%y resolves its options from the chosen table", i.key));
+            assertTrue(i.value.data_provider_info.has_record);
+        }
+    }
+}

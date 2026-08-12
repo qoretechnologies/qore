@@ -95,9 +95,25 @@ public hashdecl RestSchemaFlatFieldInfo {
     *string codec;
 }
 
+#! Describes a value the request sends but the action does not ask for
+/** @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::value_from "value_from"
+*/
+public hashdecl RestSchemaDerivedValueInfo {
+    #! The action option this value follows
+    string source;
+
+    #! The transport location this value travels in
+    /** @see @ref RestSchemaActionLocations
+    */
+    string loc;
+
+    #! The name of this value in its transport location
+    string wire_name;
+}
+
 #! Describes a bidirectional conversion between an action-facing value and its wire representation
-/** A codec exists so that an action can present a semantically correct type — a %Qore
-    @ref date "date", say — for a wire value that is something else, such as an integer count of
+/** A codec exists so that an action can present a semantically correct type - a %Qore
+    @ref date "date", say - for a wire value that is something else, such as an integer count of
     seconds since the UNIX epoch, without the UX overlay having to carry executable code.
 
     @see @ref RestSchemaActions::RestSchemaActionCodecs "RestSchemaActionCodecs"
@@ -123,28 +139,73 @@ public hashdecl RestSchemaWireCodecInfo {
     *string desc;
 }
 
+#! A header the connection is expected to supply rather than the action
+/** Produced for every header an overlay drops with
+    @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore", and used when the transport
+    request is built.
+
+    @see @ref RestSchemaActions::RestSchemaActionOperation::getConnectionHeaders() "getConnectionHeaders()"
+*/
+public hashdecl RestSchemaConnectionHeaderInfo {
+    #! The header name, spelled as the schema spells it
+    string wire_name;
+
+    #! @ref True if the schema declares the header required
+    /** A required header the connection does not send makes every call fail, so it is reported as the
+        connection problem it is; an optional one is simply left out.
+    */
+    bool required = False;
+
+    #! The connection option that supplies it, when the manifest names one
+    *string connection_option;
+}
+
 #! A declarative UX override for a single field derived from a REST schema
 /** Applied after the schema-derived request or response type has been flattened and before action options
     are generated, so that every override is visible to
     @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()".
 
     An overlay expresses **presentation**: what a field is called, whether it is shown first, whether it
-    offers a dropdown.  It must never be used to repair a schema — a missing or malformed reference belongs
+    offers a dropdown.  It must never be used to repair a schema - a missing or malformed reference belongs
     in a normalization step, and a valid construct %Qore cannot parse belongs in
     @ref openapi3intro "OpenApi3".
 */
 public hashdecl RestSchemaFieldOverlayInfo {
     #! Drop the field from the action entirely
-    /** Use for values the connection owns — an API key header, an account identifier fixed by the
-        connection — which must never appear as an action option.
+    /** Use for values the connection owns - an API key header, an account identifier fixed by the
+        connection - which must never appear as an action option.
     */
     *bool ignore;
+
+    #! The connection option that supplies an @ref ignore "ignored" header
+    /** A header the connection owns is one the action cannot be asked for, so when the connection does
+        not send it there is nothing in the action to point at: the schema rejects the request for a value
+        the user never saw, fifteen frames down.  Naming the option that supplies it turns that into a
+        sentence saying which connection option to set.
+
+        Only meaningful together with @ref ignore on a header, and only used in that error.
+    */
+    *string connection_option;
 
     #! Rename the action-facing field
     /** The wire name is unchanged; the reverse map records the original.  This is how a collision between
         two transport locations is resolved.
     */
     *string name;
+
+    #! Send this value, but take it from another option rather than asking for it
+    /** Some APIs require the identity of the object being changed in **both** the URL and the request
+        body: Confluence's page, blog post and task updates all declare a required \c id property beside
+        the \c {id} path variable, and the two must always be equal.
+
+        Presenting both would ask a user to type the same value twice and let them get it wrong; dropping
+        the body one with @ref ignore would produce a request the API rejects.  Naming the option it
+        follows resolves it: the field is not published as an option, and its wire value is copied from
+        that option when the request is built.
+
+        The named option must exist on the same action, which is checked when the action set is built.
+    */
+    *string value_from;
 
     #! The display name for the field
     *string display_name;
@@ -247,7 +308,7 @@ public hashdecl RestSchemaFieldOverlayInfo {
     is never the source of persistent identity, because an upstream rename must be reported rather than
     silently rename an action that existing workflows call.
 
-    It also makes additions deliberate — an endpoint that appears in an updated schema does not become a
+    It also makes additions deliberate - an endpoint that appears in an updated schema does not become a
     public action until somebody adds it here.
 */
 public hashdecl RestSchemaActionInfo {
@@ -269,8 +330,8 @@ public hashdecl RestSchemaActionInfo {
     #! Names the action this one is a deliberately narrowed variant of
     /** An operation may normally be exported only once, so that a copy-and-paste slip in the manifest is
         caught rather than producing two actions nobody meant to have.  Setting this declares the exception:
-        a second action on the same operation whose overlay narrows it to one job — an "archive" action that
-        is an update with the status fixed, say — where the general action remains available for everything
+        a second action on the same operation whose overlay narrows it to one job - an "archive" action that
+        is an update with the status fixed, say - where the general action remains available for everything
         else.
 
         The named action must be in the same manifest and must resolve to the same method and path, so that

@@ -1,0 +1,276 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BitbucketDataProvider.qm Qore user module providing a data provider API for Bitbucket
+
+/*  BitbucketDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires BitbucketRestClient
+%requires RestClientIo
+
+%requires json
+
+
+module BitbucketDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Bitbucket Cloud";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new BitbucketDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": BitbucketDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Bitbucket",
+            "short_desc": "Work with Bitbucket Cloud repositories, pull requests and deployments",
+            "desc": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git "
+                "repository hosting.\n\n"
+                "**Common use cases**:\n"
+                "- **Repositories**: create, read, update and delete repositories, and list branches\n"
+                "- **Pull requests**: open, update and comment on pull requests\n"
+                "- **Commits**: read commits, approve them, and comment on them\n"
+                "- **Deployments**: read what was deployed, where, and in what state\n"
+                "- **Workspaces**: read workspaces, their members and their projects\n"
+                "- **Search**: search code across a workspace's repositories\n\n"
+                "**Authentication** is a repository, project or workspace access token, an app password, "
+                "or the OAuth2 authorization code flow - the first two of which need no OAuth consumer "
+                "and so no workspace administrator.\n\n"
+                "This application targets Bitbucket **Cloud**; Bitbucket Data Center is a different "
+                "product with a different API.\n\n"
+                "Bitbucket is a trademark of Atlassian Pty Ltd.",
+            "scheme": "bitbucket",
+            "logo": Priv::BitbucketLogo,
+            "logo_file_name": "bitbucket-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::VersionControl, DataProvider::AppGroup::DevOps),
+        });
+
+        # register every action in the manifest
+        RestSchemaActionSet action_set = BitbucketSchema::getActionSet();
+        action_set.registerActions(BitbucketDataProvider::AppName);
+
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(BitbucketDataProvider::AppName,
+            "/" + BitbucketDataProvider::TablesChildName, action_set, BitbucketRecordTables::Tables,
+            BitbucketRecordTables::RecordActionIds, {
+                "groups": (BitbucketRecordTables::RecordGroup,),
+            });
+
+        # register the polling event actions
+        foreach hash<auto> i in (BitbucketEventsDataProvider::EventMap.pairIterator()) {
+            Class cls = i.value;
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": BitbucketDataProvider::AppName,
+                "path": "/" + BitbucketDataProvider::EventsChildName + "/" + i.key,
+                "action": i.key,
+                "display_name": cls.getConstant("DisplayName").getValue(),
+                "short_desc": cls.getConstant("ShortDesc").getValue(),
+                "desc": cls.getConstant("Desc").getValue(),
+                "action_code": DPAT_EVENT,
+                "action_val": i.key,
+                "groups": ("Events",),
+            });
+        }
+    };
+}
+
+/** @mainpage BitbucketDataProvider Module
+
+    @tableofcontents
+
+    @section bitbucketdataproviderintro BitbucketDataProvider Introduction
+
+    The %BitbucketDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [Bitbucket Cloud](https://bitbucket.org).
+
+    @section bitbucketdataprovider_generated Generated, Not Hand-Written
+
+    The actions this application exports are **generated from Bitbucket's own OpenAPI 3 description** by
+    the @ref restschemaactionsintro "RestSchemaActions" module.  What a schema cannot say is which of an
+    operation's fields a user should see first, or which identifiers should be selectable rather than
+    typed; those come from an application-owned manifest and UX overlay in
+    @ref BitbucketDataProvider::BitbucketManifest "BitbucketManifest".
+
+    @section bitbucketdataprovider_pinned The Pinned Schema
+
+    The schema is committed to this module rather than fetched at run time, so an upstream change cannot
+    alter the contract of an action that existing workflows already call.  It is imported with
+    \c tools/rest-schema-import.qr from \c qlib/BitbucketDataProvider/bitbucket-import.yaml.
+
+    **The committed document is repaired before it is pruned.**  Bitbucket documents \c page and
+    \c pagelen on a shared pagination page rather than per endpoint, and declares them on 3 of the 331
+    operations in its description - so without the repair a generated listing could not ask for the second
+    page of anything, and every dropdown would be stuck on Bitbucket's default page of ten records.  The
+    repair is declared in the import spec with its reason, checked on every import, and recorded in the
+    artifact under \c "x-qore-normalized"; see
+    @ref RestSchemaActions::RestSchemaNormalizationInfo "RestSchemaNormalizationInfo".
+
+    @section bitbucketdataprovider_actions Actions
+
+    30 actions are exported, in these groups:
+
+    |!Group|!What it covers
+    |Commits|repository commits, their comments and their approvals
+    |Deployments|what was deployed, where, and in what state
+    |Pull Requests|pull requests and their comments
+    |Repositories|repositories and branches
+    |Search|code search across a workspace, a user or a team
+    |Workspaces|workspaces, their members and their projects
+
+    Identifier options are dropdowns wherever the application exports an operation that can list the
+    values, and everything below a workspace or a repository is **scoped by the one the user chose**.
+
+    @section bitbucketdataprovider_crossworkspace Bitbucket Withdrew Its Cross-Workspace Listings
+
+    Bitbucket removed every endpoint that listed anything across workspaces - \c "GET /2.0/workspaces",
+    \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer **410 Gone**,
+    \c "CHANGE-2770 - Functionality has been deprecated".  There is one replacement, and only one:
+    \c "GET /2.0/user/workspaces".
+
+    That matters here because a workspace scopes every other dropdown this application offers, so without a
+    way to list workspaces none of them could be filled.  **List Workspaces** keeps its action ID and now
+    calls the replacement; a record wraps its workspace and carries no display name, so a workspace is
+    identified by its slug.
+
+    The action that listed public repositories across Bitbucket is **withdrawn**, because nothing replaces
+    it: Atlassian's own guidance is to list the workspaces and then ask each one.  **List Workspace
+    Repositories** is what to use, and it is what the repository dropdown has always been filled from.
+
+    @section bitbucketdataprovider_flat Branches and Reviewers
+
+    A pull request declares its branches as \c "source.branch.name" and its reviewers as a list of user
+    objects.  Those are presented here as a plain branch name and a plain list of member IDs, and
+    converted in both directions by wire codecs, so a dropdown can offer them and a response reads back
+    as the same flat value; see @ref BitbucketDataProvider::BitbucketCodecs "BitbucketCodecs".
+
+    @section bitbucketdataprovider_envelope Paging Through a Listing
+
+    Every Bitbucket collection is the same envelope: the records are in \c values, and \c next is the URL
+    of the following page.  Page on the presence of \c next - \c size is absent for some collections, so
+    a loop on a count does not work.  \c pagelen is capped at 100.
+
+    @section bitbucketdataprovider_records Record-Based Tables
+
+    Eight of Bitbucket's collections are exposed under \c tables: \c repositories, \c pullrequests,
+    \c pullrequest-comments and \c commit-comments for record-based reading and writing, and \c workspaces,
+    \c workspace-members, \c commits and \c branches for reading.
+
+    The last four are **read only**: Bitbucket creates none of them through these paths - a commit arrives
+    by pushing it - and this application exports no write for any of them, so those tables declare none
+    rather than offering an action that could only fail.  \c workspaces and \c workspace-members publish
+    **memberships**, which carry the workspace and the user as nested objects, as Bitbucket returns them.
+
+    Each table takes the standard search expressions.  Where a table's API publishes a filter expression
+    language the whole expression is rendered into it and the service does the searching, and that table
+    declares \c supports_native_search; where it does not, what the listing's own arguments can express is
+    sent and the rest is evaluated against each record as it arrives.  Either way the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    \c repositories and \c commit-comments render a search into Bitbucket Query Language and Bitbucket
+    evaluates it; the pull request listing does not declare \c q in Bitbucket's published description, so
+    that table filters on \c state and answers the rest itself.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
+
+    @section bitbucketdataprovider_events Events
+
+    Three polling events are offered: a new commit, a new deployment and a new pull request.  Bitbucket's
+    REST API has no event stream a credential can read, so these poll - but they poll with a **timestamp
+    cursor** rather than a bounded in-memory set of delivered identities, so a restart resumes where it
+    left off instead of re-delivering the first page.
+
+    Each event is scoped to one repository, which is a required option.
+
+    @section bitbucketdataprovider_examples Examples
+
+    @subsection bitbucketdataprovider_ex_provider Getting the Data Provider
+
+    @code{.py}
+%requires ConnectionProvider
+%requires BitbucketDataProvider
+
+AbstractDataProvider bb = get_connection("bitbucket").getDataProvider();
+    @endcode
+
+    @subsection bitbucketdataprovider_ex_pr Opening a Pull Request
+
+    The branches are given as plain names; the application sends them in the nested shape Bitbucket
+    expects:
+
+    @code{.py}
+hash<auto> pr = bb.getChildProviderEx("repositories_workspace_repo_slug_pullrequests_post").doRequest({
+    "workspace": "my-team",
+    "repo_slug": "my-repo",
+    "title": "Bump the pinned schema",
+    "source": "chore/bump-schema",
+    "destination": "main",
+    "description": "Re-imported from upstream.",
+});
+printf("opened !%d: %s\n", pr.id, pr.links.html.href);
+    @endcode
+
+    @subsection bitbucketdataprovider_ex_list Paging Through a Listing
+
+    @code{.py}
+AbstractDataProvider list_prs = bb.getChildProviderEx("repositories_workspace_repo_slug_pullrequests_get");
+
+int page = 1;
+list<auto> all = ();
+while (True) {
+    hash<auto> res = list_prs.doRequest({
+        "workspace": "my-team",
+        "repo_slug": "my-repo",
+        "state": "MERGED",
+        "pagelen": 100,
+        "page": page,
+    });
+    all += res.values;
+    if (!res.next.val()) {
+        break;
+    }
+    ++page;
+}
+printf("%d merged pull requests\n", all.size());
+    @endcode
+
+    @section bitbucketdataproviderrelnotes Release Notes
+
+    @subsection bitbucketdataproviderv1_0 BitbucketDataProvider v1.0
+    - the initial version of the %BitbucketDataProvider module
+*/
+
+#! contains all public definitions in the BitbucketDataProvider module
+public namespace BitbucketDataProvider {
+}

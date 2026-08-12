@@ -27,7 +27,7 @@ public namespace RestSchemaActions {
 #! Executes one schema-derived action
 /** Presents the flattened request type built by
     @ref RestSchemaActions::RestSchemaActionOperation "RestSchemaActionOperation", rebuilds the transport
-    request from the options it is given, and publishes the success response body — not the HTTP envelope —
+    request from the options it is given, and publishes the success response body - not the HTTP envelope -
     as its response.
 */
 public class RestSchemaActionDataProvider inherits AbstractDataProvider {
@@ -108,11 +108,64 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
     #! Makes the API call and returns the response body
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> wire = op.unflatten(req);
+        wire.req = addConnectionHeaders(wire.req);
         # path variables travel as a request option, not as part of the request body
         *hash<auto> resp = req_dp.doRequest(wire.req, request_options + {
             "path_vars": wire.path_vars,
         });
         return op.processResponse(resp.body);
+    }
+
+    #! Fills in the headers the connection owns
+    /** A header the overlay dropped with
+        @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore" is one the connection supplies,
+        not one the action asks for - an API key, or the tenant a Xero connection works in.  The schema may
+        still declare it required, and the client adds its own default headers only when the request is
+        actually sent, so a request validated against the schema in between would be rejected for a value
+        the action was never supposed to carry.
+
+        Taking it from the client's default headers is what makes \c ignore mean what it says.  An
+        optional header the client does not supply is left out; a **required** one is reported here,
+        naming the connection option that supplies it, because the alternative is a schema type error
+        about a value the user never saw and could not have set on the action.
+
+        @param wire_req the transport request
+
+        @return the request with any connection-owned headers filled in
+
+        @throw REST-CONNECTION-OPTION-ERROR the connection does not supply a header the schema requires
+    */
+    private hash<auto> addConnectionHeaders(hash<auto> wire_req) {
+        list<hash<RestSchemaConnectionHeaderInfo>> conn_headers = op.getConnectionHeaders();
+        if (!conn_headers || !rest) {
+            return wire_req;
+        }
+        # HTTP header names are case-insensitive, and a schema and a client need not spell one the same way
+        hash<string, auto> lower = {};
+        map lower{$1.key.lwr()} = $1.value, (rest.getDefaultHeaders() ?? {}).pairIterator();
+        # "auto!" because the header values are not all of one type once a caller's own are merged in
+        hash<auto!> hdr = wire_req.header ?? {};
+        foreach hash<RestSchemaConnectionHeaderInfo> ch in (conn_headers) {
+            if (exists hdr{ch.wire_name}) {
+                continue;
+            }
+            auto value = lower{ch.wire_name.lwr()};
+            if (exists value) {
+                hdr{ch.wire_name} = value;
+                continue;
+            }
+            if (ch.required) {
+                throw "REST-CONNECTION-OPTION-ERROR", sprintf("action %y requires the %y header, which the "
+                    "connection supplies rather than the action, and this connection does not send it%s",
+                    op.getAction(), ch.wire_name, ch.connection_option.val()
+                        ? sprintf("; set the %y option on the connection", ch.connection_option)
+                        : "");
+            }
+        }
+        if (hdr) {
+            wire_req.header = hdr;
+        }
+        return wire_req;
     }
 
     #! Returns the reference data this action's options can offer
@@ -124,16 +177,35 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
 
     #! Populates a dropdown by executing the action that lists its values
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
-        *hash<RestSchemaReferenceDataInfo> rd = action_set.getReferenceDataDecls(){type};
-        if (!rd) {
+        # an application split across documents declares a dropdown once, in the set whose schema describes
+        # the listing, and other sets reach it as a peer
+        *hash<RestSchemaReferenceDataInfo> rd = action_set.getReferenceDataDecl(type);
+        *RestSchemaActionSet owner = action_set.getReferenceDataSet(type);
+        if (!rd || !owner) {
             return;
         }
         on_error rethrow $1.err, sprintf("%s (while retrieving reference data %y for action %y via action %y)",
             $1.desc, type, getName(), rd.action);
 
-        RestSchemaActionDataProvider lister = new RestSchemaActionDataProvider(action_set,
-            action_set.getOperationEx(rd.action), rest);
-        auto resp = lister.doRequest(rd.options);
+        # a dropdown scoped by another option -- the branches of the selected project -- cannot be listed
+        # until that option has a value.  An empty list is the honest answer then: listing everything would
+        # offer values that do not belong to the chosen scope
+        # "auto!" because the fixed options are typically all of one type -- a page size, say -- and a
+        # narrowed hash would reject the forwarded value
+        hash<auto!> opts = rd.options ?? {};
+        foreach hash<auto> i in (rd.options_from.pairIterator()) {
+            auto val = action_opts{i.value};
+            if (!exists val) {
+                return;
+            }
+            opts{i.key} = val;
+        }
+
+        # the listing runs against the schema that declares it, because the request URI takes its prefix
+        # from that schema's base path
+        RestSchemaActionDataProvider lister = new RestSchemaActionDataProvider(owner,
+            owner.getOperationEx(rd.action), rest);
+        auto resp = lister.doRequest(opts);
         foreach string name in (rd.records_path) {
             if (!exists resp) {
                 break;
@@ -152,24 +224,59 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
                 "%y)", resp.type(), rd.records_path);
         }
         list<hash<AllowedValueInfo>> rv = ();
+        # a listing often carries the same value on many records -- the owner of each of a user's
+        # repositories, say -- and two dropdown entries with the same value are indistinguishable to
+        # whoever is choosing one, so the first occurrence wins and the rest are dropped
+        hash<string, bool> seen = {};
         foreach auto record in (resp) {
             if (record.typeCode() != NT_HASH) {
                 throw "REFERENCE-DATA-ERROR", sprintf("expected every record to be a hash, but element %d has "
                     "type %y", $#, record.type());
             }
-            if (!exists record{rd.value_field}) {
+            auto value = RestSchemaActionDataProvider::getRecordValue(record, rd.value_field);
+            if (!exists value) {
                 continue;
             }
+            string key = sprintf("%y", value);
+            if (seen{key}) {
+                continue;
+            }
+            seen{key} = True;
             # many APIs allow an object's human-readable name to be unset; showing the ID is better than
             # showing an empty row
-            auto display = rd.display_field.val() ? record{rd.display_field} : NOTHING;
+            auto display = rd.display_field.val()
+                ? RestSchemaActionDataProvider::getRecordValue(record, rd.display_field)
+                : NOTHING;
             rv += <AllowedValueInfo>{
-                "value": record{rd.value_field},
-                "display_name": (display ?? record{rd.value_field}).toString(),
+                "value": value,
+                "display_name": (display ?? value).toString(),
                 "desc": rd.desc,
             };
         }
         return rv ?: NOTHING;
+    }
+
+    #! Returns a record value named by a possibly-nested field path
+    /** @param record the record
+        @param path the field name, or a \c "." separated path into a nested record
+
+        @return the value, or @ref nothing if the path does not resolve
+
+        @note A path that runs into a non-hash returns @ref nothing rather than throwing: a record that
+        does not carry the field is skipped, which is the same treatment as one that carries it unset.
+    */
+    private static auto getRecordValue(hash<auto> record, string path) {
+        if (path.find(".") == -1) {
+            return record{path};
+        }
+        auto node = record;
+        foreach string name in (split(".", path)) {
+            if (node.typeCode() != NT_HASH) {
+                return;
+            }
+            node = node{name};
+        }
+        return node;
     }
 
     #! Returns the names of the reference data referenced by this action's options

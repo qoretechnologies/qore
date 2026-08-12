@@ -288,8 +288,8 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
                     "default_value": PaddleRestClientBase::DefaultInstanceType,
                     "desc": "The Paddle environment this connection works against, which also "
                         "determines the target URL.\n\n"
-                        "- `api`: **Production** — `https://api.paddle.com`\n"
-                        "- `sandbox-api`: **Sandbox** — `https://sandbox-api.paddle.com`\n\n"
+                        "- `api`: **Production** - `https://api.paddle.com`\n"
+                        "- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\n"
                         "The two environments are entirely separate: they hold different data and "
                         "accept different API keys, so this must match the key in `token`.\n\n"
                         "Defaults to **sandbox**, so a connection created without setting this talks to "

@@ -52500,7 +52500,7 @@
         "summary": "List all charges"
       },
       "post": {
-        "description": "<p>This method is no longer recommended—use the <a href=\"/docs/api/payment_intents\">Payment Intents API</a>\nto initiate a new payment instead. Confirmation of the PaymentIntent creates the <code>Charge</code>\nobject used to request payment.</p>",
+        "description": "<p>This method is no longer recommended-use the <a href=\"/docs/api/payment_intents\">Payment Intents API</a>\nto initiate a new payment instead. Confirmation of the PaymentIntent creates the <code>Charge</code>\nobject used to request payment.</p>",
         "operationId": "PostCharges",
         "requestBody": {
           "content": {

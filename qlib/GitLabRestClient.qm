@@ -1,0 +1,628 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GitLabRestClient.qm Qore user module for calling GitLab REST API services
+
+/*  GitLabRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module GitLabRestClient {
+    version = "1.0";
+    desc = "User module for calling GitLab REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("gitlab", GitLabRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage GitLabRestClient Module
+
+    @tableofcontents
+
+    @section gitlabrestclientintro GitLabRestClient Introduction
+
+    The %GitLabRestClient module provides an API for calling [GitLab](https://gitlab.com)'s REST API
+    services, on both GitLab.com and self-managed installations.
+
+    To use this module, use \c "%requires GitLabRestClient" in your code.
+
+    All the public symbols in the module are defined in the GitLabRestClient namespace.
+
+    The main classes are:
+    - @ref GitLabRestClient::GitLabRestClient "GitLabRestClient": the REST client for the GitLab API
+    - @ref GitLabRestClient::GitLabRestClientIo "GitLabRestClientIo": the same client on the
+      asynchronous I/O transport, which is what data providers use
+    - @ref GitLabRestClient::GitLabRestConnection "GitLabRestConnection": a connection object to
+      GitLab (based on the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section gitlabrestclient_hostname The Instance Is the Connection
+
+    GitLab is not one service.  \c https://gitlab.com and every self-managed installation run the same
+    API over entirely separate data, and an integration pointed at the wrong one does not fail - it
+    succeeds against the wrong repositories.
+
+    So \c hostname is the connection's defining option, and **everything else is derived from it in both
+    directions**:
+
+    |!Derived from \c hostname|!Value for \c https://gitlab.example.com
+    |the target URL|\c https://gitlab.example.com
+    |@ref GitLabRestClient::GitLabRestClientBase::DefaultAuthUrlPath "the authorization URL"|\c https://gitlab.example.com/oauth/authorize
+    |@ref GitLabRestClient::GitLabRestClientBase::DefaultTokenUrlPath "the token URL"|\c https://gitlab.example.com/oauth/token
+
+    A connection created from a URL alone derives \c hostname from that URL, and
+    @ref GitLabRestClient::GitLabRestConnection::getConnectionOptions() "getConnectionOptions()" then
+    withholds the stored URL entirely, so the option is the only thing that can decide where requests go.
+    A stored URL left over from an earlier instance cannot silently retarget the connection.
+
+    @section gitlabrestclient_auth Authentication
+
+    GitLab accepts either of two credentials, and this module supports both:
+
+    - a **personal, project or group access token**, sent as a bearer token.  This is the simplest
+      option and is what a script normally uses; create one under
+      \c "User Settings > Access Tokens" with the \c api scope.
+    - an **OAuth2 authorization code** flow, which is what an interactive integration uses.
+      \c oauth2_client_id and \c oauth2_client_secret come from an OAuth application registered in the
+      GitLab instance, and the authorization and token URLs are derived from \c hostname.
+
+    GitLab.com has no shared OAuth application, so a self-managed instance needs its own registered
+    application; that is the only reason the client ID and secret are connection options rather than
+    constants.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires GitLabRestClient
+
+GitLabRestClientIo gitlab({"token": ENV.GITLAB_TOKEN, "hostname": "https://gitlab.com"});
+hash<auto> result = gitlab.get("/api/v4/projects?membership=true&per_page=1");
+printf("Projects: %Y\n", result.body);
+    @endcode
+
+    @section gitlabrestclient_paths Paths Include the API Prefix
+
+    GitLab's own API description declares its paths with the \c /api/v4 prefix already in them, and this
+    client does not add one, so a path is written exactly as GitLab documents it: \c /api/v4/projects,
+    not \c /projects.
+
+    @section gitlabrestclient_pagination Pagination
+
+    A GitLab listing is paged with \c page and \c per_page (maximum 100) and reports the total and the
+    next page in \c X-Total, \c X-Page and \c X-Next-Page response headers rather than in the body.
+    Some large collections use keyset pagination instead and report only \c Link.
+
+    @section gitlabrestclientrelnotes Release Notes
+
+    @subsection gitlabrestclientv1_0 GitLabRestClient v1.0
+    - the initial version of the %GitLabRestClient module
+*/
+
+#! the GitLabRestClient namespace contains all the objects in the GitLabRestClient module
+public namespace GitLabRestClient {
+#! Common base class for GitLabRestClient functionality
+public class GitLabRestClientBase {
+    public {
+        #! The default GitLab instance
+        const DefaultHostname = "https://gitlab.com";
+
+        #! The path of the OAuth2 authorization endpoint, relative to the instance
+        const DefaultAuthUrlPath = "/oauth/authorize";
+
+        #! The path of the OAuth2 token endpoint, relative to the instance
+        const DefaultTokenUrlPath = "/oauth/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes
+        /** \c api is GitLab's full read/write API scope, which covers every endpoint this module calls
+            including the \c "/api/v4/user" ping; \c profile and \c email are the OpenID Connect scopes that
+            identify the authorizing user.
+
+            @note These are the scopes the application this module replaces requested, and that is not a
+            style choice.  GitLab validates a request against the scopes the **OAuth application** was
+            registered with, and the application the platform publishes for GitLab was registered for the
+            superseded one.  Asking for a scope outside that set - \c read_user, say, which is a perfectly
+            valid GitLab scope in general - fails the authorization outright with "The requested scope is
+            invalid, unknown, or malformed", before the user is ever asked to approve anything.
+
+            So a registered OAuth2 client's scope set is a commitment in the same way an action ID is: it is
+            shared platform state, it was created for the application being replaced, and changing what is
+            asked for means re-registering the application rather than editing this list.
+        */
+        const DefaultScopes = ("api", "profile", "email");
+
+        #! Default data serialization
+        /** GitLab takes and returns JSON.
+        */
+        const DefaultData = "json";
+
+        #! Default authorization token type
+        const DefaultTokenType = "Bearer";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** Reading the authenticated user is the cheapest call that proves the credential is accepted,
+            and it works for a token scoped to \c read_user alone.
+        */
+        const DefaultPingPath = "/api/v4/user";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! GitLab's maximum page size for a listing
+        const MaxPerPage = 100;
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "token_type": DefaultTokenType,
+        };
+    }
+
+    #! Returns the target URL for the given GitLab instance
+    /** @param hostname the instance, with or without a scheme
+
+        @return the instance's base URL, with no trailing slash
+
+        @throw GITLAB-HOSTNAME-ERROR the hostname is empty, or names a scheme that is not HTTP
+
+        @note A bare host is given \c https, because GitLab's OAuth2 flow and access tokens must not be
+        sent in clear text; asking for \c http explicitly is still honored, because a self-managed
+        instance behind a TLS-terminating proxy is a real deployment.
+    */
+    static string getUrlForHostname(string hostname) {
+        string url = hostname;
+        trim url;
+        if (!url.val()) {
+            throw "GITLAB-HOSTNAME-ERROR", "the GitLab hostname is empty; it must name the instance to "
+                "work against, ex: \"https://gitlab.com\" or \"https://gitlab.example.com\"";
+        }
+        *list<*string> m = (url =~ x/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+        if (m) {
+            string scheme = m[0].lwr();
+            if (scheme != "http" && scheme != "https" && scheme != "gitlab" && scheme != "gitlabs") {
+                throw "GITLAB-HOSTNAME-ERROR", sprintf("GitLab hostname %y names scheme %y; expecting "
+                    "\"https\" or \"http\"", hostname, scheme);
+            }
+            # the connection scheme is not a transport scheme
+            url = regex_subst(url, "^gitlabs?://", "https://");
+        } else {
+            url = "https://" + url;
+        }
+        # a trailing slash would produce "//api/v4/..." in every request path
+        while (url.size() > 1 && url.substr(-1) == "/") {
+            url = url.substr(0, url.size() - 1);
+        }
+        return url;
+    }
+
+    #! Returns the GitLab instance a URL names
+    /** The inverse of @ref getUrlForHostname(); it exists so that a connection created from a URL alone
+        still has a \c hostname option that agrees with it.
+
+        @param url the URL
+
+        @return the instance, as a URL with no path
+    */
+    static string getHostnameForUrl(string url) {
+        hash<UrlInfo> h = parse_url(GitLabRestClientBase::getUrlForHostname(url));
+        string scheme = h.protocol ?? "https";
+        if (scheme == "gitlab") {
+            scheme = "https";
+        } else if (scheme == "gitlabs") {
+            scheme = "https";
+        }
+        return sprintf("%s://%s%s", scheme, h.host, exists h.port ? sprintf(":%d", h.port) : "");
+    }
+
+    #! Returns the OAuth2 authorization URL for the given GitLab instance
+    static string getAuthUrlForHostname(string hostname) {
+        return GitLabRestClientBase::getUrlForHostname(hostname) + DefaultAuthUrlPath;
+    }
+
+    #! Returns the OAuth2 token URL for the given GitLab instance
+    static string getTokenUrlForHostname(string hostname) {
+        return GitLabRestClientBase::getUrlForHostname(hostname) + DefaultTokenUrlPath;
+    }
+
+    #! Returns options for the GitLabRestClient constructors
+    /** Consumes the GitLab-specific \c hostname option and derives the target URL and the OAuth2
+        endpoints from it.
+
+        @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+
+        @throw GITLAB-HOSTNAME-ERROR the hostname is not usable
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows to
+        # that type, and adding a hash-valued or list-valued default would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        # the instance decides the URL, never the other way round: a stored URL from an earlier instance
+        # would otherwise silently retarget every request
+        string hostname = (remove opts.hostname) ?? (opts.url.val()
+            ? GitLabRestClientBase::getHostnameForUrl(opts.url)
+            : DefaultHostname);
+        opts.url = GitLabRestClientBase::getUrlForHostname(hostname);
+
+        # OAuth2 is per-instance, so its endpoints follow the instance unless the caller named them
+        if (opts.oauth2_client_id.val()) {
+            if (!opts.oauth2_grant_type.val()) {
+                opts.oauth2_grant_type = DefaultGrantType;
+            }
+            if (!opts.oauth2_auth_url.val()) {
+                opts.oauth2_auth_url = GitLabRestClientBase::getAuthUrlForHostname(hostname);
+            }
+            if (!opts.oauth2_token_url.val()) {
+                opts.oauth2_token_url = GitLabRestClientBase::getTokenUrlForHostname(hostname);
+            }
+            if (!opts.oauth2_scopes) {
+                opts.oauth2_scopes = DefaultScopes;
+            }
+        }
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+}
+
+#! GitLab REST client
+public class GitLabRestClient inherits RestClient::RestClient, GitLabRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options; see
+        @ref GitLabRestClient::GitLabRestClientBase::getOptions() "getOptions()" for the GitLab-specific
+        options
+        @param do_not_connect if @ref False the object will immediately attempt to connect
+    */
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(GitLabRestClientBase::getOptions(opts), do_not_connect) {
+    }
+}
+
+#! GitLab REST client for non-blocking I/O
+public class GitLabRestClientIo inherits RestClientIo::RestClientIo, GitLabRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(GitLabRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for GitLab REST connections
+public class GitLabRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default GitLab connection URL
+        const DefaultConnectionUrl = "gitlab://gitlab.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "GitLab REST Connection",
+            "short_desc": "A connection to a GitLab instance",
+            "desc": "A connection to [GitLab](https://gitlab.com) for source code, issues, merge "
+                "requests, CI/CD variables and wikis.\n\n"
+                "**The instance is the connection.** `hostname` names the GitLab installation this "
+                "connection works against - `https://gitlab.com` or a self-managed instance - and the "
+                "target URL and both OAuth2 endpoints are derived from it. GitLab.com and a "
+                "self-managed instance run the same API over entirely different data, so an "
+                "integration pointed at the wrong one does not fail; it succeeds against the wrong "
+                "repositories.\n\n"
+                "**Authentication** is either an access token or the OAuth2 authorization code flow:\n"
+                "- a personal, project or group access token with the `api` scope, created under "
+                "**User Settings > Access Tokens**, sent as a bearer token; or\n"
+                "- `oauth2_client_id` and `oauth2_client_secret` from an OAuth application registered "
+                "in the instance itself. There is no shared application, so a self-managed instance "
+                "needs its own.\n\n"
+                "GitLab is a trademark of GitLab B.V.",
+            "cls": Class::forName("GitLabRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "gitlab": True,
+            },
+            "base_scheme_map": {
+                "https": "gitlab",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitLabRestClientBase::DefaultData,
+                },
+                "hostname": <ConnectionOptionInfo>{
+                    "display_name": "GitLab Hostname",
+                    "short_desc": "The GitLab instance to work against",
+                    "type": "string",
+                    "default_value": GitLabRestClientBase::DefaultHostname,
+                    "desc": "The base URL of the GitLab installation this connection works against, "
+                        "ex: `https://gitlab.com` or `https://gitlab.example.com`.\n\n"
+                        "This is the connection's defining option: the target URL and both OAuth2 "
+                        "endpoints are derived from it, and a stored URL that disagrees with it is "
+                        "ignored rather than allowed to decide where requests go.\n\n"
+                        "A bare host is given `https`.",
+                    "preselected": True,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": GitLabRestClientBase::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": GitLabRestClientBase::DefaultScopes,
+                },
+                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id
+                + <ConnectionOptionInfo>{
+                    "desc": "The client ID of an OAuth application registered in this GitLab "
+                        "instance.\n\n"
+                        "Only needed for the OAuth2 flow; an access token in `token` needs neither this "
+                        "nor `oauth2_client_secret`. Register the application under **Admin > "
+                        "Applications** (or **User Settings > Applications**) with "
+                        "`https://api.qoretechnologies.com/qorus-oauth2-redirect` as the redirect URI.",
+                },
+                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret
+                + <ConnectionOptionInfo>{
+                    "desc": "The client secret of an OAuth application registered in this GitLab "
+                        "instance.\n\n"
+                        "Only needed for the OAuth2 flow; see `oauth2_client_id`.",
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitLabRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitLabRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitLabRestClientBase::DefaultPingPath,
+                },
+                "token": RestConnection::ConnectionScheme.options."token"
+                + <ConnectionOptionInfo>{
+                    "display_name": "Access Token",
+                    "short_desc": "A GitLab personal, project or group access token",
+                    "desc": "A GitLab access token, sent as a bearer token.\n\n"
+                        "**To obtain one:**\n"
+                        "1. Log in to the GitLab instance this connection targets\n"
+                        "2. Go to **User Settings > Access Tokens** (or a project's or group's "
+                        "**Settings > Access Tokens**)\n"
+                        "3. Create a token with the `api` scope, or `read_api` for read-only use\n\n"
+                        "Leave this unset to use the OAuth2 flow instead.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "token_type": RestConnection::ConnectionScheme.options."token_type"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitLabRestClientBase::DefaultTokenType,
+                },
+            },
+            # OAuth2 is named first because it is the flow this connection should default to whenever the
+            # platform can supply a client; an access token is the fallback for a credential that is not
+            # tied to a user's authorization.  The published OAuth2 client for this app additionally
+            # declares "hostname" as required, because GitLab's authorization and token endpoints are
+            # per-instance, which is why "hostname" carries a default and is preselected
+            "required_options": "oauth2_client_id,oauth2_client_secret|token",
+        };
+    }
+
+    #! Creates the GitLabRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL; used only to derive \c hostname when that option is not set
+        @param attributes various attributes
+        @param options connection options
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description,
+                GitLabRestConnection::getConnectionUrl(options.hostname ?? url), attributes,
+                GitLabRestConnection::getOpts(options, url)) {
+    }
+
+    #! Creates the GitLabRestConnection object
+    /** @param config with the following keys:
+        - name: the connection name
+        - display_name: the display name
+        - short_desc: a short description in plain text
+        - desc: a long description with markdown formatting
+        - url: the connection URL; used only to derive \c hostname when that option is not set
+        - opts: connection options
+        @param attr optional connection attributes
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(GitLabRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the connection URL for the given GitLab instance
+    /** @param hostname the instance
+
+        @return the connection URL, in the connection's own scheme
+
+        @throw GITLAB-HOSTNAME-ERROR the hostname is not usable
+    */
+    static string getConnectionUrl(string hostname) {
+        # replace the transport scheme with the connection scheme
+        return regex_subst(GitLabRestClientBase::getUrlForHostname(hostname), "^https", "gitlab");
+    }
+
+    #! Returns the options with \c hostname derived from the URL when it is not set
+    /** This is the second direction: a connection created from a URL alone still ends up with a
+        \c hostname option that agrees with it, so the option is never absent and never stale.
+    */
+    private static hash<auto> getOpts(hash<auto> options, *string url) {
+        hash<auto> rv = options;
+        if (!rv.hostname.val() && url.val()) {
+            rv += {"hostname": GitLabRestClientBase::getHostnameForUrl(url)};
+        }
+        return GitLabRestConnection::addOAuth2Urls(rv);
+    }
+
+    #! Fills in the OAuth2 endpoints for the instance the connection works with
+    /** GitLab runs on-premises as well as at gitlab.com, so its authorization and token endpoints belong to
+        the **instance** and cannot be constants in the connection scheme the way GitHub's and Xero's are.
+        They are derived from \c hostname instead.
+
+        Deriving them in the client alone is not enough, and this is the whole reason this method exists.
+        @ref RestClient::RestConnection "RestConnection" decides at construction whether the connection can
+        offer the OAuth2 authorization code flow, and it decides it by looking for \c oauth2_auth_url,
+        \c oauth2_token_url, \c oauth2_client_id, \c oauth2_client_secret and \c oauth2_redirect_url **in
+        the connection's own options**.  A connection that leaves the two endpoints to be worked out later,
+        when a client is finally constructed, therefore reports that it cannot authorize at all: the
+        platform offers an access-token form instead of the authorization flow, and a connection created
+        that way comes back with \c oauth2_auth_code false.
+
+        The endpoints are derived from \c hostname **every time**, overwriting whatever is stored, which is
+        the same rule this connection already applies to its URL and for the same reason: they belong to the
+        instance, so a value left over from a previous one would send the authorization somewhere the
+        connection no longer talks to.  Nothing is lost by it - GitLab serves \c /oauth/authorize and
+        \c /oauth/token from the instance itself and offers no way to move them.
+
+        The client does the opposite and fills them in only when they are absent
+        (@ref GitLabRestClient::GitLabRestClientBase::getOptions() "getOptions()"), because it is given the
+        options for one call rather than storing them across changes of instance.
+
+        @param options the connection options, with \c hostname resolved
+
+        @return the options with the endpoints filled in
+    */
+    private static hash<auto> addOAuth2Urls(hash<auto> options) {
+        string hostname = options.hostname ?? GitLabRestClientBase::DefaultHostname;
+        # "auto!" because the option values are of several types, and a hash narrowed to the type of its
+        # first value would reject the rest
+        hash<auto!> rv = options;
+        rv.oauth2_auth_url = GitLabRestClientBase::getAuthUrlForHostname(hostname);
+        rv.oauth2_token_url = GitLabRestClientBase::getTokenUrlForHostname(hostname);
+        return rv;
+    }
+
+    #! Returns the config hash with the URL and \c hostname agreeing with each other
+    private static hash<auto> getConfig(hash<auto> config) {
+        hash<auto> opts = GitLabRestConnection::getOpts(config.opts ?? {}, config.url);
+        return config + {
+            "url": GitLabRestConnection::getConnectionUrl(opts.hostname
+                ?? GitLabRestClientBase::DefaultHostname),
+            "opts": opts,
+        };
+    }
+
+    #! Re-derives the URL when the options are updated
+    /** \c hostname decides the instance, so a change to it must move the connection with it.
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            string hostname = opts.hostname ?? GitLabRestClientBase::DefaultHostname;
+            string target = GitLabRestConnection::getConnectionUrl(hostname);
+            # the OAuth2 endpoints move with the instance as well, or an authorization would be sent to the
+            # instance this connection used to talk to
+            hash<auto> updates = {};
+            if (url != target) {
+                updates.url = target;
+            }
+            string auth_url = GitLabRestClientBase::getAuthUrlForHostname(hostname);
+            if (opts.oauth2_auth_url != auth_url) {
+                updates.oauth2_auth_url = auth_url;
+            }
+            string token_url = GitLabRestClientBase::getTokenUrlForHostname(hostname);
+            if (opts.oauth2_token_url != token_url) {
+                updates.oauth2_token_url = token_url;
+            }
+            if (updates) {
+                doUpdateOptions(self, updates);
+            }
+        }
+    }
+
+    #! Returns the connection options with the URL withheld
+    /** The URL is derived from \c hostname by
+        @ref GitLabRestClient::GitLabRestClientBase::getOptions() "getOptions()"; passing a stored one
+        as well would let it decide the instance when the two disagree.
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return (RestConnection::getConnectionOptions(rtopts) ?? {}) - "url";
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "gitlab";
+    }
+
+    #! Returns the name of the application this connection serves
+    *string getAppName() {
+        return "Gitlab";
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the GitLab data provider for this connection
+    /** @param subtype the data provider subtype, if any
+        @param options the data provider options, if any
+
+        @return the data provider for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and pinged
+        # without it
+        load_module("GitLabDataProvider");
+        return create_object("GitLabDataProvider", getAsync());
+    }
+
+    #! Returns a GitLabRestClient object
+    private GitLabRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GitLabRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GitLabRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

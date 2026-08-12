@@ -5235,13 +5235,18 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         # health endpoints outside the API namespace (e.g. SGLang at `/get_server_info`).  Both
         # RestClient (sync) and RestClientIo (async) expose `clearConnectionPath()`.
         #
+        # ... unless the URL path is not a namespace but the address of the thing connected to -
+        # Atlassian addresses a Confluence site as /ex/confluence/<cloud_id> - in which case
+        # dropping it asks the host for something it never named; pingInheritsConnectionPath()
+        # is how such a connection says so.
+        #
         # NOTE: the parent is held for the life of the ping; the async copy shares the parent's
         # connection manager
         AbstractRestClient parent = client;
         if (ping_path =~ /^http/) {
             client = parent.copyWithUrl(ping_path);
             ping_path = "";
-        } else if (ping_path[0] == "/") {
+        } else if (ping_path[0] == "/" && !pingInheritsConnectionPath()) {
             client.clearConnectionPath();
         }
 
@@ -5260,6 +5265,26 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! Returns the ping path from the \c ping_path option
     private *string getPingPath() {
         return opts.ping_path;
+    }
+
+    #! Returns @ref True if an absolute ping path is appended to the connection's URL path
+    /** An absolute \c ping_path normally addresses the **host**, so the connection's own URL path is
+        dropped for it.  That is what a connection whose URL carries an API namespace needs: with
+        \c http://host/v1, a health endpoint outside the namespace is \c "/get_server_info", and inheriting
+        the namespace turns it into \c "/v1/get_server_info", which reliably 404s.
+
+        For a connection whose URL path is not a namespace but the **address of the thing connected to**,
+        the opposite is true.  Atlassian addresses a Confluence site as
+        \c https://api.atlassian.com/ex/confluence/\<cloud_id\>, and a ping that drops that prefix asks the
+        gateway for a site it never named - which answers 404 while every other request on the same
+        connection succeeds.  Such a connection returns @ref True here.
+
+        @return @ref False by default: an absolute ping path addresses the host
+
+        @since %RestClient 2.7
+    */
+    bool pingInheritsConnectionPath() {
+        return False;
     }
 
     #! Returns the ping body from the \c ping_body option

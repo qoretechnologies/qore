@@ -35,12 +35,12 @@ public namespace RestSchemaActions {
 
     A schema-derived REST request type groups parameters by where they travel: \c query and \c header become
     nested hashes, the request body becomes a \c body field, and path variables do not appear in the request
-    type at all — they are supplied through the \c path_vars request option.  None of that is meaningful to
+    type at all - they are supplied through the \c path_vars request option.  None of that is meaningful to
     somebody filling in an action form, so this class lifts every value to a single flat level and keeps a
     reverse map (@ref getFlatMap()) so that @ref unflatten() can rebuild the exact transport request.
 
-    Fields are presented in transport order — path variables, then body properties, then query arguments,
-    then headers — which puts the values that identify the object first and the rarely-used transport
+    Fields are presented in transport order - path variables, then body properties, then query arguments,
+    then headers - which puts the values that identify the object first and the rarely-used transport
     controls last.  @ref RestSchemaActions::RestSchemaActionInfo::field_order "field_order" overrides this.
 
     Flattening is conservative: it removes transport groupings, never meaningful domain objects.  A body
@@ -53,7 +53,7 @@ public namespace RestSchemaActions {
 
     @section rsa_collisions Collisions
 
-    Two transport locations can carry the same name — a path variable \c id and a body property \c id, say.
+    Two transport locations can carry the same name - a path variable \c id and a body property \c id, say.
     Rather than silently choose one, the collision is reported, and the manifest resolves it by renaming
     either side through a location-qualified overlay key (\c "body.id").
 */
@@ -78,6 +78,19 @@ public class RestSchemaActionOperation {
 
         #! The flattened request type with the overlay applied
         *AbstractDataProviderType request_type;
+
+        #! Values sent but not asked for, each following another option
+        /** @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::value_from "value_from"
+        */
+        list<hash<RestSchemaDerivedValueInfo>> derived_values = ();
+
+        #! Header values dropped by the overlay, which the connection is expected to supply
+        /** An ignored header is one the connection owns - an API key, the tenant a Xero connection works
+            in - so the action must not ask for it, and the request must still carry it.  These are
+            filled in from the REST client's own default headers when the request is built, and a
+            required one the connection does not send is reported as the connection problem it is.
+        */
+        list<hash<RestSchemaConnectionHeaderInfo>> connection_headers = ();
 
         #! The action output type: the success response body, unwrapped
         *AbstractDataProviderType response_type;
@@ -166,6 +179,18 @@ public class RestSchemaActionOperation {
         return response_code;
     }
 
+    #! Returns the header values the connection is expected to supply
+    /** These are the headers the overlay dropped with
+        @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ignore "ignore".  Dropping one hides it from the
+        action, which is the point, but the schema may still declare it required - so the request is filled
+        in from the REST client's own default headers rather than being sent without it.
+
+        @see @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider"
+    */
+    list<hash<RestSchemaConnectionHeaderInfo>> getConnectionHeaders() {
+        return connection_headers;
+    }
+
     #! Returns the reverse map from action option name to transport location
     hash<string, hash<RestSchemaFlatFieldInfo>> getFlatMap() {
         return flat_map;
@@ -217,6 +242,32 @@ public class RestSchemaActionOperation {
                     break;
             }
         }
+        # a value that follows another option is filled in once every supplied option has been placed, so
+        # that it carries exactly what the request will send rather than what the caller typed
+        foreach hash<RestSchemaDerivedValueInfo> dv in (derived_values) {
+            *hash<RestSchemaFlatFieldInfo> src = flat_map{dv.source};
+            if (!src) {
+                continue;
+            }
+            auto value;
+            switch (src.loc) {
+                case RSAL_PATH: value = path_vars{src.wire_name}; break;
+                case RSAL_QUERY: value = req.query{src.wire_name}; break;
+                case RSAL_HEADER: value = req.header{src.wire_name}; break;
+                case RSAL_BODY: value = req.body{src.wire_name}; break;
+                case RSAL_BODY_ROOT: value = req.body; break;
+            }
+            if (!exists value) {
+                continue;
+            }
+            switch (dv.loc) {
+                case RSAL_PATH: path_vars{dv.wire_name} = value; break;
+                case RSAL_QUERY: req.query{dv.wire_name} = value; break;
+                case RSAL_HEADER: req.header{dv.wire_name} = value; break;
+                case RSAL_BODY: req.body{dv.wire_name} = value; break;
+            }
+        }
+
         # every path variable must resolve, or the request would be made against a URI path still containing
         # a literal "{name}" placeholder
         foreach string name in (path_var_names) {
@@ -352,6 +403,7 @@ public class RestSchemaActionOperation {
                     derived{param.inLoc} += {
                         "wire_name": param.name,
                         # a path variable is part of the URI and is therefore always required
+                        "required": param.inLoc == RSAL_PATH || param.required ? True : False,
                         "field": schema.getFieldFromSchema(param.name, param.desc, param.schema,
                             param.inLoc == RSAL_PATH || param.required),
                     };
@@ -379,6 +431,26 @@ public class RestSchemaActionOperation {
                 string derived_name = entry.wire_name;
                 hash<RestSchemaFieldOverlayInfo> ov = getFieldOverlay(info.fields, loc, derived_name);
                 if (ov.ignore) {
+                    # a header the action does not ask for is one the connection supplies; the schema may
+                    # still require it, and dropping it from the action must not produce a request the
+                    # schema rejects
+                    if (loc == RSAL_HEADER) {
+                        connection_headers += <RestSchemaConnectionHeaderInfo>{
+                            "wire_name": derived_name,
+                            "required": entry.required ?? False,
+                            "connection_option": ov.connection_option,
+                        };
+                    }
+                    continue;
+                }
+                if (ov.value_from.val()) {
+                    # not an option: the value follows another one and is filled in when the request is
+                    # built
+                    derived_values += <RestSchemaDerivedValueInfo>{
+                        "source": ov.value_from,
+                        "loc": loc,
+                        "wire_name": derived_name,
+                    };
                     continue;
                 }
                 string name = ov.name ?? derived_name;
@@ -406,6 +478,16 @@ public class RestSchemaActionOperation {
 
         # every overlay entry must resolve, so that an upstream rename cannot silently drop an override
         checkOverlayTargets(info.fields, derived, keys fields);
+
+        # a value that follows an option the action does not have could never be filled in, and the
+        # request would go out missing something the API requires
+        foreach hash<RestSchemaDerivedValueInfo> dv in (derived_values) {
+            if (!exists flat_map{dv.source}) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("the %s value %y takes its value from option %y, "
+                    "which this action does not declare; options: %y", dv.loc, dv.wire_name, dv.source,
+                    sort(keys flat_map));
+            }
+        }
 
         if (!fields) {
             return;

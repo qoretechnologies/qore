@@ -1,0 +1,20 @@
+# Import spec for the vendored GitHub schema.
+#
+#   QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+#       --spec qlib/GitHubDataProvider/github-import.yaml
+#
+# Paths are resolved against this file.  The operations come from the manifest itself, so the selection
+# and what the application exports cannot drift apart.
+#
+# The upstream document is 12.9 MB and describes 808 paths; pruning it to the exported operations is what
+# makes the module loadable in reasonable time, so this is not merely a repository-size decision.
+#
+# GitHub versions its REST API by date and GitHubRestClient sends "X-GitHub-Api-Version: 2022-11-28" with
+# every request.  The version pin in GitHubSchema::Provenance is written from that constant rather than by
+# the importer, so adopting a newer description means deciding whether the pin moves with it.
+documents:
+  - name: GitHub
+    source: https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json
+    output: github-openapi.json
+    manifest: GitHubDataProvider:GitHubManifest::Manifest
+    provenance: GitHubSchema.qc

@@ -120,6 +120,23 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
                 "desc": "widget categories",
             },
         };
+
+        #! Reference data scoped by a value the calling action supplies
+        /** Most identifiers are not global: a widget belongs to a category, so listing widgets without
+            one would offer values from a scope the user did not choose.
+        */
+        const ScopedRefData = {
+            "widget": <RestSchemaReferenceDataInfo>{
+                "name": "widget",
+                "action": "list-widgets",
+                "options": {"limit": 100},
+                "options_from": {"category": "category"},
+                "records_path": "data",
+                "value_field": "id",
+                "display_field": "name",
+                "desc": "widgets in the chosen category",
+            },
+        };
     }
 
     private {
@@ -146,10 +163,14 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("narrowed operation variants", \variantTest());
         addTestCase("operation id drift", \driftTest());
         addTestCase("reference data", \referenceDataTest());
+        addTestCase("scoped reference data", \scopedReferenceDataTest());
+        addTestCase("nested reference data fields", \nestedReferenceDataTest());
+        addTestCase("a value that follows another option", \valueFromTest());
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("action mutation effects", \actionMutationEffectTest());
         addTestCase("provider execution", \providerExecutionTest());
         addTestCase("provider paths", \providerPathTest());
+        addTestCase("a header the connection owns", \connectionHeaderTest());
         addTestCase("schema drift", \driftReportTest());
 
         set_return_value(main());
@@ -637,6 +658,146 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
             (manifest, {"cat": RefData.category}));
     }
 
+    scopedReferenceDataTest() {
+        list<hash<RestSchemaActionInfo>> manifest = (
+            entry("list-widgets", "GET", "/widgets"),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"tags": <RestSchemaFieldOverlayInfo>{
+                    "element_ref_data": "widget",
+                    "depends_on": ("category",),
+                }},
+            }),
+        );
+        RestSchemaActionSet aset = makeSet(manifest, ScopedRefData);
+        assertEq(("list-widgets", "create-widget"), aset.getActionNames());
+
+        FakeRestClient rest();
+        RestSchemaActionSetDataProvider root(aset, rest);
+        AbstractDataProvider create = root.getChildProviderEx("create-widget");
+
+        # the value the dropdown is scoped by reaches the listing action
+        rest.push_response({"body": {"data": ({"id": "w1", "name": "Hammer"},)}});
+        *list<hash<AllowedValueInfo>> values = create.getReferenceData("widget", {"category": "tools"});
+        assertEq(1, values.size());
+        assertEq("w1", values[0].value);
+        assertEq("Hammer", values[0].display_name);
+        assertRegex("category=tools", rest.last().path);
+        assertRegex("limit=100", rest.last().path, "fixed options are sent as well");
+
+        # until it has one, the dropdown is empty rather than listing widgets from every category
+        rest.reset();
+        assertNothing(create.getReferenceData("widget", {}));
+        assertNothing(create.getReferenceData("widget"));
+        assertThrows("TEST-ERROR", "no requests were recorded", \rest.last());
+
+        # the listing action has to declare the option a value is forwarded into
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "forwards a value into option", \makeSet(),
+            (manifest, {"widget": cast<hash<RestSchemaReferenceDataInfo>>(ScopedRefData.widget
+                + {"options_from": {"no_such_option": "category"}})}));
+
+        # fixing an option and forwarding a value into it would let one silently win
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "both fixes option", \makeSet(),
+            (manifest, {"widget": cast<hash<RestSchemaReferenceDataInfo>>(ScopedRefData.widget
+                + {"options": {"category": "tools"}})}));
+
+        # an action offering a dropdown scoped by a value it does not have would show an empty list and
+        # no reason for it, so it is rejected when the set is built
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "could never be populated", \makeSet(), ((
+            entry("list-widgets", "GET", "/widgets"),
+            entry("get-widget", "GET", "/widgets/{widget_id}", {
+                "fields": {"widget_id": <RestSchemaFieldOverlayInfo>{"ref_data": "widget"}},
+            }),
+        ), ScopedRefData));
+    }
+
+    nestedReferenceDataTest() {
+        # a record that carries its identity below the top level: a Bitbucket workspace membership is
+        # {user: {uuid, display_name}}, and a dropdown that could only read top-level fields would have
+        # nothing to offer
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = {
+            "category": <RestSchemaReferenceDataInfo>{
+                "name": "category",
+                "action": "list-categories",
+                "records_path": "data",
+                "value_field": "owner.id",
+                "display_field": "owner.name",
+                "desc": "categories by owner",
+            },
+        };
+        RestSchemaActionSet aset = makeSet((
+            entry("list-categories", "GET", "/categories"),
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {"category": <RestSchemaFieldOverlayInfo>{"ref_data": "category"}},
+            }),
+        ), refdata);
+
+        FakeRestClient rest();
+        RestSchemaActionSetDataProvider root(aset, rest);
+        AbstractDataProvider create = root.getChildProviderEx("create-widget");
+        rest.push_response({"body": {"data": (
+            {"owner": {"id": "u1", "name": "Ada"}},
+            {"owner": {"id": "u2"}},
+            {"owner": {"id": "u3", "name": "Grace"}},
+            # a record that does not carry the path at all is skipped, not reported as an empty row
+            {"other": {"id": "u4"}},
+        )}});
+        *list<hash<AllowedValueInfo>> values = create.getReferenceData("category");
+        assertEq(3, values.size());
+        assertEq("u1", values[0].value);
+        assertEq("Ada", values[0].display_name);
+        # a missing display falls back to the value, as it does for a top-level field
+        assertEq("u2", values[1].display_name);
+        assertEq("u3", values[2].value);
+        assertEq("Grace", values[2].display_name);
+    }
+
+    valueFromTest() {
+        # the shape of the real case: an API that wants the identity of the object being changed in both
+        # the URL and the body, where the two must always be equal
+        list<hash<RestSchemaActionInfo>> manifest = (
+            entry("update-widget", "PUT", "/widgets/{widget_id}", {
+                "response_code": "200",
+                "fields": {
+                    "body.name": <RestSchemaFieldOverlayInfo>{"value_from": "widget_id"},
+                },
+            }),
+        );
+        RestSchemaActionSet aset = makeSet(manifest);
+        RestSchemaActionOperation op = aset.getOperationEx("update-widget");
+
+        # the followed value is not something the user is asked for
+        hash<string, AbstractDataField> fields = op.getRequestFields();
+        assertTrue(exists fields.widget_id);
+        assertNothing(fields.name, "a value that follows another option is not published as one");
+
+        # ... but it is sent, carrying what the option it follows carries
+        hash<auto> wire = op.unflatten({"widget_id": "w1"});
+        assertEq({"widget_id": "w1"}, wire.path_vars);
+        assertEq("w1", wire.req.body.name);
+
+        # an unsupplied source sends nothing rather than an empty value
+        RestSchemaActionSet oset = makeSet((
+            entry("create-widget", "POST", "/widgets", {
+                "fields": {
+                    "status": <RestSchemaFieldOverlayInfo>{"value_from": "name"},
+                },
+            }),
+        ));
+        RestSchemaActionOperation oop = oset.getOperationEx("create-widget");
+        assertNothing(oop.unflatten({}).req.body.status);
+        assertEq("thing", oop.unflatten({"name": "thing"}).req.body.status);
+
+        # following an option the action does not have could never be filled in
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which this action does not declare", \makeSet(), ((
+            entry("update-widget", "PUT", "/widgets/{widget_id}", {
+                "response_code": "200",
+                "fields": {
+                    "body.name": <RestSchemaFieldOverlayInfo>{"value_from": "no_such_option"},
+                },
+            }),
+        ),));
+    }
+
     actionRegistrationTest() {
         RestSchemaActionSet aset = makeSet((
             entry("get-status", "GET", "/status"),
@@ -736,6 +897,71 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         rest.reset();
         rest.push_response({"throw_status": 404, "body": {"message": "no such widget"}});
         assertThrows("REST-RESPONSE-ERROR", "HTTP 404", \get.doRequest(), {"widget_id": "gone"});
+    }
+
+    connectionHeaderTest() {
+        # A header the connection owns is dropped from the action, which is the point: nobody should be
+        # asked for an API key or a tenant on every call.  The schema may still declare it required, so
+        # the request is filled in from the client's own default headers when it is built.
+        hash<auto> overlay = {
+            "fields": {
+                "X-Tenant-Id": <RestSchemaFieldOverlayInfo>{
+                    "ignore": True,
+                    "connection_option": "tenant_id",
+                },
+                "X-Request-Id": <RestSchemaFieldOverlayInfo>{"ignore": True},
+            },
+        };
+        RestSchemaActionSet aset = makeSet((
+            entry("get-tenant-status", "GET", "/tenant-status", overlay),
+        ));
+        RestSchemaActionOperation op = aset.getOperationEx("get-tenant-status");
+        assertFalse(op.getRequestFields().hasKey("X-Tenant-Id"),
+            "a connection-owned header is not an action option");
+        assertFalse(op.getRequestFields().hasKey("X-Request-Id"));
+
+        list<hash<RestSchemaConnectionHeaderInfo>> conn_hdrs = op.getConnectionHeaders();
+        assertEq(2, conn_hdrs.size());
+        assertEq("X-Tenant-Id", conn_hdrs[0].wire_name);
+        assertTrue(conn_hdrs[0].required, "the schema still requires it, whoever supplies it");
+        assertEq("tenant_id", conn_hdrs[0].connection_option);
+        assertEq("X-Request-Id", conn_hdrs[1].wire_name);
+        assertFalse(conn_hdrs[1].required);
+        assertNothing(conn_hdrs[1].connection_option);
+
+        # a connection that supplies the header sends it, however either side spells it
+        FakeRestClient rest();
+        rest.addDefaultHeaders({"x-tenant-id": "t-1"});
+        RestSchemaActionSetDataProvider root(aset, rest);
+        AbstractDataProvider status = root.getChildProviderEx("get-tenant-status");
+        rest.push_response({"body": {"status": "ok"}});
+        hash<auto> no_args = {};
+        assertEq("ok", status.doRequest(no_args).status);
+        assertEq("t-1", rest.last().headers{"X-Tenant-Id"},
+            "the header travels under the name the schema declares, from the value the client holds");
+
+        # ... and a connection that does not supply it says so, naming the option to set, rather than
+        # failing as a schema type error about a header no action offers
+        FakeRestClient bare();
+        RestSchemaActionSetDataProvider bare_root(aset, bare);
+        AbstractDataProvider bare_status = bare_root.getChildProviderEx("get-tenant-status");
+        assertThrows("REST-CONNECTION-OPTION-ERROR", "set the \"tenant_id\" option on the connection",
+            \bare_status.doRequest(), no_args);
+
+        # the optional one is simply left out: an idempotency key no connection sets is not an error
+        RestSchemaActionSet opt_only = makeSet((
+            entry("get-tenant-status", "GET", "/tenant-status", {
+                "fields": {"X-Request-Id": <RestSchemaFieldOverlayInfo>{"ignore": True}},
+            }),
+        ));
+        FakeRestClient opt_rest();
+        opt_rest.addDefaultHeaders({"X-Tenant-Id": "t-2"});
+        RestSchemaActionSetDataProvider opt_root(opt_only, opt_rest);
+        AbstractDataProvider opt_status = opt_root.getChildProviderEx("get-tenant-status");
+        opt_rest.push_response({"body": {"status": "ok"}});
+        opt_status.doRequest({"X-Tenant-Id": "t-2"});
+        assertNothing(opt_rest.last().headers{"X-Request-Id"},
+            "an optional header nobody supplies is left out rather than reported");
     }
 
     providerPathTest() {

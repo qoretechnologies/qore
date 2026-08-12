@@ -1,0 +1,272 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ConfluenceDataProvider.qm Qore user module providing a data provider API for Confluence
+
+/*  ConfluenceDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires ConfluenceRestClient
+%requires RestClientIo
+
+%requires json
+
+
+module ConfluenceDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Confluence Cloud";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new ConfluenceDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ConfluenceDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Confluence",
+            "short_desc": "Work with Confluence Cloud pages, blog posts, spaces and tasks",
+            "desc": "Provides access to [Confluence Cloud](https://www.atlassian.com/software/confluence), "
+                "Atlassian's team documentation and knowledge base.
+
+"
+                "**Common use cases**:
+"
+                "- **Pages**: create, read, update, rename and delete pages, and list them by space or "
+                "label
+"
+                "- **Blog posts**: the same, for blog posts
+"
+                "- **Spaces**: read the spaces on the site
+"
+                "- **Tasks**: read the checkboxes inside content, and complete or reopen them
+"
+                "- **Content**: list labels and attachments
+
+"
+                "**The site is the connection**: set `cloud_id` for the OAuth2 flow or `site` with an API "
+                "token, and the target URL is derived from whichever is set.
+
+"
+                "Confluence is a trademark of Atlassian Pty Ltd.",
+            "scheme": "confluence",
+            "logo": Priv::ConfluenceLogo,
+            "logo_file_name": "confluence-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Documents,),
+        });
+
+        # register every action in the manifest
+        RestSchemaActionSet action_set = ConfluenceSchema::getActionSet();
+        action_set.registerActions(ConfluenceDataProvider::AppName);
+
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(ConfluenceDataProvider::AppName,
+            "/" + ConfluenceDataProvider::TablesChildName, action_set, ConfluenceRecordTables::Tables,
+            ConfluenceRecordTables::RecordActionIds, {
+                "groups": (ConfluenceRecordTables::RecordGroup,),
+            });
+
+        # register the polling event actions
+        foreach hash<auto> i in (ConfluenceEventsDataProvider::EventMap.pairIterator()) {
+            Class cls = i.value;
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": ConfluenceDataProvider::AppName,
+                "path": "/" + ConfluenceDataProvider::EventsChildName + "/" + i.key,
+                "action": i.key,
+                "display_name": cls.getConstant("DisplayName").getValue(),
+                "short_desc": cls.getConstant("ShortDesc").getValue(),
+                "desc": cls.getConstant("Desc").getValue(),
+                "action_code": DPAT_EVENT,
+                "action_val": i.key,
+                "groups": ("Events",),
+            });
+        }
+    };
+}
+
+/** @mainpage ConfluenceDataProvider Module
+
+    @tableofcontents
+
+    @section confluencedataproviderintro ConfluenceDataProvider Introduction
+
+    The %ConfluenceDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [Confluence Cloud](https://www.atlassian.com/software/confluence)'s v2 REST API.
+
+    @section confluencedataprovider_generated Generated, Not Hand-Written
+
+    The actions this application exports are **generated from Confluence's own OpenAPI 3 description** by
+    the @ref restschemaactionsintro "RestSchemaActions" module; the presentation comes from an
+    application-owned manifest and UX overlay in
+    @ref ConfluenceDataProvider::ConfluenceManifest "ConfluenceManifest".
+
+    @section confluencedataprovider_pinned The Pinned Schema
+
+    The schema is committed to this module rather than fetched at run time, so an upstream change cannot
+    alter the contract of an action that existing workflows already call.  It is imported with
+    \c tools/rest-schema-import.qr from \c qlib/ConfluenceDataProvider/confluence-import.yaml.
+
+    @section confluencedataprovider_actions Actions
+
+    22 actions are exported, in these groups:
+
+    |!Group|!What it covers
+    |Pages|pages, and the listings that find them by space or label
+    |Blog Posts|blog posts, and the same listings
+    |Spaces|the spaces on the site
+    |Tasks|the checkboxes inside content
+    |Content|labels and attachments
+
+    Two of them - \c getLabels and \c getAttachments - are exported that the superseded application did
+    not, because it offered a label dropdown and an attachment trigger backed by endpoints it never
+    exported.
+
+    @section confluencedataprovider_version Updating Needs the Current Version
+
+    Confluence uses optimistic locking.  An update must send \c version.number **one greater** than the
+    version it is changing, and must resend \c title, \c body and \c status even when they are not
+    changing, so every update is a read-modify-write.  **Rename Page** exists precisely because renaming
+    through **Update Page** would otherwise mean reading and resending the whole body.
+
+    The identity of the object appears in both the URL and the request body, and the two must be equal; the
+    body copy follows the URL rather than being asked for twice.
+
+    @section confluencedataprovider_pagination Paging Through a Listing
+
+    A v2 collection returns \c {results, _links}.  There is no total and no page number: \c _links.next is
+    a relative URL carrying an opaque cursor, and its absence is what says the collection is exhausted.
+    Take the \c cursor argument out of it and pass it to the same action.
+
+    @section confluencedataprovider_records Record-Based Tables
+
+    Six of Confluence's collections are exposed under \c tables: \c pages, \c blogposts and \c tasks for
+    record-based reading and writing, and \c spaces, \c labels and \c attachments for reading.
+
+    The last three are **read only**: a space is created through a long-running job, a label is applied to
+    content rather than created on its own, and an attachment is uploaded to a page, so this application
+    exports no write for any of them and those tables declare none rather than offering an action that could
+    only fail.
+
+    Each table takes the standard search expressions.  What the listing's own arguments can express is sent
+    to the service, and the rest is evaluated against each record as it arrives; the listing is paged until
+    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+
+    The tables declare \c supports_search_expressions and **not** \c supports_native_search: this API has no
+    filter expression language, so a search does not happen entirely on the server, and each operator says
+    for itself whether the service can evaluate it.
+
+    A task is created by writing a checkbox into a page and cannot be created or deleted through the API, so
+    that table reads and updates only.  An update carries the record's current \c version, which is
+    Confluence's optimistic locking.
+
+    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    and their options are resolved from the chosen table rather than declared once for the application.
+
+    @section confluencedataprovider_events Events
+
+    Three polling events are offered: a new page, a new blog post and a new attachment.  Confluence Cloud
+    does have webhooks, but registering one needs a Connect or Forge app installed on the site - an
+    administrator action a connection cannot perform - so these poll, with a **timestamp cursor** rather
+    than the bounded in-memory set of delivered identities the superseded application used.
+
+    @section confluencedataprovider_examples Examples
+
+    @subsection confluencedataprovider_ex_provider Getting the Data Provider
+
+    @code{.py}
+%requires ConnectionProvider
+%requires ConfluenceDataProvider
+
+AbstractDataProvider conf = get_connection("confluence").getDataProvider();
+    @endcode
+
+    @subsection confluencedataprovider_ex_create Creating a Page
+
+    @code{.py}
+hash<auto> page = conf.getChildProviderEx("createPage").doRequest({
+    "spaceId": "65537",
+    "title": "Release notes",
+    "body": {
+        "representation": "storage",
+        "value": "<p>Shipped today.</p>",
+    },
+});
+printf("created page %y: %s\n", page.id, page._links.webui);
+    @endcode
+
+    @subsection confluencedataprovider_ex_update Updating a Page
+
+    An update is a read-modify-write, because the version has to be one greater than the current one:
+
+    @code{.py}
+hash<auto> current = conf.getChildProviderEx("getPageById").doRequest({
+    "id": page.id,
+    "body-format": "storage",
+});
+
+conf.getChildProviderEx("updatePage").doRequest({
+    "id": current.id,
+    "status": current.status,
+    "title": current.title,
+    "body": {"representation": "storage", "value": "<p>Shipped today. Twice.</p>"},
+    "version": {"number": current.version.number + 1, "message": "amended"},
+});
+    @endcode
+
+    @subsection confluencedataprovider_ex_page Paging Through a Listing
+
+    @code{.py}
+AbstractDataProvider list_pages = conf.getChildProviderEx("getPages");
+
+*string cursor;
+list<auto> all = ();
+while (True) {
+    hash<auto> res = list_pages.doRequest({"limit": 250} + (cursor ? {"cursor": cursor} : {}));
+    all += res.results;
+    *string next = res."_links".next;
+    if (!next.val()) {
+        break;
+    }
+    cursor = decode_url((next =~ x/[?&]cursor=([^&]+)/)[0]);
+}
+printf("%d pages\n", all.size());
+    @endcode
+
+    @section confluencedataproviderrelnotes Release Notes
+
+    @subsection confluencedataproviderv1_0 ConfluenceDataProvider v1.0
+    - the initial version of the %ConfluenceDataProvider module
+*/
+
+#! contains all public definitions in the ConfluenceDataProvider module
+public namespace ConfluenceDataProvider {
+}

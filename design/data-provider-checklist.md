@@ -28,6 +28,8 @@ its overlay, not by module code).
 
 ### OAuth2 (if applicable)
 - [ ] `required_options` names the OAuth2 option set as an alternative — this is what declares OAuth2 support and lets the platform supply the client ID and secret from its API servers
+- [ ] **The OAuth2 option set is named FIRST.** If an app can support OAuth2 then the authorization-code flow is the connection's default, and an API key or token is the fallback for a credential not tied to a user's authorization - so write `"oauth2_client_id,oauth2_client_secret|token"`, never `"token|oauth2_client_id,oauth2_client_secret"`. Ordering is presentation only: the required-option check accepts the *first satisfied* alternative, so reordering can never invalidate an existing connection. Where the app needs a site or tenant identifier to authorize, it belongs in the OAuth2 alternative (`"cloud_id,oauth2_client_id,oauth2_client_secret|site"`), not on its own.
+- [ ] Checked what the platform already publishes: `qrest dataprovider/apps/<App>/oauth2_clients`. An entry there means OAuth2 is available for the app and the client ID and secret come from the API servers. Note its own `required_options` - a per-instance app (GitLab) publishes a client requiring `hostname`, so that option needs a `default_value` and `preselected: True` or the flow cannot be offered when the form opens.
 - [ ] `oauth2_client_id` / `oauth2_client_secret` are **not** hard-coded or defaulted in the module (they come from the API servers, so the secret never reaches the instance)
 - [ ] `oauth2_grant_type` **defaulted** — without one the flow never runs and the connection silently has no token (symptom: ping returns HTTP 401)
 - [ ] `oauth2_auth_url` / `oauth2_token_url` defaulted and verified against a connection known to work — services often run more than one OAuth2 flow with different endpoints
@@ -51,6 +53,17 @@ its overlay, not by module code).
 
 ### Registration
 - [ ] Factory registered in `qlib/DataProvider/DataProvider.qc` -> `FactoryMap`
+- [ ] **Presentation catalog committed** at `qlib/<Module>/i18n/data-provider.<base64 app name>/root.json`.
+      Every app that registers presentation strings owns one, and `examples/test/qlib/DataProvider/Presentation.qtest`
+      fails with `MISSING: owner module "<Module>" catalog domain "data-provider.<b64>"` without it. Generate
+      it - never hand-write it - with the **repo's** tool, which is byte-reproducible:
+      ```
+      QORE_MODULE_DIR=build/qlib-qmod:build/modules/i18n:build/modules/json:qlib LD_LIBRARY_PATH=build \
+        build/qore bin/qore-data-provider-i18n -C -o qlib/<Module>/i18n -m <Module> --owner <Module>
+      ```
+      Regenerate whenever a `display_name`, `short_desc` or `desc` changes; the test compares the committed
+      tree against what the module currently produces. Note the check only reaches an app once its factory is
+      in `FactoryMap`, so a module missing both fails silently until the factory is added.
 - [ ] `registerApp()` called with correct fields
 - [ ] `groups` includes at least one `AppGroup` enum value (enforced at runtime by `RequiredAppKeys`)
 - [ ] `groups` uses only `AppGroup` enum values from `qlib/DataProvider/AppGroup.qc` (not raw strings)

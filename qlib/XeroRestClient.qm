@@ -1,0 +1,622 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file XeroRestClient.qm Qore user module for calling Xero REST API services
+
+/*  XeroRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module XeroRestClient {
+    version = "1.0";
+    desc = "User module for calling Xero REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("xero", XeroRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage XeroRestClient Module
+
+    @tableofcontents
+
+    @section xerorestclientintro XeroRestClient Introduction
+
+    The %XeroRestClient module provides an API for calling [Xero](https://www.xero.com)'s REST API services.
+
+    To use this module, use \c "%requires XeroRestClient" in your code.
+
+    All the public symbols in the module are defined in the XeroRestClient namespace.
+
+    The main classes are:
+    - @ref XeroRestClient::XeroRestClient "XeroRestClient": the REST client for the Xero API
+    - @ref XeroRestClient::XeroRestClientIo "XeroRestClientIo": the same client on the asynchronous I/O
+      transport, which is what data providers use
+    - @ref XeroRestClient::XeroRestConnection "XeroRestConnection": a connection object to Xero (based on
+      the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section xerorestclient_tenant One Credential, Many Organisations
+
+    A Xero credential is not scoped to an organisation.  It is granted access to one or more of them, and
+    **every** API call has to say which one it means by sending \c Xero-Tenant-Id; a call without it is
+    rejected whatever the credential can reach.
+
+    The tenant therefore belongs to the connection rather than to an action: a connection is a connection to
+    one organisation's books, and asking for the tenant on every action would let a workflow write an
+    invoice into the wrong company.  \c GET /connections lists what a credential can reach, which is why it
+    is also the ping - it is the one call that needs no tenant.
+
+    The organisation cannot be known before the credential exists, so it is **discovered from the credential
+    itself** as soon as one is issued: every path that completes an OAuth2 authorization asks
+    \c GET /connections and persists \c tenant_id onto the connection.  A user therefore never has to go and
+    look up an organisation ID, which is the whole point - an authorized connection is a working one.  A
+    credential granted access to more than one organisation gets the first one Xero lists and the others are
+    logged, so \c tenant_id can be set explicitly to one of those instead; a \c tenant_id that is already set
+    is never overwritten, and a refresh never repeats the call.
+
+    @section xerorestclient_paths One Host, Several APIs
+
+    Xero serves each of its APIs from a different path prefix on the same host:
+
+    |!API|!Prefix
+    |Accounting|\c /api.xro/2.0
+    |Projects|\c /projects.xro/2.0
+    |Payroll (AU)|\c /payroll.xro/1.0
+    |Payroll (NZ, UK)|\c /payroll.xro/2.0
+
+    So the client's URL is the bare host and the prefix comes from whichever API a request belongs to.  Note
+    that Australian payroll is a different **API version** from the other two, not merely a different path;
+    see @ref XeroRestClient::XeroRestClientBase::getPayrollPrefix() "getPayrollPrefix()".
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires XeroRestClient
+
+XeroRestClientIo xero({"token": ENV.XERO_TOKEN, "tenant_id": ENV.XERO_TENANT});
+hash<auto> result = xero.get("/api.xro/2.0/Contacts");
+printf("%d contacts\n", result.body.Contacts.size());
+    @endcode
+
+    @section xerorestclientrelnotes Release Notes
+
+    @subsection xerorestclientv1_0 XeroRestClient v1.0
+    - the initial version of the %XeroRestClient module
+*/
+
+#! the XeroRestClient namespace contains all the objects in the XeroRestClient module
+public namespace XeroRestClient {
+#! Common base class for XeroRestClient functionality
+public class XeroRestClientBase {
+    public {
+        #! The Xero API URL
+        /** Every Xero API is served from this host; the path prefix is what separates them.
+        */
+        const DefaultUrl = "https://api.xero.com";
+
+        #! The path prefix of the Accounting API
+        const AccountingPrefix = "/api.xro/2.0";
+
+        #! The path prefix of the Projects API
+        const ProjectsPrefix = "/projects.xro/2.0";
+
+        #! The header naming the organisation a request applies to
+        const TenantHeader = "Xero-Tenant-Id";
+
+        #! Payroll region: Australia
+        const RegionAu = "au";
+
+        #! Payroll region: New Zealand
+        const RegionNz = "nz";
+
+        #! Payroll region: United Kingdom
+        const RegionUk = "uk";
+
+        #! The payroll regions Xero serves, and the API version each is served at
+        /** Australia is on \c payroll.xro/1.0 and the other two on \c payroll.xro/2.0, and the two versions
+            do not describe the same operations - so the region selects an API, not a parameter.
+        */
+        const PayrollPrefixes = {
+            RegionAu: "/payroll.xro/1.0",
+            RegionNz: "/payroll.xro/2.0",
+            RegionUk: "/payroll.xro/2.0",
+        };
+
+        #! Default OAuth2 authorization request URL
+        const DefaultAuthUrl = "https://login.xero.com/identity/connect/authorize";
+
+        #! Default OAuth2 token request URL
+        const DefaultTokenUrl = "https://identity.xero.com/connect/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes
+        /** \c offline_access is required, or the connection stops working when the access token expires.
+        */
+        const DefaultScopes = (
+            "openid", "email", "profile", "offline_access",
+            "accounting.settings", "accounting.contacts", "accounting.attachments",
+            "accounting.transactions", "accounting.reports.read", "accounting.journals.read",
+            "projects",
+            "payroll.employees", "payroll.payruns", "payroll.payslip", "payroll.timesheets",
+            "payroll.settings",
+        );
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default authorization token type
+        const DefaultTokenType = "Bearer";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! The path listing the organisations a credential can reach
+        /** The one call that needs no tenant, and the one that says which tenants the credential can reach.
+        */
+        const ConnectionsPath = "/connections";
+
+        #! Default ping path
+        /** The one call that needs no tenant, and the one that says which tenants the credential can reach.
+        */
+        const DefaultPingPath = ConnectionsPath;
+
+        #! Xero's maximum page size for a listing
+        const MaxPageSize = 1000;
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "token_type": DefaultTokenType,
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns the path prefix of the payroll API for the given region
+    /** @param region \c "au", \c "nz" or \c "uk"
+
+        @return the path prefix
+
+        @throw XERO-REGION-ERROR the region is not one Xero serves payroll for
+    */
+    static string getPayrollPrefix(string region) {
+        *string rv = PayrollPrefixes{region.lwr()};
+        if (!rv.val()) {
+            throw "XERO-REGION-ERROR", sprintf("payroll region %y is unknown; Xero serves payroll for %y",
+                region, sort(keys PayrollPrefixes));
+        }
+        return rv;
+    }
+
+    #! Returns options for the XeroRestClient constructors
+    /** @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+
+        @throw XERO-REGION-ERROR \c payroll_region is set to a region Xero does not serve
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows to
+        # that type, and adding a hash-valued or list-valued default would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        # the tenant travels as a header on every call, so it is merged into the client's headers rather
+        # than passed to each request; a caller adding a header of its own does not drop it
+        if (opts.tenant_id.val()) {
+            opts.headers = {TenantHeader: opts.tenant_id} + (opts.headers ?? {});
+        }
+        # checked here rather than at the first payroll call, so that a typo is reported when the
+        # connection is made
+        if (opts.payroll_region.val()) {
+            XeroRestClientBase::getPayrollPrefix(opts.payroll_region);
+        }
+
+        if (opts.oauth2_client_id.val()) {
+            if (!opts.oauth2_grant_type.val()) {
+                opts.oauth2_grant_type = DefaultGrantType;
+            }
+            if (!opts.oauth2_auth_url.val()) {
+                opts.oauth2_auth_url = DefaultAuthUrl;
+            }
+            if (!opts.oauth2_token_url.val()) {
+                opts.oauth2_token_url = DefaultTokenUrl;
+            }
+            if (!opts.oauth2_scopes) {
+                opts.oauth2_scopes = DefaultScopes;
+            }
+        }
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        # these are the connection's, not the client's
+        return opts - ("tenant_id", "payroll_region");
+    }
+
+    #! Returns @ref True if the given request headers already name the organisation
+    /** @param hdr a hash of default request headers
+
+        @return @ref True if \c Xero-Tenant-Id is present, in either spelling a client stores it in
+    */
+    static bool hasTenantHeader(*hash<auto> hdr) {
+        return hdr{TenantHeader}.val() || hdr{TenantHeader.lwr()}.val() ? True : False;
+    }
+
+    #! Returns the connection options a @c "/connections" response names
+    /** A credential granted access to more than one organisation gets the first one Xero lists, and
+        the others are logged so that \c tenant_id can be set explicitly to one of them instead.
+
+        @param body the response body of @ref ConnectionsPath
+        @param logger an optional logger, used to report the organisation chosen and the alternatives
+
+        @return \c tenant_id, or @ref NOTHING when the credential can reach no organisation
+    */
+    static *hash<auto> getTenantOptions(auto body, *LoggerInterface logger) {
+        list<auto> all = body.typeCode() == NT_LIST ? body : ();
+        list<auto> conns = (map $1, all, $1.tenantId.val()) ?? ();
+        if (!conns) {
+            if (logger) {
+                logger.warn("Xero: the credential can reach no organisation; %y returned %y",
+                    ConnectionsPath, body);
+            }
+            return;
+        }
+        string tenant_id = conns[0].tenantId;
+        if (logger) {
+            if (conns.size() > 1) {
+                logger.info("Xero: working in organisation %y (tenant_id %y); the credential can also reach "
+                    "%y - set \"tenant_id\" explicitly to work in one of those instead",
+                    conns[0].tenantName, tenant_id,
+                    (map sprintf("%s (%s)", $1.tenantName, $1.tenantId), conns, $# > 0));
+            } else {
+                logger.info("Xero: working in organisation %y (tenant_id %y)", conns[0].tenantName, tenant_id);
+            }
+        }
+        return {"tenant_id": tenant_id};
+    }
+
+    #! Discovers the connection options a newly issued credential implies
+    /** A Xero credential is not scoped to an organisation, so the organisation cannot be known until
+        the credential exists: it is discovered here, once, from the credential itself, and persisted
+        on the connection.  This is what makes an authorized connection a working one without asking
+        the user for a value they would have to go and look up.
+
+        @param token the access token just issued
+        @param logger an optional logger, used to report the organisation chosen and the alternatives
+
+        @return \c tenant_id, or @ref NOTHING when the credential can reach no organisation
+
+        @throw REST-RESPONSE-ERROR the call failed; callers treat that as non-fatal
+    */
+    static *hash<auto> discoverTenantOptions(string token, *LoggerInterface logger) {
+        RestClientIo::RestClientIo rest({
+            "url": DefaultUrl,
+            "data": DefaultData,
+            "token": token,
+            "token_type": DefaultTokenType,
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restDoRequest("GET", ConnectionsPath, NOTHING, {
+            "Accept": MimeTypeJson,
+        });
+        return XeroRestClientBase::getTenantOptions(resp.body, logger);
+    }
+}
+
+#! Xero REST client
+public class XeroRestClient inherits RestClient::RestClient, XeroRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(XeroRestClientBase::getOptions(opts), do_not_connect) {
+    }
+
+    #! Returns options to update after an OAuth2 login, discovering the organisation on the first one
+    /** The organisation a credential works in does not change, so it is discovered on the first
+        authorization only; a refresh does not pay for the call again.
+    */
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h, *bool refresh) {
+        *hash<auto> new_opts = RestClient::getUpdateOptionsAfterLogin(h, refresh);
+        if (refresh || !h.access_token.val() || XeroRestClientBase::hasTenantHeader(getDefaultHeaders())) {
+            return new_opts;
+        }
+        try {
+            if (*hash<auto> tenant = discoverTenant(h.access_token)) {
+                # so that this client can be used immediately, not only the next one made from the
+                # options this returns
+                addDefaultHeaders({TenantHeader: tenant.tenant_id});
+                new_opts += tenant;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a failed discovery must not break an otherwise successful authorization
+            error("Xero: cannot determine the organisation to work in: %s: %s", ex.err, ex.desc);
+        }
+        return new_opts;
+    }
+
+    #! Discovers the organisation a newly issued credential works in
+    /** The one call the discovery makes; an extension point for reaching Xero another way.
+    */
+    private *hash<auto> discoverTenant(string token) {
+        return XeroRestClientBase::discoverTenantOptions(token, getLogger());
+    }
+}
+
+#! Xero REST client for non-blocking I/O
+public class XeroRestClientIo inherits RestClientIo::RestClientIo, XeroRestClientBase {
+    public {
+        #! The payroll region this client's connection names, if any
+        *string payroll_region;
+    }
+
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(XeroRestClientBase::getOptions(opts), shared_mgr) {
+        if (opts.payroll_region.val()) {
+            payroll_region = opts.payroll_region.lwr();
+        }
+    }
+
+    #! Returns options to update after an OAuth2 login, discovering the organisation on the first one
+    /** The organisation a credential works in does not change, so it is discovered only when this
+        client does not already send @ref XeroRestClientBase::TenantHeader "Xero-Tenant-Id" - which is
+        exactly the first authorization; a refresh does not pay for the call again.
+    */
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
+        *hash<auto> new_opts = RestClientIo::getUpdateOptionsAfterLogin(h);
+        if (!h.access_token.val() || XeroRestClientBase::hasTenantHeader(getDefaultHeaders())) {
+            return new_opts;
+        }
+        try {
+            if (*hash<auto> tenant = discoverTenant(h.access_token)) {
+                # so that this client can be used immediately, not only the next one made from the
+                # options this returns
+                addDefaultHeaders({TenantHeader: tenant.tenant_id});
+                new_opts += tenant;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a failed discovery must not break an otherwise successful authorization
+            log(LoggerLevel::ERROR, "Xero: cannot determine the organisation to work in: %s: %s", ex.err,
+                ex.desc);
+        }
+        return new_opts;
+    }
+
+    #! Discovers the organisation a newly issued credential works in
+    /** The one call the discovery makes; an extension point for reaching Xero another way.
+    */
+    private *hash<auto> discoverTenant(string token) {
+        return XeroRestClientBase::discoverTenantOptions(token, getLogger());
+    }
+
+    #! Returns the path prefix of the payroll API for this connection's region
+    /** @throw XERO-REGION-ERROR the connection names no payroll region
+    */
+    string getPayrollPrefix() {
+        if (!payroll_region.val()) {
+            throw "XERO-REGION-ERROR", "this connection names no payroll region, so it cannot reach the "
+                "payroll API; set \"payroll_region\" to \"au\", \"nz\" or \"uk\"";
+        }
+        return XeroRestClientBase::getPayrollPrefix(payroll_region);
+    }
+}
+
+#! Class for Xero REST connections
+public class XeroRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Xero connection URL
+        const DefaultConnectionUrl = "xero://api.xero.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Xero REST Connection",
+            "short_desc": "A connection to the Xero REST API",
+            "desc": "A connection to [Xero](https://www.xero.com) for contacts, invoices, payments, bank "
+                "transactions, quotes, projects and payroll employees.\n\n"
+                "**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and "
+                "`oauth2_client_secret` from an app registered in the Xero developer portal. The "
+                "`offline_access` scope is requested by default, without which the connection stops "
+                "working when the access token expires.\n\n"
+                "**`tenant_id` names the organisation.** A Xero credential can reach several organisations "
+                "and every call has to say which one it means, so the tenant belongs here rather than to "
+                "each action - a connection is a connection to one organisation's books. It is filled in "
+                "automatically when the connection is authorized, from `GET /connections` - which lists "
+                "what the credential can reach and is also the ping.\n\n"
+                "**`payroll_region`** selects the payroll API: Australia is served at `payroll.xro/1.0` "
+                "and New Zealand and the United Kingdom at `payroll.xro/2.0`, which are different API "
+                "versions rather than the same one at different addresses.\n\n"
+                "Xero is a trademark of Xero Limited.",
+            "cls": Class::forName("XeroRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "xero": True,
+            },
+            "base_scheme_map": {
+                "https": "xero",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultGrantType,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultTokenUrl,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultScopes,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultPingPath,
+                },
+                "token_type": RestConnection::ConnectionScheme.options."token_type"
+                + <ConnectionOptionInfo>{
+                    "default_value": XeroRestClientBase::DefaultTokenType,
+                },
+                "tenant_id": <ConnectionOptionInfo>{
+                    "display_name": "Tenant ID",
+                    "short_desc": "The Xero organisation this connection works in",
+                    "type": "string",
+                    "desc": "The ID of the Xero organisation this connection works in, sent as "
+                        "`Xero-Tenant-Id` with every call.\n\n"
+                        "**This is filled in automatically** when the connection is authorized, so it "
+                        "normally needs no attention. A credential can reach several organisations, and a "
+                        "call that does not name one is rejected; the first organisation `GET /connections` "
+                        "lists is used, and the others are logged. Set this to work in one of those instead "
+                        "- a value set here is never overwritten.",
+                    "preselected": True,
+                },
+                "payroll_region": <ConnectionOptionInfo>{
+                    "display_name": "Payroll Region",
+                    "short_desc": "Which regional payroll API to use",
+                    "type": "string",
+                    "desc": "Which regional payroll API the employee actions use.\n\n"
+                        "Xero has no single payroll API: Australia is served at `payroll.xro/1.0` and New "
+                        "Zealand and the United Kingdom at `payroll.xro/2.0`, and the two versions differ "
+                        "in what they accept. Leave this unset for an organisation that does not use Xero "
+                        "payroll; the employee actions then report that no region is set rather than "
+                        "guessing one.",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": XeroRestClientBase::RegionAu,
+                            "desc": "Australia (payroll.xro/1.0)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": XeroRestClientBase::RegionNz,
+                            "desc": "New Zealand (payroll.xro/2.0)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": XeroRestClientBase::RegionUk,
+                            "desc": "United Kingdom (payroll.xro/2.0)",
+                        },
+                    ),
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+        };
+    }
+
+    #! Creates the XeroRestConnection object
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! Creates the XeroRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "xero";
+    }
+
+    #! Returns the name of the application this connection serves
+    /** The name the superseded TypeScript application registered, which is what existing workflows
+        reference.
+    */
+    *string getAppName() {
+        return "Xero";
+    }
+
+    #! Processes an OAuth2 token response, discovering the organisation on the first authorization
+    /** This is the authorization code flow's own path: the platform exchanges the code and hands the
+        token response here, so it is where a connection that has just been authorized becomes a
+        working one.  The organisation does not change, so it is discovered only when \c tenant_id is
+        not already set - which also leaves an explicitly chosen organisation alone.
+    */
+    private *hash<auto> processOAuth2TokenResponseImpl(hash<auto> resp) {
+        *hash<auto> new_opts = RestConnection::processOAuth2TokenResponseImpl(resp);
+        if (real_opts.tenant_id.val() || !resp.access_token.val()) {
+            return new_opts;
+        }
+        try {
+            new_opts += discoverTenant(resp.access_token);
+        } catch (hash<ExceptionInfo> ex) {
+            # a failed discovery must not break an otherwise successful authorization
+            error("Xero: cannot determine the organisation to work in: %s: %s", ex.err, ex.desc);
+        }
+        return new_opts;
+    }
+
+    #! Discovers the organisation a newly issued credential works in
+    /** The one call the discovery makes; an extension point for reaching Xero another way.
+    */
+    private *hash<auto> discoverTenant(string token) {
+        return XeroRestClientBase::discoverTenantOptions(token, getLogger());
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the Xero data provider for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and pinged
+        # without it
+        load_module("XeroDataProvider");
+        return create_object("XeroDataProvider", getAsync());
+    }
+
+    #! Returns a XeroRestClient object
+    private XeroRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new XeroRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new XeroRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

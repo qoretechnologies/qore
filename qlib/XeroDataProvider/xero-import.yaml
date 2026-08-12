@@ -1,0 +1,31 @@
+# Import spec for the vendored Xero schemas.
+#
+#   QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+#       --spec qlib/XeroDataProvider/xero-import.yaml
+#
+# Paths are resolved against this file.  The operations come from the manifests themselves, so the
+# selection and what the application exports cannot drift apart.
+#
+# Xero publishes one description per product rather than one per API, so this is the first application with
+# more than one document.  Each becomes its own action set, and a request's URI prefix comes from the base
+# path of the schema its action was generated from.
+#
+# Payroll is deliberately not here.  Xero publishes three payroll documents, one per region, and Australia's
+# is a different API version (payroll.xro/1.0) from New Zealand's and the United Kingdom's (payroll.xro/2.0)
+# -- they do not describe the same operations.  A registered action has one option shape, so no generated
+# action can stand for all three; the two employee actions are hand-written instead and take the region from
+# the connection.  See XeroEmployeesDataProvider.
+documents:
+  - name: Xero Accounting
+    source: https://raw.githubusercontent.com/XeroAPI/Xero-OpenAPI/master/xero_accounting.yaml
+    output: xero-accounting.yaml
+    manifest: XeroDataProvider:XeroManifest::AccountingManifest
+    provenance: XeroSchema.qc
+    const: AccountingProvenance
+
+  - name: Xero Projects
+    source: https://raw.githubusercontent.com/XeroAPI/Xero-OpenAPI/master/xero-projects.yaml
+    output: xero-projects.yaml
+    manifest: XeroDataProvider:XeroManifest::ProjectsManifest
+    provenance: XeroSchema.qc
+    const: ProjectsProvenance

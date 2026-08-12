@@ -34,7 +34,7 @@ public const RSD_OPERATION_REMOVED = "operation-removed";
 
 #! An exported operation's \c operationId changed
 /** The operation is still there, but something about it was renamed upstream.  This never renames an
-    action — action identity is owned by the manifest — but it is worth knowing about, because a rename
+    action - action identity is owned by the manifest - but it is worth knowing about, because a rename
     often accompanies a change in meaning.
 */
 public const RSD_OPERATION_RENAMED = "operation-renamed";

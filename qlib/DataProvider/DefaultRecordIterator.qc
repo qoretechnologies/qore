@@ -118,6 +118,15 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
         if (!i) {
             return False;
         }
+        # stop before pulling anything when the limit has already been reached.  The same test is made again
+        # below, on the next matching record, but reaching it means reading everything between this call and
+        # that record first - and where the wrapped iterator fetches from a service a record at a time, that
+        # is a search for one matching record reading the whole collection to find a second one it was never
+        # going to return.
+        if (atLimit()) {
+            delete i;
+            return False;
+        }
         while (i.next()) {
             if (!where_cond || (where_cond && matchGeneric(i.getValue(), where_cond, template_context))) {
                 if (search_options.offset > 0) {
@@ -143,6 +152,16 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
         # and callers commonly keep the outer iterator object alive after next() returns False.
         delete i;
         return False;
+    }
+
+    #! Returns True if as many records have been returned as the search options allow
+    private bool atLimit() {
+        if (!exists search_options.limit || search_options.limit < 0) {
+            return False;
+        }
+        return search_options.offset > 0
+            ? (count - search_options.offset) == search_options.limit
+            : count == search_options.limit;
     }
 }
 }

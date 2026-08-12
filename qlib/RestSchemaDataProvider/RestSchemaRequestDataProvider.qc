@@ -389,11 +389,16 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         AbstractRestClient rest = getRestClient();
         # make URI path with any query args
         string uri_path = getUriPath();
-        map uri_path = replace(uri_path, "{" + $1.key + "}", $1.value.toString()), options.path_vars.pairIterator();
+        # a path variable is one path segment, so every reserved character in it has to be escaped: a
+        # branch called "release/1.0" or a file called "a b.txt" would otherwise change the path it
+        # addresses, or produce a request line the server cannot parse at all
+        map uri_path = replace(uri_path, "{" + $1.key + "}", encode_url($1.value.toString(), True)),
+            options.path_vars.pairIterator();
         if (req.query) {
             uri_path += "?" +
                 (foldl $1 + "&" + $2,
-                    (map sprintf("%s=%s", $1.key, getUriValue($1.value)), req.query.pairIterator()));
+                    (map sprintf("%s=%s", encode_url($1.key, True), getUriArgValue($1.value)),
+                        req.query.pairIterator()));
             remove req.query;
         }
 
@@ -458,7 +463,30 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         }
     }
 
+    #! Returns the URI-encoded value for the given query argument
+    /** Every reserved character in a query argument's **value** has to be escaped, or the value changes the
+        request rather than travelling in it: a space ends the request line, an \c "&" starts another
+        argument, an \c "=" or a quote corrupts the one it is in.  A GitHub search for
+        \c "qore language:qore" and a Xero filter of \c "Type==\"BANK\"" are both ordinary values that say
+        so.
+
+        A list keeps its separating commas literal, because that is the separator itself rather than part of
+        any element; each element is encoded on its own.
+
+        @param v the value
+
+        @return the value, percent-encoded and ready to place after the \c "="
+    */
+    private string getUriArgValue(auto v) {
+        if (v.typeCode() == NT_LIST) {
+            return foldl $1 + "," + $2, (map getUriArgValue($1), v);
+        }
+        return encode_url(getUriValue(v), True);
+    }
+
     #! Returns the value for the given query argument
+    /** @note The value is returned as it travels, **not** URI-encoded; see @ref getUriArgValue().
+    */
     string getUriValue(auto v) {
         switch (v.typeCode()) {
             case NT_BOOLEAN:

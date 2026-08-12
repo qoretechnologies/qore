@@ -1,0 +1,1322 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** RestSchemaRecordTable.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+%requires RestClientIo
+
+%requires json
+
+%exec-class RestSchemaRecordTableTest
+
+#! A REST client answering from a callback, so that a paged walk can be driven request by request
+class ScriptedRestClient inherits RestClientIo::RestClientIo {
+    public {
+        #! Every request path, in order
+        list<string> paths = ();
+
+        #! Every request method, in order
+        list<string> methods = ();
+
+        #! Every request body, in order
+        list<auto> bodies = ();
+
+        #! Answers each request; takes the method and the path and returns the response body
+        *code<auto(string, string)> answer;
+    }
+
+    constructor() : RestClientIo({"url": "http://record.example.com/api"}) {
+    }
+
+    reset() {
+        paths = ();
+        methods = ();
+        bodies = ();
+    }
+
+    string last() {
+        if (!paths) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return paths.last();
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        methods += method;
+        paths += path;
+        bodies += body;
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "body": answer ? answer(method, path) : NOTHING,
+            "headers": {},
+        };
+    }
+}
+
+public class RestSchemaRecordTableTest inherits QUnit::Test {
+    public {
+        #! The fixture schema
+        const SchemaFile = get_script_dir() + DirSep + "record-store.json";
+
+        #! The manifest the record tables are built on
+        const Manifest = (
+            <RestSchemaActionInfo>{
+                "action": "list-items", "method": "GET", "path": "/items",
+                "operation_id": "listItems",
+                "display_name": "List Items", "short_desc": "list items", "desc": "lists items",
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-item", "method": "POST", "path": "/items",
+                "operation_id": "createItem",
+                "display_name": "Create Item", "short_desc": "create an item", "desc": "creates an item",
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-item", "method": "GET", "path": "/items/{item_id}",
+                "operation_id": "getItem",
+                "display_name": "Get Item", "short_desc": "read an item", "desc": "reads an item",
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-item", "method": "PATCH", "path": "/items/{item_id}",
+                "operation_id": "updateItem",
+                "display_name": "Update Item", "short_desc": "update an item", "desc": "updates an item",
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete-item", "method": "DELETE", "path": "/items/{item_id}",
+                "operation_id": "deleteItem",
+                "display_name": "Delete Item", "short_desc": "delete an item", "desc": "deletes an item",
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-unions", "method": "GET", "path": "/unions",
+                "operation_id": "listUnions",
+                "display_name": "List Unions", "short_desc": "list unions", "desc": "lists unions",
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-cursor-items", "method": "GET", "path": "/cursor-items",
+                "operation_id": "listCursorItems",
+                "display_name": "List Items by Cursor", "short_desc": "list items", "desc": "lists items",
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-notes", "method": "GET", "path": "/spaces/{space}/notes",
+                "operation_id": "listNotes",
+                "display_name": "List Notes", "short_desc": "list notes", "desc": "lists notes",
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-note", "method": "POST", "path": "/spaces/{space}/notes",
+                "operation_id": "createNote",
+                "display_name": "Create Note", "short_desc": "create a note", "desc": "creates a note",
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-all-notes", "method": "GET", "path": "/all-notes",
+                "operation_id": "listAllNotes",
+                "display_name": "List All Notes", "short_desc": "list notes", "desc": "lists every note",
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-note", "method": "GET", "path": "/spaces/{space}/notes/{note_id}",
+                "operation_id": "getNote",
+                "display_name": "Get Note", "short_desc": "read a note", "desc": "reads a note",
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-note", "method": "PATCH", "path": "/spaces/{space}/notes/{note_id}",
+                "operation_id": "updateNote",
+                "display_name": "Update Note", "short_desc": "update a note", "desc": "updates a note",
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete-note", "method": "DELETE", "path": "/spaces/{space}/notes/{note_id}",
+                "operation_id": "deleteNote",
+                "display_name": "Delete Note", "short_desc": "delete a note", "desc": "deletes a note",
+            },
+        );
+
+        #! A collection spanning scopes, whose records each carry their own
+        /** This is GitHub's repository shape: the listing returns notes from every space, so the space
+            cannot be a scope option - it varies from record to record - and a note is addressed by its
+            space **and** its ID, with the space nested inside the record.
+        */
+        const AllNotesTable = <RestSchemaRecordTableInfo>{
+            "name": "all-notes",
+            "display_name": "All Notes",
+            "short_desc": "the notes in every space",
+            "desc": "the notes in every space",
+            "list_action": "list-all-notes",
+            "get_action": "get-note",
+            "update_action": "update-note",
+            "delete_action": "delete-note",
+            "id_parts": {"space": "space.key", "note_id": "note_id"},
+            "paging": <RestSchemaRecordPagingInfo>{
+                "mode": RSRP_PAGE,
+                "page_option": "page",
+                "size_option": "per_page",
+                "max_size": 25,
+            },
+        };
+
+        #! Page-numbered paging over the item collection
+        const ItemPaging = <RestSchemaRecordPagingInfo>{
+            "mode": RSRP_PAGE,
+            "page_option": "page",
+            "size_option": "per_page",
+            "max_size": 100,
+            "has_more_path": ("has_more",),
+        };
+
+        #! The filters the item listing can evaluate
+        /** \c status and the two creation bounds mean exactly what the operators mean; \c search is the
+            service's loose match over a name and therefore is not exact, so it is sent as a narrowing hint
+            and the predicate is evaluated again on what comes back.
+        */
+        const ItemFilters = (
+            <RestSchemaRecordFilterInfo>{
+                "field": "status", "operator": DP_SEARCH_OP_EQ, "option": "status", "exact": True,
+            },
+            <RestSchemaRecordFilterInfo>{
+                "field": "created", "operator": DP_SEARCH_OP_GT, "option": "created_after", "exact": True,
+            },
+            <RestSchemaRecordFilterInfo>{
+                "field": "created", "operator": DP_SEARCH_OP_LT, "option": "created_before", "exact": True,
+            },
+            <RestSchemaRecordFilterInfo>{
+                "field": "tags", "operator": DP_SEARCH_OP_IN, "option": "tags", "multi": True,
+            },
+            <RestSchemaRecordFilterInfo>{
+                "field": "name", "operator": DP_OP_CONTAINS, "option": "search",
+            },
+        );
+
+        #! The item table, filtering with query arguments
+        const ItemTable = <RestSchemaRecordTableInfo>{
+            "name": "items",
+            "display_name": "Items",
+            "short_desc": "the items",
+            "desc": "the items",
+            "list_action": "list-items",
+            "get_action": "get-item",
+            "create_action": "create-item",
+            "update_action": "update-item",
+            "delete_action": "delete-item",
+            "id_field": "id",
+            "id_option": "item_id",
+            "records_path": ("data",),
+            "record_path": ("data",),
+            "paging": ItemPaging,
+            "filters": ItemFilters,
+            # "status" is both a filter target and an option the caller may set directly, which is the
+            # collision the split has to resolve
+            "search_options": ("sort", "status"),
+            "read_only_fields": ("id", "created"),
+        };
+
+        #! A filter expression language of the shape Xero's "where" and Bitbucket's BBQL both have
+        const QuerySyntax = <RestSchemaQuerySyntaxInfo>{
+            "name": "test-query",
+            "binary_ops": {
+                DP_SEARCH_OP_EQ: "==",
+                DP_SEARCH_OP_NE: "!=",
+                DP_SEARCH_OP_LT: "<",
+                DP_SEARCH_OP_LE: "<=",
+                DP_SEARCH_OP_GT: ">",
+                DP_SEARCH_OP_GE: ">=",
+            },
+            "method_ops": {
+                DP_OP_CONTAINS: "Contains",
+                DP_OP_STARTS_WITH: "StartsWith",
+            },
+            "render_value": string sub (auto value, string field) {
+                if (value.typeCode() == NT_STRING) {
+                    return "\"" + replace(value, "\"", "\\\"") + "\"";
+                }
+                if (value.typeCode() == NT_BOOLEAN) {
+                    return value ? "true" : "false";
+                }
+                return value.toString();
+            },
+        };
+
+        #! The same collection, filtered with the service's own filter expression language
+        const QueryTable = <RestSchemaRecordTableInfo>{
+            "name": "query-items",
+            "display_name": "Items by Query",
+            "short_desc": "the items, filtered by the service",
+            "desc": "the items, filtered by the service",
+            "list_action": "list-items",
+            "id_field": "id",
+            "records_path": ("data",),
+            "paging": ItemPaging,
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": QuerySyntax,
+                "fields": {"id": True, "name": True, "status": True, "created": True, "count": True},
+            },
+        };
+
+        #! A cursor-paged collection
+        const CursorTable = <RestSchemaRecordTableInfo>{
+            "name": "cursor-items",
+            "display_name": "Items by Cursor",
+            "short_desc": "the items, a cursor at a time",
+            "desc": "the items, a cursor at a time",
+            "list_action": "list-cursor-items",
+            "id_field": "id",
+            "records_path": ("results",),
+            "paging": <RestSchemaRecordPagingInfo>{
+                "mode": RSRP_CURSOR,
+                "page_option": "cursor",
+                "size_option": "limit",
+                "max_size": 50,
+                "next_path": ("links", "next"),
+                "next_cursor": *string sub (auto value) {
+                    if (!value.val()) {
+                        return;
+                    }
+                    *list<string> m = (value.toString() =~ x/[?&]cursor=([^&]+)/);
+                    return m[0];
+                },
+            },
+        };
+
+        #! A collection scoped by a path variable
+        const NoteTable = <RestSchemaRecordTableInfo>{
+            "name": "notes",
+            "display_name": "Notes",
+            "short_desc": "the notes in one space",
+            "desc": "the notes in one space",
+            "list_action": "list-notes",
+            "create_action": "create-note",
+            "id_field": "note_id",
+            "scope_options": ("space",),
+            "paging": <RestSchemaRecordPagingInfo>{
+                "mode": RSRP_PAGE,
+                "page_option": "page",
+                "size_option": "per_page",
+                "max_size": 25,
+            },
+        };
+    }
+
+    private {
+        OpenApi3Schema schema;
+        RestSchemaActionSet aset;
+    }
+
+    constructor() : Test("RestSchemaRecordTableTest", "1.0") {
+        schema = OpenApi3::OpenApi3Loader::fromFile(SchemaFile);
+        aset = new RestSchemaActionSet(schema, Manifest);
+
+        addTestCase("predicate split with query arguments", \splitTest());
+        addTestCase("a search option and a predicate on one listing option", \reservedOptionTest());
+        addTestCase("filter expression rendering", \queryRenderTest());
+        addTestCase("published expression metadata", \expressionInfoTest());
+        addTestCase("the limit counts matching records", \limitAfterFilterTest());
+        addTestCase("paging stops where it should", \pagingTest());
+        addTestCase("cursor paging", \cursorPagingTest());
+        addTestCase("paging by the last record's ID", \afterIdPagingTest());
+        addTestCase("an identity of more than one value", \compositeIdentityTest());
+        addTestCase("record type derivation", \recordTypeTest());
+        addTestCase("reading one record by ID", \readOneTest());
+        addTestCase("create", \createTest());
+        addTestCase("update and delete", \writeTest());
+        addTestCase("scope options", \scopeTest());
+        addTestCase("a projection of the API's shape", \projectionTest());
+        addTestCase("declaration errors", \declarationErrorTest());
+        addTestCase("a collection with no record type", \noRecordTypeTest());
+        addTestCase("the paths a record is read through resolve", \recordPathTest());
+        addTestCase("the tables container", \containerTest());
+
+        set_return_value(main());
+    }
+
+    #! Returns an equality predicate
+    private hash<DataProviderExpression> eq(string field, auto value) {
+        return <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": field}, value),
+        };
+    }
+
+    #! Returns a predicate with the given operator
+    private hash<DataProviderExpression> op(string operator, string field, auto value) {
+        return <DataProviderExpression>{
+            "exp": operator,
+            "args": (<DataProviderFieldReference>{"field": field}, value),
+        };
+    }
+
+    #! Returns a logical expression over the given arguments
+    private hash<DataProviderExpression> logic(string operator, softlist<auto> args) {
+        return <DataProviderExpression>{"exp": operator, "args": args};
+    }
+
+    #! Returns a table provider answering from the given callback
+    private RestSchemaTableDataProvider table(hash<RestSchemaRecordTableInfo> t,
+            reference<ScriptedRestClient> rest, *code<auto(string, string)> answer) {
+        rest = new ScriptedRestClient();
+        rest.answer = answer;
+        return new RestSchemaTableDataProvider(aset, t, rest);
+    }
+
+    #! Returns the item records a page of the item listing carries
+    private list<hash<auto>> itemPage(int page, int per_page, int total, *code<bool(int)> keep) {
+        list<hash<auto>> rv = ();
+        int first = (page - 1) * per_page;
+        for (int i = first; i < first + per_page && i < total; ++i) {
+            if (keep && !keep(i)) {
+                continue;
+            }
+            rv += {
+                "id": sprintf("i_%d", i),
+                "name": sprintf("item %d", i),
+                "status": i % 10 == 0 ? "closed" : "open",
+                "created": sprintf("2026-01-%02d", (i % 28) + 1),
+                "count": i,
+            };
+        }
+        return rv;
+    }
+
+    splitTest() {
+        RestSchemaRecordFilter f(ItemTable);
+        assertTrue(f.hasPushdown());
+        assertFalse(f.hasNativeSearch(), "query arguments are not a filter expression language");
+
+        # an exact rule is sent and dropped from the client side
+        hash<RestSchemaRecordFilterSplit> s = f.split(eq("status", "closed"));
+        assertEq({"status": "closed"}, s.options);
+        assertNothing(s.client, "an exact filter leaves nothing for the client side");
+
+        # a rule that is not exact is sent AND kept, because the service's answer is only a superset
+        s = f.split(op(DP_OP_CONTAINS, "name", "widget"));
+        assertEq({"search": "widget"}, s.options);
+        assertEq(DP_OP_CONTAINS, s.client.exp, "a loose service filter is re-evaluated on what comes back");
+
+        # conjuncts are split independently
+        s = f.split(logic(DP_OP_AND, (
+            eq("status", "open"),
+            op(DP_SEARCH_OP_GT, "created", "2026-01-01"),
+            op(DP_SEARCH_OP_NE, "count", 3),
+        )));
+        assertEq({"status": "open", "created_after": "2026-01-01"}, s.options);
+        assertEq(DP_SEARCH_OP_NE, s.client.exp, "the predicate with no rule is left for the client side");
+
+        # a nested AND is the same predicate as a flat one and is split the same way, so a caller who
+        # parenthesised their search does not lose the pushdown
+        s = f.split(logic(DP_OP_AND, (
+            logic(DP_OP_AND, (eq("status", "open"), op(DP_SEARCH_OP_GT, "created", "2026-01-01"))),
+            op(DP_SEARCH_OP_NE, "count", 3),
+        )));
+        assertEq({"status": "open", "created_after": "2026-01-01"}, s.options);
+        assertEq(DP_SEARCH_OP_NE, s.client.exp);
+
+        # a field with no rule is entirely client-side
+        s = f.split(eq("count", 7));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        # an OR cannot be expressed as query arguments at all: sending one branch would drop the other
+        s = f.split(logic(DP_OP_OR, (eq("status", "open"), eq("status", "closed"))));
+        assertEq({}, s.options);
+        assertEq(DP_OP_OR, s.client.exp);
+
+        # two predicates on one option: the first is sent, the second is left for the client side, because
+        # one of them would otherwise silently win
+        s = f.split(logic(DP_OP_AND, (eq("status", "open"), eq("status", "closed"))));
+        assertEq({"status": "open"}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+        assertEq("closed", s.client.args[1]);
+
+        # "in" is sent whole to an option that takes a list
+        s = f.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "tags"}, ("red", "blue")),
+        });
+        assertEq({"tags": ("red", "blue")}, s.options);
+        assertEq(DP_SEARCH_OP_IN, s.client.exp, "the rule is not exact, so the predicate is kept");
+
+        # a predicate comparing two fields is not a query argument
+        s = f.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "status"},
+                <DataProviderFieldReference>{"field": "name"}),
+        });
+        assertEq({}, s.options);
+
+        # a plain search hash carries no operators, so all of it is client-side
+        s = f.split({"count": 5});
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+        assertEq("count", s.client.args[0].field);
+
+        # an option the caller is already sending is not overwritten by a predicate: the two together mean
+        # the intersection, so the predicate goes to the client side instead
+        s = f.split(eq("status", "closed"), {"status": True});
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        RestSchemaRecordFilter q(QueryTable);
+        s = q.split(eq("status", "closed"), {"q": True});
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+    }
+
+    #! A search option and a predicate naming the same listing option mean the intersection of the two
+    reservedOptionTest() {
+        ScriptedRestClient rest;
+        # the service honours "status"; the fixture returns open records only when asked for them
+        RestSchemaTableDataProvider items = table(ItemTable, \rest, auto sub (string method, string path) {
+            *list<string> m = (path =~ x/[?&]status=([a-z]+)/);
+            string want = m[0] ?? "";
+            list<hash<auto>> data = itemPage(1, 100, 20);
+            if (want.val()) {
+                data = select data, $1.status == want;
+            }
+            return {"data": data, "has_more": False};
+        });
+
+        # asked for open records, and separately for the closed ones among them: the answer is neither set
+        # but their intersection, which is empty
+        list<hash<auto>> found = map $1, items.searchRecords(eq("status", "closed"), {"status": "open"});
+        assertEq(0, found.size(), "the caller's option and the predicate are both honoured");
+        assertRegex("status=open", rest.paths[0], "the caller's own option is what was sent");
+
+        # with no colliding option the predicate is pushed down as usual
+        rest.reset();
+        found = map $1, items.searchRecords(eq("status", "closed"));
+        assertEq(2, found.size());
+        assertRegex("status=closed", rest.paths[0]);
+    }
+
+    queryRenderTest() {
+        RestSchemaRecordFilter f(QueryTable);
+        assertTrue(f.hasNativeSearch());
+
+        hash<RestSchemaRecordFilterSplit> s = f.split(eq("status", "closed"));
+        assertEq({"q": "status == \"closed\""}, s.options);
+        assertNothing(s.client, "the service evaluates the whole predicate");
+
+        # a whole tree goes over the wire, including the disjunction a query-argument table cannot express
+        s = f.split(logic(DP_OP_AND, (
+            eq("status", "open"),
+            logic(DP_OP_OR, (op(DP_SEARCH_OP_GT, "count", 5), op(DP_OP_CONTAINS, "name", "wid"))),
+        )));
+        assertEq("(status == \"open\" AND (count > 5 OR name.Contains(\"wid\")))", s.options.q);
+        assertNothing(s.client);
+
+        # negation
+        s = f.split(logic(DP_SEARCH_OP_NOT, (eq("status", "open"),)));
+        assertEq("NOT status == \"open\"", s.options.q);
+
+        # a language with no "in" spells it as a disjunction of equalities, which is exact
+        s = f.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, ("open", "closed")),
+        });
+        assertEq("(status == \"open\" OR status == \"closed\")", s.options.q);
+        assertNothing(s.client);
+
+        # a field the service will not filter on stays client-side rather than becoming a query the
+        # service would reject
+        s = f.split(logic(DP_OP_AND, (eq("status", "open"), eq("tags", "red"))));
+        assertEq("status == \"open\"", s.options.q);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+        assertEq("tags", s.client.args[0].field);
+
+        # an operator the language cannot spell stays client-side as well
+        s = f.split(op(DP_SEARCH_OP_REGEX, "name", "^wid"));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_REGEX, s.client.exp);
+
+        # a string value must be escaped, or a name containing a quote would end the literal early
+        s = f.split(eq("name", "the \"best\" item"));
+        assertEq("name == \"the \\\"best\\\" item\"", s.options.q);
+    }
+
+    expressionInfoTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(ItemTable, \rest);
+        hash<DataProviderInfo> info = items.getInfo();
+        assertTrue(info.supports_search_expressions);
+        assertFalse(info.supports_native_search, "query arguments are not native search");
+        assertTrue(info.supports_read);
+        assertTrue(info.supports_create);
+        assertTrue(info.supports_update);
+        assertTrue(info.supports_delete);
+        assertTrue(info.has_record);
+
+        # every generic search operator is answered; what varies is whether the service does the work
+        assertTrue(exists info.expressions{DP_SEARCH_OP_REGEX});
+        assertTrue(info.expressions{DP_SEARCH_OP_EQ}.supports_pushdown);
+        assertTrue(info.expressions{DP_SEARCH_OP_GT}.supports_pushdown);
+        assertFalse(info.expressions{DP_SEARCH_OP_REGEX}.supports_pushdown);
+        assertFalse(info.expressions{DP_OP_OR}.supports_pushdown);
+
+        RestSchemaTableDataProvider q = table(QueryTable, \rest);
+        hash<DataProviderInfo> qinfo = q.getInfo();
+        assertTrue(qinfo.supports_native_search, "a filter expression language is native search");
+        assertTrue(qinfo.expressions{DP_OP_OR}.supports_pushdown);
+        assertTrue(qinfo.expressions{DP_OP_CONTAINS}.supports_pushdown);
+        assertFalse(qinfo.expressions{DP_SEARCH_OP_REGEX}.supports_pushdown);
+
+        # the search options carry the collection's own, taken from the listing action
+        assertTrue(exists qinfo.search_options.limit);
+        assertTrue(exists info.search_options.sort, "a declared listing option is a search option");
+        assertEq("what to sort the listing by", info.search_options.sort.desc);
+        assertFalse(info.search_options.sort.required, "a listing option is not required");
+    }
+
+    #! The defect this whole design exists to prevent
+    /** A limit counts matching records.  Truncating the fetch at the limit and filtering afterwards answers
+        a search for 10 closed items out of 100 with one record, because only the first page was read and
+        only one item on it was closed.
+    */
+    limitAfterFilterTest() {
+        ScriptedRestClient rest;
+        # 100 items, of which every tenth is closed, served 100 to a page... but the service caps a page at
+        # 25 whatever is asked for, so a search has to read four pages to see all ten closed items
+        RestSchemaTableDataProvider items = table(ItemTable, \rest, auto sub (string method, string path) {
+            *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+            int page = m[0].toInt();
+            list<hash<auto>> data = itemPage(page, 25, 100);
+            return {"data": data, "has_more": page < 4};
+        });
+
+        # the filter is exact, so it is sent and not re-evaluated; the service in this fixture ignores it,
+        # which is exactly the case a non-exact declaration would protect against
+        list<hash<auto>> found = map $1, items.searchRecords(
+            <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "count"}, 30),
+            },
+            {"limit": 1});
+        assertEq(1, found.size());
+        assertEq("i_30", found[0].id);
+        # the record is on the second page, so the search had to read past the first one
+        assertEq(2, rest.paths.size(), "the search read exactly as many pages as it needed");
+
+        # ten matching records out of a hundred, asked for ten: all ten must come back
+        rest.reset();
+        found = map $1, items.searchRecords(
+            <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_REGEX,
+                "args": (<DataProviderFieldReference>{"field": "id"}, "^i_[0-9]*0$"),
+            },
+            {"limit": 10});
+        assertEq(10, found.size(), "a limit counts matching records, not records read");
+        assertEq(("i_0", "i_10", "i_20", "i_30", "i_40", "i_50", "i_60", "i_70", "i_80", "i_90"),
+            (map $1.id, found));
+        assertEq(4, rest.paths.size(), "every page holding a match was read");
+
+        # a limit that is met early stops the walk: the first page holds three matches
+        rest.reset();
+        found = map $1, items.searchRecords(
+            <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_REGEX,
+                "args": (<DataProviderFieldReference>{"field": "id"}, "^i_[0-9]*0$"),
+            },
+            {"limit": 2});
+        assertEq(2, found.size());
+        assertEq(1, rest.paths.size(), "the walk stopped as soon as the limit was met");
+
+        # with no limit the whole collection is read
+        rest.reset();
+        found = map $1, items.searchRecords(NOTHING, NOTHING);
+        assertEq(100, found.size());
+        assertEq(4, rest.paths.size());
+
+        # the page size the service caps at is what is asked for
+        assertRegex("per_page=100", rest.paths[0]);
+    }
+
+    pagingTest() {
+        ScriptedRestClient rest;
+        # "has_more" is authoritative: this service returns a full page and then nothing more
+        RestSchemaTableDataProvider items = table(ItemTable, \rest, auto sub (string method, string path) {
+            *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+            int page = m[0].toInt();
+            return {"data": itemPage(page, 100, 100), "has_more": False};
+        });
+        assertEq(100, (map $1, items.searchRecords()).size());
+        assertEq(1, rest.paths.size(), "the service said there was no more, and it was believed");
+
+        # an empty page ends the walk even where the service claims more follow, because reading further
+        # would repeat the same request forever
+        rest.reset();
+        items = table(ItemTable, \rest, auto sub (string method, string path) {
+            return {"data": (), "has_more": True};
+        });
+        assertEq(0, (map $1, items.searchRecords()).size());
+        assertEq(1, rest.paths.size());
+
+        # a collection that is not paged is read once
+        rest.reset();
+        hash<RestSchemaRecordTableInfo> unpaged = cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "name": "unpaged",
+            "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_NONE},
+        });
+        items = table(unpaged, \rest,
+            auto sub (string method, string path) {
+                return {"data": itemPage(1, 10, 10), "has_more": True};
+            });
+        assertEq(10, (map $1, items.searchRecords()).size());
+        assertEq(1, rest.paths.size());
+        assertFalse(rest.paths[0] =~ /page=/, "an unpaged listing is not sent a page number");
+    }
+
+    cursorPagingTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(CursorTable, \rest,
+            auto sub (string method, string path) {
+                *list<string> m = (path =~ x/[?&]cursor=([^&]+)/);
+                int page = m[0].val() ? m[0].toInt() : 1;
+                # "auto!" because the response carries a list and a hash, and a hash narrowed to the
+                # type of its first value would reject the second
+                hash<auto!> rv = {"results": itemPage(page, 50, 120)};
+                if (page < 3) {
+                    rv.links = {"next": sprintf("http://record.example.com/api/cursor-items?cursor=%d&limit=50",
+                        page + 1)};
+                }
+                return rv;
+            });
+        list<hash<auto>> found = map $1, items.searchRecords();
+        assertEq(120, found.size());
+        assertEq(3, rest.paths.size());
+        assertFalse(rest.paths[0] =~ /cursor=/, "the first request carries no cursor");
+        assertRegex("cursor=2", rest.paths[1]);
+        assertRegex("limit=50", rest.paths[1]);
+    }
+
+    #! Cursor-by-last-record-id paging, over a table that renames the column carrying the identity
+    afterIdPagingTest() {
+        hash<RestSchemaRecordTableInfo> t = cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "name": "after-id",
+            # the identity is published under a name of the table's own, which is what the cursor has to be
+            # taken from: the service is told the value, not the column it came from
+            "record_type": RestSchemaTableDataProvider::makeRecordType((
+                {"name": "ref", "desc": "the item reference", "type": "*string"},
+                {"name": "name", "desc": "the item name", "type": "*string"},
+            )),
+            "id_field": "ref",
+            "to_record": hash<auto> sub (hash<auto> rec) {
+                return {"ref": rec.id, "name": rec.name};
+            },
+            "to_wire": hash<auto> sub (hash<auto> rec) {
+                return {"name": rec.name};
+            },
+            "paging": <RestSchemaRecordPagingInfo>{
+                "mode": RSRP_AFTER_ID,
+                "page_option": "search",
+                "size_option": "per_page",
+                "max_size": 100,
+                "has_more_path": ("has_more",),
+            },
+        });
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(t, \rest, auto sub (string method, string path) {
+            *list<string> m = (path =~ x/[?&]search=i_([0-9]+)/);
+            int first = m[0].val() ? m[0].toInt() + 1 : 0;
+            return {"data": itemPage((first / 100) + 1, 100, 250), "has_more": first + 100 < 250};
+        });
+        list<hash<auto>> found = map $1, items.searchRecords();
+        assertEq(250, found.size());
+        assertEq(3, rest.paths.size());
+        assertFalse(rest.paths[0] =~ /search=/, "the first request carries no cursor");
+        assertRegex("search=i_99", rest.paths[1], "the cursor is the last record's identity");
+        assertRegex("search=i_199", rest.paths[2]);
+        assertEq("i_0", found[0].ref, "and the records are in the table's shape");
+    }
+
+    #! A record addressed by more than one value, one of them nested in the record
+    /** GitHub names a repository by its owner and its name, carries the owner as an object, and lists
+        repositories across owners so the owner cannot be a scope.  This fixture is that shape.
+    */
+    compositeIdentityTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider notes = table(AllNotesTable, \rest,
+            auto sub (string method, string path) {
+                if (path =~ m{/spaces/[^/]+/notes/}) {
+                    return {"note_id": "n_1", "title": "one", "space": {"key": "docs"}};
+                }
+                *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+                if (m[0].toInt() != 1) {
+                    return ();
+                }
+                return (
+                    {"note_id": "n_1", "title": "one", "space": {"key": "docs"}},
+                    {"note_id": "n_2", "title": "two", "space": {"key": "ops"}},
+                );
+            });
+
+        # the space is not a scope: the listing spans spaces and needs no option to do it
+        hash<DataProviderInfo> info = notes.getInfo();
+        assertNothing(info.search_options.space, "a per-record identity part is not a search option");
+        assertTrue(info.supports_update);
+        assertTrue(info.supports_delete);
+
+        list<hash<auto>> found = map $1, notes.searchRecords();
+        assertEq(2, found.size());
+        assertEq("docs", found[0].space.key);
+
+        # a predicate pinning every part names one record, and it is read rather than searched for
+        rest.reset();
+        found = map $1, notes.searchRecords(logic(DP_OP_AND, (
+            eq("space.key", "docs"), eq("note_id", "n_1"))));
+        assertEq(1, found.size());
+        assertEq(1, rest.paths.size(), "naming every part reads the record directly");
+        assertEq("/api/spaces/docs/notes/n_1", rest.paths[0], "both parts are in the path");
+
+        # pinning only one part is not naming a record: the collection is walked
+        rest.reset();
+        found = map $1, notes.searchRecords(eq("note_id", "n_1"));
+        assertEq(1, found.size());
+        assertEq("/api/all-notes", (rest.paths[0] =~ x/^([^?]*)/)[0],
+            "a partial identity is not a record name");
+
+        # a write addresses each matching record by every part, read back off the record itself - which is
+        # the whole point: the space differs from row to row
+        rest.reset();
+        assertEq(2, notes.updateRecords({"title": "renamed"}, <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_REGEX,
+            "args": (<DataProviderFieldReference>{"field": "note_id"}, "^n_"),
+        }));
+        assertEq(3, rest.paths.size(), "one listing and two updates");
+        assertEq("/api/spaces/docs/notes/n_1", rest.paths[1]);
+        assertEq("/api/spaces/ops/notes/n_2", rest.paths[2], "each record carries its own space");
+        assertEq({"title": "renamed"}, parse_json(rest.bodies[1]));
+
+        # naming a record and also asking a question about it is not naming a record on its own: answering
+        # only the first half would write to a record the caller did not match
+        rest.reset();
+        assertEq(0, notes.updateRecords({"title": "x"}, logic(DP_OP_AND, (
+            eq("space.key", "docs"), eq("note_id", "n_1"), eq("title", "no such title")))));
+        assertEq("/api/all-notes", (rest.paths[0] =~ x/^([^?]*)/)[0],
+            "the table was searched, not addressed");
+
+        # delete addresses the same way
+        rest.reset();
+        assertEq(1, notes.deleteRecords(logic(DP_OP_AND, (
+            eq("space.key", "docs"), eq("note_id", "n_1")))));
+        assertEq("DELETE", rest.methods[0]);
+        assertEq("/api/spaces/docs/notes/n_1", rest.paths[0]);
+
+        # a record missing a part of its own identity cannot be addressed, and says which part
+        rest.reset();
+        RestSchemaTableDataProvider broken = table(AllNotesTable, \rest,
+            auto sub (string method, string path) {
+                *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+                return m[0].toInt() == 1 ? ({"note_id": "n_9", "title": "no space"},) : ();
+            });
+        assertThrows("UPDATE-RECORDS-ERROR", "carries no \"space.key\"", \broken.updateRecords(),
+            ({"title": "x"}, <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_REGEX,
+                "args": (<DataProviderFieldReference>{"field": "note_id"}, "^n_"),
+            }));
+    }
+
+    recordTypeTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(ItemTable, \rest);
+        # the record type is the schema's own description of the record, so it cannot drift from it
+        *hash<string, AbstractDataField> rt = items.getRecordType();
+        assertEq(("id", "name", "status", "created", "count", "tags"), keys rt);
+        assertEq("the item ID", rt.id.getLocalInfo().desc);
+
+        # a listing whose output is the list itself needs no records path
+        RestSchemaTableDataProvider notes = table(NoteTable, \rest);
+        assertEq(("note_id", "title", "preview"), keys notes.getRecordType());
+
+        # A listing returns a projection and a single read returns the record: the fixture's listing
+        # projects a note without its space and with a preview, and its single read returns the space and
+        # the body instead.  The richer of the two is what the table publishes, because a column the table
+        # does not declare cannot be searched at all - the predicate is rejected before the table is
+        # reached - so under-declaring is not cosmetic.
+        RestSchemaTableDataProvider read = table(cast<hash<RestSchemaRecordTableInfo>>(NoteTable + {
+            "name": "read-notes",
+            "get_action": "get-note",
+        }), \rest);
+        assertEq(("note_id", "title", "space", "body", "preview"), keys read.getRecordType(),
+            "the single read wins, and the column only the listing declares is added rather than lost");
+
+        # ... and where the single read describes less than the listing, the listing wins.  Stripe
+        # describes a single customer read as anyOf a customer and a deleted customer - a union with no
+        # fields of its own - and a table over it would otherwise publish no columns at all
+        RestSchemaTableDataProvider poorer = table(cast<hash<RestSchemaRecordTableInfo>>(AllNotesTable + {
+            "name": "poorer-notes",
+            "list_action": "list-all-notes",
+            "get_action": "get-item",
+            "record_path": ("nothing-here",),
+        }), \rest);
+        assertEq(("note_id", "title", "space", "body"), keys poorer.getRecordType(),
+            "a single read that describes nothing does not empty the record type");
+
+        # a vendor that returns a field and describes it nowhere - Bitbucket returns a repository's slug in
+        # every response and declares it in no schema - is what "extra_columns" is for.  It is merged over
+        # the derived type, so the schema stays the description and this stays the short list of what it
+        # is missing
+        RestSchemaTableDataProvider extra = table(cast<hash<RestSchemaRecordTableInfo>>(NoteTable + {
+            "name": "extra-notes",
+            "extra_columns": {
+                "slug": new QoreDataField("slug", "the note slug, which the description never declares",
+                    StringOrNothingType),
+            },
+        }), \rest);
+        assertEq(("note_id", "title", "preview", "slug"), keys extra.getRecordType());
+        assertEq("the note slug, which the description never declares",
+            extra.getRecordType().slug.getLocalInfo().desc);
+
+        # extra columns never rescue a table with no record type: one hand-declared column and none of the
+        # record's own is worse than being told the table could not be built
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "no record type could be derived",
+            sub () {
+                table(cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                    "name": "no-type",
+                    "get_action": NOTHING,
+                    "records_path": ("nothing-here",),
+                    "extra_columns": {
+                        "slug": new QoreDataField("slug", "a column", StringOrNothingType),
+                    },
+                }), \rest).getRecordType();
+            });
+    }
+
+    readOneTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(ItemTable, \rest, auto sub (string method, string path) {
+            return {"data": {"id": "i_7", "name": "item 7", "status": "open"}};
+        });
+        # a search that names one record by its ID reads it directly rather than walking the collection
+        list<hash<auto>> found = map $1, items.searchRecords(eq("id", "i_7"));
+        assertEq(1, found.size());
+        assertEq("item 7", found[0].name);
+        assertEq(1, rest.paths.size());
+        assertEq("/api/items/i_7", rest.paths[0]);
+        assertEq("GET", rest.methods[0]);
+
+        # searchSingleRecord goes the same way
+        rest.reset();
+        *hash<auto> one = items.searchSingleRecord(eq("id", "i_7"));
+        assertEq("i_7", one.id);
+        assertEq("/api/items/i_7", rest.paths[0]);
+
+        # a table with no single-record read walks the collection instead
+        rest.reset();
+        hash<RestSchemaRecordTableInfo> noget = cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "name": "noget",
+            "get_action": NOTHING,
+        });
+        RestSchemaTableDataProvider walk = table(noget, \rest, auto sub (string method, string path) {
+            return {"data": itemPage(1, 10, 10), "has_more": False};
+        });
+        assertEq(1, (map $1, walk.searchRecords(eq("id", "i_3"))).size());
+        assertEq("/api/items", (rest.paths[0] =~ x/^([^?]*)/)[0]);
+    }
+
+    createTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(ItemTable, \rest, auto sub (string method, string path) {
+            return {"data": {"id": "i_new", "name": "new item", "status": "open"}};
+        });
+        # a record arrives from a mapper with every column present; the values that were never set are not
+        # sent, and the fields the service owns are dropped
+        *hash<auto> rec = items.createRecord({
+            "id": NOTHING,
+            "name": "new item",
+            "status": "open",
+            "created": NOTHING,
+            "count": NOTHING,
+            "tags": NOTHING,
+        });
+        assertEq("i_new", rec.id);
+        assertEq("POST", rest.methods[0]);
+        assertEq("/api/items", rest.paths[0]);
+        hash<auto> body = parse_json(rest.bodies[0]);
+        assertEq({"name": "new item", "status": "open"}, body);
+
+        # a read-only field supplied by the caller is dropped rather than sent and rejected
+        rest.reset();
+        items.createRecord({"name": "x", "id": "nope", "created": "2026-01-01"});
+        assertEq({"name": "x"}, parse_json(rest.bodies[0]));
+
+        # a record is read and written in one shape, so a column the write action does not declare is
+        # dropped rather than turned into a request the schema rejects; "id" is in the record type and is
+        # not a create option
+        rest.reset();
+        items.createRecord({"name": "x", "count": 3, "status": "open"});
+        assertEq({"name": "x", "count": 3, "status": "open"}, parse_json(rest.bodies[0]));
+    }
+
+    writeTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(ItemTable, \rest, auto sub (string method, string path) {
+            if (path =~ /items\/[^?]+$/ && method != "GET") {
+                return {"data": {"id": "i_1", "name": "item 1", "status": "closed"}};
+            }
+            *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+            int page = m[0].toInt();
+            return {"data": itemPage(page, 100, 4), "has_more": False};
+        });
+
+        # naming the record by its ID writes to it directly; no search is needed
+        assertTrue(items.updateSingleRecord({"status": "closed"}, eq("id", "i_1")));
+        assertEq(1, rest.paths.size());
+        assertEq("PATCH", rest.methods[0]);
+        assertEq("/api/items/i_1", rest.paths[0]);
+        assertEq({"status": "closed"}, parse_json(rest.bodies[0]));
+
+        # any other predicate is resolved by searching first, and the matches are collected before the
+        # first write is issued
+        rest.reset();
+        assertEq(4, items.updateRecords({"status": "closed"},
+            <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_REGEX,
+                "args": (<DataProviderFieldReference>{"field": "id"}, "^i_"),
+            }));
+        assertEq(5, rest.paths.size(), "one listing and four updates");
+        assertEq("GET", rest.methods[0]);
+        assertEq(("PATCH", "PATCH", "PATCH", "PATCH"), rest.methods[1..]);
+        assertEq("/api/items/i_0", rest.paths[1]);
+        assertEq("/api/items/i_3", rest.paths[4]);
+
+        # updateSingleRecord refuses to write when the predicate matches more than one record
+        rest.reset();
+        assertThrows("UPDATE-SINGLE-RECORD-ERROR", "4 records",
+            \items.updateSingleRecord(), ({"status": "closed"},
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_REGEX,
+                    "args": (<DataProviderFieldReference>{"field": "id"}, "^i_"),
+                }));
+        assertEq(1, rest.paths.size(), "nothing was written");
+
+        rest.reset();
+        # max_records is a guard on how much a write may affect, and it stops the search that resolves the
+        # predicate, so nothing is written
+        assertThrows("MAX-RECORDS-EXCEEDED", "max_records = 2",
+            \items.updateRecords(), ({"status": "closed"},
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_REGEX,
+                    "args": (<DataProviderFieldReference>{"field": "id"}, "^i_"),
+                }, {"max_records": 2}));
+        assertEq(1, rest.paths.size(), "nothing was written");
+
+        # a write with no criteria would apply to the whole table
+        assertThrows("DELETE-RECORDS-ERROR", "needs search criteria",
+            \items.deleteRecords(), NOTHING);
+
+        rest.reset();
+        assertEq(1, items.deleteRecords(eq("id", "i_9")));
+        assertEq("DELETE", rest.methods[0]);
+        assertEq("/api/items/i_9", rest.paths[0]);
+
+        # a table with no write action says so rather than doing nothing
+        rest.reset();
+        hash<RestSchemaRecordTableInfo> ro = cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "name": "read-only",
+            "create_action": NOTHING,
+            "update_action": NOTHING,
+            "delete_action": NOTHING,
+        });
+        RestSchemaTableDataProvider rot = table(ro, \rest);
+        assertFalse(rot.getInfo().supports_create);
+        assertFalse(rot.getInfo().supports_update);
+        assertFalse(rot.getInfo().supports_delete);
+        assertThrows("INVALID-OPERATION", \rot.createRecord(), {"name": "x"});
+    }
+
+    scopeTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider notes = table(NoteTable, \rest, auto sub (string method, string path) {
+            if (method == "POST") {
+                return {"note_id": "n_9", "title": "new"};
+            }
+            *list<string> m = (path =~ x/[?&]page=([0-9]+)/);
+            int page = m[0].toInt();
+            return page == 1 ? ({"note_id": "n_1", "title": "one"},) : ();
+        });
+
+        # the scope identifies the collection, so a search without it has nothing to read; it is a
+        # required search option, so the framework refuses the search before the table is reached
+        assertThrows("SEARCH-OPTION-ERROR", "missing required option \"space\"",
+            \notes.searchRecords(), (NOTHING, {"limit": 5}));
+
+        list<hash<auto>> found = map $1, notes.searchRecords(NOTHING, {"space": "docs"});
+        assertEq(1, found.size());
+        assertEq("/api/spaces/docs/notes", (rest.paths[0] =~ x/^([^?]*)/)[0]);
+
+        # the scope is a required search and create option, taken from the listing action's own declaration
+        hash<DataProviderInfo> info = notes.getInfo();
+        assertTrue(info.search_options.space.required);
+        assertTrue(info.create_options.space.required);
+        assertEq("the space the notes belong to", info.search_options.space.desc);
+
+        rest.reset();
+        *hash<auto> rec = notes.createRecord({"title": "new"}, {"space": "docs"});
+        assertEq("n_9", rec.note_id);
+        assertEq("/api/spaces/docs/notes", rest.paths[0]);
+        assertEq({"title": "new"}, parse_json(rest.bodies[0]));
+    }
+
+    projectionTest() {
+        # a table may publish a shape of its own rather than the API's, which is what an application
+        # replacing an existing one has to do to keep the column names its mappers read
+        hash<string, AbstractDataField> rt = {
+            "id": new QoreDataField("id", "the ID; not writable", AbstractDataProviderTypeMap."*string"),
+            "label": new QoreDataField("label", "the name", AbstractDataProviderTypeMap."string"),
+            "open": new QoreDataField("open", "whether the item is open",
+                AbstractDataProviderTypeMap."*bool"),
+        };
+        hash<RestSchemaRecordTableInfo> proj = cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "name": "projected",
+            "record_type": rt,
+            "to_record": hash<auto> sub (hash<auto> rec) {
+                return {"id": rec.id, "label": rec.name, "open": rec.status == "open"};
+            },
+            "to_wire": hash<auto> sub (hash<auto> rec) {
+                return {"name": rec.label, "status": rec.open ? "open" : "closed"};
+            },
+        });
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(proj, \rest, auto sub (string method, string path) {
+            if (method == "POST") {
+                return {"data": {"id": "i_new", "name": "made", "status": "closed"}};
+            }
+            return {"data": itemPage(1, 100, 2), "has_more": False};
+        });
+        assertEq(("id", "label", "open"), keys items.getRecordType());
+
+        list<hash<auto>> found = map $1, items.searchRecords();
+        assertEq(({"id": "i_0", "label": "item 0", "open": False},
+            {"id": "i_1", "label": "item 1", "open": True}), found);
+
+        # the predicate is evaluated against the record the caller sees, not the API's response
+        rest.reset();
+        found = map $1, items.searchRecords(eq("open", True));
+        assertEq(1, found.size());
+        assertEq("i_1", found[0].id);
+
+        rest.reset();
+        *hash<auto> rec = items.createRecord({"id": NOTHING, "label": "made", "open": False});
+        assertEq({"id": "i_new", "label": "made", "open": False}, rec);
+        assertEq({"name": "made", "status": "closed"}, parse_json(rest.bodies[0]));
+    }
+
+    declarationErrorTest() {
+        # a table naming an action the manifest does not export fails at once
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "is unknown", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "list_action": "no-such-action",
+            }));
+        });
+
+        # so does one sending the listing an option it does not declare, which would otherwise be dropped
+        # silently and the search would answer with the unfiltered collection
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "does not declare", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "filters": (<RestSchemaRecordFilterInfo>{
+                    "field": "status", "operator": DP_SEARCH_OP_EQ, "option": "state",
+                },),
+            }));
+        });
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "a scope option", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "scope_options": ("workspace",),
+            }));
+        });
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "the paging option", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_PAGE, "page_option": "offset"},
+            }));
+        });
+
+        # two rules for one field and operator: one of them could never be used
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "silently never be used", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "filters": (
+                    <RestSchemaRecordFilterInfo>{
+                        "field": "status", "operator": DP_SEARCH_OP_EQ, "option": "status",
+                    },
+                    <RestSchemaRecordFilterInfo>{
+                        "field": "status", "operator": DP_SEARCH_OP_EQ, "option": "search",
+                    },
+                ),
+            }));
+        });
+
+        # a paged mode with nothing to page by would never read past the first page
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "would never read past the first page", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_PAGE},
+            }));
+        });
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "unknown", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "paging": <RestSchemaRecordPagingInfo>{"mode": "magic", "page_option": "page"},
+            }));
+        });
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "next_path", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_CURSOR, "page_option": "page"},
+            }));
+        });
+
+        # a table converting its records one way only could be read but not written back
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "needs both", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "to_record": hash<auto> sub (hash<auto> rec) { return rec; },
+            }));
+        });
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "needs both", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "to_wire": hash<auto> sub (hash<auto> rec) { return rec; },
+            }));
+        });
+
+        # naming the columns without converting them is fine: a table may declare a record type only to
+        # name the fields of a collection whose element type is a union and has none to derive
+        RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "record_type": {"id": new QoreDataField("id", "the ID",
+                AbstractDataProviderTypeMap."*string")},
+        }));
+    }
+
+    #! A collection with no record type to derive is refused rather than published with no columns
+    noRecordTypeTest() {
+        # the notes listing answers with a list of notes, so its record type derives; the same listing read
+        # through a records path that does not resolve has nothing to derive from
+        ScriptedRestClient rest();
+        hash<RestSchemaRecordTableInfo> broken = cast<hash<RestSchemaRecordTableInfo>>(NoteTable + {
+            "name": "broken",
+            "records_path": ("nope",),
+        });
+        RestSchemaTableDataProvider tp(aset, broken, rest);
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "has to name its columns", \tp.getRecordType());
+
+        # and naming them is the answer
+        hash<RestSchemaRecordTableInfo> named = cast<hash<RestSchemaRecordTableInfo>>(broken + {
+            "record_type": RestSchemaTableDataProvider::makeRecordType((
+                {"name": "note_id", "desc": "the note ID", "type": "*string"},
+                {"name": "title", "desc": "the note title", "type": "*string"},
+            )),
+        });
+        RestSchemaTableDataProvider ok(aset, named, rest);
+        assertEq(("note_id", "title"), keys ok.getRecordType());
+
+        # a column naming a type that does not exist is caught where it is written
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "not a known data provider type", sub () {
+            RestSchemaTableDataProvider::makeRecordType(({"name": "x", "desc": "x", "type": "*magic"},));
+        });
+    }
+
+    recordPathTest() {
+        # A path that does not resolve against the response it reads fails **silently**: a single read
+        # whose record path names a wrapper the action already unwrapped reads one record as nothing at
+        # all, and no test that only searches will ever notice.  Paddle's tables did exactly that.
+        RestSchemaTableDataProvider::checkRecordPaths(aset, ItemTable);
+        RestSchemaTableDataProvider::checkRecordPaths(aset, NoteTable);
+
+        # the listing's records path
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "records_path", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {"records_path": ("items",)}));
+        });
+
+        # the single read's record path: the item read publishes "data", the note read publishes the
+        # note itself, so a record path on the second one unwraps a record that is already unwrapped
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "record_path", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(AllNotesTable + {"record_path": ("data",)}));
+        });
+        # ... and the message says what the response really declares, so the fix is the next thing read
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "note_id", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(AllNotesTable + {"record_path": ("data",)}));
+        });
+
+        # a write response is read through its own path
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "write_record_path", sub () {
+            RestSchemaTableDataProvider::checkRecordPaths(aset,
+                cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {"write_record_path": ("payload",)}));
+        });
+
+        # a response that describes no fields - a union, or an open hash - cannot be checked against, and
+        # an unverifiable path is left alone rather than reported on a guess
+        RestSchemaTableDataProvider::checkRecordPaths(aset,
+            cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                "list_action": "list-unions",
+                "records_path": ("whatever", "nested"),
+            }));
+
+        # and the whole container is checked at once, which is what an application's test suite calls
+        ScriptedRestClient rest();
+        RestSchemaTablesDataProvider c("tables", aset, (cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "record_path": ("data", "data"),
+        }),), rest);
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "record_path", \c.checkTables());
+    }
+
+    containerTest() {
+        ScriptedRestClient rest();
+        list<hash<RestSchemaRecordTableInfo>> tables = (ItemTable, QueryTable, NoteTable);
+        RestSchemaTablesDataProvider c("tables", aset, tables, rest);
+        assertEq(("items", "query-items", "notes"), c.getChildProviderNames());
+        assertEq("items", c.getChildProviderEx("items").getName());
+        assertNothing(c.getChildProvider("nope"));
+        # an application's test suite calls this so that a table naming a withdrawn action fails there
+        c.checkTables();
+
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "declared more than once", sub () {
+            new RestSchemaTablesDataProvider("tables", aset, (ItemTable, ItemTable), rest);
+        });
+
+        hash<DataProviderPathVarInfo> pv = RestSchemaTablesDataProvider::getTablePathVar(tables);
+        assertEq("items", pv.example_value);
+        assertRegex("`items`, `query-items` or `notes`", pv.desc);
+
+        hash<DataProviderInfo> info = RestSchemaTablesDataProvider::getRecordActionProviderInfo(aset,
+            tables);
+        assertTrue(info.supports_create, "at least one table can create");
+        assertTrue(info.supports_native_search, "at least one table searches natively");
+        assertTrue(info.supports_search_expressions);
+
+        # the record actions are what makes the tables reachable; declaring the providers is only half of it
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": "record-store-test",
+            "display_name": "Record Store",
+            "short_desc": "a fixture application",
+            "desc": "a fixture application",
+            "scheme": "record-store-test",
+            "logo": "<svg/>",
+            "logo_file_name": "record-store.svg",
+            "logo_mime_type": "image/svg+xml",
+            "groups": (DataProvider::AppGroup::DevOps,),
+        });
+        RestSchemaTablesDataProvider::registerRecordActions("record-store-test", "/tables", aset, tables,
+            <RestSchemaRecordActionIds>{}, {"groups": ("Record-Based",)});
+        hash<string, bool> actions = {};
+        map actions{$1.action} = True, DataProviderActionCatalog::getActions("record-store-test");
+        assertEq({"search": True, "search-single": True, "create": True, "update": True, "delete": True},
+            actions);
+    }
+}

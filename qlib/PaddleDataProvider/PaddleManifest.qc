@@ -32,7 +32,7 @@ public namespace PaddleDataProvider {
 
     @section paddlemanifest_ids Action IDs
 
-    The action IDs are those of the TypeScript application this module replaces — \c "list_customers", not
+    The action IDs are those of the TypeScript application this module replaces - \c "list_customers", not
     \c "list-customers".  Action identity is what existing workflows call, so it is preserved across the
     replacement rather than restyled; an ID is never derived from Paddle's \c operationId, which is checked
     for drift instead.
@@ -328,7 +328,7 @@ public class PaddleManifest {
                 "short_desc": "Retrieve one customer",
                 "desc": "Retrieves a customer by Paddle ID, including any `custom_data` stored against it.\n\n"
                     "This returns a customer whatever its status, so it is how an archived customer is read "
-                    "back — **List Customers** omits archived customers by default.",
+                    "back - **List Customers** omits archived customers by default.",
                 "groups": (GroupCustomers,),
                 "response_unwrap": ("data",),
                 "fields": {
@@ -553,7 +553,7 @@ public class PaddleManifest {
                 "short_desc": "Retire a catalog product",
                 "desc": "Archives a product, so it can no longer be billed and stops appearing in "
                     "listings.\n\n"
-                    "Existing subscriptions and transactions that reference the product are unaffected — "
+                    "Existing subscriptions and transactions that reference the product are unaffected - "
                     "archiving withdraws it from sale, it does not delete it. Paddle has no delete "
                     "operation for a product.\n\n"
                     "**The product's prices are not archived with it.** Archive each price separately if "
@@ -645,7 +645,7 @@ public class PaddleManifest {
                 "display_name": "Create Price",
                 "short_desc": "Create a price for a catalog product",
                 "desc": "Creates a price against a product.\n\n"
-                    "`unit_price` is an amount in the **smallest unit of its currency** given as a string — "
+                    "`unit_price` is an amount in the **smallest unit of its currency** given as a string - "
                     "`\"1000\"` is $10.00 in USD, but ¥1000 in JPY, which has no minor unit. Getting this "
                     "wrong is a factor-of-100 error in what customers are charged.\n\n"
                     "Set `billing_cycle` to make it a subscription price; leave it unset for a one-off "
@@ -749,7 +749,7 @@ public class PaddleManifest {
                 "short_desc": "List the subscriptions in this Paddle account",
                 "desc": "Lists subscriptions.\n\n"
                     "Filter by `customer_id` for one customer's subscriptions, by `status` for the state "
-                    "they are in — `active`, `trialing`, `past_due`, `paused` or `canceled` — or by "
+                    "they are in - `active`, `trialing`, `past_due`, `paused` or `canceled` - or by "
                     "`scheduled_change_action` to find the ones with a pause or cancellation already "
                     "booked.\n\n"
                     "The subscriptions are in `data`, and `meta.pagination` carries the cursor for the next "
@@ -799,7 +799,7 @@ public class PaddleManifest {
                 "desc": "Retrieves a subscription by Paddle ID.\n\n"
                     "`items` is what the customer is billed for, `current_billing_period` is the window "
                     "they have paid for, and `scheduled_change` is a pause or cancellation already booked "
-                    "for a future date — a subscription can be `active` and still be due to end.\n\n"
+                    "for a future date - a subscription can be `active` and still be due to end.\n\n"
                     "Set `include` to `next_transaction` for what the next renewal will cost, or "
                     "`recurring_transaction_details` for the recurring amount.",
                 "groups": (GroupSubscriptions,),
@@ -827,7 +827,7 @@ public class PaddleManifest {
                 "operation_id": "list-transactions",
                 "display_name": "List Transactions",
                 "short_desc": "List the transactions in this Paddle account",
-                "desc": "Lists transactions — the records that calculate and capture revenue.\n\n"
+                "desc": "Lists transactions - the records that calculate and capture revenue.\n\n"
                     "Filter by `status` to separate what has been paid (`completed`, `paid`) from what is "
                     "outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, "
                     "`updated_at` and `billed_at` take an operator suffix, as in "
@@ -893,7 +893,7 @@ public class PaddleManifest {
                 "display_name": "Create Transaction",
                 "short_desc": "Create a transaction, optionally billing it",
                 "desc": "Creates a transaction: the record of what a customer is being charged for.\n\n"
-                    "`items` is required — each entry names a `price_id` and a `quantity`, or carries a "
+                    "`items` is required - each entry names a `price_id` and a `quantity`, or carries a "
                     "one-off price inline. `status` decides what happens next: leave it unset for a `draft` "
                     "that can still be edited, or set it to `billed` to issue it to the customer.\n\n"
                     "**A transaction with no `customer_id` is a quote nobody can pay**; set it, along with "
@@ -926,7 +926,7 @@ public class PaddleManifest {
                     "origin": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Origin",
                         "short_desc": "How the transaction came about",
-                        "desc": "How the transaction came about — `api` for one created through the API, "
+                        "desc": "How the transaction came about - `api` for one created through the API, "
                             "`web` for a Paddle.js checkout, or one of the `subscription_…` values for one "
                             "Paddle raised itself for a renewal, charge or update.\n\n"
                             "Leave this unset when creating a transaction: Paddle sets it.",
@@ -1060,7 +1060,7 @@ public class PaddleManifest {
                 "short_desc": "Get a download URL for a report's CSV file",
                 "desc": "Returns a URL the report's CSV file can be downloaded from.\n\n"
                     "**This is a URL, not the file**: fetch it separately. The URL is signed and "
-                    "short-lived — Paddle expires it within the hour — so generate it at the point of "
+                    "short-lived - Paddle expires it within the hour - so generate it at the point of "
                     "download rather than storing it.\n\n"
                     "The report must be `ready`; asking for the file of a report that is still `pending` "
                     "fails.",

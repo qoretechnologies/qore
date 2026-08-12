@@ -106,6 +106,20 @@ class CountingStringHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A REST connection whose URL path is the address of the thing connected to, not an API namespace
+/** Atlassian addresses a Confluence site as \c https://api.atlassian.com/ex/confluence/<cloud_id>, so a
+    ping that dropped that prefix would ask the gateway for a site it never named.
+*/
+class PathKeepingRestConnection inherits RestConnection {
+    constructor(string name, string description, string url, hash<auto> attributes, hash<auto> options)
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    bool pingInheritsConnectionPath() {
+        return True;
+    }
+}
+
 #! A REST connection whose async client acquisition always fails with a given error
 /** Lets a test drive both branches of the ping's async-client fallback.
 */
@@ -200,6 +214,7 @@ public class Main inherits QUnit::Test {
         addTestCase("negotiate auth options", \negotiateAuthOptionsTest());
         addTestCase("ping_body view hint", \pingBodyViewHintTest());
         addTestCase("absolute ping URL", \absolutePingUrlTest());
+        addTestCase("an absolute ping path and the connection's URL path", \pingConnectionPathTest());
         addTestCase("async ping fallback", \asyncPingFallbackTest());
         addTestCase("OPTIONS tests", \methodOptionsTest());
         addTestCase("DELETE tests", \methodDeleteTest());
@@ -785,6 +800,93 @@ public class Main inherits QUnit::Test {
             monitor.add(bad);
             hash<auto> info = monitor.waitForResult();
             assertEq("error", info.result, "polling ping fails when the absolute ping URL is unreachable");
+        }
+    }
+
+    #! Tests who owns the connection URL's path when the ping path is absolute
+    /** An absolute \c ping_path normally addresses the **host**, and the connection's own URL path is
+        dropped for it: a connection on \c http://host/v1 has to be able to ping a health endpoint
+        outside that namespace, and inheriting it turns \c "/health" into \c "/v1/health", which 404s.
+
+        But a URL path is not always a namespace.  Atlassian addresses a Confluence site as
+        \c /ex/confluence/<cloud_id>, which is *which site is being reached*: dropping it asks the
+        gateway for a site it never named, and the ping 404s while every other request on the same
+        connection succeeds - which is exactly what happened.  Only the connection knows which of the
+        two its path is, so it says, and the default is unchanged.
+
+        Both pings are covered, because the rule is implemented separately on each path and it was the
+        polling one that failed.
+    */
+    pingConnectionPathTest() {
+        # one handler at the host root, one under the connection's URL path; each counts what it served,
+        # so the assertion is which server path answered rather than merely that something did
+        CountingStringHandler root_handler(MimeTypeText, VALUE_TEXT.input);
+        CountingStringHandler under_handler(MimeTypeText, VALUE_TEXT.input);
+        # registered as plain paths rather than patterns: a non-regex handler is matched from a tree
+        # map instead of by scanning patterns, and the two paths then cannot be confused for each
+        # other the way an unanchored "health" pattern would also match "v1/health"
+        m_http.setHandler("ping_root", "/health", MimeTypeText, root_handler, NOTHING, False);
+        m_http.setHandler("ping_under", "/v1/health", MimeTypeText, under_handler, NOTHING, False);
+        on_exit {
+            m_http.removeHandler("ping_root");
+            m_http.removeHandler("ping_under");
+        }
+
+        string url = sprintf("http://127.0.0.1:%d/v1", port);
+        hash<auto> opts = {
+            "data": "text",
+            "ping_method": "GET",
+            "ping_path": "/health",
+        };
+
+        # the default: an absolute ping path addresses the host, so the connection's "/v1" is dropped
+        RestConnection plain("test", "test", url, {"monitor": False}, opts);
+        assertFalse(plain.pingInheritsConnectionPath(), "an absolute ping path addresses the host");
+        hash<PingInfo> ping = plain.ping();
+        on_error if (ping.ex) {
+            printf("%s\n", get_exception_string(ping.ex));
+        }
+        assertTrue(ping.ok);
+        assertEq(1, root_handler.getCount(), "the ping went to the host root, not under the URL path");
+        assertEq(0, under_handler.getCount());
+
+        {
+            TestPollingConnectionMonitor monitor(logger);
+            on_exit delete monitor;
+
+            monitor.add(plain);
+            hash<auto> info = monitor.waitForResult();
+            on_error if (info.ex) {
+                printf("%s\n", get_exception_string(info.ex));
+            }
+            assertEq("OK", info.result);
+            assertEq(2, root_handler.getCount(), "the polling ping goes the same way");
+            assertEq(0, under_handler.getCount());
+        }
+
+        # ... and a connection whose URL path names what it is connected to keeps it
+        PathKeepingRestConnection keeps("test", "test", url, {"monitor": False}, opts);
+        assertTrue(keeps.pingInheritsConnectionPath());
+        hash<PingInfo> kping = keeps.ping();
+        on_error if (kping.ex) {
+            printf("%s\n", get_exception_string(kping.ex));
+        }
+        assertTrue(kping.ok, "the ping reaches the path under the connection URL");
+        assertEq(1, under_handler.getCount(), "the ping carried the connection's URL path");
+        assertEq(2, root_handler.getCount(), "and did not go to the host root");
+
+        {
+            TestPollingConnectionMonitor monitor(logger);
+            on_exit delete monitor;
+
+            monitor.add(keeps);
+            hash<auto> info = monitor.waitForResult();
+            on_error if (info.ex) {
+                printf("%s\n", get_exception_string(info.ex));
+            }
+            assertEq("OK", info.result, "the polling ping - the one that failed - carries it too");
+            assertEq(2, under_handler.getCount());
+            assertEq(2, root_handler.getCount());
         }
     }
 

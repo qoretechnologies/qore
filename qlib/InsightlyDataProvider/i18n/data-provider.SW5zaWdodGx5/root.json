@@ -156,8 +156,8 @@
           "message": "How the body is serialized and what Content-Type is sent"
         },
         "app.SW5zaWdodGx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
-          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
-          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
         },
         "app.SW5zaWdodGx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
@@ -324,8 +324,8 @@
           "message": "Return non-2xx responses normally instead of throwing"
         },
         "app.SW5zaWdodGx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
-          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
-          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
         },
         "app.SW5zaWdodGx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
           "source": "Include Debug Info",

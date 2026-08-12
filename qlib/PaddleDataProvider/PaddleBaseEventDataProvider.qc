@@ -38,13 +38,13 @@ public namespace PaddleDataProvider {
     @section paddleevent_verification Signature Verification
 
     A webhook destination is a URL anyone can post to.  Without verification it would accept a fabricated
-    \c transaction.completed — enough to make an integration provision a paid plan nobody paid for — or a
+    \c transaction.completed - enough to make an integration provision a paid plan nobody paid for - or a
     fabricated \c subscription.canceled, enough to cut off a paying customer.  So a delivery whose signature
     cannot be verified is **dropped**, and one that arrives before the destination has been created is
     dropped too; there is no configuration that turns this off.
 
     Paddle sends a \c Paddle-Signature header holding the time it signed at and an HMAC-SHA256 signature
-    over \c "{timestamp}:{body}", as \c "ts=1671552777;h1=eb4d0d…" — semicolon-separated, where Stripe uses
+    over \c "{timestamp}:{body}", as \c "ts=1671552777;h1=eb4d0d…" - semicolon-separated, where Stripe uses
     a comma, and joined with a colon where Stripe uses a full stop.  The timestamp is checked against
     @ref ReplayTolerance so that a captured delivery cannot be replayed indefinitely.
 

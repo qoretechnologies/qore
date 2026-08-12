@@ -1,0 +1,380 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GitHubRestClient.qm Qore user module for calling GitHub REST API services
+
+/*  GitHubRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module GitHubRestClient {
+    version = "1.0";
+    desc = "User module for calling GitHub REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("github", GitHubRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage GitHubRestClient Module
+
+    @tableofcontents
+
+    @section githubrestclientintro GitHubRestClient Introduction
+
+    The %GitHubRestClient module provides an API for calling [GitHub](https://github.com)'s REST API
+    services.
+
+    To use this module, use \c "%requires GitHubRestClient" in your code.
+
+    All the public symbols in the module are defined in the GitHubRestClient namespace.
+
+    The main classes are:
+    - @ref GitHubRestClient::GitHubRestClient "GitHubRestClient": the REST client for the GitHub API
+    - @ref GitHubRestClient::GitHubRestClientIo "GitHubRestClientIo": the same client on the asynchronous
+      I/O transport, which is what data providers use
+    - @ref GitHubRestClient::GitHubRestConnection "GitHubRestConnection": a connection object to GitHub
+      (based on the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section githubrestclient_version The API Version Is Pinned
+
+    Every request sends \c "X-GitHub-Api-Version: 2022-11-28".  GitHub versions its REST API by date and
+    changes behavior between versions, so a client that sends no version gets whatever GitHub currently
+    considers the default - which is not a stable contract.
+
+    The pin is recorded in the application's schema provenance as well, so the vendored description and the
+    version the requests declare move together; see
+    @ref GitHubDataProvider::GitHubSchema "GitHubSchema".
+
+    @section githubrestclient_auth Authentication
+
+    GitHub accepts either of two credentials, and this module supports both:
+
+    - a **personal access token**, fine-grained or classic, sent as a bearer token.  This is what a script
+      normally uses; a fine-grained token can be scoped to a single repository.
+    - the **OAuth2 authorization code flow**, which is what an interactive integration uses, with
+      \c oauth2_client_id and \c oauth2_client_secret from an OAuth app registered on GitHub.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires GitHubRestClient
+
+GitHubRestClientIo gh({"token": ENV.GITHUB_TOKEN});
+hash<auto> result = gh.get("/user");
+printf("User: %Y\n", result.body);
+    @endcode
+
+    @section githubrestclient_pagination Pagination
+
+    GitHub pages with \c page and \c per_page (maximum 100) and reports the next and last pages in the
+    \c Link **response header** rather than in the body; the body is the bare array.  Search endpoints are
+    different: they return \c {total_count, items} and are capped at 1000 results however far they are
+    paged.
+
+    @section githubrestclientrelnotes Release Notes
+
+    @subsection githubrestclientv1_0 GitHubRestClient v1.0
+    - the initial version of the %GitHubRestClient module
+*/
+
+#! the GitHubRestClient namespace contains all the objects in the GitHubRestClient module
+public namespace GitHubRestClient {
+#! Common base class for GitHubRestClient functionality
+public class GitHubRestClientBase {
+    public {
+        #! The GitHub API URL
+        const DefaultUrl = "https://api.github.com";
+
+        #! The REST API version this client speaks
+        /** GitHub versions its REST API by date; sending no version means accepting whatever GitHub
+            currently defaults to, which is not a contract.
+        */
+        const ApiVersion = "2022-11-28";
+
+        #! The header carrying the API version
+        const ApiVersionHeader = "X-GitHub-Api-Version";
+
+        #! Headers sent with every request
+        const DefaultHeaders = {
+            ApiVersionHeader: ApiVersion,
+            "Accept": "application/vnd.github+json",
+        };
+
+        #! Default OAuth2 authorization request URL
+        const DefaultAuthUrl = "https://github.com/login/oauth/authorize";
+
+        #! Default OAuth2 token request URL
+        const DefaultTokenUrl = "https://github.com/login/oauth/access_token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes
+        /** \c delete_repo is requested because the application exports a **Delete Repository** action, and
+            GitHub keeps that permission out of \c repo deliberately.  A connection without it offers an
+            action that always fails with 403 - which is what the superseded application did, and it is not
+            a useful thing to offer.
+
+            The scope only grants what the action already announces it does; a credential that should not be
+            able to delete a repository should not be given an application that offers to.
+        */
+        const DefaultScopes = ("repo", "user", "public_repo", "delete_repo");
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default authorization token type
+        const DefaultTokenType = "Bearer";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** Reading the authenticated user is the cheapest call that proves the credential is accepted.
+        */
+        const DefaultPingPath = "/user";
+
+        #! Default ping headers
+        const DefaultPingHeaders = DefaultHeaders;
+
+        #! GitHub's maximum page size for a listing
+        const MaxPerPage = 100;
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "token_type": DefaultTokenType,
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns options for the GitHubRestClient constructors
+    /** @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows to
+        # that type, and adding a hash-valued or list-valued default would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        # the version pin is merged rather than assigned, so a caller adding a header of its own does not
+        # drop it
+        opts.headers = DefaultHeaders + (opts.headers ?? {});
+
+        if (opts.oauth2_client_id.val()) {
+            if (!opts.oauth2_grant_type.val()) {
+                opts.oauth2_grant_type = DefaultGrantType;
+            }
+            if (!opts.oauth2_auth_url.val()) {
+                opts.oauth2_auth_url = DefaultAuthUrl;
+            }
+            if (!opts.oauth2_token_url.val()) {
+                opts.oauth2_token_url = DefaultTokenUrl;
+            }
+            if (!opts.oauth2_scopes) {
+                opts.oauth2_scopes = DefaultScopes;
+            }
+        }
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+}
+
+#! GitHub REST client
+public class GitHubRestClient inherits RestClient::RestClient, GitHubRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(GitHubRestClientBase::getOptions(opts), do_not_connect) {
+    }
+}
+
+#! GitHub REST client for non-blocking I/O
+public class GitHubRestClientIo inherits RestClientIo::RestClientIo, GitHubRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(GitHubRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for GitHub REST connections
+public class GitHubRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default GitHub connection URL
+        const DefaultConnectionUrl = "github://api.github.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "GitHub REST Connection",
+            "short_desc": "A connection to the GitHub REST API",
+            "desc": "A connection to [GitHub](https://github.com) for repositories, issues, pull "
+                "requests, releases and Actions secrets.\n\n"
+                "**Authentication** is either:\n"
+                "- a **personal access token** in `token`, fine-grained or classic, sent as a bearer "
+                "token. A fine-grained token can be scoped to a single repository, which is the narrowest "
+                "option; or\n"
+                "- the **OAuth2 authorization code flow** with `oauth2_client_id` and "
+                "`oauth2_client_secret` from an OAuth app registered on GitHub.\n\n"
+                "Every request sends `X-GitHub-Api-Version: 2022-11-28`, because GitHub versions its REST "
+                "API by date and sending no version means accepting whatever it currently defaults to.\n\n"
+                "GitHub is a trademark of GitHub, Inc.",
+            "cls": Class::forName("GitHubRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "github": True,
+            },
+            "base_scheme_map": {
+                "https": "github",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultData,
+                },
+                "headers": RestConnection::ConnectionScheme.options."headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultHeaders,
+                    "desc": "Headers sent with every request.\n\n"
+                        "`X-GitHub-Api-Version` pins the REST API version and should be left alone unless "
+                        "you mean to move to a different one: this application's actions describe the "
+                        "fields and responses of **that** version.",
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultGrantType,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultTokenUrl,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultScopes,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultPingPath,
+                },
+                "token": RestConnection::ConnectionScheme.options."token"
+                + <ConnectionOptionInfo>{
+                    "display_name": "Access Token",
+                    "short_desc": "A GitHub personal access token",
+                    "desc": "A GitHub personal access token, sent as a bearer token.\n\n"
+                        "**To obtain one:** **Settings > Developer settings > Personal access tokens**. A "
+                        "fine-grained token is scoped to chosen repositories and permissions and is the "
+                        "narrower choice; a classic token uses scopes such as `repo`.\n\n"
+                        "Leave this unset to use the OAuth2 flow instead.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "token_type": RestConnection::ConnectionScheme.options."token_type"
+                + <ConnectionOptionInfo>{
+                    "default_value": GitHubRestClientBase::DefaultTokenType,
+                },
+            },
+            # OAuth2 is named first because it is the flow this connection should default to whenever the
+            # platform can supply a client; a personal access token is the fallback for a credential that
+            # is not tied to a user's authorization
+            "required_options": "oauth2_client_id,oauth2_client_secret|token",
+        };
+    }
+
+    #! Creates the GitHubRestConnection object
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! Creates the GitHubRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "github";
+    }
+
+    #! Returns the name of the application this connection serves
+    /** The name the superseded TypeScript application registered, which is what existing workflows
+        reference; it is deliberately not restyled to \c "GitHub".
+    */
+    *string getAppName() {
+        return "Github";
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the GitHub data provider for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and pinged
+        # without it
+        load_module("GitHubDataProvider");
+        return create_object("GitHubDataProvider", getAsync());
+    }
+
+    #! Returns a GitHubRestClient object
+    private GitHubRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GitHubRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GitHubRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

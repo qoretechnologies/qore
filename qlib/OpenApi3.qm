@@ -761,6 +761,13 @@ public hashdecl ComponentInfo {
         A hash of RequestBody hashes. Keys are request body names.
     */
     hash<string, hash<auto>> requestBodies;
+
+    #! Header definitions that can be used across responses.
+    /**
+        A hash of @ref HeaderObject objects.  Keys are header component names, which are not the header
+        names themselves; a response names the header and references the definition.
+    */
+    hash<string, HeaderObject> headers;
 }
 
 #! This is the root document object for the API specification. It combines what previously was the Resource Listing and API Declaration (version 1.2 and earlier) together into one document.
@@ -1051,6 +1058,15 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 components.parameters{item.key} = ParameterObject::newParameter(item.key, item.value, self);
             }
 
+            # headers are parsed before responses, because a response declares its headers by reference
+            delete obj;
+            optional_field(obj_type, oh.components, "headers", NT_HASH, \obj);
+            foreach hash<auto> item in (obj.pairIterator()) {
+                if (item.value.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-TYPE", "OpenApi3 Object: invalid header datatype: " + item.value.type();
+                components.headers{item.key} = HeaderObject::newHeader(item.key, item.value, self);
+            }
+
             delete obj;
             optional_field(obj_type, oh.components, "responses", NT_HASH, \obj);
             foreach hash<auto> item in (obj.pairIterator()) {
@@ -1258,10 +1274,10 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         if (!ref)
             throw "INVALID-REFERENCE", sprintf("cannot resolve ParameterObject %y reference %y; known parameter "
                 "references: %y", name, refstr, keys components.parameters);
-        int size = foldl $1 + $2, (map 1, keys oh, $1 !~ /^x-/);
-        if (size > 1)
-            throw "INVALID-REFERENCE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh,
-                $1 !~ /^x-/));
+        # OpenAPI 3.0 says that any sibling of a "$ref" is ignored, because a Reference Object is a JSON
+        # Reference; real descriptions rely on that -- Xero's declares "$ref" beside "type" at 28 sites in
+        # one document -- and rejecting them made those documents unloadable.  A schema reference has always
+        # ignored its siblings; a parameter or response reference now does the same.
         return ref;
     }
 
@@ -1280,11 +1296,34 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         if (!res)
             throw "INVALID-RESPONSE", sprintf("cannot resolve ResponseObject %y reference %y; known response "
                 "references: %y", name, refstr, keys components.responses);
-        int size = foldl $1 + $2, (map 1, keys oh, $1 !~ /^x-/);
-        if (size > 1)
-            throw "INVALID-RESPONSE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh,
-                $1 !~ /^x-/));
+        # as for a parameter reference, a sibling of "$ref" is ignored rather than rejected
         return res;
+    }
+
+    #! resolves a reference to a response header
+    /** @param name the header name, for error reporting
+        @param refstr the reference string
+        @param oh the object declaring the reference
+
+        @throw INVALID-REFERENCE invalid reference
+    */
+    HeaderObject resolveHeader(string name, string refstr, hash<auto> oh) {
+        # resolve external reference
+        if (refstr !~ /^#\//) {
+            return HeaderObject::newHeader(name, getExternalReference(refstr), self);
+        }
+        if (refstr !~ /^#\/components\/headers\//) {
+            throw "INVALID-REFERENCE", sprintf("cannot resolve HeaderObject %y reference %y; expecting "
+                "\"#/components/headers/...\"", name, refstr);
+        }
+        string rstr = (refstr =~ x/^#\/components\/headers\/(.*)$/)[0];
+        *HeaderObject ref = components.headers{rstr};
+        if (!ref) {
+            throw "INVALID-REFERENCE", sprintf("cannot resolve HeaderObject %y reference %y; known header "
+                "references: %y", name, refstr, keys components.headers);
+        }
+        # as for a parameter or response reference, a sibling of "$ref" is ignored rather than rejected
+        return ref;
     }
 
     #! resolves a reference to a requestBody
@@ -1780,10 +1819,14 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                     : new QoreSoftBoolOrNothingDataType(type_options);
 
             case "array":
-                if (!arrayItems) {
-                    throw "OPENAPI3-SCHEMA-ERROR", sprintf("no item definition for array path %y", path);
-                }
-                return new SoftListDataType(arrayItems.getDataType(True), !required);
+                # an array with no "items" is a legal, if lax, declaration: JSON Schema leaves the
+                # elements unconstrained rather than making the array invalid.  GitLab's description uses
+                # it for a parameter that accepts either a scalar or a list of them.  Rejecting it would
+                # fail the whole document over a construct that is simply permissive, so it produces a
+                # list of "auto"
+                return new SoftListDataType(arrayItems
+                    ? arrayItems.getDataType(True)
+                    : AbstractDataProviderType::get(AutoType), !required);
 
             case "object":
                 return new HashDataType(required ? AutoHashType : AutoHashOrNothingType);
@@ -3763,74 +3806,8 @@ public class ParameterObject inherits ParameterBase {
 
         # issue #2388 ensure that query parameters are converted to their target type first
         if (inLoc == "query") {
-            switch (schema.type) {
-                case "integer": {
-                    if (value.typeCode() == NT_STRING) {
-                        if (value =~ /[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-2][0-9]:[0-5][0-9]:[0-5][0-9])?/) {
-                            value = date(value).getEpochSeconds();
-                        } else {
-                            if (value !~ /^([+-])?[0-9]+$/) {
-                                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y of "
-                                    "type \"integer\" is invalid; value provided: %y", name, path, method, value);
-                            }
-                            value = value.toInt();
-                        }
-                    }
-                    break;
-                }
-                case "number":
-                    if (value.typeCode() == NT_STRING) {
-                        value = value.toNumber();
-                    }
-                    break;
-                case "string":
-                    switch (schema.format) {
-                        case "date":
-                        case "date-time":
-                            try {
-                                value = date(value);
-                            } catch (hash<ExceptionInfo> ex) {
-                                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y of "
-                                    "type \"date\" is invalid; value provided: %y (%s)", name, path, method, value,
-                                    ex.desc);
-                            }
-                            break;
-                        case "binary":
-                            try {
-                                value = binary(value);
-                            } catch (hash<ExceptionInfo> ex) {
-                                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y of "
-                                    "type \"binary\" is invalid; value provided: %y (%s)", name, path, method, value,
-                                    ex.desc);
-                            }
-                            break;
-                        case "byte":
-                            try {
-                                value = parse_base64_string(value);
-                            } catch (hash<ExceptionInfo> ex) {
-                                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y of "
-                                    "type \"binary\" is invalid; value provided: %y (%s)", name, path, method, value,
-                                    ex.desc);
-                            }
-                            break;
-                    }
-                    break;
-                case "boolean":
-                    value = parse_boolean(value);
-                    break;
-                case "array":
-                    switch (value.typeCode()) {
-                        case NT_STRING:
-                            value = value.split(",");
-                            break;
-                        case NT_LIST:
-                            break;
-                        default:
-                            value = exists value ? (value,) : ();
-                            break;
-                    }
-                    break;
-            }
+            value = RestSchemaValidator::AbstractParameterObject::convertQueryArg(schema.type, schema.format,
+                schema.items, path, method, name, value);
         } else if (inLoc == "path" && !value && path) {
             # if we have a path and a missing value then ignore the missing value
             return;
@@ -3984,7 +3961,8 @@ public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractRe
 
         *hash<auto> headersObj;
         if (optional_field(obj_type, oh, "headers", NT_HASH, \headersObj))
-            headers = map {$1.key: new HeaderObject($1.key, $1.value, openapi3)}, headersObj.pairIterator();
+            headers = map {$1.key: HeaderObject::newHeader($1.key, $1.value, openapi3)},
+                headersObj.pairIterator();
 
         optional_field(obj_type, oh, "examples", NT_HASH, \examples);
         # TODO keys should be Operation 'produces' values
@@ -4034,6 +4012,23 @@ public class HeaderObject inherits ParameterBase {
             throw "HEADER-ERROR", sprintf("Header %y must not specify the 'in' keyword (%y)", name, oh."in");
         }
         parseData(oh, openapi3);
+    }
+
+    #! gets a concrete instance of a HeaderObject, resolving a reference if necessary
+    /** A response declares each of its headers as either a Header Object or a Reference Object, so a
+        description that keeps its headers in \c "#/components/headers" - as GitHub's does for the \c Link
+        pagination header - is only parseable if the reference is followed.
+
+        @param name the header name
+        @param oh the header object or reference object
+        @param openapi3 the REST schema for resolving references
+    */
+    static HeaderObject newHeader(string name, hash<auto> oh, OpenApi3Schema openapi3) {
+        on_error rethrow $1.err, sprintf("%s (while processing header %y)", $1.desc, name);
+        if (oh.hasKey("$ref")) {
+            return openapi3.resolveHeader(name, oh."$ref", oh);
+        }
+        return new HeaderObject(name, oh, openapi3);
     }
 
     #! Validates the header value
@@ -4881,7 +4876,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return str;
     }
 
-    #! Returns the data type for the schema
     #! Returns True if this schema has composition features that require special type handling
     /** Checks for oneOf, anyOf, not, or properties with readOnly/writeOnly attributes
     */
@@ -4901,6 +4895,33 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     #! Returns True if this schema has composition keywords (oneOf/anyOf/not)
     bool hasCompositionKeywords() {
         return oneOf || anyOf || notSchema ? True : False;
+    }
+
+    #! Returns True if the schema is an object whose \c oneOf or \c anyOf members only add constraints
+    /** A composition beside an object's own \c properties does not always describe alternative shapes.  The
+        common idiom is an object that declares every property it accepts and then adds
+        \c {anyOf: [{required: [a]}, {required: [b]}]} to say that at least one of them must be given -
+        GitHub's "request reviewers" body is exactly that.  Every member of such a composition carries no
+        type, no properties and no composition of its own; it is a requiredness rule, not a shape.
+
+        Exposing that as a union type would replace an object with nine well-typed options by a single
+        opaque one, so the object's own type is used and the composition is left to validation, which
+        @ref OpenApi3::OpenApi3HashDataType "OpenApi3HashDataType" performs.
+    */
+    bool isConstraintOnlyComposition() {
+        if (!properties && type != "object") {
+            return False;
+        }
+        if (!oneOf && !anyOf) {
+            return False;
+        }
+        foreach SchemaObject member in (oneOf + anyOf) {
+            if (member.own_type || member.properties || member.allOf || member.oneOf || member.anyOf
+                || member.notSchema || member.items) {
+                return False;
+            }
+        }
+        return True;
     }
 
     #! Returns the data provider type for a given type/format/items path
@@ -4933,7 +4954,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
             return orNothingDataType;
         }
-        if (oneOf || anyOf) {
+        if ((oneOf || anyOf) && !isConstraintOnlyComposition()) {
             if (required) {
                 if (!dataType) {
                     dataType = getCompositionDataType(True, rest);
@@ -5797,6 +5818,13 @@ namespace Priv {
             }
         } else if (typeCode == OpenApi3ListToAnySet) {
             foreach auto v in (val) {
+                # a null member of an "enum" says that null is an allowed value, which is what "nullable"
+                # already carries; it is not an allowed value with a name, so it is skipped rather than
+                # rejected.  Bitbucket's description uses this form, and refusing it would fail the whole
+                # document over a construct that is merely saying the field is optional
+                if (!exists v) {
+                    continue;
+                }
                 if (!v.strp())
                     throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d in list value has type %y which "
                         "cannot be converted to a string; the OpenApi3 module only supports types that can be "

@@ -30,6 +30,10 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) RestSchemaDataProvider
+%requires FileLocationHandler
+
+%requires json
+%requires yaml
 
 module RestSchemaActions {
     version = "1.0";
@@ -68,7 +72,7 @@ module RestSchemaActions {
 
     @ref RestSchemaActions::RestSchemaPruner "RestSchemaPruner" reduces a schema to the operations an
     application selected, together with the transitive closure of everything they reference.  This
-    is what keeps a large upstream document — Stripe's declares several hundred paths — from
+    is what keeps a large upstream document - Stripe's declares several hundred paths - from
     dominating load time and memory when an application exposes a couple of dozen of them.
 
     Pruning is a **structural** transformation: it never edits a schema to work around an upstream
@@ -85,7 +89,7 @@ module RestSchemaActions {
     Each entry carries a **stable action ID**.  An OpenAPI \c operationId may be recorded, and is
     checked, but it is never the source of action identity: an upstream rename has to be reported as
     drift rather than silently rename an action that existing workflows call.  The manifest also makes
-    additions deliberate — an endpoint appearing in an updated schema does not become a public action
+    additions deliberate - an endpoint appearing in an updated schema does not become a public action
     until somebody adds it.
 
     Everything is validated when the set is constructed, so a manifest that has drifted from its
@@ -135,7 +139,7 @@ module RestSchemaActions {
     A schema can say that a value is an integer; it cannot say the integer is a point in time, still
     less whether the unit is seconds or milliseconds.  A field overlay names a codec from
     @ref RestSchemaActions::RestSchemaActionCodecs "RestSchemaActionCodecs", and the field is then
-    published with the codec's type and converted in both directions — so the manifest stays
+    published with the codec's type and converted in both directions - so the manifest stays
     declarative and the unit is decided once, in one place, instead of by every caller.
 
     @section restschemaactions_refdata Reference Data
@@ -146,6 +150,27 @@ module RestSchemaActions {
     the value and the label; no application code is involved.  Dropdowns are then served through
     @ref DataProvider::AbstractDataProvider::getSupportedReferenceData() "getSupportedReferenceData()"
     and @ref DataProvider::AbstractDataProvider::getReferenceData() "getReferenceData()".
+
+    Most identifiers are not global.  A branch belongs to a project, a page to a space, a variable to a
+    group - so listing them requires the value the user has already chosen elsewhere in the same form.
+    @ref RestSchemaActions::RestSchemaReferenceDataInfo::options_from "options_from" declares that:
+    it forwards named options of the action being filled in into the listing action, and the dropdown
+    stays empty until they have values, rather than offering identifiers from some other scope.
+
+    @section restschemaactions_import Importing a Schema
+
+    @ref RestSchemaActions::RestSchemaImporter "RestSchemaImporter" produces the committed artifact:
+    download a named upstream revision, prune it to the manifest's operations, write it, and update the
+    application's provenance record.  \c tools/rest-schema-import.qr is its command-line front end and
+    also runs the drift report below, so that an update is one reproducible command rather than an ad-hoc
+    program written once per application.
+
+    It normalizes a trailing slash and a path-parameter **name** when resolving a manifest entry against a
+    document, because neither changes the operation, and comparing paths as strings therefore reports
+    operations as withdrawn when they are merely spelled differently.  Every match that needed normalizing
+    is reported and fails the import: the manifest still has to name the path exactly as the document
+    declares it, or @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" will not resolve it
+    at run time.
 
     @section restschemaactions_execution Execution
 
@@ -162,10 +187,123 @@ module RestSchemaActions {
     @note Actions can currently only be generated from OpenAPI 3 schemas; a Swagger 2.0 schema is
     rejected with a clear error rather than handled by untested code paths.
 
+    @section restschemaactions_records Record-Based Tables
+
+    An action is a request; a **record table** is a collection a caller can search, create in, update and
+    delete from with the standard record API, and with the standard search expressions the rest of the
+    platform speaks.  A REST collection can be presented as one, and
+    @ref RestSchemaActions::RestSchemaTableDataProvider "RestSchemaTableDataProvider" does it without a
+    second implementation of the API: a table is declared as a
+    @ref RestSchemaActions::RestSchemaRecordTableInfo "RestSchemaRecordTableInfo" naming **actions the
+    manifest already exports**, so the paths, the request contracts, the escaping, the codecs and the
+    published response shapes stay in one place.
+
+    @subsection restschemaactions_records_hybrid Hybrid Pushdown
+
+    A REST collection is not a table.  The service evaluates a fixed set of filters, expressed as query
+    arguments or - in the two cases where a vendor publishes a query language - as a filter expression, and
+    it evaluates nothing else.  Answering a search therefore takes three things at once, and doing any of
+    them alone is wrong:
+
+    |!Step|!Why
+    |Send what the service can evaluate|a collection of ten thousand records behind a page of 100 cannot be searched by reading all of it
+    |Evaluate the rest as records arrive|the answer has to be the one the caller asked for, not the service's approximation of it
+    |Keep reading pages until the limit is met by **matching** records|otherwise a search silently under-returns
+
+    @ref RestSchemaActions::RestSchemaRecordFilter "RestSchemaRecordFilter" performs the split, and the third
+    step falls out of applying the residual predicate in
+    @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" - which counts the limit **after**
+    filtering - over a lazy @ref RestSchemaActions::RestSchemaRecordPageIterator "RestSchemaRecordPageIterator".
+    Truncating the fetch at the limit and filtering afterwards is the way to get this wrong: asked for ten
+    closed issues from a repository holding ten closed among a hundred, it answers with one.
+
+    @subsection restschemaactions_records_exact Exactness Is the Load-Bearing Property
+
+    Each filter rule says whether the service's filter means **exactly** what the operator means.  It
+    defaults to @ref False, which is the answer that cannot produce a wrong result: the filter is sent and
+    the predicate is evaluated again on what comes back, so a service that returns more than it was asked
+    for costs a little client-side work and nothing else.  Declaring a rule exact is a statement about the
+    API, and it is the one way this machinery can under-return.
+
+    @subsection restschemaactions_records_native What Native Search Means
+
+    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" is declared only by
+    a table whose API takes a filter **expression** and can therefore evaluate a whole tree.  A table that
+    can only narrow a listing with query arguments declares it @ref False however many arguments it has,
+    because a caller reading that flag is asking whether the search happens on the server, and for such a
+    table the answer is "partly".  The per-operator detail is published as
+    @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown", and every generic
+    search operator is answered whether the service can evaluate it or not.
+
+    @ref RestSchemaActions::RestSchemaQuerySyntaxInfo "RestSchemaQuerySyntaxInfo" declares such a language
+    without any application code: an infix token per operator, a method-call form for the string predicates,
+    and one function rendering a value.  An operator the language spells without quite meaning it is listed
+    in \c inexact_ops, so it narrows the listing and the predicate is still answered here.
+
+    @subsection restschemaactions_records_type What the Columns Are
+
+    A listing returns a **projection**; reading one record returns the **record**.  A vendor describes both
+    and the two rarely agree - GitLab describes a project with 24 fields in its listing and 161 in its single
+    read - so the record type is derived from both and the richer one is published, with any column only the
+    other declares added to it rather than lost.
+
+    That is not a cosmetic difference.  A column the table does not declare **cannot be searched at all**:
+    the framework rejects a predicate on an undeclared field before the table is reached.  Under-declaring
+    therefore removes functionality silently, which is why the richer description wins and why the two are
+    merged rather than one being chosen.
+
+    Where a vendor returns a field and describes it nowhere -
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns" declares it, merged over
+    the derived type.  That keeps the schema the primary description and leaves a short list of what it is
+    missing, rather than a hand-written record type that goes stale the moment the vendor adds a field.
+    Bitbucket is the case: it addresses a repository by a \c slug it returns in every response and declares
+    in no schema, and without that column the table could not address a record at all.
+
+    @subsection restschemaactions_records_paths The Paths a Record Is Read Through
+
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::records_path "records_path",
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::record_path "record_path" and
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::write_record_path "write_record_path" say where in a
+    response the records are, and a path that does not resolve fails **silently**: a single read whose record
+    path names a wrapper the action has already unwrapped reads one record as nothing at all, and no test
+    that only searches will ever notice.
+
+    @ref RestSchemaActions::RestSchemaTablesDataProvider::checkTables() "checkTables()" therefore resolves
+    every one of them against the response the action publishes, which is what an application's test suite
+    calls.  Only a response that describes its fields can be checked; a union describes none, and an
+    unverifiable path is left alone rather than reported on a guess.
+
+    @subsection restschemaactions_records_identity Addressing One Record
+
+    A table addresses a record by whatever the API's paths take, which is not always one value and is not
+    always a top-level field.  @ref RestSchemaActions::RestSchemaRecordTableInfo::id_parts "id_parts"
+    declares a composite identity as option to record field path - GitHub names a repository by its
+    \c {owner} and its \c {repo}, and carries the first as a nested \c "owner.login".
+
+    That is a different thing from
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::scope_options "scope_options", and the difference is
+    what decides between them:
+
+    |!|!Identifies|!Comes from
+    |a scope option|the **collection**, the same for every record in a search|the caller, and the listing requires it
+    |an identity part|**one record**, varying from row to row within a listing|the record itself
+
+    A search whose predicate is the identity and nothing else is answered by reading that one record.  A
+    predicate that also asks something more is not, because answering only the identity half would return -
+    or write to - a record the caller did not match.
+
+    @subsection restschemaactions_records_actions A Table Is Reached by an Action
+
+    Declaring the providers is only half of it: a table no action reaches is offered to nobody.
+    @ref RestSchemaActions::RestSchemaTablesDataProvider::registerRecordActions() "registerRecordActions()"
+    registers the record-based actions against \c "<container>/{table}", and the IDs are the application's to
+    choose - where a native application replaces an existing one, they are the IDs the superseded application
+    registered.
+
     @section restschemaactions_drift Schema Updates
 
     Staying aligned with an API has to mean a **reproducible reviewed update**, not an uncontrolled
-    runtime one — a schema fetched at run time could change the contract of an action that existing
+    runtime one - a schema fetched at run time could change the contract of an action that existing
     workflows already call.
 
     @ref RestSchemaActions::RestSchemaDrift "RestSchemaDrift" produces the report that makes such a

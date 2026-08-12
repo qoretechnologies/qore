@@ -46,17 +46,37 @@ public hashdecl RestSchemaReferenceDataInfo {
     */
     *hash<auto> options;
 
+    #! Options taken from the action being filled in, keyed by the listing action's option name
+    /** Turns a dropdown that can only list globally into one scoped by what the user has already chosen:
+        the branches of the selected project, the pages of the selected space.  Each entry names an option
+        of the listing action, and the value names the option of the **calling** action supplying it.
+
+        Every named value is required: until the user has filled in the option it depends on, the listing
+        cannot be made at all, so the dropdown is empty rather than listing the wrong thing.  Pair this with
+        @ref RestSchemaActions::RestSchemaFieldOverlayInfo::depends_on "depends_on" on the field, so that the
+        UI knows to re-read the dropdown when the value it is scoped by changes.
+
+        Both sides are validated when the action set is built: the key must be an option of the listing
+        action, and the value must be an option of every action whose overlay names this reference data.
+    */
+    *hash<string, string> options_from;
+
     #! A path of field names leading from the action's output to the list of records
     /** Not needed when the action's output is itself the list.
     */
     *softlist<string> records_path;
 
     #! The record field supplying the value
+    /** A \c "." separated path reaches into a nested record: a Bitbucket workspace membership carries the
+        identity as \c "user.uuid", not at the top level, and a dropdown that could only read top-level
+        fields would have nothing to offer.
+    */
     string value_field;
 
     #! The record field supplying the display name
-    /** Falls back to @ref value_field when absent, or when a record does not carry it — many APIs allow the
-        human-readable name of an object to be unset.
+    /** Falls back to @ref value_field when absent, or when a record does not carry it - many APIs allow the
+        human-readable name of an object to be unset.  A \c "." separated path reaches into a nested record,
+        as for @ref value_field.
     */
     *string display_field;
 
@@ -68,9 +88,9 @@ public hashdecl RestSchemaReferenceDataInfo {
 /** Owns the manifest, resolves every entry against the schema, and generates the
     @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo" hashes an application registers.
 
-    All validation happens in the constructor, so a manifest that has drifted from its schema — an operation
+    All validation happens in the constructor, so a manifest that has drifted from its schema - an operation
     that no longer exists, an overlay entry that no longer resolves, a reference-data entry naming an action
-    that was removed — fails when the module is loaded rather than when a user opens the action.
+    that was removed - fails when the module is loaded rather than when a user opens the action.
 */
 public class RestSchemaActionSet {
     private {
@@ -85,20 +105,36 @@ public class RestSchemaActionSet {
 
         #! Reference data declarations, keyed by reference data name
         hash<string, hash<RestSchemaReferenceDataInfo>> refdata;
+
+        #! Other sets in the same application whose reference data this one may use
+        list<RestSchemaActionSet> peers = ();
     }
 
     #! Resolves and validates an application's manifest against a schema
     /** @param schema the schema the actions are derived from
         @param manifest the operations the application exports
         @param refdata reference data declarations, keyed by reference data name
+        @param peers other sets in the same application whose reference data this one may use
+
+        An application whose API is split across documents needs one set per document, because a set binds
+        one schema and the request URI takes its prefix from that schema's base path.  Its dropdowns do not
+        split the same way: a Xero project names a **contact**, and contacts are declared in the accounting
+        document while projects are declared in the projects one.  Naming the peer sets lets a field in this
+        set declare reference data another set produces, and the listing then runs against the schema that
+        actually declares it.
+
+        Peers are given at construction rather than added later so that every declaration is still checked
+        once, in one place.  That means they have to be built in dependency order, which is what makes a
+        cycle between two sets impossible to express.
 
         @throw REST-SCHEMA-ACTION-ERROR the manifest is inconsistent, or an entry does not resolve
     */
     constructor(AbstractRestSchemaValidator schema, list<hash<RestSchemaActionInfo>> manifest,
-            *hash<string, hash<RestSchemaReferenceDataInfo>> refdata) {
+            *hash<string, hash<RestSchemaReferenceDataInfo>> refdata, *softlist<RestSchemaActionSet> peers) {
         self.schema = schema;
         self.manifest = manifest;
         self.refdata = refdata ?? {};
+        self.peers = peers ?? ();
 
         hash<string, string> seen_ops = {};
         # manifest entries by action ID, for resolving "variant_of" against what came before
@@ -254,6 +290,51 @@ public class RestSchemaActionSet {
         }
     }
 
+    #! Returns every reference data declaration reachable from this set, including its peers'
+    hash<string, hash<RestSchemaReferenceDataInfo>> getAllReferenceDataDecls() {
+        hash<string, hash<RestSchemaReferenceDataInfo>> rv = {};
+        foreach RestSchemaActionSet peer in (peers) {
+            rv += peer.getAllReferenceDataDecls();
+        }
+        # this set's own declarations win, so a peer cannot shadow one
+        return rv + refdata;
+    }
+
+    #! Returns the reference data declaration of the given name, from this set or a peer
+    /** @param name the reference data name
+
+        @return the declaration, or @ref nothing if no set in the application declares it
+    */
+    *hash<RestSchemaReferenceDataInfo> getReferenceDataDecl(string name) {
+        if (*hash<RestSchemaReferenceDataInfo> rv = refdata{name}) {
+            return rv;
+        }
+        foreach RestSchemaActionSet peer in (peers) {
+            if (*hash<RestSchemaReferenceDataInfo> rv = peer.getReferenceDataDecl(name)) {
+                return rv;
+            }
+        }
+    }
+
+    #! Returns the set that produces the given reference data, from this set or a peer
+    /** The listing has to run against the schema that declares it, because the request URI takes its prefix
+        from that schema's base path.
+
+        @param name the reference data name
+
+        @return the set, or @ref nothing if no set in the application declares it
+    */
+    *RestSchemaActionSet getReferenceDataSet(string name) {
+        if (exists refdata{name}) {
+            return self;
+        }
+        foreach RestSchemaActionSet peer in (peers) {
+            if (*RestSchemaActionSet rv = peer.getReferenceDataSet(name)) {
+                return rv;
+            }
+        }
+    }
+
     #! Validates the reference data declarations against the manifest and the overlays
     private checkReferenceData() {
         foreach hash<auto> i in (refdata.pairIterator()) {
@@ -276,6 +357,17 @@ public class RestSchemaActionSet {
                         "which does not declare it; options: %y", i.key, opt, rd.action, sort(keys flat));
                 }
             }
+            foreach string opt in (keys rd.options_from) {
+                if (!exists flat{opt}) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("reference data %y forwards a value into option "
+                        "%y of action %y, which does not declare it; options: %y", i.key, opt, rd.action,
+                        sort(keys flat));
+                }
+                if (exists rd.options{opt}) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("reference data %y both fixes option %y and "
+                        "forwards a value into it; one of the two would silently win", i.key, opt);
+                }
+            }
         }
 
         # every ref_data named by an overlay must be declared, or the dropdown would silently stay empty
@@ -284,10 +376,25 @@ public class RestSchemaActionSet {
             foreach hash<auto> f in (fields.pairIterator()) {
                 *hash<auto> attr = f.value.getAttributes();
                 foreach string key in (("ref_data", "element_ref_data")) {
-                    if (attr{key}.val() && !exists refdata{attr{key}}) {
+                    if (!attr{key}.val()) {
+                        continue;
+                    }
+                    *hash<RestSchemaReferenceDataInfo> rd = getReferenceDataDecl(attr{key});
+                    if (!rd) {
                         throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y option %y declares %s %y, which is "
-                            "not declared in the reference data of this action set; declared reference data: "
-                            "%y", i.key, f.key, key, attr{key}, sort(keys refdata));
+                            "not declared in the reference data of this action set or any of its peers; "
+                            "declared reference data: %y", i.key, f.key, key, attr{key},
+                            sort(keys getAllReferenceDataDecls()));
+                    }
+                    # a forwarded value has to come from somewhere: an action offering a dropdown scoped by
+                    # a value it does not itself have would show an empty list and no reason for it
+                    foreach string from in (rd.options_from.iterator()) {
+                        if (!exists fields{from}) {
+                            throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y option %y declares %s %y, "
+                                "which is scoped by option %y; action %y does not declare that option, so the "
+                                "dropdown could never be populated; options: %y", i.key, f.key, key,
+                                attr{key}, from, i.key, sort(keys fields));
+                        }
                     }
                 }
             }

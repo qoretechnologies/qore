@@ -1,0 +1,379 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GitHubDataProvider.qm Qore user module providing a data provider API for GitHub
+
+/*  GitHubDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires GitHubRestClient
+%requires RestClientIo
+%requires Util
+
+%requires json
+
+
+module GitHubDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for GitHub";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new GitHubDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GitHubDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "GitHub",
+            "short_desc": "Work with GitHub repositories, issues, pull requests, releases and Actions",
+            "desc": "Provides access to [GitHub](https://github.com), the code hosting and collaboration "
+                "platform.
+
+"
+                "**Common use cases**:
+"
+                "- **Repositories**: create, read, update and delete repositories, and read or commit "
+                "files in them
+"
+                "- **Issues**: open, read, update, assign and label issues
+"
+                "- **Pull requests**: open, read, update and request reviews
+"
+                "- **Branches and commits**: list branches and commits, and create a branch or tag
+"
+                "- **Releases**: list and publish releases
+"
+                "- **Actions**: list workflows and write encrypted secrets
+
+"
+                "**Seven webhook events** report new issues, pull requests, reviews, commits, branches, "
+                "releases and commit comments; each registers a hook on one repository and **verifies the "
+                "signature** on every delivery.
+
+"
+                "GitHub is a trademark of GitHub, Inc.",
+            "scheme": "github",
+            "logo": Priv::GitHubLogo,
+            "logo_file_name": "github-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::VersionControl, DataProvider::AppGroup::DevOps),
+        });
+
+        # register every action in the manifest
+        RestSchemaActionSet action_set = GitHubSchema::getActionSet();
+        action_set.registerActions(GitHubDataProvider::AppName);
+
+        # register the record-based table actions; the IDs are those of the TypeScript application this
+        # module replaces, so a workflow that already calls them keeps working
+        {
+            string scope_desc = "; the `issues`, `pulls` and `releases` tables are each scoped to one "
+                "repository, given by the `owner` and `repo` options, while `repositories` spans every "
+                "owner the credential can see";
+            string search_desc = sprintf("Search for matching records in the given table in app %y",
+                GitHubDataProvider::AppName);
+            string single_desc = sprintf("Search for a single matching record in the given table in app %y",
+                GitHubDataProvider::AppName);
+            string create_desc = sprintf("Create new records in the given table in app %y",
+                GitHubDataProvider::AppName);
+            # kept under 80 characters, because a short description is shown where there is no room for
+            # more; the full explanation belongs in "desc"
+            string update_short = sprintf("Update matching records in the given table in app %y",
+                GitHubDataProvider::AppName);
+            string update_desc = sprintf("Updates every record in the given table in app %y matching the "
+                "search criteria", GitHubDataProvider::AppName);
+            string delete_short = sprintf("Delete matching records in the given table in app %y",
+                GitHubDataProvider::AppName);
+
+            RestSchemaTablesDataProvider::registerRecordActions(GitHubDataProvider::AppName,
+                "/" + GitHubDataProvider::TablesChildName, action_set, GitHubRecordTables::Tables,
+                GitHubRecordTables::RecordActionIds, {
+                    "groups": (GitHubRecordTables::RecordGroup,),
+                }, {
+                    "search": {
+                        "short_desc": search_desc,
+                        "desc": search_desc + scope_desc,
+                    },
+                    "search-single": {
+                        "short_desc": single_desc,
+                        "desc": single_desc + scope_desc,
+                    },
+                    "create": {
+                        "short_desc": create_desc,
+                        "desc": create_desc + ".\n\nGitHub's collection endpoints lag its writes by a few "
+                            "seconds, so a record created here is **not** in what a search returns "
+                            "immediately afterwards; use what this action returned rather than reading it "
+                            "back",
+                    },
+                    "delete": {
+                        "short_desc": delete_short,
+                        "desc": "Deletes every record in the given table matching the search criteria.\n\n"
+                            "Only the **Repositories** table can be deleted from: GitHub closes an issue or "
+                            "a pull request rather than removing it, and offers no delete for a release.\n\n"
+                            "**Deleting a repository cannot be undone.** GitHub keeps no trash for one; "
+                            "recovering it means asking GitHub Support within 90 days. This needs the "
+                            "`delete_repo` scope, which this connection requests by default.",
+                    },
+                    "update": {
+                        "short_desc": update_short,
+                        "desc": update_desc + ".\n\nGitHub identifies an issue or a pull request by its "
+                            "`number` within the repository, so a search naming one changes exactly that "
+                            "record; any other search reads the table first and updates every record it "
+                            "matches",
+                    },
+                });
+        }
+
+        # register the webhook event actions
+        foreach hash<auto> i in (GitHubEventsDataProvider::EventMap.pairIterator()) {
+            Class cls = i.value;
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GitHubDataProvider::AppName,
+                "path": "/" + GitHubDataProvider::EventsChildName + "/" + i.key,
+                "action": i.key,
+                "display_name": cls.getConstant("DisplayName").getValue(),
+                "short_desc": cls.getConstant("ShortDesc").getValue(),
+                "desc": cls.getConstant("Desc").getValue(),
+                "action_code": DPAT_EVENT,
+                "action_val": i.key,
+                "groups": ("Events",),
+            });
+        }
+    };
+}
+
+/** @mainpage GitHubDataProvider Module
+
+    @tableofcontents
+
+    @section githubdataproviderintro GitHubDataProvider Introduction
+
+    The %GitHubDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [GitHub](https://github.com)'s REST API.
+
+    @section githubdataprovider_generated Generated, Not Hand-Written
+
+    The actions this application exports are **generated from GitHub's own OpenAPI 3 description** by the
+    @ref restschemaactionsintro "RestSchemaActions" module; the presentation comes from an
+    application-owned manifest and UX overlay in
+    @ref GitHubDataProvider::GitHubManifest "GitHubManifest".
+
+    @section githubdataprovider_pinned The Pinned Schema
+
+    The schema is committed to this module rather than fetched at run time, so an upstream change cannot
+    alter the contract of an action that existing workflows already call.  It is imported with
+    \c tools/rest-schema-import.qr from \c qlib/GitHubDataProvider/github-import.yaml.
+
+    GitHub publishes one description covering its entire REST API - 12.9 MB and 808 paths - so pruning it
+    to the operations this application exports is what makes the module usable at all; the committed
+    artifact is a fraction of a percent of the document it came from.
+
+    @section githubdataprovider_version The API Version Moves With the Schema
+
+    Every request sends \c "X-GitHub-Api-Version: 2022-11-28", and that version is recorded in the schema
+    provenance beside the document's checksum.  GitHub versions its REST API by date and changes behaviour
+    between versions, so the description the actions are generated from and the version the requests
+    declare have to move together.
+
+    @section githubdataprovider_actions Actions
+
+    43 actions are exported, in these groups:
+
+    |!Group|!What it covers
+    |Repositories|repositories, their contents, contributors and collaborators
+    |Issues|issues, their assignees and the repository's labels
+    |Pull Requests|pull requests and their requested reviewers
+    |Branches and Commits|branches, commits, and creating a branch or tag
+    |Releases|listing and publishing releases
+    |Organizations|the organizations the credential belongs to, and their members and repositories
+    |Search|repository and issue search
+    |Actions|workflows and encrypted repository secrets
+
+    Three of them - \c "orgs-list-for-authenticated-user", \c "issues-list-labels-for-repo" and
+    \c "repos-list-for-user" - are exported that the superseded application did not, because it offered
+    dropdowns backed by endpoints it never exported.
+
+    @section githubdataprovider_pagination Paging Through a Listing
+
+    GitHub pages with \c page and \c per_page, and \c per_page is capped at **100**.  The body is the bare
+    array; the next and last pages are reported in the \c Link **response header**, and a page shorter than
+    the size asked for is the last one.
+
+    The two search actions are different: they return \c {total_count, items} and are capped at 1000
+    results however far they are paged.
+
+    @section githubdataprovider_events Events
+
+    Seven webhook events are offered.  Each registers a hook on **one repository** - so \c owner and
+    \c repo are required options - with a generated shared secret, and **drops any delivery whose
+    \c X-Hub-Signature-256 does not verify**.  The application this module replaces registered its hooks
+    with no secret at all, so nothing it received could be checked.
+
+    Each event raises only the change its name describes: **New Issue** raises \c opened and not \c edited
+    or \c closed, **New Branch** raises a branch and not a tag.  Set \c all_actions to receive every
+    delivery of the underlying GitHub event and read the payload's \c action to tell them apart.
+
+    @section githubdataprovider_records Record-Based Tables
+
+    Seven tables are exposed under \c tables.  \c issues, \c pulls, \c releases and \c repositories are
+    read and written, and are **flattened, writable projections** rather than GitHub's response shapes: an
+    issue's labels are names, its assignee a login, a pull request's base and head branch names.  \c owner
+    and \c repo are required search and create options, because a table is scoped to one repository.
+
+    \c labels, \c collaborators and \c contributors are **read only**: this application exports no create,
+    update or delete for any of them, so those tables declare none rather than offering an action that could
+    only fail.  They publish GitHub's own record shape, having no predecessor whose column names have to be
+    preserved, and each is named by what GitHub's paths take - a label by its \c name, a collaborator and a
+    contributor by their \c login.
+
+    Five actions reach them, each naming its table in the path (\c "tables/{table}"):
+
+    |!Action|!What it does
+    |\c search|Returns every record in the table matching the search
+    |\c search-single|Returns the one record matching the search
+    |\c create|Creates records in the table
+    |\c update|Updates every record matching the search
+    |\c delete|Deletes every record matching the search
+
+    Their options depend on which table was named - \c issues accepts a state and a sort that \c releases has
+    no notion of - so they are resolved from the chosen table rather than declared once for the application.
+    The first three action IDs are those of the application this module replaces.
+
+    \c delete applies to \c repositories alone: GitHub's REST API cannot delete an issue, a pull request or a
+    release - an issue is closed rather than removed, which is an update - and every other table reports that
+    it cannot rather than pretending.  **Deleting a repository cannot be undone.**
+
+    \c repositories is also the one table with no repository scope, because its records are the repositories.
+    GitHub names one by its \c {owner} and its \c {repo}, so a record there is addressed by two values: the
+    record's \c name and its \c "owner.login".
+
+    @subsection githubdataprovider_records_search How a Search Is Answered
+
+    A table takes the standard search expressions, and answers one in two parts.  What GitHub can evaluate is
+    sent with the listing: an issue's \c state, a pull request's \c base branch, and \c since for issues
+    updated after a point in time.  Everything else is evaluated against each record as it arrives, and the
+    listing is paged until the caller's \c limit is met **by matching records** - so a search for ten closed
+    issues returns ten of them however far into the repository they are.
+
+    The tables therefore declare \c supports_search_expressions and **not** \c supports_native_search: GitHub
+    has no filter expression language, so the search does not happen entirely on the server, and each
+    operator says for itself whether GitHub can evaluate it.
+
+    @section githubdataprovider_examples Examples
+
+    @subsection githubdataprovider_ex_provider Getting the Data Provider
+
+    @code{.py}
+%requires ConnectionProvider
+%requires GitHubDataProvider
+
+AbstractDataProvider gh = get_connection("github").getDataProvider();
+    @endcode
+
+    @subsection githubdataprovider_ex_issue Opening an Issue
+
+    @code{.py}
+hash<auto> issue = gh.getChildProviderEx("issues-create").doRequest({
+    "owner": "qoretechnologies",
+    "repo": "qorus",
+    "title": "Release notes are out of date",
+    "body": "The 6.1 notes still describe the 6.0 behaviour.",
+    "labels": ("documentation",),
+});
+printf("opened #%d: %s\n", issue.number, issue.html_url);
+    @endcode
+
+    @subsection githubdataprovider_ex_page Paging Through a Listing
+
+    @code{.py}
+AbstractDataProvider list_issues = gh.getChildProviderEx("issues-list-for-repo");
+
+list<auto> all = ();
+for (int page = 1; True; ++page) {
+    list<auto> res = list_issues.doRequest({
+        "owner": "qoretechnologies",
+        "repo": "qorus",
+        "state": "all",
+        "per_page": 100,
+        "page": page,
+    });
+    all += res;
+    if (res.size() < 100) {
+        break;
+    }
+}
+printf("%d issues\n", all.size());
+    @endcode
+
+    @subsection githubdataprovider_ex_file Committing a File
+
+    A file is written Base64-encoded, and replacing one needs the SHA of the blob being replaced:
+
+    @code{.py}
+hash<auto> scope = {"owner": "qoretechnologies", "repo": "qorus"};
+
+*hash<auto> current;
+try {
+    current = gh.getChildProviderEx("repos-get-content").doRequest(scope + {"path": "VERSION"});
+} catch (hash<ExceptionInfo> ex) {
+    # a file that does not exist yet is created rather than replaced
+}
+
+gh.getChildProviderEx("repos-create-or-update-file-contents").doRequest(scope + {
+    "path": "VERSION",
+    "message": "chore: bump the version",
+    "content": make_base64_string("6.1.0\n"),
+} + (current ? {"sha": current.sha} : {}));
+    @endcode
+
+    @subsection githubdataprovider_ex_secret Writing an Actions Secret
+
+    GitHub never accepts a secret in the clear: it must be sealed with the repository's public key first.
+
+    @code{.py}
+hash<auto> key = gh.getChildProviderEx("actions-get-repo-public-key").doRequest(scope);
+
+gh.getChildProviderEx("actions-create-or-update-repo-secret").doRequest(scope + {
+    "secret_name": "DEPLOY_TOKEN",
+    # sealed with key.key using libsodium's sealed-box construction, then Base64-encoded
+    "encrypted_value": sealed_value,
+    "key_id": key.key_id,
+});
+    @endcode
+
+    @section githubdataproviderrelnotes Release Notes
+
+    @subsection githubdataproviderv1_0 GitHubDataProvider v1.0
+    - the initial version of the %GitHubDataProvider module
+*/
+
+#! contains all public definitions in the GitHubDataProvider module
+public namespace GitHubDataProvider {
+}
