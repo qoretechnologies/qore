@@ -175,7 +175,19 @@ module McpServerHandler {
     - \c tasks/cancel: Cancel a running task
     - \c tasks/list: List all tasks for the session
 
-    To execute a tool call as a background task, include \c _meta.task: \c true in the request.
+    To execute a tool call as a background task, send the \c task augmentation with
+    \c tools/call (\c _meta.task is accepted from older clients for backwards compatibility).
+    A tool controls whether that is allowed with \c execution.taskSupport in its registration
+    metadata: @ref McpClient::MCP_TaskSupportForbidden "forbidden" rejects the request,
+    @ref McpClient::MCP_TaskSupportOptional "optional" (the default when nothing is declared)
+    lets the client decide per call, and @ref McpClient::MCP_TaskSupportRequired "required"
+    runs every call as a task whether or not the client asked.  A server can apply its own
+    policy for calls that carry no augmentation by reimplementing
+    @ref McpServerHandler::McpServerHandler::shouldCreateTask() "shouldCreateTask()".
+
+    Tasks created by a modern (stateless) request are held in a session-free store and
+    survive without a session, while requests on earlier protocol versions use the
+    session-scoped store and require a session.
 
     @subsection McpServer_intro_resources Resource Features
     The handler supports:
@@ -194,6 +206,21 @@ module McpServerHandler {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_0 McpServerHandler v1.0
+    - fixed a bug where a \c tools/call carrying the \c task augmentation failed for a client
+      using a modern (stateless) protocol version: the call was routed to the session-scoped
+      task store, which has no session to work with on that transport, so the request failed
+      instead of running.  Such calls now use the session-free task store
+    - fixed a bug where a client could not request task execution for a tool that permits but
+      does not require it; the server's own policy was the only way a task was ever created,
+      so a client that asked for one received a result it could not interpret.  A request for
+      a tool declaring @ref McpClient::MCP_TaskSupportForbidden "taskSupport forbidden" is now
+      refused explicitly rather than answered synchronously
+    - fixed a bug where a \c task augmentation carrying no options was ignored, so
+      \c "task": \c {} and the legacy \c _meta.task shape ran synchronously
+    - fixed a bug where a request missing its session reported an internal type error instead
+      of \c MCP-SESSION-ERROR
+    - fixed a bug where task \c createdAt and \c lastUpdatedAt were not valid ISO-8601
+      timestamps; they were emitted with an invalid format mask
     - added support for the @ref mcp_apps "MCP Apps extension" (\c io.modelcontextprotocol/ui): a server can
       register a \c ui:// user interface resource with
       @ref McpServerHandler::McpServerHandler::registerUiResource() "registerUiResource()" and attach it to a tool

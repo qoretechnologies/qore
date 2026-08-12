@@ -191,6 +191,8 @@ module McpClient {
     @section McpClient_relnotes McpClient Release Notes
 
     @subsection McpClient_1_0 McpClient v1.0
+    - added the @ref mcp_task_support "task support constants" naming the values a tool can
+      declare in \c execution.taskSupport
     - added support for the @ref mcp_apps "MCP Apps extension" (\c io.modelcontextprotocol/ui) under the
       \c enable_ui option: the client negotiates the extension, surfaces \c _meta.ui through
       @ref McpClient::McpClient::getToolUiMeta() "getToolUiMeta()", and fetches an interface with its sandbox

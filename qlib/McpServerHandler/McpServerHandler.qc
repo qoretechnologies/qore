@@ -495,6 +495,19 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         */
         const InputRequiredException = "MCP-INPUT-REQUIRED";
 
+        #! Exceptions that must reach the client as JSON-RPC errors, not tool results
+        /** A \c tools/call failure is normally reported as an \c isError tool result, because
+            the tool ran and failed.  These codes mean the request itself was refused before
+            any tool ran, so the client must see a JSON-RPC error it can act on rather than a
+            result it would have to parse to discover that nothing happened.
+        */
+        const ProtocolErrorCodes = (
+            "MCP-CAPABILITY-ERROR",
+            "MCP-REQUEST-STATE-ERROR",
+            "MCP-TASK-ERROR",
+            "MCP-SESSION-ERROR",
+        );
+
         #! Client capability required to send each kind of server-to-client input request
         const InputRequestCapabilities = {
             "elicitation/create": "elicitation",
@@ -1888,8 +1901,11 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 return makeInputRequiredResult(cx, "tools/call", params, ex.arg);
             }
             # a missing client capability is a protocol error, not a tool error: it must reach
-            # the client as a JSON-RPC error so that it can declare the capability and retry
-            if (ex.err == "MCP-CAPABILITY-ERROR" || ex.err == "MCP-REQUEST-STATE-ERROR") {
+            # the client as a JSON-RPC error so that it can declare the capability and retry.
+            # A rejected task augmentation and a missing session are protocol errors for the
+            # same reason: the tool never ran, and a client that asked for a task cannot read
+            # an isError result as an answer to the request it actually made
+            if (inlist(ex.err, ProtocolErrorCodes)) {
                 rethrow;
             }
             error("Error executing tool with params %y: %s", params, get_exception_string(ex));
@@ -2938,10 +2954,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (cx.mcp_modern) {
             return modernTasksGet(cx, params);
         }
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
         }
+        string sessionId = cx.mcp_session;
         if (!params.taskId.val()) {
             throw "MCP-TASK-ERROR", "Missing required parameter: taskId";
         }
@@ -2971,10 +2987,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Handle tasks/result request - block until task completes and return result
     private *hash<auto> tasksResult(hash<auto> cx, *hash<auto> params) {
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
         }
+        string sessionId = cx.mcp_session;
         if (!params.taskId.val()) {
             throw "MCP-TASK-ERROR", "Missing required parameter: taskId";
         }
@@ -3056,10 +3072,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (cx.mcp_modern) {
             return modernTasksCancel(cx, params);
         }
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
         }
+        string sessionId = cx.mcp_session;
         if (!params.taskId.val()) {
             throw "MCP-TASK-ERROR", "Missing required parameter: taskId";
         }
@@ -3108,10 +3124,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Handle tasks/list request - list all tasks for session
     private hash<auto> tasksList(hash<auto> cx, *hash<auto> params) {
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
         }
+        string sessionId = cx.mcp_session;
 
         # Clean up expired tasks first
         cleanupExpiredTasks(sessionId);
@@ -3141,8 +3157,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         hash<auto> rv = {
             "taskId": task.taskId,
             "status": task.status,
-            "createdAt": task.createdAt.format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
-            "lastUpdatedAt": task.lastUpdatedAt.format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "createdAt": task.createdAt.format("YYYY-MM-DDTHH:mm:SS.usZ"),
+            "lastUpdatedAt": task.lastUpdatedAt.format("YYYY-MM-DDTHH:mm:SS.usZ"),
             "ttl": task.ttl,
             "pollInterval": task.pollInterval,
         };
@@ -3161,10 +3177,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Handle resources/subscribe request
     private *hash<auto> resourcesSubscribe(hash<auto> cx, *hash<auto> params) {
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
         }
+        string sessionId = cx.mcp_session;
         if (!params.uri.val()) {
             throw "MCP-ARG-ERROR", "Missing required parameter: uri";
         }
@@ -3191,10 +3207,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Handle resources/unsubscribe request
     private *hash<auto> resourcesUnsubscribe(hash<auto> cx, *hash<auto> params) {
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
         }
+        string sessionId = cx.mcp_session;
         if (!params.uri.val()) {
             throw "MCP-ARG-ERROR", "Missing required parameter: uri";
         }
@@ -3453,10 +3469,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Handles cancellation notification
     private cancelRequest(hash<auto> cx, hash<auto> params) {
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             return;
         }
+        string sessionId = cx.mcp_session;
 
         # Validate requestId - must be present
         if (!exists params.requestId) {
@@ -3766,10 +3782,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param response the response hash
     */
     handleClientResponse(hash<auto> cx, hash<auto> response) {
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             return;
         }
+        string sessionId = cx.mcp_session;
 
         if (!exists response.id) {
             return;
@@ -4135,13 +4151,46 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         return cx.mcp_client_capabilities.extensions.hasKey(MCP_ExtensionTasks);
     }
 
-    #! Decides whether a modern request should be executed as a task
-    /** Under the \c tasks extension the decision is the
-        server's, not the client's: there is no per-request opt-in flag.  The default policy
-        creates a task when the client declared the extension and the tool declares
-        \c execution.taskSupport as \c "required"; reimplement in subclasses to apply a
-        different policy (for example, to also use tasks for \c "optional" tools, or to decide
-        from the arguments how long the call will take).
+    #! Verifies that a client may request task execution for the given tool
+    /** Called when a modern \c tools/call carries the \c task augmentation, which is the
+        client asking for the call to run as a task.  Such a request is refused rather than
+        silently downgraded to a synchronous call, because a client that asked for a task
+        expects a task handle back and cannot recognize a plain result as an answer.
+
+        @param cx the request context
+        @param info the tool being called
+
+        @throw MCP-TASK-ERROR the client did not declare the tasks extension, or the tool
+            declares @ref MCP_TaskSupportForbidden
+
+        @see @ref shouldCreateTask() for the server-side policy applied when the client sends
+            no augmentation
+    */
+    private checkTaskAugmentationAllowed(hash<auto> cx, hash<McpToolInfo> info) {
+        if (!clientSupportsTasks(cx)) {
+            throw "MCP-TASK-ERROR", sprintf("tool %y was called with the task augmentation, "
+                "but the client did not declare the %y extension in its capabilities",
+                info.name, MCP_ExtensionTasks), JRE_InvalidParams;
+        }
+        if (info.extra.execution.taskSupport == MCP_TaskSupportForbidden) {
+            throw "MCP-TASK-ERROR", sprintf("tool %y cannot be executed as a task; it "
+                "declares taskSupport %y", info.name, MCP_TaskSupportForbidden),
+                JRE_InvalidParams;
+        }
+    }
+
+    #! Decides whether a modern request with no task augmentation should run as a task
+    /** This is the server's own policy, applied only when the client did not ask for task
+        execution itself.  The default creates a task when the client declared the extension
+        and the tool declares \c execution.taskSupport as @ref MCP_TaskSupportRequired;
+        reimplement in subclasses to apply a different policy, for example to also use tasks
+        for @ref MCP_TaskSupportOptional tools, or to decide from the arguments how long the
+        call will take.
+
+        A client that sends the \c task augmentation is honored regardless of what this
+        method returns, so narrowing the policy in a subclass cannot refuse a task the client
+        legitimately requested; declare \c execution.taskSupport as
+        @ref MCP_TaskSupportForbidden to forbid tasks for a tool.
 
         @param cx the request context
         @param info the tool being called
@@ -4150,7 +4199,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @return @ref True to create a task instead of running the call synchronously
     */
     bool shouldCreateTask(hash<auto> cx, hash<McpToolInfo> info, *hash<auto> params) {
-        return clientSupportsTasks(cx) && info.extra.execution.taskSupport == "required";
+        return clientSupportsTasks(cx)
+            && info.extra.execution.taskSupport == MCP_TaskSupportRequired;
     }
 
     #! Creates a task for a modern request and starts executing it in the background
@@ -4310,8 +4360,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         hash<auto!> rv = {
             "taskId": task.taskId,
             "status": task.status,
-            "createdAt": task.createdAt.format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
-            "lastUpdatedAt": task.lastUpdatedAt.format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "createdAt": task.createdAt.format("YYYY-MM-DDTHH:mm:SS.usZ"),
+            "lastUpdatedAt": task.lastUpdatedAt.format("YYYY-MM-DDTHH:mm:SS.usZ"),
             "ttlMs": task.ttl,
             "pollIntervalMs": task.pollInterval,
         };
@@ -4449,27 +4499,35 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Modified toolsCallIntern to support task-based execution
     private *hash<auto> toolsCallIntern(hash<auto> cx, *hash<auto> params) {
-        # With a modern client the decision to run the call as a task is the server's; there is
-        # no per-request opt-in flag.  The tasks extension is session-free, so this path does
-        # not use the session-scoped task store at all.
+        # The tasks extension is session-free, so a modern request is answered entirely from
+        # the modern task store and never reaches the session-scoped one below.  A modern
+        # request carries no session, so falling through would fail the call instead of
+        # running it; every other task method routes modern requests away for the same reason.
         if (cx.mcp_modern) {
             *hash<McpToolInfo> tinfo = findToolForCall(cx, params.name);
             if (!tinfo) {
                 throw "MCP-SERVER-ARG-ERROR", sprintf("Tool %y is unknown; known tools: %y",
                     params.name, getKnownToolNames(cx)), JRE_InvalidParams;
             }
+            # a client that sent the task augmentation asked for task execution explicitly;
+            # with no augmentation the server's own policy decides
+            if (exists getTaskAugmentation(params)) {
+                checkTaskAugmentationAllowed(cx, tinfo);
+                return toolsCallAsModernTask(cx, tinfo, params);
+            }
             if (shouldCreateTask(cx, tinfo, params)) {
                 return toolsCallAsModernTask(cx, tinfo, params);
             }
-        }
-
-        # Check if this should be a task-based call.  The standard MCP
-        # 2025-11-25 shape is params.task; params._meta.task is accepted only
-        # for backwards compatibility.
-        *hash<auto> task_params = getTaskAugmentation(params);
-        if (task_params) {
-            # Pass the requestId from context for cancellation tracking
-            return toolsCallAsTask(cx, params, task_params, cx.id);
+        } else {
+            # Check if this should be a task-based call.  The standard MCP
+            # 2025-11-25 shape is params.task; params._meta.task is accepted only
+            # for backwards compatibility.  An augmentation with no options is an empty
+            # hash, which is false but not missing, so test for existence.
+            *hash<auto> task_params = getTaskAugmentation(params);
+            if (exists task_params) {
+                # Pass the requestId from context for cancellation tracking
+                return toolsCallAsTask(cx, params, task_params, cx.id);
+            }
         }
 
         *hash<McpToolInfo> info = findToolForCall(cx, params.name);
@@ -4517,10 +4575,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Executes a tool call as a background task
     private hash<auto> toolsCallAsTask(hash<auto> cx, *hash<auto> params,
             *hash<auto> task_params, *auto requestId) {
-        string sessionId = cx.mcp_session;
-        if (!sessionId.val()) {
+        if (!cx.mcp_session.val()) {
             throw "MCP-SESSION-ERROR", "No session ID for task-based call";
         }
+        string sessionId = cx.mcp_session;
 
         *hash<McpToolInfo> info = findToolForCall(cx, params.name);
         if (!info) {
