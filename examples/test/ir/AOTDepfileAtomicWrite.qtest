@@ -1,0 +1,193 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Verifies that qcc publishes a depfile by replacing it, never by rewriting it
+# in place.
+#
+# A depfile is a shared input, not a private output: the incremental AOT
+# scheduler reads every member's depfile to recover the required-edge graph that
+# decides component membership, preload closures and publication order, and it
+# does so while other members of the same group are compiling.  A writer that
+# truncates the file first leaves a window in which a reader sees an empty or
+# partial dependency list, which is indistinguishable from a source that
+# genuinely lost a dependency -- so the strongly connected components silently
+# split or merge underneath another builder.
+#
+# The property is checked without racing anything: a hard link taken before the
+# rewrite is a reader holding the old file.  An in-place write reaches it,
+# because it shares the inode; an atomic replace cannot.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTDepfileAtomicWriteTest
+
+class AOTDepfileAtomicWriteTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("AOTDepfileAtomicWriteTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc")
+                ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+
+        addTestCase("a rewritten depfile replaces the file rather than truncating it",
+            \testDepfileIsReplacedNotTruncated());
+        addTestCase("the batch sidecar depfiles are replaced too",
+            \testBatchDepfilesAreReplaced());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    #! Compiles \a source to \a output, emitting \a output.d.
+    private string compile(string source, string output) {
+        return backquote(sprintf("{ LD_LIBRARY_PATH=%y %y -c --depfile=%y "
+            "--depfile-target=%y -o %y %y; } 2>&1",
+            libqore_dir, qcc_bin, output + ".d", output + ".stamp", output, source));
+    }
+
+    testDepfileIsReplacedNotTruncated() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available in this environment");
+        }
+        TmpDir tmp("qore-aot-depfile-atomic-");
+        string source = tmp.path + "/a.qc";
+        string included = tmp.path + "/inc.qc";
+        string output = tmp.path + "/a.qo";
+        string depfile = output + ".d";
+        string witness = tmp.path + "/witness.d";
+
+        write(included, "%new-style\nstring sub incFunc() {\n    return \"inc\";\n}\n");
+        write(source, "%new-style\n%include inc.qc\n"
+            "string sub aFunc() {\n    return incFunc();\n}\n");
+        string compiled = compile(source, output);
+        assertTrue(is_file(depfile), "the first compile emits a depfile: " + compiled);
+        string first = ReadOnlyFile::readTextFile(depfile);
+        assertTrue(first.find(included) >= 0,
+            "the depfile records the included source: " + first);
+
+        # A reader that opened the depfile before the next compile began.  It is
+        # the same inode, so anything written through the original name reaches
+        # it -- unless the writer publishes by replacing the name instead.
+        backquote(sprintf("ln %y %y 2>&1", depfile, witness));
+        assertEq(hstat(depfile).inode, hstat(witness).inode,
+            "the witness starts out as the same file as the depfile");
+
+        # Drop the %include so the dependency set genuinely changes; without a
+        # content change the comparison would prove nothing.
+        write(source, "%new-style\nstring sub aFunc() {\n    return \"a\";\n}\n");
+        string recompiled = compile(source, output);
+        string second = ReadOnlyFile::readTextFile(depfile);
+        assertNeq(first, second,
+            "the second compile rewrites the depfile: " + recompiled);
+        assertEq(-1, second.find(included),
+            "the rewritten depfile drops the dependency that went away: " + second);
+
+        assertEq(first, ReadOnlyFile::readTextFile(witness),
+            "a reader holding the previous depfile still sees it complete");
+        assertNeq(hstat(depfile).inode, hstat(witness).inode,
+            "the published depfile is a new file, not the rewritten old one");
+
+        # A temporary that outlived its rename would be picked up by a scan for
+        # build artifacts and would defeat the pruner's managed-output contract.
+        Dir dir();
+        dir.chdir(tmp.path);
+        assertEq((), dir.listFiles("\\.tmp\\."),
+            "no temporary depfile is left behind");
+    }
+
+    #! The shared-parse batch emits its per-member depfiles through its own writer.
+    /** It is also the one that runs from several threads at once, so it is the
+        path where a torn read is most likely and where the temporary name must
+        be derived from the target rather than shared.
+    */
+    testBatchDepfilesAreReplaced() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available in this environment");
+        }
+        TmpDir tmp("qore-aot-depfile-batch-");
+        string qo_dir = tmp.path + "/qo";
+        mkdir(qo_dir, 0777, True);
+        string provider = tmp.path + "/p.qc";
+        string consumer = tmp.path + "/c.qc";
+        write(provider, "%new-style\nstring sub pFunc() {\n    return \"p\";\n}\n");
+        write(consumer, "%new-style\nstring sub cFunc() {\n    return pFunc();\n}\n");
+
+        string compiled = batchCompile(tmp.path, qo_dir, (provider, consumer));
+        string consumer_depfile = batchDepfile(qo_dir, consumer);
+        assertTrue(is_file(consumer_depfile),
+            "the batch emits a depfile per member: " + compiled);
+        string first = ReadOnlyFile::readTextFile(consumer_depfile);
+        assertTrue(first.find(".compile-contract.stamp") >= 0,
+            "the consumer records the provider's compile contract: " + first);
+
+        string witness = tmp.path + "/batch-witness.d";
+        backquote(sprintf("ln %y %y 2>&1", consumer_depfile, witness));
+        assertEq(hstat(consumer_depfile).inode, hstat(witness).inode,
+            "the witness starts out as the same file as the depfile");
+
+        # Break the dependency so the rewritten depfile loses the contract entry.
+        write(consumer, "%new-style\nstring sub cFunc() {\n    return \"c\";\n}\n");
+        string recompiled = batchCompile(tmp.path, qo_dir, (provider, consumer));
+        string second = ReadOnlyFile::readTextFile(consumer_depfile);
+        assertNeq(first, second, "the batch rewrites the depfile: " + recompiled);
+        assertEq(-1, second.find(".compile-contract.stamp"),
+            "the rewritten depfile drops the contract that went away: " + second);
+        assertEq(first, ReadOnlyFile::readTextFile(witness),
+            "a reader holding the previous batch depfile still sees it complete");
+
+        Dir dir();
+        dir.chdir(qo_dir);
+        assertEq((), dir.listFiles("\\.tmp\\."),
+            "the batch leaves no temporary depfile behind");
+    }
+
+    private string batchCompile(string root, string qo_dir, list<string> sources) {
+        string command = sprintf("{ LD_LIBRARY_PATH=%y %y -c --batch-build-sidecars "
+            "--depfile-compile-contract-stamps --output-dir=%y --depfile-dir=%y "
+            "--depfile=%y --depfile-target=%y",
+            libqore_dir, qcc_bin, qo_dir, qo_dir,
+            qo_dir + "/batch.stamp.d", qo_dir + "/batch.stamp");
+        foreach string source in (sources) {
+            command += sprintf(" %y", source);
+        }
+        return backquote(command + "; } 2>&1");
+    }
+
+    #! The batch depfile that records \a source, found by content.
+    /** The batch derives each object's name from its absolute source path
+        through a mangling this test has no business reimplementing, so the
+        depfile is identified by the source it names instead.
+    */
+    private string batchDepfile(string qo_dir, string source) {
+        Dir dir();
+        dir.chdir(qo_dir);
+        foreach string file in (dir.listFiles("\\.qo\\.d$")) {
+            string path = qo_dir + DirSep + file;
+            if (ReadOnlyFile::readTextFile(path).find(source) >= 0) {
+                return path;
+            }
+        }
+        throw "BATCH-DEPFILE-ERROR", sprintf("no batch depfile in %y names %y",
+            qo_dir, source);
+    }
+}

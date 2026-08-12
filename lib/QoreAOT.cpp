@@ -25949,34 +25949,63 @@ static std::string escapeMakeDepPath(const std::string& path) {
     return out;
 }
 
+//! Publishes a depfile with a single atomic rename(2).
+/** A depfile is not private to the process that writes it.  The incremental AOT
+    scheduler reads every member's depfile to recover the required-edge graph
+    that decides component membership, preload closures and publication order,
+    and it does so while other members of the same group are compiling.  Writing
+    in place truncates the file first, so a concurrent reader could observe an
+    empty or partial dependency list -- which is indistinguishable from a source
+    that genuinely lost a dependency, and which therefore silently splits or
+    merges strongly connected components underneath another builder.  With the
+    rename a reader sees either the previous generation or the new one.
+
+    The temporary name deliberately does not end in `.d`, so a scan for depfiles
+    cannot pick one up mid-write.  Same idiom as the atomic `.qo` replace.
+*/
+static bool writeDepfileAtomic(const std::string& depfile_path,
+        const std::string& content, std::string& error) {
+    std::string tmp_path = depfile_path + ".tmp." + std::to_string(getpid());
+    FILE* f = fopen(tmp_path.c_str(), "w");
+    if (!f) {
+        error = "cannot open depfile '" + tmp_path + "' for writing: " + strerror(errno);
+        return false;
+    }
+    if (!content.empty()
+            && fwrite(content.data(), 1, content.size(), f) != content.size()) {
+        int e = errno;
+        fclose(f);
+        remove(tmp_path.c_str());
+        error = "cannot write depfile '" + tmp_path + "': " + strerror(e);
+        return false;
+    }
+    if (fclose(f) != 0) {
+        int e = errno;
+        remove(tmp_path.c_str());
+        error = "cannot close depfile '" + tmp_path + "': " + strerror(e);
+        return false;
+    }
+    if (rename(tmp_path.c_str(), depfile_path.c_str()) != 0) {
+        int e = errno;
+        remove(tmp_path.c_str());
+        error = "cannot replace depfile '" + depfile_path + "' with temporary depfile '"
+            + tmp_path + "': " + strerror(e);
+        return false;
+    }
+    return true;
+}
+
 static bool writeAOTMakeDepfile(const std::string& depfile_path,
         const std::string& output_path, const std::vector<std::string>& deps,
         std::string& error, const char* cancel_context,
         const char* depfile_target = nullptr) {
-    FILE* f = fopen(depfile_path.c_str(), "w");
-    if (!f) {
-        error = "cannot open depfile '" + depfile_path + "' for writing: " + strerror(errno);
-        return false;
-    }
-
-    auto fail_write = [&](const char* op) {
-        int e = errno;
-        fclose(f);
-        error = std::string("cannot ") + op + " depfile '" + depfile_path + "'";
-        if (e) {
-            error += ": ";
-            error += strerror(e);
-        }
-        return false;
-    };
-
     std::string target = depfile_target ? depfile_target : output_path;
-    if (fprintf(f, "%s:", escapeMakeDepPath(canonicalizeDepPath(target)).c_str()) < 0) {
-        return fail_write("write");
-    }
+    std::string content = escapeMakeDepPath(canonicalizeDepPath(target));
+    content += ':';
     for (size_t i = 0; i < deps.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
-            fclose(f);
+            // Nothing has been published yet, so a cancelled emission leaves the
+            // previous depfile in place rather than a truncated one.
             error = "operation cancelled during AOT depfile emission";
             return false;
         }
@@ -25984,18 +26013,11 @@ static bool writeAOTMakeDepfile(const std::string& depfile_path,
         if (!depPathIsRegularFile(dep_path)) {
             continue;
         }
-        if (fprintf(f, " \\\n    %s", escapeMakeDepPath(dep_path).c_str()) < 0) {
-            return fail_write("write");
-        }
+        content += " \\\n    ";
+        content += escapeMakeDepPath(dep_path);
     }
-    if (fputc('\n', f) == EOF) {
-        return fail_write("write");
-    }
-    if (fclose(f) != 0) {
-        error = "cannot close depfile '" + depfile_path + "': " + strerror(errno);
-        return false;
-    }
-    return true;
+    content += '\n';
+    return writeDepfileAtomic(depfile_path, content, error);
 }
 
 static bool aotIsImplicitQoreFeature(const std::string& feat) {

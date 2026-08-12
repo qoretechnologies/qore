@@ -354,6 +354,54 @@ static bool qcc_check_cancel(const char* operation) {
 // Consumed by cmake's `add_custom_command(... DEPFILE ...)` so sibling-
 // file edits in split-module dirs retrigger the affected per-file `.qo`.
 // Only spaces and backslashes in paths are escaped — Make handles both.
+// Publishes a depfile with a single atomic rename(2).
+//
+// A depfile is not private to the process that writes it.  The incremental AOT
+// scheduler reads every member's depfile to recover the required-edge graph
+// that decides component membership, preload closures and publication order,
+// and it does so while other members of the same group are compiling.  Writing
+// in place truncates the file first, so a concurrent reader could observe an
+// empty or partial dependency list -- which is indistinguishable from a source
+// that genuinely lost a dependency, and which therefore silently splits or
+// merges strongly connected components underneath another builder.  With the
+// rename a reader sees either the previous generation or the new one.
+//
+// The temporary name deliberately does not end in `.d`, so a scan for depfiles
+// cannot pick one up mid-write.
+static bool write_depfile_atomic(const char* path, const std::string& content) {
+    std::string tmp = std::string(path) + ".tmp." + std::to_string(getpid());
+    FILE* f = fopen(tmp.c_str(), "w");
+    if (!f) {
+        fprintf(stderr, "error: --depfile: cannot open '%s' for writing: %s\n",
+            tmp.c_str(), strerror(errno));
+        return false;
+    }
+    if (!content.empty()
+            && fwrite(content.data(), 1, content.size(), f) != content.size()) {
+        int e = errno;
+        fclose(f);
+        unlink(tmp.c_str());
+        fprintf(stderr, "error: --depfile: cannot write '%s': %s\n",
+            tmp.c_str(), strerror(e));
+        return false;
+    }
+    if (fclose(f) != 0) {
+        int e = errno;
+        unlink(tmp.c_str());
+        fprintf(stderr, "error: --depfile: cannot close '%s': %s\n",
+            tmp.c_str(), strerror(e));
+        return false;
+    }
+    if (rename(tmp.c_str(), path) != 0) {
+        int e = errno;
+        unlink(tmp.c_str());
+        fprintf(stderr, "error: --depfile: cannot replace '%s': %s\n",
+            path, strerror(e));
+        return false;
+    }
+    return true;
+}
+
 static bool write_depfile(const char* path, const std::string& output,
                           const std::string& source, const char* context,
                           const std::vector<std::string>* extra_deps = nullptr) {
@@ -442,13 +490,6 @@ static bool write_depfile(const char* path, const std::string& output,
         }
     }
 
-    FILE* f = fopen(path, "w");
-    if (!f) {
-        fprintf(stderr, "error: --depfile: cannot open '%s' for writing: %s\n",
-            path, strerror(errno));
-        return false;
-    }
-
     auto escape = [](const std::string& s) {
         std::string out;
         out.reserve(s.size());
@@ -461,13 +502,14 @@ static bool write_depfile(const char* path, const std::string& output,
         return out;
     };
 
-    fprintf(f, "%s:", escape(output).c_str());
+    std::string content = escape(output);
+    content += ':';
     for (const auto& dep : deps) {
-        fprintf(f, " \\\n    %s", escape(dep).c_str());
+        content += " \\\n    ";
+        content += escape(dep);
     }
-    fputc('\n', f);
-    fclose(f);
-    return true;
+    content += '\n';
+    return write_depfile_atomic(path, content);
 }
 
 // Write a Make-style depfile from an explicit, already-canonicalized
@@ -477,12 +519,6 @@ static bool write_depfile(const char* path, const std::string& output,
 // changes).
 static bool write_depfile_list(const char* path, const std::string& output,
                                const std::vector<std::string>& deps) {
-    FILE* f = fopen(path, "w");
-    if (!f) {
-        fprintf(stderr, "error: --depfile: cannot open '%s' for writing: %s\n",
-            path, strerror(errno));
-        return false;
-    }
     auto escape = [](const std::string& s) {
         std::string out;
         out.reserve(s.size());
@@ -506,10 +542,12 @@ static bool write_depfile_list(const char* path, const std::string& output,
         free(r);
         return out;
     };
-    fprintf(f, "%s:", escape(output).c_str());
+    std::string content = escape(output);
+    content += ':';
     for (size_t i = 0; i < deps.size(); ++i) {
         if (i && !(i % 100) && qcc_check_cancel("qcc depfile emission")) {
-            fclose(f);
+            // Nothing has been published yet, so a cancelled emission leaves the
+            // previous depfile in place rather than a truncated one.
             fprintf(stderr, "error: operation cancelled during qcc depfile emission\n");
             return false;
         }
@@ -518,11 +556,11 @@ static bool write_depfile_list(const char* path, const std::string& output,
         if (!depfile_dependency_exists(full)) {
             continue;
         }
-        fprintf(f, " \\\n    %s", escape(full).c_str());
+        content += " \\\n    ";
+        content += escape(full);
     }
-    fputc('\n', f);
-    fclose(f);
-    return true;
+    content += '\n';
+    return write_depfile_atomic(path, content);
 }
 
 // Program options
