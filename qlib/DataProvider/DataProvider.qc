@@ -279,6 +279,7 @@ public class DataProvider {
             "confluence": "ConfluenceDataProvider",
             "github": "GitHubDataProvider",
             "gitlab": "GitLabDataProvider",
+            "intercom": "IntercomDataProvider",
             "xero": "XeroDataProvider",
 
             # provided by the jni module

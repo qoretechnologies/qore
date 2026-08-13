@@ -1,0 +1,326 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file IntercomDataProvider.qm Qore user module providing a data provider API for Intercom
+
+/*  IntercomDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires IntercomRestClient
+%requires RestClientIo
+
+%requires yaml
+
+module IntercomDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Intercom";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new IntercomDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": IntercomDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Intercom",
+            "short_desc": "Talk to your customers and keep what you know about them in one place",
+            "desc": "Provides access to [Intercom](https://www.intercom.com), the customer "
+                "communications platform.\n\n"
+                "Intercom holds the people who use your product - **contacts**, either `user`s who have "
+                "signed up or `lead`s who have not - the **companies** they belong to, and the "
+                "**conversations** you have had with them, alongside a help center of **articles**.\n\n"
+                "**Common use cases**:\n"
+                "- **Contacts**: find contacts, note what you know about them, and tag them\n"
+                "- **Companies**: create and update companies from your own system's records\n"
+                "- **Conversations**: start one, search them, and reply as a teammate\n"
+                "- **Messaging**: send a contact an e-mail or an in-app message from a teammate\n"
+                "- **Data events**: record what a contact did, and read a contact's event summary\n"
+                "- **Help center**: list and write articles\n\n"
+                "Authentication is the OAuth2 authorization code flow. Intercom asks for no scopes: what "
+                "an access token may do is set by the permissions granted to the app in Intercom's own "
+                "developer hub.\n\n"
+                "Intercom is a trademark of Intercom, Inc.",
+            "scheme": "intercom",
+            "logo": Priv::IntercomLogo,
+            "logo_file_name": "intercom-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CustomerSupport,),
+        });
+
+        # register every action in the manifest
+        RestSchemaActionSet action_set = IntercomSchema::getActionSet();
+        action_set.registerActions(IntercomDataProvider::AppName);
+
+        # register the one hand-written action; see IntercomReplyConversationDataProvider for why it is
+        # not generated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": IntercomDataProvider::AppName,
+            "path": "/" + IntercomDataProvider::ReplyConversationAction,
+            "action": IntercomDataProvider::ReplyConversationAction,
+            "display_name": IntercomReplyConversationDataProvider::DisplayName,
+            "short_desc": IntercomReplyConversationDataProvider::ShortDesc,
+            "desc": IntercomReplyConversationDataProvider::Desc,
+            "action_code": DPAT_API,
+            "groups": (IntercomManifest::GroupConversations,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                IntercomReplyConversationDataProvider::RequestType.getFields()),
+        });
+
+        # register the polling event actions
+        foreach hash<auto> event in (IntercomEvents) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": IntercomDataProvider::AppName,
+                "path": "/" + IntercomDataProvider::EventsChildName + "/" + event.event,
+                "action": event.event,
+                "display_name": event.display_name,
+                "short_desc": event.short_desc,
+                "desc": event.desc,
+                "action_code": DPAT_EVENT,
+                "action_val": event.event,
+                "groups": ("Events",),
+            });
+        }
+    };
+}
+
+/** @mainpage IntercomDataProvider Module
+
+    @tableofcontents
+
+    @section intercomdataproviderintro IntercomDataProvider Introduction
+
+    The %IntercomDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [Intercom](https://www.intercom.com), the customer communications platform.
+
+    Intercom holds the people who use your product - contacts, either \c users who have signed up or
+    \c leads who have not - the companies they belong to, and the conversations you have had with them,
+    alongside a help center of articles.
+
+    @section intercomdataprovider_generated Generated, Not Hand-Written
+
+    The actions this application exports are **generated from Intercom's own OpenAPI 3 description** by the
+    @ref restschemaactionsintro "RestSchemaActions" module, rather than being hand-written.  A schema
+    describes the transport contract precisely and is maintained by Intercom; duplicating several hundred
+    request and response fields in %Qore would mean finding and reproducing every upstream change by hand.
+
+    What a schema cannot say is which of an operation's fields a user should see first, which identifiers
+    should be selectable rather than typed, or which of several endpoints is the one to reach for.  Those
+    come from an application-owned manifest and UX overlay in
+    @ref IntercomDataProvider::IntercomManifest "IntercomManifest".
+
+    @section intercomdataprovider_pinned The Pinned Schema, and the API Revision With It
+
+    Intercom versions its API by a dated revision - \c 2.16 here - sent as an \c Intercom-Version header,
+    and publishes one OpenAPI description per revision.  So pinning the description pins the API version
+    as well, and the two move together:
+
+    |!Property|!Value
+    |Source|https://github.com/intercom/Intercom-OpenAPI \c descriptions/2.16/api.intercom.io.yaml
+    |SHA-256|\c 57be9a3f321bfc3b67a073f5ed14d1920a9450f5eb11a43caed8dfcdda14a2dc
+    |Revision|\c 2.16
+    |Imported|2026-08-13
+
+    A request that sends no revision header rides whichever revision the workspace's app package happens to
+    name, which means the same integration can behave differently in two workspaces and can change
+    behaviour when somebody edits that package.  So
+    @ref IntercomRestClient::IntercomRestClientBase "IntercomRestClientBase" always sends it, and sends the
+    one this description describes.
+
+    The committed copy is pruned to the exported operations and everything they reference - 15 of 164 paths
+    and 83 of 338 component schemas, 227 KB of the upstream 1.3 MB.  See
+    @ref IntercomDataProvider::IntercomSchema "IntercomSchema" for what was repaired at import time and why.
+
+    @section intercomdataprovider_actions Actions
+
+    20 actions are exported, in these groups:
+
+    |!Group|!What it covers
+    |Contacts|finding, listing and annotating the people in the workspace
+    |Companies|the companies contacts belong to
+    |Conversations|starting, finding and replying to conversations, and sending messages
+    |Tags|the tags defined in the workspace and their application to contacts
+    |Articles|the help center's articles and the collections they are filed under
+    |Data Events|recording what a contact did, and reading a contact's event summary
+
+    Identifier options are dropdowns wherever the application exports an operation that can list the
+    values, so a user picks a contact rather than pasting a 24-character ID.  Every dropdown also accepts a
+    value typed or chained in from a previous step, because an identifier usually comes from earlier in a
+    workflow and a narrowly scoped credential may not be able to list the values at all.
+
+    @section intercomdataprovider_conventions Timestamps, Searching and Paging
+
+    Three conventions are worth knowing before using these actions:
+
+    - **Timestamps are counts of seconds since the epoch.**  The options that take one are presented as
+      %Qore @ref date "date" values and converted when the request is built; the values inside a search
+      \c query are not, because a query is an opaque structure to the schema - compare against a number
+      there.
+    - **Searching takes a filter tree.**  \c query is either a single \c "{field, operator, value}" filter
+      or \c "{operator: \"AND\", value: [ ... ]}" combining several, nested as deeply as needed.  A field
+      Intercom does not define on a contact is searched by naming it \c "custom_attributes.<name>".
+    - **Paging is by cursor, with two exceptions.**  A listing answers \c pages.next.starting_after and
+      that value is passed back as \c starting_after; \c pages is absent once the collection is exhausted.
+      **List Companies** pages by number instead, and **List Tags**, **List Teammates** and **List Tags on
+      Contact** are not paged at all.
+
+    @section intercomdataprovider_events Events
+
+    Two events are reported, and both **poll**:
+
+    |!Event|!Fires
+    |\c new-contact|for each contact created, optionally narrowed to users or to leads
+    |\c new-conversation|for each conversation created
+
+    Intercom publishes a webhook API and native webhook triggers would be better, but subscribing to a
+    topic needs it configured against the app in Intercom's own developer hub rather than anything a
+    connection can do, and it changes delivery semantics.  That is a separate, reviewable decision.
+
+    These poll better than the application they replace, which asked for everything created in the last
+    thirty minutes on every cycle and discarded what it had already seen from a bounded in-memory set - so
+    a restart re-delivered whatever was still inside the window, and a stall longer than the window lost
+    records outright.  These position the feed by \c created_at and keep a durable checkpoint, so a cycle
+    reads only what is new and a restart resumes where it left off.
+
+    A contact edited later, or a reply to an existing conversation, does **not** fire either event: both
+    feeds are positioned by when the object was created.
+
+    @section intercomdataprovider_examples Examples
+
+    @subsection intercomdataprovider_ex_provider Getting the Data Provider
+
+    From a connection, which is how a data-provider-aware caller reaches it:
+
+    @code{.py}
+%requires ConnectionProvider
+%requires IntercomDataProvider
+
+AbstractDataProvider intercom = get_connection("intercom").getDataProvider();
+    @endcode
+
+    Or directly from an access token, for a script:
+
+    @code{.py}
+%requires IntercomDataProvider
+%requires IntercomRestClient
+
+IntercomDataProvider intercom(new IntercomRestClientIo({"token": ENV.INTERCOM_TOKEN}));
+    @endcode
+
+    @subsection intercomdataprovider_ex_search Searching, and Paging Through the Result
+
+    @code{.py}
+AbstractDataProvider search = intercom.getChildProviderEx("SearchContacts");
+
+*string after;
+list<hash<auto>> all = ();
+while (True) {
+    hash<auto> page = search.doRequest({
+        "query": {
+            "operator": "AND",
+            "value": (
+                {"field": "role", "operator": "=", "value": "user"},
+                {"field": "created_at", "operator": ">", "value": get_epoch_seconds(2026-01-01Z)},
+            ),
+        },
+        "pagination": {"per_page": 150} + (after ? {"starting_after": after} : {}),
+    });
+    all += page.data;
+    # "pages" is absent once the collection is exhausted
+    if (!(after = page.pages.next.starting_after)) {
+        break;
+    }
+}
+printf("%d users signed up this year\n", all.size());
+    @endcode
+
+    @subsection intercomdataprovider_ex_tag Tagging a Contact
+
+    @code{.py}
+intercom.getChildProviderEx("attachTagToContact").doRequest({
+    "contact_id": "536e564f316c83104c000020",
+    "id": "7522907",
+});
+    @endcode
+
+    @subsection intercomdataprovider_ex_events Reacting to an Event
+
+    @code{.py}
+class ContactObserver inherits DataProvider::Observer {
+    update(string event_id, hash<auto> data) {
+        printf("%s: %s <%s>\n", event_id, data.name, data.email);
+    }
+}
+
+AbstractDataProvider event = intercom.getChildProviderEx("events").getChildProviderEx("new-contact");
+event.registerObserver(new ContactObserver());
+cast<DelayedObservable>(event).observersReady();
+    @endcode
+
+    @subsection intercomdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+
+    The application exports a reviewed subset of Intercom's API.  For anything else, the generic API call
+    action reaches the rest of it with the same connection and authentication:
+
+    @code{.py}
+hash<auto> res = intercom.getChildProviderEx("__call__").doRequest({
+    "method": "GET",
+    "path": "/teams",
+});
+printf("%d teams\n", res.body.teams.size());
+    @endcode
+
+    @section intercomdataproviderrelnotes Release Notes
+
+    @subsection intercomdataproviderv1_0 IntercomDataProvider v1.0
+    - the initial version of the %IntercomDataProvider module
+*/
+
+#! contains all public definitions in the IntercomDataProvider module
+public namespace IntercomDataProvider {
+#! The events this application reports
+/** Registered as actions so that they appear in the application's action surface; each is served by a
+    provider under the \c events child.
+*/
+public const IntercomEvents = (
+    {
+        "event": IntercomNewContactDataProvider::EventName,
+        "display_name": IntercomNewContactDataProvider::DisplayName,
+        "short_desc": IntercomNewContactDataProvider::ShortDesc,
+        "desc": IntercomNewContactDataProvider::Desc,
+    },
+    {
+        "event": IntercomNewConversationDataProvider::EventName,
+        "display_name": IntercomNewConversationDataProvider::DisplayName,
+        "short_desc": IntercomNewConversationDataProvider::ShortDesc,
+        "desc": IntercomNewConversationDataProvider::Desc,
+    },
+);
+}

@@ -1,0 +1,539 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** IntercomDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires IntercomDataProvider
+%requires IntercomRestClient
+%requires RestClientIo
+
+%requires json
+%requires yaml
+
+%exec-class IntercomDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! An Intercom REST client that records requests instead of making them
+class FakeIntercomRestClient inherits IntercomRestClient::IntercomRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : IntercomRestClientIo({"token": "fake-intercom-token"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Returns the last request body, decoded when the transport was handed a serialized one
+    auto lastBody() {
+        auto body = last().body;
+        if (body.typeCode() == NT_BINARY) {
+            body = binary_to_string(body, "UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            return parse_json(body);
+        }
+        return body;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+public class IntercomDataProviderTest inherits QUnit::Test {
+    public {
+        #! The action IDs the superseded TypeScript application registered
+        /** Read from its i18n catalog at
+            \c module-v8/qlib/TypeScriptActionInterface/i18n/data-provider.SW50ZXJjb20/root.json, not from
+            filenames or operation IDs.  Two of them look like mistakes and are Intercom's own spelling:
+            \c lisDataEvents carries the vendor's typo and \c SearchContacts is capitalised unlike its
+            peers.  Both ship exactly as they are, because an action ID is a product commitment.
+        */
+        const SupersededActions = (
+            "SearchContacts",
+            "attachTagToContact",
+            "createArticle",
+            "createConversation",
+            "createDataEvent",
+            "createMessage",
+            "createNote",
+            "createOrUpdateCompany",
+            "detachTagFromContact",
+            "lisDataEvents",
+            "listAllCompanies",
+            "listArticles",
+            "listTags",
+            "make-api-call",
+            "new-contact",
+            "new-conversation",
+            "replyConversation",
+            "searchConversations",
+        );
+
+        #! The read-only listings this application adds so that its dropdowns have actions to call
+        const AddedListings = (
+            "ListContacts",
+            "listAdmins",
+            "listAllCollections",
+            "listConversations",
+            "listTagsForAContact",
+        );
+    }
+
+    constructor() : Test("IntercomDataProviderTest", "1.0") {
+        addTestCase("schema", \schemaTest());
+        addTestCase("drift", \driftTest());
+        addTestCase("manifest", \manifestTest());
+        addTestCase("actionSurface", \actionSurfaceTest());
+        addTestCase("referenceData", \referenceDataTest());
+        addTestCase("paging", \pagingTest());
+        addTestCase("connection", \connectionTest());
+        addTestCase("execution", \executionTest());
+        addTestCase("replyConversation", \replyConversationTest());
+        addTestCase("events", \eventsTest());
+        set_return_value(main());
+    }
+
+    private schemaTest() {
+        hash<IntercomSchemaProvenanceInfo> p = IntercomSchema::Provenance;
+        assertRegex("^[0-9a-f]{64}$", p.source_sha256, "the recorded checksum is a SHA-256");
+        assertGt(0, p.source_size);
+        assertGt(0, p.source_paths);
+        assertGt(0, p.source_operations);
+        assertGt(0, p.source_schemas);
+        assertTrue(p.imported.absolute());
+        assertRegex("descriptions/2\\.16/", p.source_url,
+            "the provenance names the revision the actions are generated from");
+
+        # the revision the client sends and the revision the description describes must be the same one:
+        # an action generated from 2.16 and sent against another revision is making a request the
+        # description does not describe
+        assertEq(IntercomRestClient::IntercomRestClientBase::ApiVersion, p.api_version,
+            "the client's revision and the pinned description's revision agree");
+
+        assertTrue(is_file(IntercomSchema::getSchemaPath()), "the vendored schema is beside the module");
+        OpenApi3Schema schema = IntercomSchema::getSchema();
+        assertTrue(exists schema, "the vendored schema parses");
+    }
+
+    private driftTest() {
+        RestSchemaActionSet aset = IntercomSchema::getActionSet();
+        list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset, IntercomSchema::getSchema());
+        assertEq((), drift, "the manifest and the vendored schema agree");
+    }
+
+    private manifestTest() {
+        RestSchemaActionSet aset = IntercomSchema::getActionSet();
+        foreach hash<RestSchemaActionInfo> a in (IntercomManifest::Manifest) {
+            RestSchemaActionOperation op = aset.getOperationEx(a.action);
+            assertEq(a.method, op.getMethod(), sprintf("%s resolves to its declared method", a.action));
+            assertEq(a.path, op.getPath(), sprintf("%s resolves to its declared path", a.action));
+            assertTrue(a.display_name.val(), sprintf("%s has a display name", a.action));
+            assertTrue(a.desc.val(), sprintf("%s has a description", a.action));
+        }
+
+        # every operation declares the revision header and every action drops it, because the connection
+        # owns it; an action offering it would let a workflow send a revision the actions were not
+        # generated from
+        foreach hash<RestSchemaActionInfo> a in (IntercomManifest::Manifest) {
+            assertTrue(a.fields{IntercomRestClient::IntercomRestClientBase::VersionHeader}.ignore,
+                sprintf("%s drops the revision header", a.action));
+        }
+    }
+
+    private actionSurfaceTest() {
+        hash<string, bool> native = {};
+        map native{$1.action} = True, DataProviderActionCatalog::getActions("Intercom");
+
+        # every action ID the superseded application exported still exists: each one missing here would be
+        # a workflow that breaks on the migration
+        foreach string action in (SupersededActions) {
+            assertTrue(native{action}, sprintf("%y survives the port", action));
+        }
+        foreach string action in (AddedListings) {
+            assertTrue(native{action}, sprintf("%y is exported to fill a dropdown", action));
+        }
+
+        # the section dropdown is deliberately not reproduced: Intercom removed "GET /help_center/sections"
+        # at API version 2.10 and returns what used to be a section as a nested collection, so the helper
+        # the superseded application shipped has been calling a removed endpoint ever since
+        assertFalse(native.listAllSections ?? False, "the withdrawn sections listing is not exported");
+        hash<auto> doc = parse_yaml(File::readTextFile(IntercomSchema::getSchemaPath()));
+        assertFalse(exists doc.paths{"/help_center/sections"},
+            "the pinned description declares no sections endpoint");
+
+        # the parent of an article can only be a collection now, because a section can no longer be
+        # resolved to offer
+        hash<string, hash<DataProviderActionInfo>> byid = {};
+        map byid{$1.action} = $1, DataProviderActionCatalog::getActions("Intercom");
+        assertEq(("collection",),
+            (map $1.value ?? $1, byid.createArticle.options.parent_type.allowed_values),
+            "an article's parent type offers only what still exists");
+    }
+
+    private referenceDataTest() {
+        RestSchemaActionSet aset = IntercomSchema::getActionSet();
+        hash<string, hash<RestSchemaReferenceDataInfo>> refdata = aset.getAllReferenceDataDecls();
+        assertTrue(refdata.size() > 0);
+
+        hash<string, bool> exported = {};
+        map exported{$1.action} = True, IntercomManifest::Manifest;
+
+        # a dropdown can only name an action the manifest exports; exporting a read-only listing purely to
+        # fill one is expected, and is why the five listings above are here
+        foreach hash<RestSchemaReferenceDataInfo> rd in (refdata.iterator()) {
+            assertTrue(exported{rd.action},
+                sprintf("reference data %y names exported action %y", rd.name, rd.action));
+            assertTrue(rd.value_field.val(), sprintf("reference data %y names a value field", rd.name));
+        }
+
+        # a contact's tags are scoped to the contact: removing a tag has to choose from the tags that
+        # contact actually has, not from every tag in the workspace, almost all of which would fail
+        hash<RestSchemaReferenceDataInfo> ct = refdata{IntercomManifest::RefContactTag};
+        assertEq({"contact_id": "contact_id"}, ct.options_from,
+            "the contact-tag dropdown is scoped by the contact being edited");
+
+        # every field naming a dropdown has to name one that exists
+        foreach hash<RestSchemaActionInfo> a in (IntercomManifest::Manifest) {
+            foreach hash<auto> i in ((a.fields ?? {}).pairIterator()) {
+                if (i.value.ref_data.val()) {
+                    assertTrue(exists refdata{i.value.ref_data},
+                        sprintf("%s.%s names declared reference data %y", a.action, i.key,
+                            i.value.ref_data));
+                }
+            }
+        }
+    }
+
+    private pagingTest() {
+        # Intercom answers a "cursor_pages" envelope on these three and declares no paging arguments for
+        # them, so an action generated from the unrepaired description could never ask for page two.  The
+        # repair is applied at import time with a reason recorded in the artifact; this asserts it landed,
+        # because losing it silently caps every dropdown at Intercom's default page
+        RestSchemaActionSet aset = IntercomSchema::getActionSet();
+        foreach string action in (("listArticles", "ListContacts", "listAllCollections")) {
+            *hash<string, AbstractDataField> fields = aset.getOperationEx(action).getRequestType().getFields();
+            assertTrue(exists fields.per_page, sprintf("%s can ask for a page size", action));
+            assertTrue(exists fields.starting_after, sprintf("%s can ask for the next page", action));
+        }
+
+        # "GET /conversations" is what makes the repair a repair rather than an invention: it returns the
+        # same envelope and does declare both arguments
+        *hash<string, AbstractDataField> conv =
+            aset.getOperationEx("listConversations").getRequestType().getFields();
+        assertTrue(exists conv.per_page);
+        assertTrue(exists conv.starting_after);
+
+        # these answer envelopes with no "pages" object at all, so they are genuinely unpaged and were
+        # deliberately left alone
+        foreach string action in (("listTags", "listAdmins", "listTagsForAContact")) {
+            # an action with no options at all has no request type, which is itself the answer for
+            # "List Tags": every option Intercom declares on it is the revision header the connection owns
+            *AbstractDataProviderType rt = aset.getOperationEx(action).getRequestType();
+            *hash<string, AbstractDataField> fields = rt ? rt.getFields() : NOTHING;
+            assertFalse(exists fields.starting_after,
+                sprintf("%s is unpaged upstream and was not repaired", action));
+        }
+
+        # the repair is recorded in the committed artifact, so a reviewer diffing it against the upstream
+        # document is told why they differ
+        hash<auto> doc = parse_yaml(File::readTextFile(IntercomSchema::getSchemaPath()));
+        assertEq(NT_LIST, doc."x-qore-normalized".typeCode(),
+            "the artifact records what was repaired and why");
+        assertRegex("contradicts itself", doc."x-qore-normalized"[0].reason);
+    }
+
+    private connectionTest() {
+        IntercomRestConnection conn("intercom-test", "test connection",
+            IntercomRestConnection::DefaultConnectionUrl, {"monitor": False}, {
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+            });
+        assertEq("intercom", conn.getType());
+        assertEq("Intercom", conn.getAppName(),
+            "the connection serves the app name the superseded application registered");
+        assertTrue(conn.hasDataProvider());
+
+        hash<ConnectionSchemeInfo> scheme = IntercomRestConnection::ConnectionScheme;
+        assertEq(IntercomRestClientBase::DefaultAuthUrl, scheme.options.oauth2_auth_url.default_value);
+        assertEq(IntercomRestClientBase::DefaultTokenUrl, scheme.options.oauth2_token_url.default_value);
+        assertEq("authorization_code", scheme.options.oauth2_grant_type.default_value);
+        assertEq("/me", scheme.options.ping_path.default_value,
+            "the ping identifies the teammate, which needs no object to exist");
+
+        # Intercom declares no OAuth2 scopes at all: what a token may do is set by the permissions granted
+        # to the app in Intercom's own dashboard, so there is nothing to request and nothing to preserve
+        assertFalse(scheme.options.oauth2_scopes.default_value ?? False,
+            "no scopes are requested, because Intercom declares none");
+
+        # the revision travels on every call as a default header rather than as an action option
+        hash<auto> opts = IntercomRestClientBase::getOptions({"token": "x"});
+        assertEq(IntercomRestClientBase::ApiVersion,
+            opts.headers{IntercomRestClientBase::VersionHeader},
+            "the client sends the revision the pinned description describes");
+
+        # a caller that set the header explicitly keeps its own value
+        hash<auto> override = IntercomRestClientBase::getOptions({
+            "token": "x",
+            "headers": {IntercomRestClientBase::VersionHeader: "2.15"},
+        });
+        assertEq("2.15", override.headers{IntercomRestClientBase::VersionHeader});
+    }
+
+    private executionTest() {
+        FakeIntercomRestClient rest();
+        IntercomDataProvider intercom(rest);
+
+        # every registered action path has to resolve, or the action exists in the catalog and cannot be
+        # executed
+        RestSchemaActionSet aset = IntercomSchema::getActionSet();
+        aset.validateActionPaths(intercom);
+
+        # a path variable is escaped by the transport, not pasted into the URI: an identifier carrying a
+        # reserved character would otherwise change the route it addresses
+        rest.reset();
+        intercom.getChildProviderEx("listTagsForAContact").doRequest({"contact_id": "a b/c"});
+        assertEq("GET", rest.last().method);
+        assertEq("/contacts/a%20b%2Fc/tags", rest.last().path, "a path variable is percent-encoded");
+
+        rest.reset();
+        intercom.getChildProviderEx("attachTagToContact").doRequest({
+            "contact_id": "536e564f316c83104c000020",
+            "id": "7522907",
+        });
+        assertEq("POST", rest.last().method);
+        assertEq("/contacts/536e564f316c83104c000020/tags", rest.last().path);
+        assertEq({"id": "7522907"}, rest.lastBody(), "the tag travels in the body, the contact in the path");
+
+        rest.reset();
+        intercom.getChildProviderEx("detachTagFromContact").doRequest({
+            "contact_id": "536e564f316c83104c000020",
+            "tag_id": "7522907",
+        });
+        assertEq("DELETE", rest.last().method);
+        assertEq("/contacts/536e564f316c83104c000020/tags/7522907", rest.last().path);
+
+        # Intercom's description types this one path variable as an integer and types the same value as a
+        # string everywhere else, including on the very next path; its own example for this operation is a
+        # 24-character hex string.  Left alone the option would reject every real contact ID
+        rest.reset();
+        intercom.getChildProviderEx("createNote").doRequest({
+            "contact_id": "6762f0ad1bb69f9f2193bb62",
+            "body": "spoke to them",
+        });
+        assertEq("/contacts/6762f0ad1bb69f9f2193bb62/notes", rest.last().path,
+            "a hex contact ID reaches Create Note, whose parameter Intercom declares as an integer");
+
+        # Intercom writes every timestamp as a count of seconds since the epoch, so a date option is
+        # converted when the request is built
+        rest.reset();
+        intercom.getChildProviderEx("createDataEvent").doRequest({
+            "event_name": "invite-friend",
+            "created_at": 2026-08-13T10:00:00Z,
+            "email": "a@example.com",
+        });
+        assertEq(get_epoch_seconds(2026-08-13T10:00:00Z), rest.lastBody().created_at,
+            "a timestamp is sent as seconds since the epoch");
+
+        # a listing sends its paging arguments as query arguments
+        rest.reset();
+        intercom.getChildProviderEx("listArticles").doRequest({"per_page": 150, "starting_after": "abc"});
+        assertRegex("per_page=150", rest.last().path);
+        assertRegex("starting_after=abc", rest.last().path);
+    }
+
+    private replyConversationTest() {
+        FakeIntercomRestClient rest();
+        IntercomDataProvider intercom(rest);
+
+        # this is the one hand-written action: Intercom declares the reply body as a union of five request
+        # contracts, and an action has one option shape, so the generated action came out with the
+        # conversation ID and no way to supply the reply at all
+        AbstractDataProvider reply = intercom.getChildProviderEx("replyConversation");
+        *hash<string, AbstractDataField> fields = reply.getRequestType().getFields();
+        assertTrue(exists fields.conversation_id);
+        assertTrue(exists fields.message_type);
+        assertTrue(exists fields.admin_id);
+        assertTrue(exists fields.body);
+
+        rest.reset();
+        reply.doRequest({
+            "conversation_id": "123",
+            "message_type": "comment",
+            "admin_id": "3156780",
+            "body": "<p>on it</p>",
+        });
+        assertEq("POST", rest.last().method);
+        assertEq("/conversations/123/reply", rest.last().path);
+        assertEq({
+            "message_type": "comment",
+            "admin_id": "3156780",
+            "body": "<p>on it</p>",
+            "type": "admin",
+        }, rest.lastBody(), "the reply is sent as a teammate, and the conversation stays in the path");
+
+        # a timestamp goes out as seconds since the epoch here too; the hand-written action must not
+        # diverge from the generated ones on a convention they share
+        rest.reset();
+        reply.doRequest({
+            "conversation_id": "123",
+            "message_type": "note",
+            "admin_id": "3156780",
+            "body": "internal",
+            "created_at": 2026-08-13T10:00:00Z,
+        });
+        assertEq(get_epoch_seconds(2026-08-13T10:00:00Z), rest.lastBody().created_at);
+
+        # the conversation is escaped exactly as a generated action escapes a path variable
+        rest.reset();
+        reply.doRequest({
+            "conversation_id": "a b",
+            "message_type": "comment",
+            "admin_id": "1",
+            "body": "x",
+        });
+        assertEq("/conversations/a%20b/reply", rest.last().path);
+
+        assertThrows("INTERCOM-REPLY-ERROR", "no REST client",
+            sub () {
+                new IntercomReplyConversationDataProvider(IntercomSchema::getActionSet())
+                    .doRequest({"conversation_id": "1", "message_type": "comment", "admin_id": "1"});
+            });
+    }
+
+    private eventsTest() {
+        FakeIntercomRestClient rest();
+        IntercomDataProvider intercom(rest);
+        AbstractDataProvider events = intercom.getChildProviderEx("events");
+        assertEq(("new-contact", "new-conversation"), sort(events.getChildProviderNames()));
+
+        # a watch provider must inherit the watch base first: both bases implement observersReady(), %Qore
+        # resolves to the first branch that declares it, and the data provider base reports the operation
+        # as unsupported - so getting the order wrong leaves every subscription failing at run time
+        foreach string name in (("new-contact", "new-conversation")) {
+            AbstractDataProvider ev = events.getChildProviderEx(name);
+            assertTrue(ev.getInfo().supports_observable, sprintf("%s supports observers", name));
+            assertTrue(ev instanceof DataProvider::AbstractTimestampWatchDataProvider,
+                sprintf("%s is positioned by a timestamp", name));
+            assertTrue(exists ev.getEventTypes(){name}, sprintf("%s publishes its event type", name));
+        }
+
+        # Intercom has no ">=" operator, so the cursor asks for "> (cursor - 1 second)"; the values are
+        # whole seconds, so that is exactly "at or after".  An exclusive ">" would drop a record sharing
+        # the cursor's timestamp that had not been delivered yet
+        hash<auto> filter =
+            IntercomWatchDataProviderBase::getCreatedSinceFilter(2026-08-13T10:00:00Z);
+        assertEq("created_at", filter.field);
+        assertEq(">", filter.operator);
+        assertEq(get_epoch_seconds(2026-08-13T10:00:00Z) - 1, filter.value,
+            "the cursor filter is inclusive of its own instant");
+
+        assertEq(2026-08-13T10:00:00Z,
+            IntercomWatchDataProviderBase::fromEpochSeconds(get_epoch_seconds(2026-08-13T10:00:00Z)),
+            "epoch seconds round-trip");
+
+        # the role narrows which contacts the feed returns, so it defines the scan: resuming a cursor
+        # taken with one role against another would silently skip every contact created before the change
+        IntercomNewContactDataProvider all(rest);
+        IntercomNewContactDataProvider users(rest, {"role": "user"});
+        assertNeq(all.getWatchStreamIdentity(), users.getWatchStreamIdentity(),
+            "a different role is a different scan");
+    }
+}

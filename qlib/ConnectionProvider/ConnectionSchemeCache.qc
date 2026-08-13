@@ -265,6 +265,7 @@ public class ConnectionSchemeCache {
             "confluence": "ConfluenceRestClient",
             "github": "GitHubRestClient",
             "gitlab": "GitLabRestClient",
+            "intercom": "IntercomRestClient",
             "xero": "XeroRestClient",
 
             "pop3": "Pop3Client",

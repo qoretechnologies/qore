@@ -514,6 +514,64 @@ operations already reference, so an event type can be composed from them. Only t
 not publish as reusable components stay open hashes. That keeps the event and the actions describing the
 same record the same way.
 
+## What the Intercom port added
+
+**A union request body cannot be published as one option shape.** This is the third distinct reason to
+hand-write an action, and it is not the same as GitLab's placeholder body or Xero's three disagreeing
+regional schemas. Intercom declares its conversation reply as
+`oneOf: [contact_reply_conversation_request, admin_reply_conversation_request]`, and the first of those is
+itself a `oneOf` of three more. The flattener lifts an object body's *properties*, and a union has none of
+its own, so the generated action came out with the path variable and **no way to supply the reply at all** -
+not a bad option shape, an absent one.
+
+The test that decides what to do is the same one as always: *can the schema describe the action the
+application means?* Here it can - one branch describes a teammate's reply exactly - and only the union
+around it cannot be flattened. So that branch is written out by hand, the action keeps its ID, and it is
+registered alongside the generated ones. `relax_oneof` is the wrong tool: it exists for a composition whose
+branches overlap so completely that nothing can satisfy it, and these branches are genuinely alternative.
+
+Two consequences worth knowing. The operation is dropped from the manifest, so no operation selects that
+path and the pruner drops it from the committed artifact - which is correct, because a hand-written action
+does not resolve through the schema. And the hand-written action must not diverge from the generated ones
+on the conventions they share: it escapes its path variables the same way and applies the same timestamp
+codec, both of which are asserted in the module's tests.
+
+**Diff the vendor's own versions for endpoints that were removed, not only for endpoints that changed.**
+A port usually moves an application from an old pinned API version to the current one, and the superseded
+application's `get_*_allowed_values` helpers are written against the *old* one. Intercom removed the Help
+Center **sections** endpoints at version 2.10 - its 2.9 description declares `/help_center/sections`, and no
+description from 2.10 onward declares either it or its single-item sibling - so the section dropdown the
+TypeScript application shipped has been calling a removed endpoint against every workspace for as long as
+they have been on 2.10 or later.
+
+Nothing in the port would have caught that: the dropdown is helper code in the application being replaced,
+not an operation in the new schema, so it is absent from the drift report and from the action-surface diff
+alike. Downloading both versions of the description and diffing the path sets takes a minute and is the only
+thing that finds it. The repair is a decision, not a mechanism - here the dropdown is **withdrawn** and the
+option narrowed to the one value that still resolves, because Intercom now returns what used to be a section
+as a nested collection.
+
+**A description can contradict its own example, on the same operation.** Intercom declares the `contact_id`
+path variable of `POST /contacts/{contact_id}/notes` as `type: integer`, types the same value as a `string`
+on every other operation that takes it - including the two tag operations on the very next path - and prints
+`"contact_id": "6762f0ad1bb69f9f2193bb62"` in that operation's own example block. A contact ID is a
+24-character hex string, so the generated option would have rejected every real one.
+
+This is a **type presentation override** on the field overlay, not a normalization: `normalize` adds
+parameters a vendor documents and omits, and cannot retype one. The request contract is unchanged - the value
+still travels in the same path segment - so the overlay is expressing what the operation's own example says.
+Worth a pass over the scalar types of path variables that appear on more than one operation: a value the
+document types two ways is types one of them wrongly.
+
+**A header every operation declares and none requires is still the connection's.** Intercom's dated API
+revision rides an `Intercom-Version` header declared, optional, on all 226 operations. Optional is the
+dangerous case rather than the safe one: a request that omits it does not fail, it silently rides whichever
+revision the workspace's own app package names - so the same integration behaves differently in two
+workspaces, and changes behaviour when somebody edits that package. The client sends the revision the pinned
+description describes, every action drops the header with `ignore`, and the two are asserted equal in the
+module's tests, because an action generated from one revision and sent against another is making a request
+the description does not describe.
+
 ## A connection has to configure itself
 
 **A connection option whose value only exists after authorization must be discovered, never asked for.**

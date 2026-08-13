@@ -1,0 +1,52 @@
+# Import spec for the vendored Intercom schema.
+#
+#   QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+#       --spec qlib/IntercomDataProvider/intercom-import.yaml
+#
+# Paths are resolved against this file.  The operations come from the manifest itself, so the selection
+# and what the application exports cannot drift apart.
+#
+# Intercom versions its API by a dated revision sent as the "Intercom-Version" header, and publishes one
+# description per revision.  Pinning "descriptions/2.16" therefore pins the API version as well, which is
+# why IntercomRestClient sends 2.16 and this file names it: the two must move together, and moving them is
+# a re-import rather than an edit.
+documents:
+  - name: Intercom
+    source: https://raw.githubusercontent.com/intercom/Intercom-OpenAPI/main/descriptions/2.16/api.intercom.io.yaml
+    output: intercom-openapi.yaml
+    manifest: IntercomDataProvider:IntercomManifest::Manifest
+    provenance: IntercomSchema.qc
+
+    # Repairs applied to the document before it is pruned.  Each is checked: naming an operation the
+    # document does not declare, or a parameter it already declares, fails the import - so a repair that
+    # upstream has since made unnecessary is removed rather than left here forever as a silent local edit.
+    normalize:
+      - reason: >-
+          These three listings answer a "cursor_pages" envelope whose "next" object carries "per_page" and
+          "starting_after" - so Intercom pages them - but declare neither as a request parameter, which
+          leaves a generated action unable to ask for page two.
+          The omission is internal to this document rather than an API without paging: "GET /conversations"
+          returns the *same* "cursor_pages" shape and does declare exactly those two parameters. The
+          description contradicts itself, and these are the operations on the wrong side of it.
+        operations:
+          - GET /articles
+          - GET /contacts
+          - GET /help_center/collections
+        add_parameters:
+          - name: per_page
+            in: query
+            required: false
+            description: >-
+              How many records to return in one page. Intercom documents cursor pagination for every
+              listing that answers a "pages" object, but declares this parameter on only some of them.
+            schema:
+              type: integer
+              minimum: 1
+          - name: starting_after
+            in: query
+            required: false
+            description: >-
+              The pagination cursor for the next page: pass the "pages.next.starting_after" value from the
+              previous response. It is opaque and must not be constructed by hand.
+            schema:
+              type: string

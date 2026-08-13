@@ -1,0 +1,352 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file IntercomRestClient.qm Qore user module for calling Intercom REST API services
+
+/*  IntercomRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module IntercomRestClient {
+    version = "1.0";
+    desc = "User module for calling Intercom REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("intercom", IntercomRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage IntercomRestClient Module
+
+    @tableofcontents
+
+    @section intercomrestclientintro IntercomRestClient Introduction
+
+    The %IntercomRestClient module provides an API for calling [Intercom](https://www.intercom.com)'s REST
+    API services.
+
+    To use this module, use \c "%requires IntercomRestClient" in your code.
+
+    All the public symbols in the module are defined in the IntercomRestClient namespace.
+
+    The main classes are:
+    - @ref IntercomRestClient::IntercomRestClient "IntercomRestClient": the REST client for the Intercom API
+    - @ref IntercomRestClient::IntercomRestClientIo "IntercomRestClientIo": the same client on the
+      asynchronous I/O transport, which is what data providers use
+    - @ref IntercomRestClient::IntercomRestConnection "IntercomRestConnection": a connection object to
+      Intercom (based on the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section intercomrestclient_version The API Version Belongs to the Connection
+
+    Intercom versions its API by a dated revision sent as an \c Intercom-Version header, and publishes one
+    OpenAPI description per revision.  A workspace has a default revision set in its app package, and a
+    request that sends no header rides that default - which means the same integration can behave
+    differently in two workspaces, and can change behaviour when somebody edits the app package.
+
+    So this client **always** sends the header, and sends the revision the
+    @ref intercomdataproviderintro "IntercomDataProvider" module's pinned description describes.  The two
+    move together: adopting a newer revision is a re-import of the description, not an edit here.
+
+    The header is the connection's business rather than each action's, so it is set as a default header on
+    the client; the actions generated from the description drop it and it is filled in when the request is
+    built.
+
+    @section intercomrestclient_regions Regional Hosting
+
+    An Intercom workspace is hosted in one of three regions, each with its own host:
+
+    |!Region|!Host
+    |United States|\c https://api.intercom.io
+    |Europe|\c https://api.eu.intercom.io
+    |Australia|\c https://api.au.intercom.io
+
+    The default is the United States host, and Intercom documents that a call to it is routed to whichever
+    region the workspace is actually in - so a connection does not have to know the region.  A connection
+    that would rather address its region directly, and skip the routing hop, sets its URL to the regional
+    host; nothing else changes, because the three hosts serve the same API.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires IntercomRestClient
+
+IntercomRestClientIo intercom({"token": ENV.INTERCOM_TOKEN});
+hash<auto> result = intercom.get("/tags");
+printf("%d tags\n", result.body.data.size());
+    @endcode
+
+    @section intercomrestclientrelnotes Release Notes
+
+    @subsection intercomrestclientv1_0 IntercomRestClient v1.0
+    - the initial version of the %IntercomRestClient module
+*/
+
+#! the IntercomRestClient namespace contains all the objects in the IntercomRestClient module
+public namespace IntercomRestClient {
+#! Common base class for IntercomRestClient functionality
+public class IntercomRestClientBase {
+    public {
+        #! The default Intercom API URL
+        /** The United States host, which Intercom routes to whichever region a workspace is hosted in.
+        */
+        const DefaultUrl = "https://api.intercom.io";
+
+        #! The Intercom API URL for workspaces hosted in Europe
+        const EuUrl = "https://api.eu.intercom.io";
+
+        #! The Intercom API URL for workspaces hosted in Australia
+        const AuUrl = "https://api.au.intercom.io";
+
+        #! The header naming the API revision a request is made against
+        const VersionHeader = "Intercom-Version";
+
+        #! The API revision this module speaks
+        /** The revision the vendored description in the \c IntercomDataProvider module describes.  The two
+            must agree: an action generated from the 2.16 description and sent against another revision
+            would be making a request the description does not describe.
+
+            Changing this is a re-import of that description rather than an edit here.
+        */
+        const ApiVersion = "2.16";
+
+        #! Default OAuth2 authorization request URL
+        const DefaultAuthUrl = "https://app.intercom.com/oauth";
+
+        #! Default OAuth2 token request URL
+        const DefaultTokenUrl = "https://api.intercom.io/auth/eagle/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default authorization token type
+        const DefaultTokenType = "Bearer";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** \c GET /me identifies the authorized teammate and the workspace it belongs to, so it is the one
+            call that proves the credential works without naming any object.
+        */
+        const DefaultPingPath = "/me";
+
+        #! The largest page Intercom returns for a cursor-paged listing
+        const MaxPageSize = 150;
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "token_type": DefaultTokenType,
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns options for the IntercomRestClient constructors
+    /** @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows to
+        # that type, and adding a hash-valued or list-valued default would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        # the revision travels as a header on every call, so it is merged into the client's headers rather
+        # than passed to each request; a caller adding a header of its own does not drop it, and a caller
+        # that set the header explicitly keeps its own value
+        opts.headers = {VersionHeader: ApiVersion, "Accept": MimeTypeJson} + (opts.headers ?? {});
+
+        if (opts.oauth2_client_id.val()) {
+            if (!opts.oauth2_grant_type.val()) {
+                opts.oauth2_grant_type = DefaultGrantType;
+            }
+            if (!opts.oauth2_auth_url.val()) {
+                opts.oauth2_auth_url = DefaultAuthUrl;
+            }
+            if (!opts.oauth2_token_url.val()) {
+                opts.oauth2_token_url = DefaultTokenUrl;
+            }
+        }
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+}
+
+#! Intercom REST client
+public class IntercomRestClient inherits RestClient::RestClient, IntercomRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(IntercomRestClientBase::getOptions(opts), do_not_connect) {
+    }
+}
+
+#! Intercom REST client for non-blocking I/O
+public class IntercomRestClientIo inherits RestClientIo::RestClientIo, IntercomRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(IntercomRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Intercom REST connections
+public class IntercomRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Intercom connection URL
+        const DefaultConnectionUrl = "intercom://api.intercom.io";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Intercom REST Connection",
+            "short_desc": "A connection to the Intercom REST API",
+            "desc": "A connection to [Intercom](https://www.intercom.com) for contacts, companies, "
+                "conversations, tags, notes, data events and help center articles.\n\n"
+                "**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and "
+                "`oauth2_client_secret` from an app created in the Intercom developer hub, or a `token` "
+                "for an integration that only ever works in its own workspace - Intercom issues one per "
+                "app for exactly that. Intercom declares no scopes in the flow: what a token may do is "
+                "set by the permissions granted to the app in its own dashboard, so a capability the "
+                "integration needs is added there rather than requested here.\n\n"
+                "**The API revision is sent on every call** as `Intercom-Version: "
+                + IntercomRestClientBase::ApiVersion + "`, "
+                "matching the description the actions are generated from. Without it a call would ride "
+                "whichever revision the workspace's app package happens to name, so the same integration "
+                "could behave differently in two workspaces.\n\n"
+                "**Regional hosting**: a workspace lives in the United States (`api.intercom.io`), Europe "
+                "(`api.eu.intercom.io`) or Australia (`api.au.intercom.io`). Intercom routes a call to the "
+                "default host on to the right region, so the region normally needs no attention; set the "
+                "URL to a regional host to address it directly.\n\n"
+                "Intercom is a trademark of Intercom, Inc.",
+            "cls": Class::forName("IntercomRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "intercom": True,
+            },
+            "base_scheme_map": {
+                "https": "intercom",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": IntercomRestClientBase::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": IntercomRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": IntercomRestClientBase::DefaultGrantType,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": IntercomRestClientBase::DefaultTokenUrl,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": IntercomRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": IntercomRestClientBase::DefaultPingPath,
+                },
+                "token_type": RestConnection::ConnectionScheme.options."token_type"
+                + <ConnectionOptionInfo>{
+                    "default_value": IntercomRestClientBase::DefaultTokenType,
+                },
+            },
+            # the OAuth2 alternative is named first because an app that can support OAuth2 makes the
+            # authorization code flow the default; "token" is the fallback for a credential that is not
+            # tied to a user's authorization - Intercom issues one per app for its own workspace, which is
+            # what a single-workspace integration actually has
+            "required_options": "oauth2_client_id,oauth2_client_secret|token",
+        };
+    }
+
+    #! Creates the IntercomRestConnection object
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! Creates the IntercomRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "intercom";
+    }
+
+    #! Returns the name of the application this connection serves
+    /** The name the superseded TypeScript application registered, which is what existing workflows
+        reference.
+    */
+    *string getAppName() {
+        return "Intercom";
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the Intercom data provider for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and pinged
+        # without it
+        load_module("IntercomDataProvider");
+        return create_object("IntercomDataProvider", getAsync());
+    }
+
+    #! Returns an IntercomRestClient object
+    private IntercomRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new IntercomRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new IntercomRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}
