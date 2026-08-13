@@ -42,6 +42,11 @@
     Used by AsyncIoControllerPriv (per-controller logger) and the global
     async I/O logger singleton.
 
+    Both calls may be made from a native thread with no program context (ex: an
+    async I/O thread's event loop); the logger object's program is entered for
+    the duration of the call in that case, and the call is skipped if that
+    program is already being torn down.
+
     @since %Qore 3.0
 */
 class QoreLoggerBridge : public QoreAbstractLoggerInterface {
@@ -60,6 +65,12 @@ public:
 
 private:
     QoreObject* logger_obj;                //!< Referenced
+    //! The logger object's program, or nullptr for a system object
+    /** Not referenced here: the object holds a weak (dep) reference to its program for the whole
+        time this bridge holds a reference to the object, so the program cannot be reclaimed while
+        this pointer is in use.
+    */
+    QoreProgram* pgm;
     const QoreMethod* logArgsMethod;       //!< logArgs(int, string, *softlist<auto>)
     const QoreMethod* isEnabledForMethod;  //!< isEnabledFor(int)
 };

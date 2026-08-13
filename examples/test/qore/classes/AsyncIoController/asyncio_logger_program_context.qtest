@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Logger
+
+%exec-class AsyncIoLoggerProgramContextTest
+
+#! An appender that keeps every rendered message and can be waited on for a specific one
+/** The layout pattern renders %m, which makes the C++ Logger implementation format the message with
+    q_sprintf() inside the appender call - the code that reads parse options from the current
+    program, and the reason a log call from a thread with no program context used to crash.
+*/
+class CapturingAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! Every message rendered, in order
+        list<string> messages = ();
+
+        #! Serializes access to messages
+        Mutex mtx();
+
+        #! Zeroed when a message containing "wanted" has been rendered
+        Counter wait_cnt(1);
+    }
+
+    private {
+        #! The substring being waited for
+        *string wanted;
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    #! Declares the message to wait for; must be called before the message can be logged
+    setWanted(string str) {
+        AutoLock al(mtx);
+        wanted = str;
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        string msg = params.toString();
+        AutoLock al(mtx);
+        push messages, msg;
+        if (exists wanted && msg.find(wanted) != -1) {
+            remove wanted;
+            wait_cnt.dec();
+        }
+    }
+
+    #! Waits for the message declared with setWanted(); returns True if it arrived
+    bool waitForWanted(timeout to) {
+        return !wait_cnt.waitForZero(to);
+    }
+
+    list<string> snapshot() {
+        AutoLock al(mtx);
+        return messages;
+    }
+}
+
+class AsyncIoLoggerProgramContextTest inherits QUnit::Test {
+    public {
+        const IoThreadReadyMsg = "I/O thread ready";
+    }
+
+    constructor() : Test("AsyncIoLoggerProgramContextTest", "1.0") {
+        addTestCase("I/O thread log has a program context", \ioThreadLogTest());
+        addTestCase("logging from a Qore thread still formats", \qoreThreadLogTest());
+        set_return_value(main());
+    }
+
+    #! The I/O thread logs from a native thread that never entered a %Qore program
+    /** Regression test: AsyncIoControllerPriv's I/O thread calls the controller's logger directly
+        from its event loop.  The C++ Logger renders the message with q_sprintf(), which read
+        PO_BROKEN_SPRINTF from the current program without checking for one; on the I/O thread there
+        is no current program, so the process crashed with SIGSEGV in
+        QoreProgram::getParseOptions().  Reproduced in CI as an intermittent crash of
+        HttpServerAsyncHttp2Multiplexed, where the I/O thread reported an event loop error.
+
+        QoreLoggerBridge now enters the logger object's program for the duration of the call, and
+        q_sprintf() tolerates having no program at all.
+    */
+    ioThreadLogTest() {
+        # the I/O thread must not have started yet, or the message this test waits for was already
+        # logged before the logger was installed
+        assertFalse(AsyncIoController::running(), "I/O thread is not running at test start");
+
+        CapturingAppender appender();
+        appender.setWanted(IoThreadReadyMsg);
+        # the message is logged at DEBUG level
+        Logger logger("asyncio-program-context", LoggerLevel::getLevelDebug());
+        logger.addAppender(appender);
+
+        AsyncIoController::setLogger(logger);
+        on_exit {
+            AsyncIoController::setLogger(NOTHING);
+        }
+
+        # starting a timer starts the I/O thread, which logs IoThreadReadyMsg as its first action
+        Counter timer_cnt(1);
+        int timer_id = AsyncIoController::addTimer(now_us() + 1ms, sub () {
+            timer_cnt.dec();
+        });
+        # note: the I/O thread may already have fired the timer and exited (autostop) by now, so
+        # its state is not asserted here - what matters is that it logged and ran the timer
+        assertGt(0, timer_id, "timer accepted");
+
+        assertTrue(appender.waitForWanted(30s), "I/O thread's log message was rendered");
+        assertEq(0, timer_cnt.waitForZero(30s), "timer fired");
+
+        # the message must be rendered in full: a message that reached the appender empty or
+        # truncated would mean the format step was skipped, not that it worked
+        list<string> msgs = appender.snapshot();
+        list<string> ready = map $1, msgs, $1.find(IoThreadReadyMsg) != -1;
+        assertEq(1, ready.size(), sprintf("exactly one ready message in %y", msgs));
+        assertEq(IoThreadReadyMsg, ready[0], "the rendered message is complete");
+    }
+
+    #! Logging from a thread that does have a program context must keep formatting arguments
+    qoreThreadLogTest() {
+        CapturingAppender appender();
+        Logger logger("asyncio-program-context-qore", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+
+        logger.info("value: %d and %s", 42, "text");
+        logger.info("literal percent: 100%%");
+        # a format argument that is not consumed by the format string is ignored
+        logger.info("no args here", "extra");
+
+        list<string> msgs = appender.snapshot();
+        assertEq(3, msgs.size(), sprintf("all messages rendered: %y", msgs));
+        assertEq("value: 42 and text", msgs[0], "arguments are substituted");
+        assertEq("literal percent: 100%", msgs[1], "escaped percent is rendered");
+        assertEq("no args here", msgs[2], "unused arguments are ignored");
+    }
+}

@@ -67,6 +67,24 @@ poll-state work.
   - Callback dispatcher workers execute Qore callbacks; Queue waiters receive results through the result Queue.
   - `submit()` increments `submit_seq` under the lock before waking the I/O thread.
 
+### Logging is the one Qore call made on the I/O thread
+
+`AsyncIoControllerPriv::log()` runs on the I/O thread, and the logger it calls is a Qore object
+(`LoggerInterfaceBase`), so its `isEnabledFor()`/`logArgs()` methods execute there.  The I/O thread is
+started with `q_start_thread()` and never enters a program, so it has **no program context**: the
+current program is `nullptr`, and any %Qore machinery that reads program state from the thread —
+`q_sprintf()` reading `PO_BROKEN_SPRINTF` to render the message, above all — has nothing to read.
+
+`QoreLoggerBridge` therefore enters the logger object's program for the duration of each call, which
+also contributes to that program's thread count so it cannot finish teardown mid-log; a logger whose
+program is already past its teardown gate drops the message instead.  Anything else that calls into
+%Qore from the I/O thread needs the same treatment.
+
+Because the I/O thread reuses one `ExceptionSink` for a whole loop iteration, an exception raised by
+a helper that reports through it and is not checked at that call site survives to the next check —
+which then reports it as its own failure and logs it.  Every phase clears the sink with
+`logAndClearStrayException()` for this reason.
+
 ## EventNotifier and Command Queue
 
 The controller uses an EventNotifier (registered in the persistent EventLoop) to wake the I/O thread

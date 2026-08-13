@@ -56,6 +56,7 @@
 
 #include <arpa/inet.h>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -350,6 +351,88 @@ static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c)
         "tryRSectionLockNotifyWaitRead() registers notification for writer-owned lock");
     lock.clearFakeWriterAndNotify();
     UT_ASSERT(c, !notifier.setp, "writer release clears registered notification");
+}
+
+//! Unregistering a file descriptor that has been closed - however it has been recycled since
+/** The async I/O controller unregisters an fd it may no longer own: a socket can be closed by
+    another thread between the registration and the release, which is why remove() treats EBADF (the
+    number is now unused) and ENOENT (the number is a different pollable object) as success.
+
+    EPERM is the same condition once more: the number was handed to an object epoll cannot poll - a
+    regular file - for which EPOLL_CTL_DEL reports "operation not permitted".  Raising an exception
+    there left it pending in the I/O thread's sink, where the next operation to check the sink
+    reported it as its own failure and logged it from a thread with no program context.
+*/
+static void ut_event_loop_remove_recycled_fd(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink, "event loop construction succeeds");
+    UT_ASSERT(c, loop.isValid(), "event loop is valid");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+        UT_ASSERT(c, false, "socketpair() for the recycled fd test succeeds");
+        return;
+    }
+
+    // note: UT_ASSERT_EQ() evaluates its arguments twice (once to compare, once to report), so
+    // every call under test is made into a variable first
+    int rc = loop.add(sv[0], QORE_EV_READ, nullptr, &xsink);
+    UT_ASSERT_EQ(c, 0, rc, "a socket registers with the event loop");
+    UT_ASSERT(c, !xsink, "registration raises no exception");
+
+    // put a regular file at the registered fd number, exactly as a close() followed by an unrelated
+    // open() in another thread would; dup2() makes the recycling deterministic
+    char tmpl[] = "/tmp/qore-event-loop-ut-XXXXXX";
+    int tmp_fd = mkstemp(tmpl);
+    if (tmp_fd < 0) {
+        UT_ASSERT(c, false, "mkstemp() for the recycled fd test succeeds");
+        close(sv[0]);
+        close(sv[1]);
+        return;
+    }
+    unlink(tmpl);
+    close(sv[0]);
+    bool recycled = dup2(tmp_fd, sv[0]) == sv[0];
+    UT_ASSERT(c, recycled, "the registered fd number now refers to a regular file");
+    close(tmp_fd);
+
+    if (recycled) {
+        rc = loop.remove(sv[0], &xsink);
+        UT_ASSERT_EQ(c, 0, rc, "removing a recycled fd succeeds");
+        UT_ASSERT(c, !xsink, "removing a recycled fd raises no exception");
+        if (xsink) {
+            xsink.clear();
+        }
+        close(sv[0]);
+    }
+    close(sv[1]);
+
+    // the neighbouring conditions: an fd that was never registered, and a registered fd whose
+    // number is unused by the time it is removed
+    rc = loop.remove(sv[0], &xsink);
+    UT_ASSERT_EQ(c, 0, rc, "removing an unregistered fd succeeds");
+    UT_ASSERT(c, !xsink, "removing an unregistered fd raises no exception");
+
+    int sv2[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv2)) {
+        UT_ASSERT(c, false, "second socketpair() for the recycled fd test succeeds");
+        return;
+    }
+    rc = loop.add(sv2[0], QORE_EV_READ, nullptr, &xsink);
+    UT_ASSERT_EQ(c, 0, rc, "a second socket registers with the event loop");
+    close(sv2[0]);
+    rc = loop.remove(sv2[0], &xsink);
+    UT_ASSERT_EQ(c, 0, rc, "removing a closed fd succeeds");
+    UT_ASSERT(c, !xsink, "removing a closed fd raises no exception");
+    if (xsink) {
+        xsink.clear();
+    }
+    close(sv2[1]);
 }
 
 static void ut_asyncio_construction(UnitTestCounters& c) {
@@ -3384,6 +3467,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_qorevalue_operator_bool_null(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
+    ut_event_loop_remove_recycled_fd(c);
     ut_asyncio_construction(c);
     ut_asyncio_poll_timeout_rounding(c);
     ut_asyncio_autostop(c);
