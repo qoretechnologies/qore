@@ -19,6 +19,7 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires RestClient
+%requires RestClientIo
 
 %exec-class HttpServerAsyncHttp2StreamingTest
 
@@ -55,15 +56,18 @@ class H2StaggeredCallbackHandler inherits AbstractHttpRequestHandler {
     private {
         int chunk_count;
         int sleep_ms;
+        string content_type;
         # Recorded server-side emit times so the test can compare against
         # client-side receive times.
         list<date> emit_times = ();
         Mutex emit_mtx();
     }
 
-    constructor(int chunk_count = 5, int sleep_ms = 250) {
+    constructor(int chunk_count = 5, int sleep_ms = 250,
+            string content_type = "text/event-stream; charset=utf-8") {
         self.chunk_count = chunk_count;
         self.sleep_ms = sleep_ms;
+        self.content_type = content_type;
     }
 
     list<date> getEmitTimes() {
@@ -76,7 +80,7 @@ class H2StaggeredCallbackHandler inherits AbstractHttpRequestHandler {
         return <HttpResponseInfo>{
             "code": 200,
             "hdr": {
-                "Content-Type": "text/event-stream; charset=utf-8",
+                "Content-Type": content_type,
                 "Cache-Control": "no-cache",
             },
             "send_callback": *string sub () {
@@ -440,6 +444,7 @@ class HttpServerAsyncHttp2StreamingTest inherits QUnit::Test {
         string mSslUrl;
         string mTmpDir;
         H2StaggeredCallbackHandler mStaggeredHandler;
+        H2StaggeredCallbackHandler mBufferedStaggeredHandler;
 
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
@@ -526,6 +531,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # SSE / send_callback per-chunk flush regression test
         addTestCase("H2 send_callback chunks reach wire per emit (SSE flush)",
             \testH2SendCallbackPerChunkFlush());
+        addTestCase("H2 buffered partial response waits without polling spin",
+            \testH2BufferedPartialResponseWaitsEfficiently());
 
         set_return_value(main());
     }
@@ -562,6 +569,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mStaggeredHandler = new H2StaggeredCallbackHandler(5, 250);
         mServer.setHandler("staggered-cb", "/staggered-cb", NOTHING,
             mStaggeredHandler, NOTHING, False);
+        mBufferedStaggeredHandler = new H2StaggeredCallbackHandler(8, 250,
+            "text/plain; charset=utf-8");
+        mServer.setHandler("buffered-staggered-cb", "/buffered-staggered-cb", NOTHING,
+            mBufferedStaggeredHandler, NOTHING, False);
 
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -1059,5 +1070,62 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             sprintf("staggered SSE: chunks must arrive over time; "
                 "first→last span only %d ms (pre-fix bug compresses to <100ms)",
                 recv_window_ms));
+    }
+
+    #! A normal HTTP/2 request buffers partial response DATA until END_STREAM.
+    #! Those buffered bytes are not actionable input for the client poll
+    #! operation.  Re-queuing the socket merely because the partial body is
+    #! nonempty makes the async I/O thread spin while a slow SSE-style producer
+    #! waits before emitting its next chunk.
+    testH2BufferedPartialResponseWaitsEfficiently() {
+        RestClientIo rc({
+            "url": mSslUrl,
+            "data": "text",
+            "accept_all_certs": True,
+            "http_version": "2.0",
+            "timeout": 10s,
+            "connect_timeout": 5s,
+        });
+
+        # Linux exposes process CPU time in clock ticks in /proc/self/stat.
+        # The pre-fix livelock consumes one full core for the handler's 1.75 s
+        # stagger window (>150 ticks on Linux's USER_HZ=100); the fixed path
+        # sleeps in epoll and normally consumes only a handful of ticks.  Keep
+        # the functional assertion on every platform and make the CPU bound a
+        # Linux-specific regression check.
+        *int cpu_before = getLinuxProcessCpuTicks();
+        hash<auto> resp = rc.restGet("/buffered-staggered-cb");
+        *int cpu_after = getLinuxProcessCpuTicks();
+
+        assertEq(200, resp.status_code, "buffered staggered response status");
+        assertTrue(string(resp.body).find("data: event-0") >= 0,
+            "buffered staggered response contains first event");
+        assertTrue(string(resp.body).find("data: event-7") >= 0,
+            "buffered staggered response contains final event");
+        if (exists cpu_before && exists cpu_after) {
+            assertLt(50, cpu_after - cpu_before,
+                sprintf("buffered partial response must wait efficiently; used %d CPU ticks",
+                    cpu_after - cpu_before));
+        } else {
+            testSkip("/proc/self/stat unavailable; CPU-spin assertion is Linux-specific");
+        }
+    }
+
+    private *int getLinuxProcessCpuTicks() {
+        if (!stat("/proc/self/stat")) {
+            return NOTHING;
+        }
+        string process_stat = File::readTextFile("/proc/self/stat");
+        *list<*string> match = process_stat =~ x/^\d+ \([^)]*\) (.*)$/;
+        if (!match) {
+            return NOTHING;
+        }
+        list<string> fields = trim(match[0]).splitRegex("\\s+");
+        # After pid and comm are removed, field 3 (state) is index 0;
+        # utime/stime are process-stat fields 14/15, hence indexes 11/12.
+        if (fields.size() <= 12) {
+            return NOTHING;
+        }
+        return int(fields[11]) + int(fields[12]);
     }
 }
