@@ -4241,6 +4241,27 @@ public class OpenApi3HashDataType inherits HashDataType {
             return prop.nullable;
         }
 
+        # an enum is part of what a property accepts, and in practice it is what tells the alternatives of a
+        # composition apart: Intercom's search filter is "oneOf: [single, multiple]" where the two differ by
+        # their "operator" enum - ">" against ["AND", "OR"] - and by nothing else that this check could see,
+        # because "multiple" declares no required properties and does not forbid additional ones.  Without
+        # this, both alternatives matched every single-filter query and every search was rejected as
+        # ambiguous before the request was sent
+        if (prop.enumValues && !prop.enumValues{value.toString()}) {
+            return False;
+        }
+
+        # a property that is itself a composition has no "type" of its own, so the switch below would accept
+        # anything; it matches when one of its alternatives does
+        if (prop.oneOf || prop.anyOf) {
+            foreach SchemaObject alt in (prop.oneOf ?? prop.anyOf) {
+                if (matchesPropertyType(alt, value)) {
+                    return True;
+                }
+            }
+            return False;
+        }
+
         switch (prop.type) {
             case "string":
                 return value.typeCode() == NT_STRING;
@@ -4313,6 +4334,9 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         *hash<ExceptionInfo> last_exception;
         list<AbstractDataProviderType> types = getUnionTypes();
         for (int i = 0; i < types.size(); ++i) {
+            if (schemas && !OpenApi3UnionDataType::branchMatchesShape(schemas[i], value)) {
+                continue;
+            }
             try {
                 auto accepted = value;
                 if (schemas) {
@@ -4347,6 +4371,48 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         }
         throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match any anyOf schema%s", value_type,
             last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
+    }
+
+    #! Returns @ref True if a value is shaped like what an alternative declares
+    /** A composition alternative is turned into a %Qore type, and those types coerce: a \c softlist accepts a
+        single value by wrapping it into a one-element list, and a scalar type accepts a value of another
+        scalar type.  Coercion is right when a type stands alone and wrong when it is one alternative among
+        several, because it is what tells the alternatives apart.
+
+        An \c array alternative that soft-accepts a scalar matches **everything**, so a \c oneOf mixing a
+        scalar alternative with an array one can never be satisfied by a scalar: two alternatives match and
+        the keyword requires exactly one.  Intercom's search filter is exactly that shape - a value is
+        \c "oneOf: [string, integer, boolean, array]" - and every search was rejected before the request was
+        sent.
+
+        So an alternative is considered only when the value's fundamental shape agrees with what that
+        alternative declares.  Scalar-to-scalar coercion is left alone: which of \c string and \c integer a
+        JSON value means really is ambiguous, and the keyword's own "must match exactly one" rule reports
+        that honestly.
+
+        @param s the alternative's schema, if the composition recorded one
+        @param value the value being checked
+
+        @return @ref True if the alternative may be considered for this value
+    */
+    private static bool branchMatchesShape(*SchemaObject s, auto value) {
+        if (!s || !s.type.val()) {
+            # nothing is declared, so there is nothing to tell this alternative apart by
+            return True;
+        }
+        int tc = value.typeCode();
+        switch (s.type) {
+            case "array":
+                return tc == NT_LIST;
+            case "object":
+                return tc == NT_HASH;
+            case "string":
+            case "integer":
+            case "number":
+            case "boolean":
+                return tc != NT_LIST && tc != NT_HASH;
+        }
+        return True;
     }
 
     #! Returns a "soft" type equivalent to the current type
@@ -5198,8 +5264,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     #! validates a schema object against a value
+    /** @param no_check_others skip property validation entirely; used for an \c allOf member, whose
+        properties are validated once against the combined schema rather than per member
+        @param allow_unknown validate the properties this schema declares but tolerate any other, which is
+        what OpenAPI's default \c "additionalProperties: true" means.  Used when checking a composition
+        alternative: an alternative is rejected for declaring a property the value contradicts, never for
+        failing to mention one, or a \c oneOf whose alternatives share a discriminating property could
+        never be satisfied by a value carrying anything else
+    */
     private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, hash<auto> v, reference<hash<auto>> value, *bool no_check_others) {
+            string name, hash<auto> v, reference<hash<auto>> value, *bool no_check_others,
+            *bool allow_unknown) {
         if (type != "object" && type != "any") {
             throwInvalidType(name, "object", type, v);
         }
@@ -5214,8 +5289,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             foreach SchemaObject schema in (oneOf) {
                 try {
                     hash<auto> test_value = value;
+                    # the properties are checked, unlike for "allOf" above: an alternative is chosen by
+                    # whether the value satisfies it, and its properties are usually the only thing that
+                    # tells one alternative from another.  Skipping them made every alternative match
+                    # anything of the right base type, so a "oneOf" of two object shapes always reported
+                    # "matches multiple" and could never be satisfied - Intercom's search filter is exactly
+                    # that, two objects differing only by their "operator" enum
                     schema.checkIntern(serialize, request, schema.type ?? type, NOTHING, path, method, name, v,
-                        \test_value, True);
+                        \test_value, NOTHING, True);
                     ++matches;
                     matched_schemas += schema.name;
                 } catch (hash<ExceptionInfo> ex) {
@@ -5238,8 +5319,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             foreach SchemaObject schema in (anyOf) {
                 try {
                     hash<auto> test_value = value;
+                    # the properties are checked, for the same reason as "oneOf" above
                     schema.checkIntern(serialize, request, schema.type ?? type, NOTHING, path, method, name, v,
-                        \test_value, True);
+                        \test_value, NOTHING, True);
                     matched = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
@@ -5257,7 +5339,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             try {
                 hash<auto> test_value = value;
                 notSchema.checkIntern(serialize, request, notSchema.type ?? type, NOTHING, path, method, name, v,
-                    \test_value, True);
+                    \test_value, NOTHING, True);
                 # if we get here, the value matched the "not" schema, which is an error
                 throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: value for %y must not match the 'not' schema",
                     method.upr(), path, name);
@@ -5287,6 +5369,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         prop = additionalProperties;
                     }
                     if (!prop) {
+                        if (allow_unknown) {
+                            # this schema says nothing about the property, which is not a reason to reject
+                            # the value against it; see the parameter's documentation
+                            nv{key} += value{key};
+                            continue;
+                        }
                         throw "SCHEMA-VALIDATION-ERROR", sprintf("Property %y is not valid for object %y "
                             "(value: %y); valid properties: %y",  key, name, value, keys properties);
                     }
