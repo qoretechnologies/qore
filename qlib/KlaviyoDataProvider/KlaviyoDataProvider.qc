@@ -37,6 +37,9 @@ public class KlaviyoDataProvider inherits RestSchemaActions::RestSchemaActionSet
         #! The name of the child provider holding the event providers
         const EventsChildName = "events";
 
+        #! The name of the child provider holding the record-based tables
+        const TablesChildName = "tables";
+
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "klaviyo",
@@ -45,6 +48,7 @@ public class KlaviyoDataProvider inherits RestSchemaActions::RestSchemaActionSet
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
             "children_can_support_observers": True,
+            "children_can_support_records": True,
         };
 
         #! Constructor options
@@ -115,11 +119,15 @@ public class KlaviyoDataProvider inherits RestSchemaActions::RestSchemaActionSet
     */
     private *list<string> getChildProviderNamesImpl() {
         return (RestSchemaActionSetDataProvider::getChildProviderNamesImpl() ?? ())
-            + KlaviyoHandWrittenActions + (EventsChildName,);
+            + KlaviyoHandWrittenActions + (EventsChildName, TablesChildName);
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == TablesChildName) {
+            return new RestSchemaTablesDataProvider(TablesChildName, KlaviyoSchema::getActionSet(),
+                KlaviyoRecordTables::Tables, rest);
+        }
         if (name == EventsChildName) {
             return new KlaviyoEventsDataProvider(cast<*KlaviyoRestClient::KlaviyoRestClientIo>(rest));
         }

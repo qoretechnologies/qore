@@ -192,6 +192,42 @@ public class KlaviyoManifest {
                 "- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
         };
 
+        #! The overlay naming the list a single-record action works on
+        const ListIdOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "List",
+            "short_desc": "The list to work on",
+            "ref_data": RefList,
+            "supports_custom_values": True,
+            "preselected": True,
+        };
+
+        #! The overlay naming the segment a single-record action works on
+        const SegmentIdOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "Segment",
+            "short_desc": "The segment to work on",
+            "ref_data": RefSegment,
+            "supports_custom_values": True,
+            "preselected": True,
+        };
+
+        #! The overlay naming the tag a single-record action works on
+        const TagIdOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "Tag",
+            "short_desc": "The tag to work on",
+            "ref_data": RefTag,
+            "supports_custom_values": True,
+            "preselected": True,
+        };
+
+        #! The overlay naming the campaign a single-record action works on
+        const CampaignIdOverlay = <RestSchemaFieldOverlayInfo>{
+            "display_name": "Campaign",
+            "short_desc": "The campaign to work on",
+            "ref_data": RefCampaign,
+            "supports_custom_values": True,
+            "preselected": True,
+        };
+
         #! The overlay for a listing's sort argument
         /** The permitted fields differ per listing and are set per action; the direction does not.
 
@@ -606,6 +642,79 @@ public class KlaviyoManifest {
                     "revision": RevisionOverlay,
                 },
             },
+            <RestSchemaActionInfo>{
+                "action": "get_list",
+                "method": "GET",
+                "path": "/api/lists/{id}",
+                "operation_id": "get_list",
+                "display_name": "Get List",
+                "short_desc": "Retrieves a specific list",
+                "desc": "Retrieves one list by its Klaviyo ID.\n\n"
+                    "`additionalFields` adds the list's profile count, which Klaviyo does not return "
+                    "otherwise because counting is expensive.",
+                "groups": (GroupLists,),
+                "field_order": ("id", "additionalFields"),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "id": ListIdOverlay,
+                    "additional-fields[list]": AdditionalFieldsOverlay,
+                    "fields[flow]": IgnoreOverlay,
+                    "fields[list]": IgnoreOverlay,
+                    "fields[tag]": IgnoreOverlay,
+                    "include": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update_list",
+                "method": "PATCH",
+                "path": "/api/lists/{id}",
+                "operation_id": "update_list",
+                "display_name": "Update List",
+                "short_desc": "Updates an existing list",
+                "desc": "Updates a list that already exists, named by its Klaviyo ID.\n\n"
+                    "Only the attributes supplied are changed.",
+                "groups": (GroupLists,),
+                "request_unwrap": ("data", "attributes"),
+                "field_order": ("id", "name", "optInProcess"),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "path.id": ListIdOverlay,
+                    # Klaviyo requires the identity in the body as well as in the URL, and the two must
+                    # always be equal; asking for it twice would only be a way to get it wrong
+                    "body.data.id": <RestSchemaFieldOverlayInfo>{"value_from": "id"},
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Name",
+                        "short_desc": "The new name of the list",
+                        "preselected": True,
+                    },
+                    "opt_in_process": <RestSchemaFieldOverlayInfo>{
+                        "name": "optInProcess",
+                        "display_name": "Opt-in Process",
+                        "short_desc": "Whether a new subscriber has to confirm by e-mail",
+                    },
+                    "fields[list]": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete_list",
+                "method": "DELETE",
+                "path": "/api/lists/{id}",
+                "operation_id": "delete_list",
+                "display_name": "Delete List",
+                "short_desc": "Deletes a list",
+                "desc": "Deletes a list.\n\n"
+                    "The profiles on it are **not** deleted; they simply stop being members. Klaviyo "
+                    "answers with no content.",
+                "groups": (GroupLists,),
+                "fields": {
+                    "id": ListIdOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
             #
             # Segments
             #
@@ -651,6 +760,124 @@ public class KlaviyoManifest {
                     "revision": RevisionOverlay,
                 },
             },
+            <RestSchemaActionInfo>{
+                "action": "get_segment",
+                "method": "GET",
+                "path": "/api/segments/{id}",
+                "operation_id": "get_segment",
+                "display_name": "Get Segment",
+                "short_desc": "Retrieves a specific segment",
+                "desc": "Retrieves one segment by its Klaviyo ID.\n\n"
+                    "`additionalFields` adds the segment's profile count and its `definition` - the rule "
+                    "Klaviyo evaluates - neither of which is returned otherwise.",
+                "groups": (GroupSegments,),
+                "field_order": ("id", "additionalFields"),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "id": SegmentIdOverlay,
+                    "additional-fields[segment]": AdditionalFieldsOverlay,
+                    "fields[flow]": IgnoreOverlay,
+                    "fields[segment]": IgnoreOverlay,
+                    "fields[tag]": IgnoreOverlay,
+                    "include": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create_segment",
+                "method": "POST",
+                "path": "/api/segments",
+                "operation_id": "create_segment",
+                "display_name": "Create Segment",
+                "short_desc": "Creates a new segment",
+                "desc": "Creates a segment.\n\n"
+                    "`definition` is the rule Klaviyo evaluates to decide who is in the segment, and it is "
+                    "**required**: a segment with no rule would match nobody. It is Klaviyo's own condition "
+                    "structure - a list of condition groups, each a list of conditions - and is documented "
+                    "with the segments API rather than here.",
+                "groups": (GroupSegments,),
+                "request_unwrap": ("data", "attributes"),
+                "field_order": ("name", "definition", "isStarred"),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Name",
+                        "short_desc": "The name of the segment",
+                        "preselected": True,
+                    },
+                    "definition": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Definition",
+                        "short_desc": "The rule deciding who is in the segment",
+                        "preselected": True,
+                    },
+                    "is_starred": <RestSchemaFieldOverlayInfo>{
+                        "name": "isStarred",
+                        "display_name": "Starred",
+                        "short_desc": "Whether the segment is starred in the Klaviyo UI",
+                    },
+                    "fields[segment]": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update_segment",
+                "method": "PATCH",
+                "path": "/api/segments/{id}",
+                "operation_id": "update_segment",
+                "display_name": "Update Segment",
+                "short_desc": "Updates an existing segment",
+                "desc": "Updates a segment that already exists, named by its Klaviyo ID.\n\n"
+                    "Only the attributes supplied are changed. Replacing `definition` re-evaluates the "
+                    "membership, which Klaviyo does in the background.",
+                "groups": (GroupSegments,),
+                "request_unwrap": ("data", "attributes"),
+                "field_order": ("id", "name", "definition", "isStarred", "isActive"),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "path.id": SegmentIdOverlay,
+                    "body.data.id": <RestSchemaFieldOverlayInfo>{"value_from": "id"},
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Name",
+                        "short_desc": "The new name of the segment",
+                        "preselected": True,
+                    },
+                    "definition": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Definition",
+                        "short_desc": "The rule deciding who is in the segment",
+                    },
+                    "is_starred": <RestSchemaFieldOverlayInfo>{
+                        "name": "isStarred",
+                        "display_name": "Starred",
+                        "short_desc": "Whether the segment is starred in the Klaviyo UI",
+                    },
+                    "is_active": <RestSchemaFieldOverlayInfo>{
+                        "name": "isActive",
+                        "display_name": "Active",
+                        "short_desc": "Whether Klaviyo keeps the segment's membership up to date",
+                    },
+                    "fields[segment]": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete_segment",
+                "method": "DELETE",
+                "path": "/api/segments/{id}",
+                "operation_id": "delete_segment",
+                "display_name": "Delete Segment",
+                "short_desc": "Deletes a segment",
+                "desc": "Deletes a segment.\n\n"
+                    "The profiles it matched are **not** deleted; the rule simply stops being evaluated. "
+                    "Klaviyo answers with no content.",
+                "groups": (GroupSegments,),
+                "fields": {
+                    "id": SegmentIdOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
             #
             # Tags
             #
@@ -689,6 +916,91 @@ public class KlaviyoManifest {
                     "fields[tag-group]": IgnoreOverlay,
                     "fields[tag]": IgnoreOverlay,
                     "include": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get_tag",
+                "method": "GET",
+                "path": "/api/tags/{id}",
+                "operation_id": "get_tag",
+                "display_name": "Get Tag",
+                "short_desc": "Retrieves a specific tag",
+                "desc": "Retrieves one tag by its Klaviyo ID",
+                "groups": (GroupTags,),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "id": TagIdOverlay,
+                    "fields[tag-group]": IgnoreOverlay,
+                    "fields[tag]": IgnoreOverlay,
+                    "include": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create_tag",
+                "method": "POST",
+                "path": "/api/tags",
+                "operation_id": "create_tag",
+                "display_name": "Create Tag",
+                "short_desc": "Creates a new tag",
+                "desc": "Creates a tag.\n\n"
+                    "A tag groups campaigns, flows, lists and segments for reporting. Klaviyo places a new "
+                    "tag in the account's default tag group unless one is named in the relationships, which "
+                    "this action does not publish.",
+                "groups": (GroupTags,),
+                "request_unwrap": ("data", "attributes"),
+                "field_order": ("name",),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Name",
+                        "short_desc": "The name of the tag",
+                        "preselected": True,
+                    },
+                    "fields[tag]": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update_tag",
+                "method": "PATCH",
+                "path": "/api/tags/{id}",
+                "operation_id": "update_tag",
+                "display_name": "Update Tag",
+                "short_desc": "Renames an existing tag",
+                "desc": "Renames a tag.\n\n"
+                    "A tag's name is the only attribute it has, so this action changes the name and nothing "
+                    "else. Klaviyo answers with no content.",
+                "groups": (GroupTags,),
+                "request_unwrap": ("data", "attributes"),
+                "field_order": ("id", "name"),
+                "fields": {
+                    "path.id": TagIdOverlay,
+                    "body.data.id": <RestSchemaFieldOverlayInfo>{"value_from": "id"},
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Name",
+                        "short_desc": "The new name of the tag",
+                        "preselected": True,
+                    },
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete_tag",
+                "method": "DELETE",
+                "path": "/api/tags/{id}",
+                "operation_id": "delete_tag",
+                "display_name": "Delete Tag",
+                "short_desc": "Deletes a tag",
+                "desc": "Deletes a tag.\n\n"
+                    "The campaigns, flows, lists and segments it was applied to are **not** deleted; they "
+                    "simply lose the tag. Klaviyo answers with no content.",
+                "groups": (GroupTags,),
+                "fields": {
+                    "id": TagIdOverlay,
                     "revision": RevisionOverlay,
                 },
             },
@@ -766,6 +1078,122 @@ public class KlaviyoManifest {
                 },
             },
             <RestSchemaActionInfo>{
+                "action": "create_campaign",
+                "method": "POST",
+                "path": "/api/campaigns",
+                "operation_id": "create_campaign",
+                "display_name": "Create Campaign",
+                "short_desc": "Creates a new campaign",
+                "desc": "Creates a campaign as a **draft**; it is not sent until **Send Campaign** creates a "
+                    "send job for it.\n\n"
+                    "`audiences` names the lists and segments to include and exclude, and `campaignMessages` "
+                    "carries the message content per channel; both are **required** and both are Klaviyo's "
+                    "own structures, documented with the campaigns API rather than here.",
+                "groups": (GroupCampaigns,),
+                "request_unwrap": ("data", "attributes"),
+                "field_order": ("name", "audiences", "campaignMessages", "sendStrategy", "sendOptions",
+                    "trackingOptions"),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Name",
+                        "short_desc": "The name of the campaign",
+                        "preselected": True,
+                    },
+                    "audiences": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Audiences",
+                        "short_desc": "The lists and segments to include and exclude",
+                        "preselected": True,
+                    },
+                    "campaign-messages": <RestSchemaFieldOverlayInfo>{
+                        "name": "campaignMessages",
+                        "display_name": "Messages",
+                        "short_desc": "The message content, per channel",
+                        "preselected": True,
+                    },
+                    "send_strategy": <RestSchemaFieldOverlayInfo>{
+                        "name": "sendStrategy",
+                        "display_name": "Send Strategy",
+                        "short_desc": "When the campaign is sent, if not immediately",
+                    },
+                    "send_options": <RestSchemaFieldOverlayInfo>{
+                        "name": "sendOptions",
+                        "display_name": "Send Options",
+                        "short_desc": "Whether to use smart sending",
+                    },
+                    "tracking_options": <RestSchemaFieldOverlayInfo>{
+                        "name": "trackingOptions",
+                        "display_name": "Tracking Options",
+                        "short_desc": "The UTM parameters and tracking flags to apply",
+                    },
+                    "fields[campaign]": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update_campaign",
+                "method": "PATCH",
+                "path": "/api/campaigns/{id}",
+                "operation_id": "update_campaign",
+                "display_name": "Update Campaign",
+                "short_desc": "Updates an existing campaign",
+                "desc": "Updates a campaign that already exists, named by its Klaviyo ID.\n\n"
+                    "Only the attributes supplied are changed. Klaviyo rejects a change to a campaign that "
+                    "has already been sent.",
+                "groups": (GroupCampaigns,),
+                "request_unwrap": ("data", "attributes"),
+                "field_order": ("id", "name", "audiences", "sendStrategy", "sendOptions", "trackingOptions"),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "path.id": CampaignIdOverlay,
+                    "body.data.id": <RestSchemaFieldOverlayInfo>{"value_from": "id"},
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Name",
+                        "short_desc": "The new name of the campaign",
+                        "preselected": True,
+                    },
+                    "audiences": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Audiences",
+                        "short_desc": "The lists and segments to include and exclude",
+                    },
+                    "send_strategy": <RestSchemaFieldOverlayInfo>{
+                        "name": "sendStrategy",
+                        "display_name": "Send Strategy",
+                        "short_desc": "When the campaign is sent, if not immediately",
+                    },
+                    "send_options": <RestSchemaFieldOverlayInfo>{
+                        "name": "sendOptions",
+                        "display_name": "Send Options",
+                        "short_desc": "Whether to use smart sending",
+                    },
+                    "tracking_options": <RestSchemaFieldOverlayInfo>{
+                        "name": "trackingOptions",
+                        "display_name": "Tracking Options",
+                        "short_desc": "The UTM parameters and tracking flags to apply",
+                    },
+                    "fields[campaign]": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete_campaign",
+                "method": "DELETE",
+                "path": "/api/campaigns/{id}",
+                "operation_id": "delete_campaign",
+                "display_name": "Delete Campaign",
+                "short_desc": "Deletes a campaign",
+                "desc": "Deletes a campaign.\n\n"
+                    "Klaviyo answers with no content. A campaign that has already been sent keeps its "
+                    "reporting history.",
+                "groups": (GroupCampaigns,),
+                "fields": {
+                    "id": CampaignIdOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
                 "action": "send_campaign",
                 "method": "POST",
                 "path": "/api/campaign-send-jobs",
@@ -828,7 +1256,46 @@ public class KlaviyoManifest {
                             },
                         },
                     },
-                    "filter": IgnoreOverlay,
+                    # published rather than ignored so that the events table can narrow a search Klaviyo
+                    # would otherwise answer by walking every event in the account; it takes Klaviyo's own
+                    # filter syntax, which the argument's own description spells out
+                    "filter": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Filter",
+                        "short_desc": "Narrow the listing to matching events",
+                        "desc": "Narrow the listing to matching events, in Klaviyo's filter syntax.\n\n"
+                            "`equals(metric_id,\"…\")` and `equals(profile_id,\"…\")` select one metric or "
+                            "one profile, and `datetime` and `timestamp` take the four range comparisons - "
+                            "for example "
+                            "`greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. "
+                            "Predicates are joined by commas and mean **and**; Klaviyo has no `or` here.",
+                    },
+                    "fields[attribution]": IgnoreOverlay,
+                    "fields[event]": IgnoreOverlay,
+                    "fields[metric]": IgnoreOverlay,
+                    "fields[profile]": IgnoreOverlay,
+                    "include": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get_event",
+                "method": "GET",
+                "path": "/api/events/{id}",
+                "operation_id": "get_event",
+                "display_name": "Get Event",
+                "short_desc": "Retrieves a specific event",
+                "desc": "Retrieves one event by its Klaviyo ID",
+                "groups": (GroupEvents,),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Event",
+                        "short_desc": "The event to retrieve",
+                        "ref_data": RefEvent,
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
                     "fields[attribution]": IgnoreOverlay,
                     "fields[event]": IgnoreOverlay,
                     "fields[metric]": IgnoreOverlay,
@@ -855,6 +1322,33 @@ public class KlaviyoManifest {
                 "fields": {
                     "page[cursor]": CursorOverlay,
                     "filter": IgnoreOverlay,
+                    "fields[flow]": IgnoreOverlay,
+                    "fields[metric]": IgnoreOverlay,
+                    "include": IgnoreOverlay,
+                    "revision": RevisionOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get_metric",
+                "method": "GET",
+                "path": "/api/metrics/{id}",
+                "operation_id": "get_metric",
+                "display_name": "Get Metric",
+                "short_desc": "Retrieves a specific metric",
+                "desc": "Retrieves one metric by its Klaviyo ID.\n\n"
+                    "A **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and "
+                    "Klaviyo defines one the first time an event names it.",
+                "groups": (GroupEvents,),
+                "response_unwrap": "data",
+                "response_fields": SingleResourceResponse,
+                "fields": {
+                    "id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Metric",
+                        "short_desc": "The metric to retrieve",
+                        "ref_data": RefMetricId,
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
                     "fields[flow]": IgnoreOverlay,
                     "fields[metric]": IgnoreOverlay,
                     "include": IgnoreOverlay,

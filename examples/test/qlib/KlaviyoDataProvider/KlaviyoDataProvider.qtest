@@ -181,6 +181,32 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
             "list_metrics",
         );
 
+        #! The single reads and writes added so that the record tables have actions to name
+        /** A table is assembled from actions the manifest already exports, and the port shipped only the
+            listings and the writes the superseded application had.  Every ID here is new, so none of them
+            touches the 26 IDs that application registered.
+
+            @see @ref KlaviyoDataProvider::KlaviyoRecordTables "KlaviyoRecordTables"
+        */
+        const AddedRecordActions = (
+            "create_campaign",
+            "create_segment",
+            "create_tag",
+            "delete_campaign",
+            "delete_list",
+            "delete_segment",
+            "delete_tag",
+            "get_event",
+            "get_list",
+            "get_metric",
+            "get_segment",
+            "get_tag",
+            "update_campaign",
+            "update_list",
+            "update_segment",
+            "update_tag",
+        );
+
         #! The options the superseded application published, per action
         /** These are as much a commitment as the action IDs: an existing workflow supplies option values
             **by name**, so an option this application renamed would break every workflow that set it.
@@ -230,6 +256,8 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
         addTestCase("the dropdowns", \referenceDataTest());
         addTestCase("the hand-written relationship actions", \relationshipTest());
         addTestCase("the hand-written write actions", \writeActionTest());
+        addTestCase("the record tables", \recordTableTest());
+        addTestCase("the filter expression rendering", \tableQueryTest());
         addTestCase("the polling events", \eventTest());
         addTestCase("the connection", \connectionTest());
 
@@ -273,7 +301,10 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
         assertEq((), missing, "no superseded action ID was dropped");
 
         map assertTrue(registered{$1}, sprintf("the added listing %y is registered", $1)), AddedListings;
-        assertEq(SupersededActions.size() + AddedListings.size(), registered.size(),
+        map assertTrue(registered{$1}, sprintf("the added record action %y is registered", $1)),
+            AddedRecordActions;
+        assertEq(SupersededActions.size() + AddedListings.size() + AddedRecordActions.size()
+            + KlaviyoRecordTables::RecordActionIds.size(), registered.size(),
             "nothing was registered that is neither a superseded action nor a declared addition");
 
         # the four trigger IDs are the registered ones, not the filenames they were written in
@@ -455,6 +486,147 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
             sub () {
                 lists.flatten({"req": {"query": {"filter": "any(nope,\"x\")"}}, "path_vars": {}});
             });
+    }
+
+    private recordTableTest() {
+        RestSchemaActionSet set = aset();
+
+        # every table names actions the manifest exports, and every path a record is read or written
+        # through resolves against the response the action publishes
+        RestSchemaTablesDataProvider tables("tables", set, KlaviyoRecordTables::Tables);
+        tables.checkTables();
+        assertEq(("profiles", "lists", "segments", "tags", "campaigns", "metrics", "events"),
+            (map $1.name, KlaviyoRecordTables::Tables));
+
+        # the record type is derived from both reading actions and the richer one wins: Klaviyo returns a
+        # list's profile count only on the single read, and a column the table does not declare cannot be
+        # searched at all
+        RestSchemaTableDataProvider lists(set, KlaviyoRecordTables::ListsTable);
+        *hash<string, AbstractDataField> lt = lists.getRecordType();
+        assertTrue(exists lt.name);
+        assertTrue(exists lt.opt_in_process, "the attributes are columns, not an envelope");
+        assertEq(NOTHING, lt.attributes, "the JSON:API envelope is not a column");
+        assertTrue(exists lt.profile_count, "a column only the single read describes is still declared");
+
+        # what each table can do is what Klaviyo can do, not what the layer can express
+        hash<string, hash<DataProviderInfo>> info = {};
+        map info{$1.name} = (new RestSchemaTableDataProvider(set, $1)).getInfo(),
+            KlaviyoRecordTables::Tables;
+        assertFalse(info.profiles.supports_delete,
+            "a profile is deleted through a privacy request, not through this API");
+        assertTrue(info.lists.supports_delete);
+        assertFalse(info.metrics.supports_create, "a metric is defined by the first event that names it");
+        assertFalse(info.metrics.supports_update);
+        assertFalse(info.metrics.supports_delete);
+        assertFalse(info.events.supports_create, "an event is created through the hand-written action");
+        assertFalse(info.events.supports_update, "an event records what happened and is never changed");
+        assertFalse(info.events.supports_delete);
+
+        # native search is claimed only where a whole expression reaches Klaviyo's filter argument
+        assertTrue(info.profiles.supports_native_search);
+        assertTrue(info.lists.supports_native_search);
+        assertTrue(info.segments.supports_native_search);
+        assertTrue(info.tags.supports_native_search);
+        assertTrue(info.events.supports_native_search);
+        assertFalse(info.campaigns.supports_native_search,
+            "the channel argument is the whole of what Klaviyo's campaign filter can carry");
+        assertFalse(info.metrics.supports_native_search,
+            "Klaviyo filters metrics only on fields a metric record does not have");
+
+        # Klaviyo has no disjunction and no negation, and says so rather than rendering one
+        map assertFalse(info{$1}.expressions{DP_OP_OR}.supports_pushdown,
+            sprintf("table %y claims no OR", $1)), keys info;
+        map assertFalse(info{$1}.expressions{DP_SEARCH_OP_NOT}.supports_pushdown,
+            sprintf("table %y claims no NOT", $1)), keys info;
+
+        # Klaviyo has no ">=" on a profile at all, and it does have one on an event
+        assertFalse(info.profiles.expressions{DP_SEARCH_OP_GE}.supports_pushdown);
+        assertTrue(info.profiles.expressions{DP_SEARCH_OP_GT}.supports_pushdown);
+        assertTrue(info.events.expressions{DP_SEARCH_OP_GE}.supports_pushdown);
+
+        # the channel identifies the collection, so a search without it cannot be answered at all
+        RestSchemaTableDataProvider campaigns(set, KlaviyoRecordTables::CampaignsTable);
+        assertTrue(campaigns.getInfo().search_options.channel.required,
+            "the channel is a required search option");
+    }
+
+    private tableQueryTest() {
+        # one predicate, rendered as a prefix call rather than as an infix comparison, and wrapped so that
+        # the listing's filter codec does not convert it a second time and drop it
+        RestSchemaRecordFilter pf(KlaviyoRecordTables::ProfilesTable);
+        hash<RestSchemaRecordFilterSplit> s = pf.split(eq("email", "ada@example.com"));
+        assertEq("equals(email,\"ada@example.com\")", s.options.filter.value);
+        assertNothing(s.client, "Klaviyo evaluates it, so nothing is left for the client side");
+
+        # a conjunction joins with a bare comma and is never parenthesised
+        s = pf.split(<DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (eq("email", "ada@example.com"), op(DP_SEARCH_OP_GT, "created", 2026-01-01Z)),
+        });
+        assertEq("equals(email,\"ada@example.com\"),greater-than(created,\"2026-01-01T00:00:00Z\")",
+            s.options.filter.value, "a date is compared as an ISO-8601 instant in UTC");
+        assertNothing(s.client);
+
+        # a set predicate is always a JSON array, even holding one value: Klaviyo rejects any(email,"x")
+        s = pf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "email"}, ("ada@example.com",)),
+        });
+        assertEq("any(email,[\"ada@example.com\"])", s.options.filter.value);
+        s = pf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, ("01H", "02H")),
+        });
+        assertEq("any(id,[\"01H\",\"02H\"])", s.options.filter.value);
+
+        # Klaviyo has no disjunction: the whole expression is evaluated here rather than being sent as a
+        # conjunction, which would answer with the intersection and look like a working search
+        s = pf.split(<DataProviderExpression>{
+            "exp": DP_OP_OR,
+            "args": (eq("email", "ada@example.com"), eq("email", "grace@example.com")),
+        });
+        assertEq({}, s.options, "no disjunction is sent");
+        assertEq(DP_OP_OR, s.client.exp, "and it is answered here instead");
+
+        # Klaviyo has no greater-or-equal on a profile's timestamps, and sending one would fail the search
+        # rather than answer it wrongly
+        s = pf.split(op(DP_SEARCH_OP_GE, "created", 2026-01-01Z));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_GE, s.client.exp);
+
+        # ... and it does have one on an event's datetime
+        RestSchemaRecordFilter ef(KlaviyoRecordTables::EventsTable);
+        s = ef.split(op(DP_SEARCH_OP_GE, "datetime", 2026-01-01T12:30:00Z));
+        assertEq("greater-or-equal(datetime,\"2026-01-01T12:30:00Z\")", s.options.filter.value);
+
+        # a field Klaviyo does not index is evaluated here rather than turned into an error
+        s = pf.split(eq("title", "Engineer"));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        # the three string predicates narrow the fetch and are applied again to what comes back, because
+        # Klaviyo documents neither their case sensitivity nor their collation
+        RestSchemaRecordFilter tf(KlaviyoRecordTables::TagsTable);
+        s = tf.split(op(DP_OP_CONTAINS, "name", "black"));
+        assertEq("contains(name,\"black\")", s.options.filter.value);
+        assertEq(DP_OP_CONTAINS, s.client.exp, "and the predicate is answered here as well");
+
+        # a tag has one attribute, so equality on anything else is not sent
+        s = tf.split(eq("id", "T1"));
+        assertEq({}, s.options);
+    }
+
+    #! Returns an equality predicate
+    private hash<DataProviderExpression> eq(string field, auto value) {
+        return op(DP_SEARCH_OP_EQ, field, value);
+    }
+
+    #! Returns a predicate with the given operator
+    private hash<DataProviderExpression> op(string operator, string field, auto value) {
+        return <DataProviderExpression>{
+            "exp": operator,
+            "args": (<DataProviderFieldReference>{"field": field}, value),
+        };
     }
 
     private responseEnvelopeTest() {

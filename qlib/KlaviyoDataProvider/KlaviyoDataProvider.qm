@@ -80,6 +80,14 @@ module KlaviyoDataProvider {
         RestSchemaActionSet action_set = KlaviyoSchema::getActionSet();
         action_set.registerActions(KlaviyoDataProvider::AppName);
 
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(KlaviyoDataProvider::AppName,
+            "/" + KlaviyoDataProvider::TablesChildName, action_set, KlaviyoRecordTables::Tables,
+            KlaviyoRecordTables::RecordActionIds, {
+                "groups": (KlaviyoRecordTables::RecordGroup,),
+            });
+
         # register the nine hand-written actions; see @ref klaviyomanifest_handwritten for why they are
         # not generated
         foreach hash<KlaviyoRelationshipActionInfo> ri in (KlaviyoRelationshipActions.iterator()) {
@@ -235,6 +243,36 @@ properties beside the identity, so a result carries \c email rather than \c attr
     re-delivered whatever was still in that page, and a burst larger than one page lost records outright.
     These position the feed by its timestamp field, ask for records at or after the cursor in ascending
     order, and keep a durable checkpoint.
+
+    @section klaviyodataprovider_tables Record Tables
+
+    Seven of Klaviyo's collections are exposed under \c tables for record-based reading and writing, so that
+    they can be read, searched, mapped and written like any other record source:
+
+    |!Table|!Reads|!Writes|!Server-side search
+    |\c profiles|list, get|create, update|yes - Klaviyo evaluates the whole expression
+    |\c lists|list, get|create, update, delete|yes
+    |\c segments|list, get|create, update, delete|yes
+    |\c tags|list, get|create, update, delete|yes
+    |\c campaigns|list, get|create, update, delete|no - narrowed by name within one channel
+    |\c metrics|list, get|-|no - Klaviyo filters them only on their integration
+    |\c events|list, get|-|yes - over the timestamps
+
+    Every table is assembled from actions the manifest exports, so no path, request contract, codec or
+    escaping rule is written a second time.  Sixteen single reads and writes were added to the manifest for
+    them; every one is a new action ID, so none of the 26 IDs the superseded application registered is
+    touched.
+
+    A search is **hybrid**: what Klaviyo can evaluate is rendered into its \c filter argument, and the rest
+    is applied to the records as they arrive, with the caller's limit counting **matching** records.  What
+    Klaviyo can evaluate is declared per field, because Klaviyo indexes each field for particular
+    comparisons and answers any other one with an error rather than with records - there is no
+    \c greater-or-equal on a profile's \c created at all, though there is one on an event's \c datetime.
+    Klaviyo also has **no disjunction and no negation**, so a search containing an \c OR or a \c NOT is
+    evaluated here rather than sent as something Klaviyo would answer differently.
+
+    @see @ref KlaviyoDataProvider::KlaviyoRecordTables "KlaviyoRecordTables" for the whole of it, including
+    why campaigns are scoped rather than searched and why a profile is not deleted here.
 
     @section klaviyodataprovider_examples Examples
 

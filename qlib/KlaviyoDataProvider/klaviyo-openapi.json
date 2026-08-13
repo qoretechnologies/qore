@@ -371,6 +371,104 @@
         "x-klaviyo-scopes": [
           "campaigns:read"
         ]
+      },
+      "post": {
+        "operationId": "create_campaign",
+        "summary": "Create Campaign",
+        "description": "Creates a campaign given a set of parameters, then returns it.<br><br>*Rate limits*:<br>Burst: `10/s`<br>Steady: `150/m`\n\n**Scopes:**\n`campaigns:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/create_campaign.json)",
+        "parameters": [
+          {
+            "name": "fields[campaign]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "archived",
+                  "audiences",
+                  "audiences.excluded",
+                  "audiences.included",
+                  "created_at",
+                  "id",
+                  "name",
+                  "scheduled_at",
+                  "send_options",
+                  "send_options.use_smart_sending",
+                  "send_strategy",
+                  "send_strategy.date",
+                  "send_strategy.datetime",
+                  "send_strategy.method",
+                  "send_strategy.options",
+                  "send_strategy.options.is_local",
+                  "send_strategy.options.send_past_recipients_immediately",
+                  "send_strategy.throttle_percentage",
+                  "send_time",
+                  "status",
+                  "tracking_options",
+                  "tracking_options.add_tracking_params",
+                  "tracking_options.custom_tracking_params",
+                  "tracking_options.is_tracking_clicks",
+                  "tracking_options.is_tracking_opens",
+                  "updated_at"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Creates a campaign from parameters",
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreateQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostCampaignResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Campaigns"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "10/s",
+          "steady": "150/m"
+        },
+        "x-klaviyo-scopes": [
+          "campaigns:write"
+        ]
       }
     },
     "/api/campaigns/{id}": {
@@ -557,6 +655,163 @@
         },
         "x-klaviyo-scopes": [
           "campaigns:read"
+        ]
+      },
+      "patch": {
+        "operationId": "update_campaign",
+        "summary": "Update Campaign",
+        "description": "Update a campaign with the given campaign ID.<br><br>*Rate limits*:<br>Burst: `10/s`<br>Steady: `150/m`\n\n**Scopes:**\n`campaigns:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/update_campaign.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The campaign ID to be retrieved",
+            "required": true,
+            "schema": {
+              "description": "The campaign ID to be retrieved",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fields[campaign]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "archived",
+                  "audiences",
+                  "audiences.excluded",
+                  "audiences.included",
+                  "created_at",
+                  "id",
+                  "name",
+                  "scheduled_at",
+                  "send_options",
+                  "send_options.use_smart_sending",
+                  "send_strategy",
+                  "send_strategy.date",
+                  "send_strategy.datetime",
+                  "send_strategy.method",
+                  "send_strategy.options",
+                  "send_strategy.options.is_local",
+                  "send_strategy.options.send_past_recipients_immediately",
+                  "send_strategy.throttle_percentage",
+                  "send_time",
+                  "status",
+                  "tracking_options",
+                  "tracking_options.add_tracking_params",
+                  "tracking_options.custom_tracking_params",
+                  "tracking_options.is_tracking_clicks",
+                  "tracking_options.is_tracking_opens",
+                  "updated_at"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Update a campaign and return it",
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignPartialUpdateQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchCampaignResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Campaigns"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "10/s",
+          "steady": "150/m"
+        },
+        "x-klaviyo-scopes": [
+          "campaigns:write"
+        ]
+      },
+      "delete": {
+        "operationId": "delete_campaign",
+        "summary": "Delete Campaign",
+        "description": "Delete a campaign with the given campaign ID.<br><br>*Rate limits*:<br>Burst: `10/s`<br>Steady: `150/m`\n\n**Scopes:**\n`campaigns:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/delete_campaign.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The campaign ID to be deleted",
+            "required": true,
+            "schema": {
+              "description": "The campaign ID to be deleted",
+              "type": "string"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Campaigns"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "10/s",
+          "steady": "150/m"
+        },
+        "x-klaviyo-scopes": [
+          "campaigns:write"
         ]
       }
     },
@@ -960,6 +1215,177 @@
         ]
       }
     },
+    "/api/events/{id}": {
+      "get": {
+        "operationId": "get_event",
+        "summary": "Get Event",
+        "description": "Get an event with the given event ID.<br><br>*Rate limits*:<br>Burst: `10/s`<br>Steady: `150/m`\n\n**Scopes:**\n`events:read`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/get_event.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the event",
+            "required": true,
+            "schema": {
+              "description": "ID of the event",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fields[attribution]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "id"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[event]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "datetime",
+                  "event_properties",
+                  "id",
+                  "timestamp",
+                  "uuid"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[metric]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "id",
+                  "integration",
+                  "name",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[profile]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "email",
+                  "external_id",
+                  "first_name",
+                  "id",
+                  "image",
+                  "last_event_date",
+                  "last_name",
+                  "locale",
+                  "location",
+                  "location.address1",
+                  "location.address2",
+                  "location.city",
+                  "location.country",
+                  "location.ip",
+                  "location.latitude",
+                  "location.longitude",
+                  "location.region",
+                  "location.timezone",
+                  "location.zip",
+                  "organization",
+                  "phone_number",
+                  "properties",
+                  "title",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#relationships",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "attributions",
+                  "metric",
+                  "profile"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetEventResponseCompoundDocument"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Events"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "10/s",
+          "steady": "150/m"
+        },
+        "x-klaviyo-scopes": [
+          "events:read"
+        ]
+      }
+    },
     "/api/lists": {
       "get": {
         "operationId": "get_lists",
@@ -1251,6 +1677,294 @@
           "burst": "10/s",
           "steady": "150/m",
           "daily": "150/d"
+        },
+        "x-klaviyo-scopes": [
+          "lists:write"
+        ]
+      }
+    },
+    "/api/lists/{id}": {
+      "get": {
+        "operationId": "get_list",
+        "summary": "Get List",
+        "description": "Get a list with the given list ID.<br><br>*Rate limits*:<br>Burst: `75/s`<br>Steady: `750/m`<br><br>Rate limits when using the `additional-fields[list]=profile_count` parameter in your API request:<br>Burst: `1/s`<br>Steady: `15/m`<br><br>To learn more about how the `additional-fields` parameter impacts rate limits, check out our [Rate limits, status codes, and errors](https://developers.klaviyo.com/en/v2026-07-15/docs/rate_limits_and_error_handling) guide.\n\n**Scopes:**\n`lists:read`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/get_list.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+            "required": true,
+            "schema": {
+              "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+              "type": "string",
+              "example": "Y6nRLr"
+            }
+          },
+          {
+            "name": "additional-fields[list]",
+            "in": "query",
+            "description": "Request additional fields not included by default in the response. Supported values: 'profile_count'",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "profile_count"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[flow]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "archived",
+                  "created",
+                  "id",
+                  "name",
+                  "status",
+                  "trigger_type",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[list]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "id",
+                  "name",
+                  "opt_in_process",
+                  "profile_count",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[tag]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "id",
+                  "name"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#relationships",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "flow-triggers",
+                  "tags"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetListRetrieveResponseCompoundDocument"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Lists"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "75/s",
+          "steady": "750/m"
+        },
+        "x-klaviyo-scopes": [
+          "lists:read"
+        ]
+      },
+      "patch": {
+        "operationId": "update_list",
+        "summary": "Update List",
+        "description": "Update the name of a list with the given list ID.<br><br>*Rate limits*:<br>Burst: `10/s`<br>Steady: `150/m`\n\n**Scopes:**\n`lists:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/update_list.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+            "required": true,
+            "schema": {
+              "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+              "type": "string",
+              "example": "Y6nRLr"
+            }
+          },
+          {
+            "name": "fields[list]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "id",
+                  "name",
+                  "opt_in_process",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListPartialUpdateQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchListPartialUpdateResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Lists"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "10/s",
+          "steady": "150/m"
+        },
+        "x-klaviyo-scopes": [
+          "lists:write"
+        ]
+      },
+      "delete": {
+        "operationId": "delete_list",
+        "summary": "Delete List",
+        "description": "Delete a list with the given list ID.<br><br>*Rate limits*:<br>Burst: `10/s`<br>Steady: `150/m`\n\n**Scopes:**\n`lists:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/delete_list.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+            "required": true,
+            "schema": {
+              "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+              "type": "string",
+              "example": "Y6nRLr"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Lists"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "10/s",
+          "steady": "150/m"
         },
         "x-klaviyo-scopes": [
           "lists:write"
@@ -1823,6 +2537,121 @@
             }
           }
         },
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "10/s",
+          "steady": "150/m"
+        },
+        "x-klaviyo-scopes": [
+          "metrics:read"
+        ]
+      }
+    },
+    "/api/metrics/{id}": {
+      "get": {
+        "operationId": "get_metric",
+        "summary": "Get Metric",
+        "description": "Get a metric with the given metric ID.<br><br>*Rate limits*:<br>Burst: `10/s`<br>Steady: `150/m`\n\n**Scopes:**\n`metrics:read`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/get_metric.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Metric ID",
+            "required": true,
+            "schema": {
+              "description": "Metric ID",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fields[flow]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "archived",
+                  "created",
+                  "id",
+                  "name",
+                  "status",
+                  "trigger_type",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[metric]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "id",
+                  "integration",
+                  "name",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#relationships",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "flow-triggers"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMetricResponseCompoundDocument"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Metrics"
+        ],
         "x-klaviyo-pre-release": "None",
         "x-klaviyo-ratelimit": {
           "burst": "10/s",
@@ -3567,6 +4396,378 @@
         "x-klaviyo-scopes": [
           "segments:read"
         ]
+      },
+      "post": {
+        "operationId": "create_segment",
+        "summary": "Create Segment",
+        "description": "Create a segment.<br><br>*Rate limits*:<br>Burst: `1/s`<br>Steady: `15/m`<br>Daily: `100/d`\n\n**Scopes:**\n`segments:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/create_segment.json)",
+        "parameters": [
+          {
+            "name": "fields[segment]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "definition",
+                  "definition.condition_groups",
+                  "id",
+                  "is_active",
+                  "is_processing",
+                  "is_starred",
+                  "name",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SegmentCreateQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostSegmentCreateResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Segments"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "1/s",
+          "steady": "15/m",
+          "daily": "100/d"
+        },
+        "x-klaviyo-scopes": [
+          "segments:write"
+        ]
+      }
+    },
+    "/api/segments/{id}": {
+      "get": {
+        "operationId": "get_segment",
+        "summary": "Get Segment",
+        "description": "Get a segment with the given segment ID.<br><br>*Rate limits*:<br>Burst: `75/s`<br>Steady: `750/m`<br><br>Rate limits when using the `additional-fields[segment]=profile_count` parameter in your API request:<br>Burst: `1/s`<br>Steady: `15/m`<br><br>To learn more about how the `additional-fields` parameter impacts rate limits, check out our [Rate limits, status codes, and errors](https://developers.klaviyo.com/en/v2026-07-15/docs/rate_limits_and_error_handling) guide.\n\n**Scopes:**\n`segments:read`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/get_segment.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "additional-fields[segment]",
+            "in": "query",
+            "description": "Request additional fields not included by default in the response. Supported values: 'profile_count'",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "profile_count"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[flow]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "archived",
+                  "created",
+                  "id",
+                  "name",
+                  "status",
+                  "trigger_type",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[segment]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "definition",
+                  "definition.condition_groups",
+                  "id",
+                  "is_active",
+                  "is_processing",
+                  "is_starred",
+                  "name",
+                  "profile_count",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[tag]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "id",
+                  "name"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#relationships",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "flow-triggers",
+                  "tags"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSegmentRetrieveResponseCompoundDocument"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Segments"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "75/s",
+          "steady": "750/m"
+        },
+        "x-klaviyo-scopes": [
+          "segments:read"
+        ]
+      },
+      "patch": {
+        "operationId": "update_segment",
+        "summary": "Update Segment",
+        "description": "Update a segment with the given segment ID.<br><br>*Rate limits*:<br>Burst: `1/s`<br>Steady: `15/m`<br>Daily: `100/d`\n\n**Scopes:**\n`segments:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/update_segment.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fields[segment]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "definition",
+                  "definition.condition_groups",
+                  "id",
+                  "is_active",
+                  "is_processing",
+                  "is_starred",
+                  "name",
+                  "updated"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SegmentPartialUpdateQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchSegmentPartialUpdateResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Segments"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "1/s",
+          "steady": "15/m",
+          "daily": "100/d"
+        },
+        "x-klaviyo-scopes": [
+          "segments:write"
+        ]
+      },
+      "delete": {
+        "operationId": "delete_segment",
+        "summary": "Delete Segment",
+        "description": "Delete a segment with the given segment ID.<br><br>*Rate limits*:<br>Burst: `3/s`<br>Steady: `60/m`\n\n**Scopes:**\n`segments:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/delete_segment.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Segments"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "3/s",
+          "steady": "60/m"
+        },
+        "x-klaviyo-scopes": [
+          "segments:write"
+        ]
       }
     },
     "/api/segments/{id}/profiles": {
@@ -4040,6 +5241,302 @@
         },
         "x-klaviyo-scopes": [
           "tags:read"
+        ]
+      },
+      "post": {
+        "operationId": "create_tag",
+        "summary": "Create Tag",
+        "description": "Create a tag. An account cannot have more than **500** unique tags.\n\nA tag belongs to a single tag group. If `relationships.tag-group.data.id` is not specified,\nthe tag is added to the account's default tag group.<br><br>*Rate limits*:<br>Burst: `3/s`<br>Steady: `60/m`\n\n**Scopes:**\n`tags:read`\n`tags:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/create_tag.json)",
+        "parameters": [
+          {
+            "name": "fields[tag]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "id",
+                  "name"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagCreateQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTagResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Tags"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "3/s",
+          "steady": "60/m"
+        },
+        "x-klaviyo-scopes": [
+          "tags:read",
+          "tags:write"
+        ]
+      }
+    },
+    "/api/tags/{id}": {
+      "get": {
+        "operationId": "get_tag",
+        "summary": "Get Tag",
+        "description": "Retrieve the tag with the given tag ID.<br><br>*Rate limits*:<br>Burst: `3/s`<br>Steady: `60/m`\n\n**Scopes:**\n`tags:read`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/get_tag.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The Tag ID",
+            "required": true,
+            "schema": {
+              "description": "The Tag ID",
+              "type": "string",
+              "example": "abcd1234-ef56-gh78-ij90-abcdef123456"
+            }
+          },
+          {
+            "name": "fields[tag-group]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "exclusive",
+                  "id",
+                  "name"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "fields[tag]",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#sparse-fieldsets",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "id",
+                  "name"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "description": "For more information please visit https://developers.klaviyo.com/en/v2026-07-15/reference/api-overview#relationships",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "tag-group"
+                ]
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTagResponseCompoundDocument"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Tags"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "3/s",
+          "steady": "60/m"
+        },
+        "x-klaviyo-scopes": [
+          "tags:read"
+        ]
+      },
+      "patch": {
+        "operationId": "update_tag",
+        "summary": "Update Tag",
+        "description": "Update the tag with the given tag ID.\n\nOnly a tag's `name` can be changed. A tag cannot be moved from one tag group to another.<br><br>*Rate limits*:<br>Burst: `3/s`<br>Steady: `60/m`\n\n**Scopes:**\n`tags:read`\n`tags:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/update_tag.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The Tag ID",
+            "required": true,
+            "schema": {
+              "description": "The Tag ID",
+              "type": "string",
+              "example": "abcd1234-ef56-gh78-ij90-abcdef123456"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagUpdateQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Tags"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "3/s",
+          "steady": "60/m"
+        },
+        "x-klaviyo-scopes": [
+          "tags:read",
+          "tags:write"
+        ]
+      },
+      "delete": {
+        "operationId": "delete_tag",
+        "summary": "Delete Tag",
+        "description": "Delete the tag with the given tag ID. Any associations between the tag and other resources will also be removed.<br><br>*Rate limits*:<br>Burst: `3/s`<br>Steady: `60/m`\n\n**Scopes:**\n`tags:read`\n`tags:write`\n\n[OpenAPI Spec](https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable/apis/delete_tag.json)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The Tag ID",
+            "required": true,
+            "schema": {
+              "description": "The Tag ID",
+              "type": "string",
+              "example": "abcd1234-ef56-gh78-ij90-abcdef123456"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "header",
+            "description": "API endpoint revision (format: YYYY-MM-DD[.suffix])",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "2026-07-15"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "tags": [
+          "Tags"
+        ],
+        "x-klaviyo-pre-release": "None",
+        "x-klaviyo-ratelimit": {
+          "burst": "3/s",
+          "steady": "60/m"
+        },
+        "x-klaviyo-scopes": [
+          "tags:read",
+          "tags:write"
         ]
       }
     },
@@ -5713,6 +7210,39 @@
           "data"
         ]
       },
+      "GetEventResponseCompoundDocument": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EventResponseObjectResource"
+          },
+          "included": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/MetricResponseObjectResource"
+                },
+                {
+                  "$ref": "#/components/schemas/ProfileResponseObjectResource"
+                },
+                {
+                  "$ref": "#/components/schemas/AttributionResponseObjectResource"
+                }
+              ]
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "FlowActionEnum": {
         "type": "string",
         "enum": [
@@ -5864,6 +7394,29 @@
             "items": {
               "$ref": "#/components/schemas/FlowResponseObjectResource"
             }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "GetMetricResponseCompoundDocument": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MetricResponseObjectResource"
+          },
+          "included": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlowResponseObjectResource"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
           }
         },
         "required": [
@@ -6210,6 +7763,195 @@
                 }
               ]
             }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ListRetrieveResponseObjectResource": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ListEnum"
+          },
+          "id": {
+            "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+            "type": "string",
+            "example": "Y6nRLr"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "A helpful name to label the list",
+                "type": "string",
+                "example": "Newsletter",
+                "nullable": true
+              },
+              "created": {
+                "description": "Date and time when the list was created, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                "type": "string",
+                "format": "date-time",
+                "example": "2022-11-08T00:00:00+00:00",
+                "nullable": true
+              },
+              "updated": {
+                "description": "Date and time when the list was last updated, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                "type": "string",
+                "format": "date-time",
+                "example": "2022-11-08T00:00:00+00:00",
+                "nullable": true
+              },
+              "opt_in_process": {
+                "description": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'.",
+                "type": "string",
+                "example": "double_opt_in",
+                "enum": [
+                  "double_opt_in",
+                  "single_opt_in"
+                ],
+                "nullable": true
+              }
+            }
+          },
+          "relationships": {
+            "type": "object",
+            "properties": {
+              "profiles": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "properties": {
+                        "type": {
+                          "$ref": "#/components/schemas/ProfileEnum"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "links": {
+                    "$ref": "#/components/schemas/RelationshipLinks"
+                  }
+                }
+              },
+              "tags": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "properties": {
+                        "type": {
+                          "$ref": "#/components/schemas/TagEnum"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "links": {
+                    "$ref": "#/components/schemas/RelationshipLinks"
+                  }
+                }
+              },
+              "flow-triggers": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "properties": {
+                        "type": {
+                          "$ref": "#/components/schemas/FlowEnum"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "links": {
+                    "$ref": "#/components/schemas/RelationshipLinks"
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes",
+          "links"
+        ]
+      },
+      "GetListRetrieveResponseCompoundDocument": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "properties": {
+                  "type": {
+                    "$ref": "#/components/schemas/ListEnum"
+                  },
+                  "attributes": {
+                    "properties": {
+                      "profile_count": {
+                        "type": "integer",
+                        "nullable": true
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "$ref": "#/components/schemas/ListRetrieveResponseObjectResource"
+              }
+            ]
+          },
+          "included": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/TagResponseObjectResource"
+                },
+                {
+                  "$ref": "#/components/schemas/FlowResponseObjectResource"
+                }
+              ]
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
           }
         },
         "required": [
@@ -10107,6 +11849,202 @@
           "data"
         ]
       },
+      "SegmentRetrieveResponseObjectResource": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/SegmentEnum"
+          },
+          "id": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "A helpful name to label the segment",
+                "type": "string",
+                "example": "Repeat Purchasers",
+                "nullable": true
+              },
+              "definition": {
+                "$ref": "#/components/schemas/SegmentDefinition",
+                "nullable": true
+              },
+              "created": {
+                "description": "Date and time when the segment was created, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                "type": "string",
+                "format": "date-time",
+                "example": "2022-11-08T00:00:00+00:00",
+                "nullable": true
+              },
+              "updated": {
+                "description": "Date and time when the segment was last updated, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                "type": "string",
+                "format": "date-time",
+                "example": "2022-11-08T00:00:00+00:00",
+                "nullable": true
+              },
+              "is_active": {
+                "description": "Whether the segment is active. Inactive segments are not processed and their membership does not update.",
+                "type": "boolean"
+              },
+              "is_processing": {
+                "type": "boolean"
+              },
+              "is_starred": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "is_active",
+              "is_processing",
+              "is_starred"
+            ]
+          },
+          "relationships": {
+            "type": "object",
+            "properties": {
+              "profiles": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "properties": {
+                        "type": {
+                          "$ref": "#/components/schemas/ProfileEnum"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "links": {
+                    "$ref": "#/components/schemas/RelationshipLinks"
+                  }
+                }
+              },
+              "tags": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "properties": {
+                        "type": {
+                          "$ref": "#/components/schemas/TagEnum"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "links": {
+                    "$ref": "#/components/schemas/RelationshipLinks"
+                  }
+                }
+              },
+              "flow-triggers": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "properties": {
+                        "type": {
+                          "$ref": "#/components/schemas/FlowEnum"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "links": {
+                    "$ref": "#/components/schemas/RelationshipLinks"
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes",
+          "links"
+        ]
+      },
+      "GetSegmentRetrieveResponseCompoundDocument": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "properties": {
+                  "type": {
+                    "$ref": "#/components/schemas/SegmentEnum"
+                  },
+                  "attributes": {
+                    "properties": {
+                      "profile_count": {
+                        "type": "integer",
+                        "nullable": true
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "$ref": "#/components/schemas/SegmentRetrieveResponseObjectResource"
+              }
+            ]
+          },
+          "included": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/TagResponseObjectResource"
+                },
+                {
+                  "$ref": "#/components/schemas/FlowResponseObjectResource"
+                }
+              ]
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "SegmentMemberResponseObjectResource": {
         "type": "object",
         "properties": {
@@ -12623,6 +14561,29 @@
           "data"
         ]
       },
+      "GetTagResponseCompoundDocument": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TagResponseObjectResource"
+          },
+          "included": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagGroupResponseObjectResource"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "MetricCreateQueryResourceObject": {
         "type": "object",
         "properties": {
@@ -13149,6 +15110,210 @@
           "data"
         ]
       },
+      "SegmentCreateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/SegmentEnum"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "definition": {
+                "$ref": "#/components/schemas/SegmentDefinition"
+              },
+              "is_starred": {
+                "type": "boolean",
+                "default": false,
+                "nullable": true
+              }
+            },
+            "required": [
+              "name",
+              "definition"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "attributes"
+        ]
+      },
+      "SegmentCreateQuery": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SegmentCreateQueryResourceObject"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PostSegmentCreateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/components/schemas/SegmentEnum"
+              },
+              "id": {
+                "type": "string"
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "description": "A helpful name to label the segment",
+                    "type": "string",
+                    "example": "Repeat Purchasers",
+                    "nullable": true
+                  },
+                  "definition": {
+                    "$ref": "#/components/schemas/SegmentDefinition",
+                    "nullable": true
+                  },
+                  "created": {
+                    "description": "Date and time when the segment was created, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "updated": {
+                    "description": "Date and time when the segment was last updated, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "is_active": {
+                    "description": "Whether the segment is active. Inactive segments are not processed and their membership does not update.",
+                    "type": "boolean"
+                  },
+                  "is_processing": {
+                    "type": "boolean"
+                  },
+                  "is_starred": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "is_active",
+                  "is_processing",
+                  "is_starred"
+                ]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "profiles": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/ProfileEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "tags": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/TagEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "flow-triggers": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/FlowEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  }
+                }
+              },
+              "links": {
+                "$ref": "#/components/schemas/ObjectLinks"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes",
+              "links"
+            ]
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "ProfileCreateQueryResourceObject": {
         "type": "object",
         "properties": {
@@ -13595,6 +15760,520 @@
           "data"
         ]
       },
+      "SMSContentCreate": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "description": "The message body",
+            "type": "string",
+            "example": "My preview sms",
+            "nullable": true
+          }
+        }
+      },
+      "SMSMessageDefinitionCreate": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "sms"
+            ]
+          },
+          "content": {
+            "$ref": "#/components/schemas/SMSContentCreate",
+            "description": "Additional attributes relating to the content of the message",
+            "nullable": true
+          },
+          "render_options": {
+            "description": "Additional options for rendering the message",
+            "$ref": "#/components/schemas/RenderOptions",
+            "nullable": true
+          }
+        },
+        "required": [
+          "channel"
+        ]
+      },
+      "MobilePushContentCreate": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "description": "The title of the message",
+            "type": "string",
+            "nullable": true
+          },
+          "body": {
+            "description": "The message body",
+            "type": "string",
+            "example": "My preview push notification"
+          },
+          "dynamic_image": {
+            "description": "The dynamic image to be used in the push notification",
+            "type": "string",
+            "nullable": true
+          },
+          "action_buttons": {
+            "description": "Action buttons for the push notification (max 3, positions 0-indexed with no gaps)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PushActionButtonDefinition"
+            },
+            "nullable": true
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "MobilePushMessageStandardDefinitionCreate": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "mobile_push"
+            ]
+          },
+          "content": {
+            "$ref": "#/components/schemas/MobilePushContentCreate",
+            "description": "Additional attributes relating to the content of the message"
+          },
+          "kv_pairs": {
+            "description": "The key-value pairs to be sent with the push notification",
+            "type": "object",
+            "nullable": true
+          },
+          "options": {
+            "$ref": "#/components/schemas/MobilePushOptions",
+            "nullable": true
+          },
+          "notification_type": {
+            "description": "The type of notification to send",
+            "type": "string",
+            "example": "standard",
+            "default": "standard",
+            "enum": [
+              "standard"
+            ]
+          }
+        },
+        "required": [
+          "channel",
+          "content"
+        ]
+      },
+      "MobilePushMessageSilentDefinitionCreate": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "mobile_push"
+            ]
+          },
+          "kv_pairs": {
+            "description": "The key-value pairs to be sent with the push notification",
+            "type": "object",
+            "nullable": true
+          },
+          "notification_type": {
+            "description": "The type of notification to send",
+            "type": "string",
+            "example": "silent",
+            "default": "silent",
+            "enum": [
+              "silent"
+            ]
+          }
+        },
+        "required": [
+          "channel"
+        ]
+      },
+      "CampaignMessageCreateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/CampaignMessageEnum"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "definition": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/EmailMessageDefinition"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SMSMessageDefinitionCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MobilePushMessageStandardDefinitionCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MobilePushMessageSilentDefinitionCreate"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "definition"
+            ]
+          },
+          "relationships": {
+            "type": "object",
+            "properties": {
+              "image": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "$ref": "#/components/schemas/ImageEnum"
+                      },
+                      "id": {
+                        "description": "The associated image for mobile_push or SMS messages",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "id"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "attributes"
+        ]
+      },
+      "CampaignCreateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/CampaignEnum"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "The campaign name",
+                "type": "string",
+                "example": "My new campaign"
+              },
+              "audiences": {
+                "description": "The audiences to be included and/or excluded from the campaign",
+                "$ref": "#/components/schemas/Audiences"
+              },
+              "send_strategy": {
+                "description": "The send strategy the campaign will send with. Defaults to 'Immediate' send strategy.",
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/StaticSendStrategy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ThrottledSendStrategy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImmediateSendStrategy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SmartSendTimeStrategy"
+                  }
+                ]
+              },
+              "send_options": {
+                "description": "Options to use when sending a campaign",
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/EmailSendOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SMSSendOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PushSendOptions"
+                  }
+                ]
+              },
+              "tracking_options": {
+                "description": "The tracking options associated with the campaign",
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CampaignsEmailTrackingOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CampaignsSMSTrackingOptions"
+                  }
+                ]
+              },
+              "campaign-messages": {
+                "description": "The message(s) associated with the campaign",
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/CampaignMessageCreateQueryResourceObject"
+                    }
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "audiences",
+              "campaign-messages"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "attributes"
+        ]
+      },
+      "CampaignCreateQuery": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CampaignCreateQueryResourceObject"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PostCampaignResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/components/schemas/CampaignEnum"
+              },
+              "id": {
+                "description": "The campaign ID",
+                "type": "string"
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "description": "The campaign name",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "The current status of the campaign",
+                    "type": "string",
+                    "enum": [
+                      "Adding Recipients",
+                      "Cancelled",
+                      "Cancelled: Account Disabled",
+                      "Cancelled: Billing Limit",
+                      "Cancelled: Internal Error",
+                      "Cancelled: Misconfigured",
+                      "Cancelled: No Recipients",
+                      "Cancelled: Smart Sending",
+                      "Draft",
+                      "Preparing to schedule",
+                      "Preparing to send",
+                      "Queued without Recipients",
+                      "Scheduled",
+                      "Sending",
+                      "Sending Segments",
+                      "Sent",
+                      "Unknown",
+                      "Variations Sent"
+                    ]
+                  },
+                  "archived": {
+                    "description": "Whether the campaign has been archived or not",
+                    "type": "boolean"
+                  },
+                  "audiences": {
+                    "description": "The audiences to be included and/or excluded from the campaign",
+                    "$ref": "#/components/schemas/Audiences"
+                  },
+                  "send_options": {
+                    "description": "Options to use when sending a campaign",
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/EmailSendOptions"
+                      },
+                      {
+                        "$ref": "#/components/schemas/SMSSendOptions"
+                      },
+                      {
+                        "$ref": "#/components/schemas/PushSendOptions"
+                      }
+                    ]
+                  },
+                  "tracking_options": {
+                    "description": "The tracking options associated with the campaign",
+                    "nullable": true,
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/CampaignsEmailTrackingOptions"
+                      },
+                      {
+                        "$ref": "#/components/schemas/CampaignsSMSTrackingOptions"
+                      }
+                    ]
+                  },
+                  "send_strategy": {
+                    "description": "The send strategy the campaign will send with",
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/StaticSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/SmartSendTimeStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ThrottledSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ImmediateSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ABTestSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/UnsupportedSendStrategy"
+                      }
+                    ]
+                  },
+                  "created_at": {
+                    "description": "The datetime when the campaign was created",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00"
+                  },
+                  "scheduled_at": {
+                    "description": "The datetime when the campaign was scheduled for future sending",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "updated_at": {
+                    "description": "The datetime when the campaign was last updated by a user or the system",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00"
+                  },
+                  "send_time": {
+                    "description": "The datetime when the campaign will be / was sent or None if not yet scheduled by a send_job.",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "name",
+                  "status",
+                  "archived",
+                  "audiences",
+                  "send_options",
+                  "send_strategy",
+                  "created_at",
+                  "updated_at"
+                ]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "campaign-messages": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/CampaignMessageEnum"
+                            },
+                            "id": {
+                              "description": "The message(s) associated with the campaign",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "tags": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/TagEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  }
+                }
+              },
+              "links": {
+                "$ref": "#/components/schemas/ObjectLinks"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes",
+              "links"
+            ]
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "CampaignSendJobCreateQueryResourceObject": {
         "type": "object",
         "properties": {
@@ -13652,6 +16331,250 @@
                 "required": [
                   "status"
                 ]
+              },
+              "links": {
+                "$ref": "#/components/schemas/ObjectLinks"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes",
+              "links"
+            ]
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "TagCreateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/TagEnum"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "The Tag name",
+                "type": "string",
+                "example": "My Tag"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "relationships": {
+            "type": "object",
+            "properties": {
+              "tag-group": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "$ref": "#/components/schemas/TagGroupEnum"
+                      },
+                      "id": {
+                        "description": "The ID of the Tag Group to associate the Tag with. If this field is not specified, the Tag will be associated with the company's Default Tag Group.",
+                        "type": "string",
+                        "example": "zyxw9876-vu54-ts32-rq10-zyxwvu654321"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "id"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "attributes"
+        ]
+      },
+      "TagCreateQuery": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TagCreateQueryResourceObject"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PostTagResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/components/schemas/TagEnum"
+              },
+              "id": {
+                "description": "The Tag ID",
+                "type": "string",
+                "example": "abcd1234-ef56-gh78-ij90-abcdef123456"
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "description": "The Tag name",
+                    "type": "string",
+                    "example": "My Tag"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "tag-group": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "$ref": "#/components/schemas/TagGroupEnum"
+                          },
+                          "id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "id"
+                        ]
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "lists": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/ListEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "segments": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/SegmentEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "campaigns": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/CampaignEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "flows": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/FlowEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  }
+                }
               },
               "links": {
                 "$ref": "#/components/schemas/ObjectLinks"
@@ -14399,6 +17322,420 @@
           "data"
         ]
       },
+      "ListPartialUpdateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ListEnum"
+          },
+          "id": {
+            "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+            "type": "string",
+            "example": "Y6nRLr"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "A helpful name to label the list",
+                "type": "string",
+                "example": "Newsletter",
+                "nullable": true
+              },
+              "opt_in_process": {
+                "description": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'.",
+                "type": "string",
+                "example": "double_opt_in",
+                "enum": [
+                  "double_opt_in",
+                  "single_opt_in"
+                ],
+                "nullable": true
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "ListPartialUpdateQuery": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ListPartialUpdateQueryResourceObject"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PatchListPartialUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/components/schemas/ListEnum"
+              },
+              "id": {
+                "description": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+                "type": "string",
+                "example": "Y6nRLr"
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "description": "A helpful name to label the list",
+                    "type": "string",
+                    "example": "Newsletter",
+                    "nullable": true
+                  },
+                  "created": {
+                    "description": "Date and time when the list was created, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "updated": {
+                    "description": "Date and time when the list was last updated, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "opt_in_process": {
+                    "description": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'.",
+                    "type": "string",
+                    "example": "double_opt_in",
+                    "enum": [
+                      "double_opt_in",
+                      "single_opt_in"
+                    ],
+                    "nullable": true
+                  }
+                }
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "profiles": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/ProfileEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "tags": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/TagEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "flow-triggers": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/FlowEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  }
+                }
+              },
+              "links": {
+                "$ref": "#/components/schemas/ObjectLinks"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes",
+              "links"
+            ]
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "SegmentPartialUpdateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/SegmentEnum"
+          },
+          "id": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "definition": {
+                "$ref": "#/components/schemas/SegmentDefinition",
+                "nullable": true
+              },
+              "name": {
+                "type": "string",
+                "nullable": true
+              },
+              "is_starred": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "is_active": {
+                "description": "Set to false to deactivate the segment. When deactivating, this must be the only attribute in the request body. Deactivation cannot be combined with other updates. Marking a segment inactive will impact campaigns, flows, ad syncs, forms, helpdesk routing, and other features that reference this segment. Set to true to reactivate a deactivated segment.",
+                "type": "boolean",
+                "nullable": true
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "SegmentPartialUpdateQuery": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SegmentPartialUpdateQueryResourceObject"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PatchSegmentPartialUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/components/schemas/SegmentEnum"
+              },
+              "id": {
+                "type": "string"
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "description": "A helpful name to label the segment",
+                    "type": "string",
+                    "example": "Repeat Purchasers",
+                    "nullable": true
+                  },
+                  "definition": {
+                    "$ref": "#/components/schemas/SegmentDefinition",
+                    "nullable": true
+                  },
+                  "created": {
+                    "description": "Date and time when the segment was created, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "updated": {
+                    "description": "Date and time when the segment was last updated, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "is_active": {
+                    "description": "Whether the segment is active. Inactive segments are not processed and their membership does not update.",
+                    "type": "boolean"
+                  },
+                  "is_processing": {
+                    "type": "boolean"
+                  },
+                  "is_starred": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "is_active",
+                  "is_processing",
+                  "is_starred"
+                ]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "profiles": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/ProfileEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "tags": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/TagEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "flow-triggers": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/FlowEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  }
+                }
+              },
+              "links": {
+                "$ref": "#/components/schemas/ObjectLinks"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes",
+              "links"
+            ]
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "ProfilePartialUpdateQueryResourceObject": {
         "type": "object",
         "properties": {
@@ -14714,6 +18051,383 @@
           },
           "meta": {
             "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AudiencesUpdate": {
+        "type": "object",
+        "properties": {
+          "included": {
+            "description": "An optional list of included audiences, will override existing included audiences",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Y6nRLr"
+            ],
+            "nullable": true
+          },
+          "excluded": {
+            "description": "An optional list of excluded audiences, will override exising excluded audiences",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "UTd5ui"
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "CampaignPartialUpdateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/CampaignEnum"
+          },
+          "id": {
+            "description": "The campaign ID to be retrieved",
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "The campaign name",
+                "type": "string",
+                "example": "My new campaign",
+                "nullable": true
+              },
+              "audiences": {
+                "description": "The audiences to be included and/or excluded from the campaign",
+                "$ref": "#/components/schemas/AudiencesUpdate",
+                "nullable": true
+              },
+              "send_options": {
+                "description": "Options to use when sending a campaign",
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/EmailSendOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SMSSendOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PushSendOptions"
+                  }
+                ]
+              },
+              "tracking_options": {
+                "description": "The tracking options associated with the campaign",
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CampaignsEmailTrackingOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CampaignsSMSTrackingOptions"
+                  }
+                ]
+              },
+              "send_strategy": {
+                "description": "The send strategy the campaign will send with",
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/StaticSendStrategy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ThrottledSendStrategy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImmediateSendStrategy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SmartSendTimeStrategy"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "CampaignPartialUpdateQuery": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CampaignPartialUpdateQueryResourceObject"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PatchCampaignResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/components/schemas/CampaignEnum"
+              },
+              "id": {
+                "description": "The campaign ID",
+                "type": "string"
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "description": "The campaign name",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "The current status of the campaign",
+                    "type": "string",
+                    "enum": [
+                      "Adding Recipients",
+                      "Cancelled",
+                      "Cancelled: Account Disabled",
+                      "Cancelled: Billing Limit",
+                      "Cancelled: Internal Error",
+                      "Cancelled: Misconfigured",
+                      "Cancelled: No Recipients",
+                      "Cancelled: Smart Sending",
+                      "Draft",
+                      "Preparing to schedule",
+                      "Preparing to send",
+                      "Queued without Recipients",
+                      "Scheduled",
+                      "Sending",
+                      "Sending Segments",
+                      "Sent",
+                      "Unknown",
+                      "Variations Sent"
+                    ]
+                  },
+                  "archived": {
+                    "description": "Whether the campaign has been archived or not",
+                    "type": "boolean"
+                  },
+                  "audiences": {
+                    "description": "The audiences to be included and/or excluded from the campaign",
+                    "$ref": "#/components/schemas/Audiences"
+                  },
+                  "send_options": {
+                    "description": "Options to use when sending a campaign",
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/EmailSendOptions"
+                      },
+                      {
+                        "$ref": "#/components/schemas/SMSSendOptions"
+                      },
+                      {
+                        "$ref": "#/components/schemas/PushSendOptions"
+                      }
+                    ]
+                  },
+                  "tracking_options": {
+                    "description": "The tracking options associated with the campaign",
+                    "nullable": true,
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/CampaignsEmailTrackingOptions"
+                      },
+                      {
+                        "$ref": "#/components/schemas/CampaignsSMSTrackingOptions"
+                      }
+                    ]
+                  },
+                  "send_strategy": {
+                    "description": "The send strategy the campaign will send with",
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/StaticSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/SmartSendTimeStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ThrottledSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ImmediateSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ABTestSendStrategy"
+                      },
+                      {
+                        "$ref": "#/components/schemas/UnsupportedSendStrategy"
+                      }
+                    ]
+                  },
+                  "created_at": {
+                    "description": "The datetime when the campaign was created",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00"
+                  },
+                  "scheduled_at": {
+                    "description": "The datetime when the campaign was scheduled for future sending",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  },
+                  "updated_at": {
+                    "description": "The datetime when the campaign was last updated by a user or the system",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00"
+                  },
+                  "send_time": {
+                    "description": "The datetime when the campaign will be / was sent or None if not yet scheduled by a send_job.",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2022-11-08T00:00:00+00:00",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "name",
+                  "status",
+                  "archived",
+                  "audiences",
+                  "send_options",
+                  "send_strategy",
+                  "created_at",
+                  "updated_at"
+                ]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "campaign-messages": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/CampaignMessageEnum"
+                            },
+                            "id": {
+                              "description": "The message(s) associated with the campaign",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  },
+                  "tags": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "type",
+                            "id"
+                          ],
+                          "properties": {
+                            "type": {
+                              "$ref": "#/components/schemas/TagEnum"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "links": {
+                        "$ref": "#/components/schemas/RelationshipLinks"
+                      }
+                    }
+                  }
+                }
+              },
+              "links": {
+                "$ref": "#/components/schemas/ObjectLinks"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes",
+              "links"
+            ]
+          },
+          "links": {
+            "$ref": "#/components/schemas/ObjectLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "TagUpdateQueryResourceObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/TagEnum"
+          },
+          "id": {
+            "description": "The Tag ID",
+            "type": "string",
+            "example": "abcd1234-ef56-gh78-ij90-abcdef123456"
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "The Tag name",
+                "type": "string",
+                "example": "My Tag"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "TagUpdateQuery": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TagUpdateQueryResourceObject"
           }
         },
         "required": [
