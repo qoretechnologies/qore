@@ -84,6 +84,14 @@ public class RestSchemaActionOperation {
         */
         list<hash<RestSchemaDerivedValueInfo>> derived_values = ();
 
+        #! The envelope the body options are rebuilt into, if the manifest lifted them out of one
+        /** @see @ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap"
+        */
+        *list<string> request_wrap;
+
+        #! The fixed values that envelope carries beside the lifted body
+        list<hash<RestSchemaRequestWrapValueInfo>> request_wrap_fixed = ();
+
         #! Header values dropped by the overlay, which the connection is expected to supply
         /** An ignored header is one the connection owns - an API key, the tenant a Xero connection works
             in - so the action must not ask for it, and the request must still carry it.  These are
@@ -242,6 +250,28 @@ public class RestSchemaActionOperation {
                     break;
             }
         }
+        # the envelope the body options were lifted out of is rebuilt around them, before any value that
+        # follows another option is placed - those name transport locations, not envelope paths
+        if (request_wrap && exists req.body) {
+            # built from the inside out: each turn of the loop wraps what came before in one more level of
+            # the envelope, and adds the values fixed at *that* level beside it
+            hash<auto> wrapped = req.body;
+            for (int i = request_wrap.size() - 1; i >= 0; --i) {
+                hash<auto!> level = {request_wrap[i]: wrapped};
+                list<string> here = ();
+                for (int j = 0; j < i; ++j) {
+                    here += request_wrap[j];
+                }
+                foreach hash<RestSchemaRequestWrapValueInfo> fv in (request_wrap_fixed) {
+                    if (fv.path == here) {
+                        level{fv.name} = fv.value;
+                    }
+                }
+                wrapped = level;
+            }
+            req.body = wrapped;
+        }
+
         # a value that follows another option is filled in once every supplied option has been placed, so
         # that it carries exactly what the request will send rather than what the caller typed
         foreach hash<RestSchemaDerivedValueInfo> dv in (derived_values) {
@@ -527,6 +557,12 @@ public class RestSchemaActionOperation {
             };
             return;
         }
+        # a body wrapped in a fixed envelope is lifted from inside it rather than from its top level; see
+        # RestSchemaActionInfo::request_unwrap
+        if (info.request_unwrap) {
+            body_type = buildRequestUnwrap(body.schema, body_type);
+        }
+
         *hash<string, AbstractDataField> body_fields = body_type.getFields();
         if (!body_fields) {
             return;
@@ -541,6 +577,119 @@ public class RestSchemaActionOperation {
             derived{RSAL_BODY} += {
                 "wire_name": i.key,
                 "field": f,
+            };
+        }
+    }
+
+    #! Returns a schema object's declared properties, whatever schema class it is
+    private static *hash<auto> getSchemaProperties(auto s) {
+        return exists s.properties && s.properties.typeCode() == NT_HASH ? s.properties : NOTHING;
+    }
+
+    #! Returns a schema object's named property
+    private static auto getSchemaProperty(auto s, string name) {
+        *hash<auto> props = RestSchemaActionOperation::getSchemaProperties(s);
+        return props{name};
+    }
+
+    #! Returns a schema object's required property names as a set
+    private static hash<string, bool> getSchemaRequired(auto s) {
+        hash<string, bool> rv = {};
+        auto req = s.required;
+        switch (req.typeCode()) {
+            case NT_HASH:
+                # some schema classes carry "required" as a set already
+                map rv{$1} = True, keys req;
+                break;
+            case NT_LIST:
+                map rv{$1.toString()} = True, req;
+                break;
+        }
+        return rv;
+    }
+
+    #! Returns the values a schema object permits, if it fixes them
+    /** A schema class stores these in \c enumValues; a plain deserialized schema hash spells it \c "enum".
+        The two are read separately because accessing a member an object does not declare throws.
+    */
+    private static *softlist<auto> getSchemaEnum(auto s) {
+        auto e = s.typeCode() == NT_HASH ? (s.enumValues ?? s."enum") : s.enumValues;
+        switch (e.typeCode()) {
+            case NT_HASH:
+                return keys e;
+            case NT_LIST:
+                return e;
+        }
+    }
+
+    #! Descends the request body's envelope and records how to rebuild it
+    /** @param body_schema the request body's schema
+        @param body_type the type derived from it
+
+        @return the type at the end of the unwrap path, whose fields become the action's body options
+
+        @throw REST-SCHEMA-ACTION-ERROR the path does not resolve, or a required sibling of the path cannot
+        be filled in automatically and the manifest does not supply it
+
+        @see @ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap"
+    */
+    private AbstractDataProviderType buildRequestUnwrap(auto body_schema, AbstractDataProviderType body_type) {
+        AbstractDataProviderType t = body_type;
+        auto s = body_schema;
+        list<string> walked = ();
+        foreach string name in (info.request_unwrap) {
+            *hash<string, AbstractDataField> fields = t.getFields();
+            *AbstractDataField f = fields{name};
+            if (!f) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y cannot lift the request body through "
+                    "%y: the value at %y declares no such property; it declares %y (unwrap path: %y)",
+                    info.action, name, walked ? walked.join(".") : "the body root",
+                    fields ? sort(keys fields) : (), info.request_unwrap);
+            }
+            AbstractDataProviderType next = f.getType();
+            if (next.getBaseTypeCode() != NT_HASH) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y cannot lift the request body through "
+                    "%y: that property has type %y, not an object (unwrap path: %y)", info.action, name,
+                    next.getName(), info.request_unwrap);
+            }
+            # every property beside the path has to be accounted for, or the rebuilt body is incomplete in a
+            # way only the API would report
+            recordUnwrapSiblings(s, name, walked);
+            walked += name;
+            s = RestSchemaActionOperation::getSchemaProperty(s, name);
+            t = next;
+        }
+        request_wrap = info.request_unwrap;
+        return t;
+    }
+
+    #! Records the values a level of the request envelope carries beside the unwrap path
+    /** A property the schema declares required with exactly one permitted value is filled in here, because
+        there is nothing for a caller to choose - JSON:API's \c type discriminator is always this shape.
+        Anything else required is an error: the manifest has to say what to send.
+    */
+    private recordUnwrapSiblings(auto level_schema, string next, list<string> walked) {
+        *hash<auto> props = RestSchemaActionOperation::getSchemaProperties(level_schema);
+        if (!props) {
+            return;
+        }
+        hash<string, bool> req = RestSchemaActionOperation::getSchemaRequired(level_schema);
+        foreach hash<auto> i in (props.pairIterator()) {
+            if (i.key == next || !req{i.key}) {
+                continue;
+            }
+            *softlist<auto> allowed = RestSchemaActionOperation::getSchemaEnum(i.value);
+            if (allowed.size() != 1) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y lifts the request body through %y, but "
+                    "the envelope at %y also requires %y, which has %s; the manifest has to supply it "
+                    "(unwrap path: %y)", info.action, next, walked ? walked.join(".") : "the body root",
+                    i.key, allowed ? sprintf("%d permitted values", allowed.size()) : "no fixed value",
+                    info.request_unwrap);
+            }
+            request_wrap_fixed += <RestSchemaRequestWrapValueInfo>{
+                "path": walked,
+                "name": i.key,
+                "value": allowed[0],
             };
         }
     }

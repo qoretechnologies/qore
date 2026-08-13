@@ -572,6 +572,42 @@ description describes, every action drops the header with `ignore`, and the two 
 module's tests, because an action generated from one revision and sent against another is making a request
 the description does not describe.
 
+## What the Klaviyo evaluation added
+
+**An application whose TypeScript predecessor was hand-written does not port at parity for free.** Every
+port before Klaviyo replaced an application built with `buildActionsFromSwaggerSchema` over an
+`allowed-paths` map, so its option names were already the *vendor's* - Xero's catalog even lists an option
+called `xero-tenant-id`, which is the header name. There was nothing to preserve that the schema did not
+already say, and the ports looked mechanical because of it.
+
+Klaviyo's application is 21 hand-written `createLocalizedAction` calls over the vendor's SDK, with a
+designed camelCase surface - `phoneNumber`, `pageSize`, `additionalFields` - and **not one of its ~70
+option names matches the wire**. Workflows supply option values by name, so generating from the schema
+renames all of them. Check how the superseded application builds its actions before estimating a port:
+that, not the size of the API, is what decides whether the option surface is free.
+
+**A body wrapped in a fixed envelope is lifted from inside it.** `flatten_body` lifts an object body's
+top-level properties, which is the right depth when the body *is* the object being sent and the wrong depth
+for a vendor that wraps everything. Klaviyo is JSON:API:
+
+```json
+{"data": {"type": "profile", "attributes": {"email": "...", "first_name": "..."}}}
+```
+
+Lifting one level publishes a single `data` option with everything meaningful two levels inside it, which
+is unusable as a form and unrecognisable to an existing workflow.
+`RestSchemaActionInfo::request_unwrap` names the path to lift instead - `("data", "attributes")` - so the
+action offers `email` and `first_name`, and the envelope is rebuilt when the request is sent. It is the
+mirror of `response_unwrap`, and it is opt-in: an application that does not set it is unaffected.
+
+Two properties make it safe rather than a way of inventing a contract:
+
+- a property beside the path that the schema declares **required with exactly one permitted value** is
+  filled in automatically, because there is nothing to choose - JSON:API's `type` discriminator is always
+  this;
+- any *other* required sibling fails registration, naming it. The manifest has to say what to send rather
+  than the module quietly omitting it and letting the API reject the request.
+
 ## A connection has to configure itself
 
 **A connection option whose value only exists after authorization must be discovered, never asked for.**

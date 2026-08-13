@@ -172,6 +172,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("provider paths", \providerPathTest());
         addTestCase("a header the connection owns", \connectionHeaderTest());
         addTestCase("schema drift", \driftReportTest());
+        addTestCase("a body lifted out of an envelope", \requestUnwrapTest());
 
         set_return_value(main());
     }
@@ -1100,6 +1101,104 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         }));
         assertEq(RSD_RESPONSE_CHANGED, (select drift, $1.kind == RSD_RESPONSE_CHANGED)[0].kind);
         assertTrue((select drift, $1.kind == RSD_RESPONSE_CHANGED)[0].compatible);
+    }
+
+    #! An action whose options are lifted out of a fixed request envelope
+    /** The JSON:API shape: everything a caller supplies is two levels inside a "data"/"attributes"
+        wrapper, so lifting only the body's top level would publish a single "data" option.
+    */
+    private requestUnwrapTest() {
+        hash<auto> doc = {
+            "openapi": "3.0.1",
+            "info": {"title": "t", "version": "1"},
+            "paths": {
+                "/things": {
+                    "post": {
+                        "operationId": "create_thing",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                MimeTypeJson: {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ("data",),
+                                        "properties": {
+                                            "data": {
+                                                "type": "object",
+                                                "required": ("type", "attributes"),
+                                                "properties": {
+                                                    "type": {"type": "string", "enum": ("thing",)},
+                                                    "attributes": {
+                                                        "type": "object",
+                                                        "required": ("name",),
+                                                        "properties": {
+                                                            "name": {"type": "string"},
+                                                            "size": {"type": "integer"},
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromString(make_json(doc), True);
+
+        hash<RestSchemaActionInfo> ai = <RestSchemaActionInfo>{
+            "action": "create_thing",
+            "method": "POST",
+            "path": "/things",
+            "display_name": "Create Thing",
+            "short_desc": "x",
+            "desc": "x",
+            "request_unwrap": ("data", "attributes"),
+        };
+        RestSchemaActionSet aset(schema, (ai,));
+        RestSchemaActionOperation op = aset.getOperationEx("create_thing");
+
+        # the attributes are the options, not the envelope
+        assertEq(("name", "size"), sort(keys (op.getRequestType().getFields() ?? {})),
+            "the options come from inside the envelope");
+
+        # and the envelope is rebuilt on the way out, including the discriminator nobody was asked for
+        hash<auto> wire = op.unflatten({"name": "widget", "size": 3});
+        assertEq({
+            "data": {
+                "type": "thing",
+                "attributes": {"name": "widget", "size": 3},
+            },
+        }, wire.req.body, "the envelope is rebuilt and the fixed discriminator filled in");
+
+        # without it the action publishes the envelope itself, which is the behaviour every other
+        # application depends on
+        RestSchemaActionSet plain(schema, (cast<hash<RestSchemaActionInfo>>(ai - "request_unwrap"),));
+        assertEq(("data",), sort(keys (plain.getOperationEx("create_thing").getRequestType().getFields() ?? {})),
+            "lifting is opt-in");
+
+        # a path that does not resolve is an error naming what the level does declare
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "declares no such property",
+            sub () {
+                new RestSchemaActionSet(schema,
+                    (cast<hash<RestSchemaActionInfo>>(ai + {"request_unwrap": ("data", "nope")}),));
+            });
+
+        # a required sibling with no single permitted value cannot be invented
+        hash<auto> doc2 = doc;
+        doc2.paths."/things".post.requestBody.content{MimeTypeJson}.schema.properties.data.properties.meta =
+            {"type": "string"};
+        doc2.paths."/things".post.requestBody.content{MimeTypeJson}.schema.properties.data.required =
+            ("type", "attributes", "meta");
+        OpenApi3Schema schema2 = OpenApi3::OpenApi3Loader::fromString(make_json(doc2), True);
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "the manifest has to supply it",
+            sub () {
+                new RestSchemaActionSet(schema2, (ai,));
+            });
     }
 
     #! Returns the fixture schema with the given mutation applied

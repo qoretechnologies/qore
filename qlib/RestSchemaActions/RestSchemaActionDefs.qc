@@ -95,6 +95,20 @@ public hashdecl RestSchemaFlatFieldInfo {
     *string codec;
 }
 
+#! Describes a fixed value in the envelope a lifted request body is rebuilt into
+/** @see @ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap"
+*/
+public hashdecl RestSchemaRequestWrapValueInfo {
+    #! The path within the envelope holding the value, empty for the body root
+    list<string> path;
+
+    #! The property name
+    string name;
+
+    #! The value, which is the only one the schema permits
+    auto value;
+}
+
 #! Describes a value the request sends but the action does not ask for
 /** @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::value_from "value_from"
 */
@@ -381,6 +395,27 @@ public hashdecl RestSchemaActionInfo {
         object carries nothing a caller needs.
     */
     *softlist<string> response_unwrap;
+
+    #! A path of field names to lift the request body's options out of
+    /** The mirror of @ref response_unwrap, for the request.  @ref flatten_body lifts the properties of an
+        object body to the top level of the action, which is the right depth for an API whose body *is* the
+        object being sent.  It is the wrong depth for one that wraps every body in a fixed envelope: a
+        JSON:API vendor sends
+        @code{.py}
+{"data": {"type": "profile", "attributes": {"email": ..., "first_name": ...}}}
+        @endcode
+        and lifting one level yields a single \c "data" option with everything meaningful two levels inside
+        it.  Naming \c ("data", "attributes") here lifts the *attributes* instead, so the action offers
+        \c email and \c first_name, and the envelope is rebuilt when the request is sent.
+
+        A property beside the path that the schema declares **required** with exactly one permitted value -
+        JSON:API's \c type discriminator is always this - is filled in automatically, because there is
+        nothing for a caller to choose.  Any other required sibling must be supplied by the manifest, and
+        registration fails naming it rather than sending a body the API will reject.
+
+        This changes only which options the action publishes; the request contract is unchanged.
+    */
+    *softlist<string> request_unwrap;
 
     #! Free-form metadata attached to the generated action
     *hash<auto> metadata;
