@@ -168,6 +168,13 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
                     "\"render_value\" nor \"render_query\", so no predicate could be rendered into it",
                     table.query.syntax.name);
             }
+            # "field_ops" is the whole statement of what the API filters on where it is declared, so a
+            # table declaring both would have one of them silently ignored
+            if (exists table.query.fields && exists table.query.field_ops) {
+                throw "REST-SCHEMA-RECORD-ERROR", "a table's query declares both \"fields\" and "
+                    "\"field_ops\"; \"field_ops\" states which operators each field accepts and replaces "
+                    "\"fields\" entirely, so declaring both would leave one of them unused";
+            }
         }
         foreach string opt in (table.scope_options) {
             RestSchemaTableDataProvider::checkOption(table, list_flat, opt, "a scope option");

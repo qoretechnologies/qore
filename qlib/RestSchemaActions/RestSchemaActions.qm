@@ -250,6 +250,7 @@ module RestSchemaActions {
     |A language with no OR or no NOT|leave \c or_op or \c not_op unset|the connective cannot be rendered, so the expression stays whole and is evaluated client-side.  Klaviyo's \c filter has neither, and sending the arguments of an OR joined by anything else would answer with records the caller excluded
     |A language with no grouping|\c and_sep / \c or_sep give the literal separator, \c parenthesize says whether a group is wrapped|Klaviyo joins predicates with a bare comma and rejects a parenthesised one
     |A query that is not a string|\c render_query renders the whole expression and may return any type|Intercom's search takes a **tree of hashes** in the request body
+    |A service that indexes each field for different comparisons|the table's query declares \c field_ops, field -> operator, in place of \c fields|Klaviyo takes \c equals on a profile's \c id and only the strict comparisons on its \c created, and answers an operator it does not allow on a field with an **error**
 
     The split matters: the operator tables still decide **what is pushed down** even when \c render_query
     decides **how it is spelled**, so

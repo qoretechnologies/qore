@@ -292,7 +292,9 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                 DP_SEARCH_OP_EQ: "equals",
                 DP_SEARCH_OP_IN: "any",
                 DP_SEARCH_OP_GT: "greater-than",
+                DP_SEARCH_OP_GE: "greater-or-equal",
                 DP_SEARCH_OP_LT: "less-than",
+                DP_SEARCH_OP_LE: "less-or-equal",
                 DP_OP_CONTAINS: "contains",
             },
             "and_sep": ",",
@@ -355,6 +357,31 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                 "option": "q",
                 "syntax": HookSyntax,
                 "fields": {"id": True, "name": True, "status": True, "created": True, "count": True},
+            },
+        };
+
+        #! The same prefix-call collection, where the service indexes each field for different comparisons
+        /** Klaviyo's shape: \c id takes equality and set membership, \c created takes only the strict
+            comparisons - there is no \c greater-or-equal on it at all - and \c name takes only \c contains.
+        */
+        const FieldOpsTable = <RestSchemaRecordTableInfo>{
+            "name": "field-ops-items",
+            "display_name": "Items by Field Matrix",
+            "short_desc": "the items, where each field accepts different comparisons",
+            "desc": "the items, where each field accepts different comparisons",
+            "list_action": "list-items",
+            "id_field": "id",
+            "records_path": ("data",),
+            "paging": ItemPaging,
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": CallSyntax,
+                "field_ops": {
+                    "id": {DP_SEARCH_OP_EQ: True, DP_SEARCH_OP_IN: True},
+                    "status": {DP_SEARCH_OP_EQ: True},
+                    "created": {DP_SEARCH_OP_GT: True, DP_SEARCH_OP_LT: True},
+                    "name": {DP_OP_CONTAINS: True},
+                },
             },
         };
 
@@ -826,6 +853,64 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
             lister.unflatten({"nope": <RestSchemaRawValue>{"value": "x"}});
         });
 
+        # a service that indexes each field for different comparisons: the language can spell
+        # "greater-or-equal", and sending one on a field the service does not accept it for would be an
+        # error rather than a wrong answer, so it is evaluated here instead
+        RestSchemaRecordFilter ff(FieldOpsTable);
+        s = ff.split(op(DP_SEARCH_OP_GT, "created", "2026-01-01"));
+        assertEq("greater-than(created,\"2026-01-01\")", s.options.q.value);
+        assertNothing(s.client);
+
+        s = ff.split(op(DP_SEARCH_OP_GE, "created", "2026-01-01"));
+        assertEq({}, s.options, "the service has no greater-or-equal on this field");
+        assertEq(DP_SEARCH_OP_GE, s.client.exp);
+
+        # the same operator on a field that does accept it is still pushed down... and this table declares
+        # none, so equality on "created" is refused while equality on "status" is not
+        s = ff.split(eq("created", "2026-01-01"));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+        s = ff.split(eq("status", "open"));
+        assertEq("equals(status,\"open\")", s.options.q.value);
+
+        # a field named nowhere in the matrix is not filterable at all
+        s = ff.split(eq("count", 5));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        # "contains" is the one comparison this service indexes "name" for
+        s = ff.split(op(DP_OP_CONTAINS, "name", "wid"));
+        assertEq("contains(name,\"wid\")", s.options.q.value);
+        s = ff.split(eq("name", "widget"));
+        assertEq({}, s.options, "the service has no equality on this field");
+
+        # a conjunction sends the conjuncts the matrix allows and answers the rest here
+        s = ff.split(logic(DP_OP_AND, (
+            eq("status", "open"),
+            op(DP_SEARCH_OP_GE, "created", "2026-01-01"),
+        )));
+        assertEq("equals(status,\"open\")", s.options.q.value);
+        assertEq(DP_SEARCH_OP_GE, s.client.exp);
+
+        # an "in" is answered wherever equality is, and "id" declares both
+        s = ff.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "id"}, ("i_1", "i_2")),
+        });
+        assertEq("any(id,[\"i_1\",\"i_2\"])", s.options.q.value);
+
+        # declaring both ways of saying which fields are filterable would leave one of them unused
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "would leave one of them unused", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(FieldOpsTable + {
+                "query": <RestSchemaRecordQueryInfo>{
+                    "option": "q",
+                    "syntax": CallSyntax,
+                    "fields": {"id": True},
+                    "field_ops": {"id": {DP_SEARCH_OP_EQ: True}},
+                },
+            }));
+        });
+
         # a syntax that can neither render a value nor render the whole query could spell nothing at all
         assertThrows("REST-SCHEMA-RECORD-ERROR", "render_value", sub () {
             RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(CallTable + {
@@ -875,7 +960,19 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertFalse(cinfo.expressions{DP_SEARCH_OP_NOT}.supports_pushdown, "the language has no NOT");
         assertTrue(cinfo.expressions{DP_SEARCH_OP_EQ}.supports_pushdown, "declared as a prefix call");
         assertTrue(cinfo.expressions{DP_SEARCH_OP_IN}.supports_pushdown);
-        assertFalse(cinfo.expressions{DP_SEARCH_OP_GE}.supports_pushdown, "the language has no >=");
+        assertTrue(cinfo.expressions{DP_SEARCH_OP_GE}.supports_pushdown, "the language spells >=");
+
+        # ... and where the service's matrix is declared per field, an operator no field accepts is not
+        # pushed down however well the language spells it
+        RestSchemaTableDataProvider ff = table(FieldOpsTable, \rest);
+        hash<DataProviderInfo> finfo = ff.getInfo();
+        assertTrue(finfo.supports_native_search);
+        assertTrue(finfo.expressions{DP_SEARCH_OP_GT}.supports_pushdown);
+        assertFalse(finfo.expressions{DP_SEARCH_OP_GE}.supports_pushdown,
+            "no field accepts it, though the language spells it");
+        assertFalse(finfo.expressions{DP_SEARCH_OP_LE}.supports_pushdown);
+        assertTrue(finfo.expressions{DP_SEARCH_OP_IN}.supports_pushdown);
+        assertTrue(finfo.expressions{DP_OP_CONTAINS}.supports_pushdown);
 
         # a language rendering itself still declares what it can push down
         RestSchemaTableDataProvider h = table(HookTable, \rest);

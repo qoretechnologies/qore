@@ -293,8 +293,37 @@ public hashdecl RestSchemaRecordQueryInfo {
     #! The record fields the API will accept in a filter, if it will not accept all of them
     /** A predicate naming a field absent from this set is evaluated client-side.  Both Xero and Bitbucket
         reject a filter naming a field they do not index, so offering one would turn a search into an error.
+
+        Declare this **or** @ref field_ops, not both.
     */
     *hash<string, bool> fields;
+
+    #! The operators the API will accept, per field, where they differ from one field to the next
+    /** Some APIs index a field for some comparisons and not others, and differ on that **within one
+        collection**.  Klaviyo accepts \c equals on a profile's \c id and only \c greater-than and
+        \c less-than on its \c created - it has no \c greater-or-equal there at all, though it has one on a
+        campaign's \c created_at - and it answers a filter using an operator it does not allow on that field
+        with an error rather than with records.
+
+        @ref fields cannot say that: it admits a field for every operator the language can spell.  Where a
+        vendor publishes the finer matrix, declare it here instead, keyed by record field and then by generic
+        search operator.
+
+        @code{.py}
+"field_ops": {
+    "id": {DP_SEARCH_OP_EQ: True, DP_SEARCH_OP_IN: True},
+    "created": {DP_SEARCH_OP_GT: True, DP_SEARCH_OP_LT: True},
+},
+        @endcode
+
+        When this is declared it is the **whole** statement of what the API will filter on: a field absent
+        from it is not filterable at all, and a predicate using an operator absent from a field's set is
+        evaluated client-side.  An \c "in" is still rendered on a field that allows only equality, because
+        the language expands it into a disjunction of equalities - where the language has a disjunction.
+
+        Declare this **or** @ref fields, not both.
+    */
+    *hash<string, hash<string, bool>> field_ops;
 
     #! Operators the language can render but whose meaning is not exactly the operator's
     /** A rendered query is normally taken as exact, because the service evaluates it.  An operator listed

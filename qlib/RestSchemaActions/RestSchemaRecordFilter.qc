@@ -382,7 +382,15 @@ public class RestSchemaRecordFilter {
             return False;
         }
         string field = cast<hash<DataProviderFieldReference>>(c.args[0]).field;
-        if (exists table.query.fields && !table.query.fields{field}) {
+        if (exists table.query.field_ops) {
+            # the finer matrix: this API indexes a field for some comparisons and not others, and answers a
+            # filter using one it does not allow on that field with an error rather than with records
+            *hash<string, bool> allowed = table.query.field_ops{field};
+            if (!allowed{c.exp}
+                && !(c.exp == DP_SEARCH_OP_IN && allowed{DP_SEARCH_OP_EQ})) {
+                return False;
+            }
+        } else if (exists table.query.fields && !table.query.fields{field}) {
             return False;
         }
         for (int j = 1; j < c.args.size(); ++j) {
@@ -400,6 +408,25 @@ public class RestSchemaRecordFilter {
         }
         # more than one value needs a disjunction, and a language with no OR cannot write one
         return RestSchemaRecordFilter::getInValues(c).size() < 2 || syn.or_op.val();
+    }
+
+    #! Returns every operator the API accepts on some field, or @ref nothing where the table does not say
+    /** @ref RestSchemaActions::RestSchemaRecordQueryInfo::field_ops "field_ops" states the matrix per field;
+        an operator no field accepts cannot be pushed down whatever the language can spell.
+    */
+    private *hash<string, bool> getApiOperators() {
+        if (!exists table.query.field_ops) {
+            return;
+        }
+        hash<string, bool> rv = {};
+        foreach hash<auto> i in (table.query.field_ops.pairIterator()) {
+            map rv{$1} = True, keys i.value;
+        }
+        # an "in" is answered wherever equality is, by expanding it into a disjunction of equalities
+        if (rv{DP_SEARCH_OP_EQ}) {
+            rv{DP_SEARCH_OP_IN} = True;
+        }
+        return rv;
     }
 
     #! Returns @ref True if the syntax can render an operator in any of its three forms
@@ -563,9 +590,12 @@ public class RestSchemaRecordFilter {
         map pushdown{$1.operator} = True, table.filters;
         if (exists table.query) {
             hash<RestSchemaQuerySyntaxInfo> syn = table.query.syntax;
-            map pushdown{$1} = True, keys syn.binary_ops;
-            map pushdown{$1} = True, keys syn.call_ops;
-            map pushdown{$1} = True, keys syn.method_ops;
+            # where the API's matrix is declared per field, an operator the language can spell but no field
+            # accepts is not pushed down on this table at all
+            *hash<string, bool> api_ops = getApiOperators();
+            map pushdown{$1} = True, keys syn.binary_ops, !exists api_ops || api_ops{$1};
+            map pushdown{$1} = True, keys syn.call_ops, !exists api_ops || api_ops{$1};
+            map pushdown{$1} = True, keys syn.method_ops, !exists api_ops || api_ops{$1};
             pushdown{DP_OP_AND} = True;
             # a connective the language does not have is never pushed down; claiming it here would say the
             # API can answer a search it would in fact have to be answered client-side
@@ -575,7 +605,8 @@ public class RestSchemaRecordFilter {
             if (syn.not_op.val()) {
                 pushdown{DP_SEARCH_OP_NOT} = True;
             }
-            if (RestSchemaRecordFilter::hasOp(syn, DP_SEARCH_OP_EQ)) {
+            if (RestSchemaRecordFilter::hasOp(syn, DP_SEARCH_OP_EQ)
+                && (!exists api_ops || api_ops{DP_SEARCH_OP_IN})) {
                 pushdown{DP_SEARCH_OP_IN} = True;
             }
         }
