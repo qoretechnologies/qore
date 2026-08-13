@@ -173,6 +173,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("a header the connection owns", \connectionHeaderTest());
         addTestCase("schema drift", \driftReportTest());
         addTestCase("a body lifted out of an envelope", \requestUnwrapTest());
+        addTestCase("a grouping object published as options", \liftTest());
 
         set_return_value(main());
     }
@@ -1188,16 +1189,166 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
                     (cast<hash<RestSchemaActionInfo>>(ai + {"request_unwrap": ("data", "nope")}),));
             });
 
-        # a required sibling with no single permitted value cannot be invented
+        # a sibling with no single permitted value is published as an option at the level it belongs to,
+        # rather than being dropped: JSON:API carries the identity of the object being changed there
         hash<auto> doc2 = doc;
-        doc2.paths."/things".post.requestBody.content{MimeTypeJson}.schema.properties.data.properties.meta =
+        doc2.paths."/things".post.requestBody.content{MimeTypeJson}.schema.properties.data.properties.id =
             {"type": "string"};
         doc2.paths."/things".post.requestBody.content{MimeTypeJson}.schema.properties.data.required =
-            ("type", "attributes", "meta");
+            ("type", "attributes", "id");
         OpenApi3Schema schema2 = OpenApi3::OpenApi3Loader::fromString(make_json(doc2), True);
-        assertThrows("REST-SCHEMA-ACTION-ERROR", "the manifest has to supply it",
+        RestSchemaActionSet with_id(schema2, (ai,));
+        RestSchemaActionOperation op2 = with_id.getOperationEx("create_thing");
+        assertEq(("id", "name", "size"), sort(keys (op2.getRequestType().getFields() ?? {})),
+            "an envelope sibling is published as an option");
+        assertEq(("data",), op2.getFlatMap().id.wire_path, "the option records the level it belongs to");
+        hash<auto> wire2 = op2.unflatten({"id": "x1", "name": "widget"});
+        assertEq({
+            "data": {
+                "id": "x1",
+                "type": "thing",
+                "attributes": {"name": "widget"},
+            },
+        }, wire2.req.body, "the sibling travels at its own level, not among the attributes");
+        assertEq({"id": "x1", "name": "widget"}, op2.flatten(wire2),
+            "a nested body flattens back to the options that built it");
+
+        # the discriminator at the level the options were lifted to is filled in too, rather than becoming a
+        # required option nobody can usefully answer
+        hash<RestSchemaActionInfo> shallow = cast<hash<RestSchemaActionInfo>>(ai + {"request_unwrap": "data"});
+        RestSchemaActionOperation op3 = new RestSchemaActionSet(schema2, (shallow,))
+            .getOperationEx("create_thing");
+        assertEq(("attributes", "id"), sort(keys (op3.getRequestType().getFields() ?? {})),
+            "the fixed discriminator is not published at the level lifted to");
+        assertEq({
+            "data": {
+                "id": "x1",
+                "type": "thing",
+                "attributes": {"name": "widget"},
+            },
+        }, op3.unflatten({"id": "x1", "attributes": {"name": "widget"}}).req.body,
+            "the discriminator is filled in at the level lifted to");
+
+        # a required sibling that must simply repeat a path variable follows it rather than being asked for
+        # "auto!" because a literal whose values happen to share a type narrows to it, and a path item
+        # carries both an operation hash and a parameter list
+        hash<auto!> path_item = {
+            "patch": doc2.paths."/things".post + {"operationId": "update_thing"},
+            "parameters": (
+                {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}},
+            ),
+        };
+        hash<auto!> paths3 = doc2.paths;
+        paths3."/things/{id}" = path_item;
+        hash<auto!> doc3 = doc2;
+        doc3.paths = paths3;
+        OpenApi3Schema schema3 = OpenApi3::OpenApi3Loader::fromString(make_json(doc3), True);
+        RestSchemaActionOperation op4 = new RestSchemaActionSet(schema3, (
+            cast<hash<RestSchemaActionInfo>>(ai + {
+                "action": "update_thing",
+                "method": "PATCH",
+                "path": "/things/{id}",
+                "operation_id": "update_thing",
+                "fields": {
+                    "body.data.id": <RestSchemaFieldOverlayInfo>{"value_from": "id"},
+                },
+            }),)).getOperationEx("update_thing");
+        assertEq(("id", "name", "size"), sort(keys (op4.getRequestType().getFields() ?? {})),
+            "the body identity is not a second option beside the path variable");
+        hash<auto> wire4 = op4.unflatten({"id": "x1", "name": "widget"});
+        assertEq({"id": "x1"}, wire4.path_vars, "the identity travels in the path");
+        assertEq({
+            "data": {
+                "type": "thing",
+                "id": "x1",
+                "attributes": {"name": "widget"},
+            },
+        }, wire4.req.body, "and is repeated in the envelope without being asked for twice");
+    }
+
+    private liftTest() {
+        hash<auto> doc = {
+            "openapi": "3.0.1",
+            "info": {"title": "t", "version": "1"},
+            "paths": {
+                "/people": {
+                    "post": {
+                        "operationId": "create_person",
+                        "parameters": (
+                            {"name": "where", "in": "query", "schema": {"type": "string"}},
+                        ),
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                MimeTypeJson: {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ("name",),
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "location": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "city": {"type": "string"},
+                                                    "zip": {"type": "string"},
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromString(make_json(doc), True);
+        hash<RestSchemaActionInfo> ai = <RestSchemaActionInfo>{
+            "action": "create_person",
+            "method": "POST",
+            "path": "/people",
+            "display_name": "Create Person",
+            "short_desc": "x",
+            "desc": "x",
+            "fields": {
+                "location": <RestSchemaFieldOverlayInfo>{"lift": True},
+            },
+        };
+        RestSchemaActionOperation op = new RestSchemaActionSet(schema, (ai,)).getOperationEx("create_person");
+
+        # the grouping object is gone and its properties are options in its place
+        assertEq(("city", "name", "where", "zip"), sort(keys (op.getRequestType().getFields() ?? {})),
+            "a lifted value's properties are the options");
+        assertEq(NOTHING, op.getFlatMap().location, "the lifted value is not itself an option");
+        assertEq("location", op.getFlatMap().city.lift_into, "each option records what it is assembled into");
+
+        hash<auto> wire = op.unflatten({"name": "ada", "city": "Prague", "zip": "11000"});
+        assertEq({"name": "ada", "location": {"city": "Prague", "zip": "11000"}}, wire.req.body,
+            "the value is assembled back from the options published in its place");
+        assertEq({"name": "ada", "city": "Prague", "zip": "11000"}, op.flatten(wire),
+            "and splits back into them");
+
+        # a value left entirely unset is not sent as an empty object
+        assertEq({"name": "ada"}, op.unflatten({"name": "ada"}).req.body,
+            "an unset lifted value contributes nothing");
+
+        # a property that collides with an option the action already has is reported rather than chosen
+        hash<auto> doc2 = doc;
+        doc2.paths."/people".post.parameters = (
+            {"name": "city", "in": "query", "schema": {"type": "string"}},
+        );
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "is produced by both",
             sub () {
-                new RestSchemaActionSet(schema2, (ai,));
+                new RestSchemaActionSet(OpenApi3::OpenApi3Loader::fromString(make_json(doc2), True), (ai,));
+            });
+
+        # lifting something that is not an object says so
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which is not an object",
+            sub () {
+                new RestSchemaActionSet(schema, (cast<hash<RestSchemaActionInfo>>(ai + {
+                    "fields": {"name": <RestSchemaFieldOverlayInfo>{"lift": True}},
+                }),));
             });
     }
 

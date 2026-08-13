@@ -89,10 +89,56 @@ public hashdecl RestSchemaFlatFieldInfo {
     */
     string wire_name;
 
+    #! The path to the enclosing object within the request body, for a value that is not at its top level
+    /** Empty for an ordinary body property.  Set when the manifest lifted the action's options out of a
+        fixed envelope, in which case it names the envelope levels the value sits at or beside.
+
+        @see @ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap"
+    */
+    *list<string> wire_path;
+
     #! The name of any wire codec applied to values of this field
     /** @see @ref RestSchemaActions::RestSchemaActionCodecs "RestSchemaActionCodecs"
     */
     *string codec;
+
+    #! Names the value this option is a property of, when it is published in that value's place
+    /** Such an option does not travel on its own: it is assembled into the named value, which is what the
+        request carries.  @ref loc and @ref wire_name describe the property within that value rather than
+        a location in the request.
+
+        @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::lift "lift"
+    */
+    *string lift_into;
+}
+
+#! Describes a value whose properties are published as options in place of the value itself
+/** The value is not an option, so it has no entry in
+    @ref RestSchemaActions::RestSchemaActionOperation::getFlatMap() "the flat map"; everything needed to
+    place it in the request is here instead.
+
+    @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::lift "lift"
+*/
+public hashdecl RestSchemaLiftedValueInfo {
+    #! The name identifying this value, which is the name the schema gives it
+    string name;
+
+    #! The transport location the assembled value travels in
+    /** @see @ref RestSchemaActionLocations
+    */
+    string loc;
+
+    #! The name of the assembled value in its transport location
+    string wire_name;
+
+    #! The path to the enclosing object within the request body, if the value is nested
+    *list<string> wire_path;
+
+    #! The conversion applied to the assembled value, if the overlay gave it a codec
+    *hash<auto> conv;
+
+    #! The published option names, keyed by the property name each one carries
+    hash<string, string> options;
 }
 
 #! Describes a fixed value in the envelope a lifted request body is rebuilt into
@@ -123,6 +169,9 @@ public hashdecl RestSchemaDerivedValueInfo {
 
     #! The name of this value in its transport location
     string wire_name;
+
+    #! The path to the enclosing object within the request body, if the value is nested
+    *list<string> wire_path;
 }
 
 #! Describes a bidirectional conversion between an action-facing value and its wire representation
@@ -307,6 +356,25 @@ public hashdecl RestSchemaFieldOverlayInfo {
     */
     *AbstractDataProviderType type;
 
+    #! Publish this object-valued field's properties as options in place of the field itself
+    /** Flattening removes transport groupings and stops there, because a body property that is itself an
+        object is usually a domain object worth supplying whole.  Some are not: an API that carries a
+        postal address as a nested \c location object, or that accepts a compound query argument, is using
+        the object as a grouping, and publishing it whole asks a user to build a hash by hand.
+
+        Setting this publishes the object's properties as options of the action instead, and the object is
+        assembled back from them when the request is built.  A property that collides with an option the
+        action already has is reported, as any other collision is.
+
+        Applied **after** @ref codec and @ref type, so a field whose wire form is not an object at all -
+        a compound value the API spells as a single string, say - can be presented as a structured type by
+        a codec and then lifted into individual options by this.
+
+        @note Only the named field's own properties are lifted; a property that is itself an object stays
+        one.  Use the nested overlay in @ref fields to reach into it.
+    */
+    *bool lift;
+
     #! Raw field attributes merged after every other override
     *hash<auto> attr;
 
@@ -408,10 +476,17 @@ public hashdecl RestSchemaActionInfo {
         it.  Naming \c ("data", "attributes") here lifts the *attributes* instead, so the action offers
         \c email and \c first_name, and the envelope is rebuilt when the request is sent.
 
-        A property beside the path that the schema declares **required** with exactly one permitted value -
-        JSON:API's \c type discriminator is always this - is filled in automatically, because there is
-        nothing for a caller to choose.  Any other required sibling must be supplied by the manifest, and
-        registration fails naming it rather than sending a body the API will reject.
+        A property the schema declares **required** with exactly one permitted value - JSON:API's \c type
+        discriminator is always this - is filled in automatically wherever it appears in the envelope,
+        because there is nothing for a caller to choose.
+
+        Every other property of the envelope **is published as an option**, at the level it belongs to,
+        so that nothing the API accepts is lost by lifting: JSON:API spells the identity of the object
+        being changed as \c data.id beside the attributes, and an update that could not send it would be
+        unusable.  Such an option is addressed in the overlay by its path within the body
+        (\c "body.data.id"), which is also how it is renamed when it collides with a path variable of the
+        same name - and a required one that must simply repeat a path variable is best given
+        @ref RestSchemaActions::RestSchemaFieldOverlayInfo::value_from "value_from" naming it.
 
         This changes only which options the action publishes; the request contract is unchanged.
     */

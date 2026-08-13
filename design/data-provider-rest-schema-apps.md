@@ -602,11 +602,33 @@ mirror of `response_unwrap`, and it is opt-in: an application that does not set 
 
 Two properties make it safe rather than a way of inventing a contract:
 
-- a property beside the path that the schema declares **required with exactly one permitted value** is
-  filled in automatically, because there is nothing to choose - JSON:API's `type` discriminator is always
-  this;
-- any *other* required sibling fails registration, naming it. The manifest has to say what to send rather
-  than the module quietly omitting it and letting the API reject the request.
+- a property the schema declares **required with exactly one permitted value** is filled in automatically
+  wherever it sits in the envelope, because there is nothing to choose - JSON:API's `type` discriminator is
+  always this, and publishing it as a required option would make every existing call fail;
+- **every other property of the envelope is published as an option** at the level it belongs to, so that
+  lifting the body cannot quietly withdraw part of the request contract. JSON:API carries the identity of
+  the object being changed as `data.id` beside the attributes, and an update that could not send it would
+  not work at all.
+
+Such an option is addressed in the overlay by its path within the body - `"body.data.id"` - which is also
+how it is renamed when it collides with a path variable of the same name. A required one that must simply
+repeat a path variable is best given `value_from` naming it, which is the Confluence case one level up:
+the caller supplies the identity once and it travels in both places.
+
+### `lift`: a grouping object is not a domain object
+
+Flattening deliberately stops at the top level of the body, because a property that is itself an object is
+usually a domain object worth supplying whole. Some are not. Klaviyo carries a postal address as a nested
+`location` object, and the application being replaced published `city`, `region`, `country` and `zip` as
+ordinary options; publishing `location` instead would have asked a user to build a hash by hand and broken
+every workflow that set one of the four.
+
+The `lift` field overlay publishes an object-valued field's properties as options in place of the field,
+and assembles the object back when the request is built. It is applied **after** `codec` and `type`, so a
+compound value the API spells as a single string can be presented as a structured type by a codec and then
+lifted into individual options - which is how Klaviyo's `filter` query argument becomes the options the
+superseded application offered rather than a DSL string nobody would type. A lifted property that collides
+with an option the action already has is reported, as any other collision is.
 
 ## A connection has to configure itself
 

@@ -92,6 +92,11 @@ public class RestSchemaActionOperation {
         #! The fixed values that envelope carries beside the lifted body
         list<hash<RestSchemaRequestWrapValueInfo>> request_wrap_fixed = ();
 
+        #! Values assembled from options published in their place
+        /** @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::lift "lift"
+        */
+        list<hash<RestSchemaLiftedValueInfo>> lifted_values = ();
+
         #! Header values dropped by the overlay, which the connection is expected to supply
         /** An ignored header is one the connection owns - an API key, the tenant a Xero connection works
             in - so the action must not ask for it, and the request must still carry it.  These are
@@ -222,54 +227,48 @@ public class RestSchemaActionOperation {
     hash<auto> unflatten(*hash<auto> options) {
         hash<auto> req = {};
         hash<auto> path_vars = {};
-        foreach hash<auto> i in (options.pairIterator()) {
-            *hash<RestSchemaFlatFieldInfo> fi = flat_map{i.key};
-            if (!fi) {
+
+        # every option is validated before anything is assembled, because the values assembled for lifted
+        # options below are placed in this hash and would otherwise be indistinguishable from supplied ones
+        foreach string name in (keys options) {
+            if (!exists flat_map{name}) {
                 throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y has no option %y; known options: %y",
-                    info.action, i.key, sort(keys flat_map));
+                    info.action, name, sort(keys flat_map));
             }
+        }
+        # a value whose properties were published in its place is assembled from them here, so that it
+        # travels as the single value the schema declares
+        foreach hash<RestSchemaLiftedValueInfo> lv in (lifted_values) {
+            hash<auto!> assembled = {};
+            foreach hash<auto> i in (lv.options.pairIterator()) {
+                if (options.hasKey(i.value)) {
+                    assembled{i.key} = options{i.value};
+                    options -= i.value;
+                }
+            }
+            if (!assembled) {
+                continue;
+            }
+            auto value = lv.conv
+                ? RestSchemaActionOperation::convertValue(assembled, lv.conv, True)
+                : assembled;
+            placeRequestValue(\req, \path_vars, lv.loc, lv.wire_name, lv.wire_path, value);
+        }
+
+        foreach hash<auto> i in (options.pairIterator()) {
+            hash<RestSchemaFlatFieldInfo> fi = flat_map{i.key};
             auto value = i.value;
             if (*hash<auto> node = request_conv{i.key}) {
                 value = RestSchemaActionOperation::convertValue(value, node, True);
             }
-            switch (fi.loc) {
-                case RSAL_PATH:
-                    path_vars{fi.wire_name} = value;
-                    break;
-                case RSAL_QUERY:
-                    req.query{fi.wire_name} = value;
-                    break;
-                case RSAL_HEADER:
-                    req.header{fi.wire_name} = value;
-                    break;
-                case RSAL_BODY:
-                    req.body{fi.wire_name} = value;
-                    break;
-                case RSAL_BODY_ROOT:
-                    req.body = value;
-                    break;
-            }
+            placeRequestValue(\req, \path_vars, fi.loc, fi.wire_name, fi.wire_path, value);
         }
-        # the envelope the body options were lifted out of is rebuilt around them, before any value that
-        # follows another option is placed - those name transport locations, not envelope paths
-        if (request_wrap && exists req.body) {
-            # built from the inside out: each turn of the loop wraps what came before in one more level of
-            # the envelope, and adds the values fixed at *that* level beside it
-            hash<auto> wrapped = req.body;
-            for (int i = request_wrap.size() - 1; i >= 0; --i) {
-                hash<auto!> level = {request_wrap[i]: wrapped};
-                list<string> here = ();
-                for (int j = 0; j < i; ++j) {
-                    here += request_wrap[j];
-                }
-                foreach hash<RestSchemaRequestWrapValueInfo> fv in (request_wrap_fixed) {
-                    if (fv.path == here) {
-                        level{fv.name} = fv.value;
-                    }
-                }
-                wrapped = level;
+        # the values the envelope fixes are added once some part of the body has been supplied; an action
+        # whose body is entirely optional and left unset sends no body at all
+        if (request_wrap_fixed && exists req.body) {
+            foreach hash<RestSchemaRequestWrapValueInfo> fv in (request_wrap_fixed) {
+                req.body = RestSchemaActionOperation::setNested(req.body, fv.path, fv.name, fv.value);
             }
-            req.body = wrapped;
         }
 
         # a value that follows another option is filled in once every supplied option has been placed, so
@@ -284,18 +283,15 @@ public class RestSchemaActionOperation {
                 case RSAL_PATH: value = path_vars{src.wire_name}; break;
                 case RSAL_QUERY: value = req.query{src.wire_name}; break;
                 case RSAL_HEADER: value = req.header{src.wire_name}; break;
-                case RSAL_BODY: value = req.body{src.wire_name}; break;
+                case RSAL_BODY:
+                    value = RestSchemaActionOperation::getNested(req.body, src.wire_path, src.wire_name);
+                    break;
                 case RSAL_BODY_ROOT: value = req.body; break;
             }
             if (!exists value) {
                 continue;
             }
-            switch (dv.loc) {
-                case RSAL_PATH: path_vars{dv.wire_name} = value; break;
-                case RSAL_QUERY: req.query{dv.wire_name} = value; break;
-                case RSAL_HEADER: req.header{dv.wire_name} = value; break;
-                case RSAL_BODY: req.body{dv.wire_name} = value; break;
-            }
+            placeRequestValue(\req, \path_vars, dv.loc, dv.wire_name, dv.wire_path, value);
         }
 
         # every path variable must resolve, or the request would be made against a URI path still containing
@@ -323,9 +319,10 @@ public class RestSchemaActionOperation {
         @throw REST-SCHEMA-ACTION-ERROR the request contains a value the action does not declare
     */
     hash<auto> flatten(hash<auto> wire) {
-        # index the reverse map by location and wire name
+        # index the reverse map by location and wire name; an option published in another value's place
+        # does not travel on its own, so it is not addressable here - the value it is assembled into is
         hash<string, hash<string, string>> rmap = {};
-        map rmap{$1.loc}{$1.wire_name} = $1.name, flat_map.iterator();
+        map rmap{$1.loc}{$1.wire_name} = $1.name, flat_map.iterator(), !$1.lift_into.val();
 
         hash<auto> rv = {};
         code add = sub (string loc, string wire_name, auto value) {
@@ -340,17 +337,178 @@ public class RestSchemaActionOperation {
             rv{name} = value;
         };
 
-        map add(RSAL_PATH, $1.key, $1.value), wire.path_vars.pairIterator();
-        map add(RSAL_QUERY, $1.key, $1.value), wire.req.query.pairIterator();
-        map add(RSAL_HEADER, $1.key, $1.value), wire.req.header.pairIterator();
+        # a lifted value is read from the request and split back into the options published in its place,
+        # before the locations it came from are walked, so that it is not reported as undeclared there
+        hash<string, hash<string, bool>> lifted_seen = {};
+        foreach hash<RestSchemaLiftedValueInfo> lv in (lifted_values) {
+            lifted_seen{lv.loc}{lv.wire_name} = True;
+            auto value;
+            switch (lv.loc) {
+                case RSAL_QUERY: value = wire.req.query{lv.wire_name}; break;
+                case RSAL_HEADER: value = wire.req.header{lv.wire_name}; break;
+                case RSAL_PATH: value = wire.path_vars{lv.wire_name}; break;
+                case RSAL_BODY:
+                    value = RestSchemaActionOperation::getNested(wire.req.body, lv.wire_path, lv.wire_name);
+                    break;
+            }
+            if (!exists value) {
+                continue;
+            }
+            if (lv.conv) {
+                value = RestSchemaActionOperation::convertValue(value, lv.conv, False);
+            }
+            if (value.typeCode() != NT_HASH) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y publishes the properties of %s value %y "
+                    "as options, but the request carries %y there rather than an object", info.action, lv.loc,
+                    lv.wire_name, value.type());
+            }
+            foreach hash<auto> i in (value.pairIterator()) {
+                *string opt = lv.options{i.key};
+                if (!opt) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y does not publish a property named %y "
+                        "of %s value %y; published properties: %y", info.action, i.key, lv.loc, lv.wire_name,
+                        sort(keys lv.options));
+                }
+                rv{opt} = i.value;
+            }
+        }
+
+        code addUnlifted = sub (string loc, string wire_name, auto value) {
+            if (lifted_seen{loc}{wire_name}) {
+                return;
+            }
+            add(loc, wire_name, value);
+        };
+        map addUnlifted(RSAL_PATH, $1.key, $1.value), wire.path_vars.pairIterator();
+        map addUnlifted(RSAL_QUERY, $1.key, $1.value), wire.req.query.pairIterator();
+        map addUnlifted(RSAL_HEADER, $1.key, $1.value), wire.req.header.pairIterator();
         if (exists wire.req.body) {
             if (rmap{RSAL_BODY_ROOT}) {
                 add(RSAL_BODY_ROOT, "body", wire.req.body);
             } else {
-                map add(RSAL_BODY, $1.key, $1.value), wire.req.body.pairIterator();
+                # the body may be nested, because the manifest can lift the action's options out of a fixed
+                # envelope; each value is looked up by the full path it was found at
+                hash<string, string> at_path = getBodyPathMap();
+                hash<string, bool> envelope = getBodyEnvelopePaths();
+                code walk = sub (auto node, list<string> path) {
+                    foreach hash<auto> i in (node.pairIterator()) {
+                        list<string> here = path + i.key;
+                        string key = here.join(".");
+                        if (exists at_path{key}) {
+                            # a lifted value has already been split into the options published in its place
+                            if (at_path{key}.val()) {
+                                if (*hash<auto> cnode = request_conv{at_path{key}}) {
+                                    rv{at_path{key}} = RestSchemaActionOperation::convertValue(i.value, cnode,
+                                        False);
+                                } else {
+                                    rv{at_path{key}} = i.value;
+                                }
+                            }
+                            continue;
+                        }
+                        if (envelope{key} && i.value.typeCode() == NT_HASH) {
+                            walk(i.value, here);
+                            continue;
+                        }
+                        throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y does not declare a %s value named "
+                            "%y; declared %s values: %y", info.action, RSAL_BODY, key, RSAL_BODY,
+                            sort(keys at_path));
+                    }
+                };
+                walk(wire.req.body, ());
             }
         }
         return rv;
+    }
+
+    #! Returns the option name carried by each body path, empty for a lifted or fixed value
+    /** A lifted value and a value the envelope fixes are not options, but they are declared, so they map
+        to an empty name rather than being absent: absent is what makes a value undeclared.
+    */
+    private hash<string, string> getBodyPathMap() {
+        hash<string, string> rv = {};
+        foreach hash<RestSchemaFlatFieldInfo> fi in (flat_map.iterator()) {
+            if (fi.loc != RSAL_BODY || fi.lift_into.val()) {
+                continue;
+            }
+            rv{((fi.wire_path ?? ()) + fi.wire_name).join(".")} = fi.name;
+        }
+        map rv{(($1.wire_path ?? ()) + $1.wire_name).join(".")} = "", lifted_values.iterator(),
+            $1.loc == RSAL_BODY;
+        map rv{($1.path + $1.name).join(".")} = "", request_wrap_fixed.iterator();
+        return rv;
+    }
+
+    #! Returns every envelope level a body value sits below, as a set of dotted paths
+    /** Each level of each path is included, so that walking a nested body can tell an envelope level it is
+        expected to descend through from a value nobody declared.
+    */
+    private hash<string, bool> getBodyEnvelopePaths() {
+        hash<string, bool> rv = {};
+        code add = sub (*list<string> path) {
+            list<string> here = ();
+            foreach string level in (path) {
+                here += level;
+                rv{here.join(".")} = True;
+            }
+        };
+        map add($1.wire_path), flat_map.iterator(), $1.loc == RSAL_BODY && !$1.lift_into.val();
+        map add($1.wire_path), lifted_values.iterator(), $1.loc == RSAL_BODY;
+        map add($1.path), request_wrap_fixed.iterator();
+        return rv;
+    }
+
+    #! Places a value in the transport request at its location, descending into the body when it is nested
+    private placeRequestValue(reference<hash<auto>> req, reference<hash<auto>> path_vars, string loc,
+            string wire_name, *list<string> wire_path, auto value) {
+        switch (loc) {
+            case RSAL_PATH:
+                path_vars{wire_name} = value;
+                break;
+            case RSAL_QUERY:
+                req.query{wire_name} = value;
+                break;
+            case RSAL_HEADER:
+                req.header{wire_name} = value;
+                break;
+            case RSAL_BODY:
+                req.body = RestSchemaActionOperation::setNested(req.body ?? {}, wire_path, wire_name, value);
+                break;
+            case RSAL_BODY_ROOT:
+                req.body = value;
+                break;
+        }
+    }
+
+    #! Returns the hash with the value set at the given path below it, creating the levels it names
+    private static hash<auto> setNested(hash<auto> h, *list<string> path, string name, auto value) {
+        if (!path) {
+            # "auto!" so that a hash whose values happen to share a type does not narrow and then reject
+            # a value of another type
+            hash<auto!> rv = h;
+            rv{name} = value;
+            return rv;
+        }
+        string head = path[0];
+        hash<auto> below = {};
+        if (h{head}.typeCode() == NT_HASH) {
+            below = h{head};
+        }
+        hash<auto!> rv = h;
+        rv{head} = RestSchemaActionOperation::setNested(below, path.size() > 1 ? path[1..] : NOTHING, name,
+            value);
+        return rv;
+    }
+
+    #! Returns the value at the given path below the hash, or @ref nothing if any level is missing
+    private static auto getNested(auto h, *list<string> path, string name) {
+        foreach string level in (path) {
+            if (h.typeCode() != NT_HASH) {
+                return;
+            }
+            h = h{level};
+        }
+        return h.typeCode() == NT_HASH ? h{name} : NOTHING;
     }
 
     #! Applies response unwrapping and any response wire codecs to a response body
@@ -458,7 +616,9 @@ public class RestSchemaActionOperation {
         hash<string, string> origin = {};
         foreach string loc in (LocationOrder) {
             foreach hash<auto> entry in (derived{loc}) {
-                string derived_name = entry.wire_name;
+                # a value lifted out of an envelope is addressed in the overlay by its path within the
+                # body, so that two levels of the envelope can both declare a property of the same name
+                string derived_name = entry.ov_name ?? entry.wire_name;
                 hash<RestSchemaFieldOverlayInfo> ov = getFieldOverlay(info.fields, loc, derived_name);
                 if (ov.ignore) {
                     # a header the action does not ask for is one the connection supplies; the schema may
@@ -479,20 +639,27 @@ public class RestSchemaActionOperation {
                     derived_values += <RestSchemaDerivedValueInfo>{
                         "source": ov.value_from,
                         "loc": loc,
-                        "wire_name": derived_name,
+                        "wire_name": entry.wire_name,
+                        "wire_path": entry.wire_path,
                     };
                     continue;
                 }
-                string name = ov.name ?? derived_name;
-                if (exists fields{name}) {
+                string name = ov.name ?? entry.wire_name;
+                if (!ov.lift && exists fields{name}) {
                     throw "REST-SCHEMA-ACTION-ERROR", sprintf("option %y is produced by both the %s and the %s "
                         "value named %y; rename one of them with a location-qualified overlay key "
                         "(ex: \"%s.%s\") giving a \"name\"", name, origin{name}, loc, derived_name, loc,
                         derived_name);
                 }
                 *hash<auto> node;
-                fields{name} = applyFieldOverlay(entry.field, ov, name,
+                AbstractDataField field = applyFieldOverlay(entry.field, ov, name,
                     sprintf("%s value %y", loc, derived_name), \node);
+                if (ov.lift) {
+                    liftFieldOptions(field, loc, entry, node, sprintf("%s value %y", loc, derived_name),
+                        \fields, \origin);
+                    continue;
+                }
+                fields{name} = field;
                 if (node) {
                     request_conv{name} = node;
                 }
@@ -500,7 +667,8 @@ public class RestSchemaActionOperation {
                 flat_map{name} = <RestSchemaFlatFieldInfo>{
                     "name": name,
                     "loc": loc,
-                    "wire_name": loc == RSAL_BODY_ROOT ? "body" : derived_name,
+                    "wire_name": loc == RSAL_BODY_ROOT ? "body" : entry.wire_name,
+                    "wire_path": entry.wire_path,
                     "codec": ov.codec,
                 };
             }
@@ -559,15 +727,29 @@ public class RestSchemaActionOperation {
         }
         # a body wrapped in a fixed envelope is lifted from inside it rather than from its top level; see
         # RestSchemaActionInfo::request_unwrap
+        auto landing_schema = body.schema;
         if (info.request_unwrap) {
-            body_type = buildRequestUnwrap(body.schema, body_type);
+            body_type = buildRequestUnwrap(body.schema, body_type, \landing_schema, \derived, body_required);
         }
 
         *hash<string, AbstractDataField> body_fields = body_type.getFields();
         if (!body_fields) {
             return;
         }
+        hash<string, bool> fixed = getFixedProperties(landing_schema);
         foreach hash<auto> i in (body_fields.pairIterator()) {
+            if (fixed{i.key}) {
+                # a discriminator the level the options were lifted to fixes is filled in rather than
+                # published, exactly as one beside the path is: there is nothing for a caller to choose,
+                # and publishing it as a required option would make every existing call fail
+                request_wrap_fixed += <RestSchemaRequestWrapValueInfo>{
+                    "path": request_wrap ?? (),
+                    "name": i.key,
+                    "value": RestSchemaActionOperation::getSchemaEnum(
+                        RestSchemaActionOperation::getSchemaProperty(landing_schema, i.key))[0],
+                };
+                continue;
+            }
             AbstractDataField f = i.value;
             if (!body_required && fieldIsRequired(f)) {
                 # omitting the body entirely is valid, so a property of it cannot be required at the action
@@ -576,9 +758,31 @@ public class RestSchemaActionOperation {
             }
             derived{RSAL_BODY} += {
                 "wire_name": i.key,
+                "wire_path": request_wrap,
+                "ov_name": request_wrap ? (request_wrap + i.key).join(".") : NOTHING,
                 "field": f,
             };
         }
+    }
+
+    #! Returns the properties of a schema object that are required and permit exactly one value
+    /** Only meaningful under @ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap":
+        an application that does not lift its body out of an envelope has not declared that the body is one,
+        so a fixed property of it is still the caller's to send.
+    */
+    private hash<string, bool> getFixedProperties(auto level_schema) {
+        hash<string, bool> rv = {};
+        if (!info.request_unwrap) {
+            return rv;
+        }
+        hash<string, bool> req = RestSchemaActionOperation::getSchemaRequired(level_schema);
+        foreach hash<auto> i in ((RestSchemaActionOperation::getSchemaProperties(level_schema) ?? {})
+                .pairIterator()) {
+            if (req{i.key} && RestSchemaActionOperation::getSchemaEnum(i.value).size() == 1) {
+                rv{i.key} = True;
+            }
+        }
+        return rv;
     }
 
     #! Returns a schema object's declared properties, whatever schema class it is
@@ -633,7 +837,9 @@ public class RestSchemaActionOperation {
 
         @see @ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap"
     */
-    private AbstractDataProviderType buildRequestUnwrap(auto body_schema, AbstractDataProviderType body_type) {
+    private AbstractDataProviderType buildRequestUnwrap(auto body_schema, AbstractDataProviderType body_type,
+            reference<auto> landing_schema, reference<hash<string, list<hash<auto>>>> derived,
+            bool body_required) {
         AbstractDataProviderType t = body_type;
         auto s = body_schema;
         list<string> walked = ();
@@ -652,44 +858,66 @@ public class RestSchemaActionOperation {
                     "%y: that property has type %y, not an object (unwrap path: %y)", info.action, name,
                     next.getName(), info.request_unwrap);
             }
-            # every property beside the path has to be accounted for, or the rebuilt body is incomplete in a
-            # way only the API would report
-            recordUnwrapSiblings(s, name, walked);
+            # every property beside the path is accounted for, or the rebuilt body would be missing
+            # something the API accepts in a way only the API would report
+            recordUnwrapSiblings(s, t, name, walked, \derived, body_required);
             walked += name;
             s = RestSchemaActionOperation::getSchemaProperty(s, name);
             t = next;
         }
         request_wrap = info.request_unwrap;
+        landing_schema = s;
         return t;
     }
 
-    #! Records the values a level of the request envelope carries beside the unwrap path
+    #! Accounts for the values a level of the request envelope carries beside the unwrap path
     /** A property the schema declares required with exactly one permitted value is filled in here, because
         there is nothing for a caller to choose - JSON:API's \c type discriminator is always this shape.
-        Anything else required is an error: the manifest has to say what to send.
+        Every other property becomes an option of the action at the level it belongs to, so that lifting the
+        body does not withdraw part of the request contract: JSON:API carries the identity of the object
+        being changed as \c data.id beside the attributes, and an update that could not send it would not
+        work at all.
     */
-    private recordUnwrapSiblings(auto level_schema, string next, list<string> walked) {
+    private recordUnwrapSiblings(auto level_schema, AbstractDataProviderType level_type, string next,
+            list<string> walked, reference<hash<string, list<hash<auto>>>> derived, bool body_required) {
         *hash<auto> props = RestSchemaActionOperation::getSchemaProperties(level_schema);
         if (!props) {
             return;
         }
+        *hash<string, AbstractDataField> tfields = level_type.getFields();
         hash<string, bool> req = RestSchemaActionOperation::getSchemaRequired(level_schema);
         foreach hash<auto> i in (props.pairIterator()) {
-            if (i.key == next || !req{i.key}) {
+            if (i.key == next) {
                 continue;
             }
             *softlist<auto> allowed = RestSchemaActionOperation::getSchemaEnum(i.value);
-            if (allowed.size() != 1) {
-                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y lifts the request body through %y, but "
-                    "the envelope at %y also requires %y, which has %s; the manifest has to supply it "
-                    "(unwrap path: %y)", info.action, next, walked ? walked.join(".") : "the body root",
-                    i.key, allowed ? sprintf("%d permitted values", allowed.size()) : "no fixed value",
-                    info.request_unwrap);
+            if (req{i.key} && allowed.size() == 1) {
+                request_wrap_fixed += <RestSchemaRequestWrapValueInfo>{
+                    "path": walked,
+                    "name": i.key,
+                    "value": allowed[0],
+                };
+                continue;
             }
-            request_wrap_fixed += <RestSchemaRequestWrapValueInfo>{
-                "path": walked,
-                "name": i.key,
-                "value": allowed[0],
+            *AbstractDataField f = tfields{i.key};
+            if (!f) {
+                # the schema declares the property but the derived type does not carry it, so there is no
+                # type to publish an option with; the manifest cannot address what is not there
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y lifts the request body through %y, and "
+                    "the envelope at %y declares %y beside it, which the derived type does not carry; it "
+                    "carries %y (unwrap path: %y)", info.action, next,
+                    walked ? walked.join(".") : "the body root", i.key,
+                    tfields ? sort(keys tfields) : (), info.request_unwrap);
+            }
+            # a property of an envelope level is only ever as required as the body itself
+            if (!body_required && fieldIsRequired(f)) {
+                f = f.getOrNothingType();
+            }
+            derived{RSAL_BODY} += {
+                "wire_name": i.key,
+                "wire_path": walked,
+                "ov_name": (walked + i.key).join("."),
+                "field": f,
             };
         }
     }
@@ -768,8 +996,9 @@ public class RestSchemaActionOperation {
         hash<string, bool> valid = {};
         foreach hash<auto> i in (derived.pairIterator()) {
             foreach hash<auto> entry in (i.value) {
-                valid{entry.wire_name} = True;
-                valid{i.key + "." + entry.wire_name} = True;
+                string name = entry.ov_name ?? entry.wire_name;
+                valid{name} = True;
+                valid{i.key + "." + name} = True;
             }
         }
         foreach string key in (keys ovl) {
@@ -778,6 +1007,69 @@ public class RestSchemaActionOperation {
                     "operation declares; addressable values: %y", key, sort(keys valid));
             }
         }
+    }
+
+    #! Publishes an object-valued field's properties as options in place of the field itself
+    /** @param field the field the overlay has already been applied to
+        @param loc the transport location the value travels in
+        @param entry the derived field entry
+        @param node the conversion applied to the assembled value, if the overlay gave it a codec or
+        overrode any of its properties
+        @param ctx a description of the field for error messages
+        @param fields the action's fields, added to here
+        @param origin the location each field came from, added to here
+
+        @throw REST-SCHEMA-ACTION-ERROR the value is not an object, declares no properties, or one of them
+        collides with an option the action already has
+
+        @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::lift "lift"
+    */
+    private liftFieldOptions(AbstractDataField field, string loc, hash<auto> entry, *hash<auto> node,
+            string ctx, reference<hash<string, AbstractDataField>> fields,
+            reference<hash<string, string>> origin) {
+        AbstractDataProviderType type = field.getType();
+        if (type.getBaseTypeCode() != NT_HASH) {
+            throw "REST-SCHEMA-ACTION-ERROR", sprintf("cannot publish the properties of %s as options: it has "
+                "type %y, which is not an object; a codec or a type override can present it as one",
+                ctx, type.getName());
+        }
+        *hash<string, AbstractDataField> tfields = type.getFields();
+        if (!tfields) {
+            throw "REST-SCHEMA-ACTION-ERROR", sprintf("cannot publish the properties of %s as options: it "
+                "declares none", ctx);
+        }
+        # a property of a value that may be omitted entirely cannot be required at the action level, for the
+        # same reason a property of an optional body cannot be
+        bool required = fieldIsRequired(field);
+        hash<string, string> opts = {};
+        foreach hash<auto> i in (tfields.pairIterator()) {
+            string name = i.value.getName();
+            if (exists fields{name}) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("option %y is produced by both the %s value of that "
+                    "name and property %y of %s; rename one of them", name, origin{name}, i.key, ctx);
+            }
+            AbstractDataField f = i.value;
+            if (!required && fieldIsRequired(f)) {
+                f = f.getOrNothingType();
+            }
+            fields{name} = f;
+            origin{name} = loc;
+            opts{i.key} = name;
+            flat_map{name} = <RestSchemaFlatFieldInfo>{
+                "name": name,
+                "loc": loc,
+                "wire_name": i.key,
+                "lift_into": entry.wire_name,
+            };
+        }
+        lifted_values += <RestSchemaLiftedValueInfo>{
+            "name": entry.wire_name,
+            "loc": loc,
+            "wire_name": entry.wire_name,
+            "wire_path": entry.wire_path,
+            "conv": node,
+            "options": opts,
+        };
     }
 
     #! Applies a field overlay to a derived field and returns the field to publish
