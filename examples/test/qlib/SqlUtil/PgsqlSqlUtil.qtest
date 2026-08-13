@@ -339,6 +339,9 @@ class PgsqlTest inherits SqlTestBase {
             # create the test schema
             schema = new PgsqlTestSchema(ds);
 
+            # drop a schema left behind by a run that never reached its teardown
+            SqlTestBase::clearSchemaLeftFromInterruptedRun(schema, m_options.verbose);
+
             # workaround for issue #853 (https://github.com/qoretechnologies/qore/issues/853)
             try {
                 on_error ds.rollback();

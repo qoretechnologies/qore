@@ -2264,14 +2264,20 @@ printf('OK');
         # Pass QORE_MODULE_DIR to subprocess so it can find the QoreRepl module
         # Quote paths properly to handle spaces and special characters
         *string module_dir = ENV.QORE_MODULE_DIR;
+        # Use the binary this test is running under, not whatever "qore" resolves to in the PATH: the
+        # module path handed to the subprocess is this build's, and an installed binary older than
+        # the build tree cannot load its AOT qmods (ex: "STATIC-VAR-ERROR: cannot resolve class ...
+        # for static variable" when the metadata format has moved on)
+        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string cmd;
         # Shell-escape paths by replacing ' with '\'' and wrapping in single quotes
         string escaped_script = "'" + replace(temp_script, "'", "'\\''") + "'";
+        string escaped_exe = "'" + replace(qore_exe, "'", "'\\''") + "'";
         if (module_dir) {
             string escaped_module_dir = "'" + replace(module_dir, "'", "'\\''") + "'";
-            cmd = sprintf("QORE_MODULE_DIR=%s qore %s 2>&1", escaped_module_dir, escaped_script);
+            cmd = sprintf("QORE_MODULE_DIR=%s %s %s 2>&1", escaped_module_dir, escaped_exe, escaped_script);
         } else {
-            cmd = sprintf("qore %s 2>&1", escaped_script);
+            cmd = sprintf("%s %s 2>&1", escaped_exe, escaped_script);
         }
         string output = backquote(cmd);
         assertRegex("OK", output, "REPL test script should output OK");
