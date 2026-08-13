@@ -17,6 +17,55 @@
 
 %exec-class CdsEntityEventsTest
 
+#! A Dataverse client that answers the metadata request from a fixture rather than from a service
+/** The event providers derive their payload type from the organisation's \c $metadata document, and the
+    rest of this suite runs with no client at all - so that derivation was never exercised, and a defect in
+    it went unnoticed until a live check found every event publishing an untyped payload.
+*/
+class FakeCdsRestClient inherits CdsRestClient::CdsRestClient {
+    public {
+        #! One entity with two properties, in the shape Dataverse answers with
+        const Metadata = {
+            "edmx:Edmx": {
+                "edmx:DataServices": {
+                    "Schema": {
+                        "EntityType": (
+                            {
+                                "^attributes^": {"Name": "account"},
+                                "Key": {"PropertyRef": {"^attributes^": {"Name": "accountid"}}},
+                                "Property": (
+                                    {"^attributes^": {"Name": "accountid", "Type": "Edm.Guid"}},
+                                    {"^attributes^": {"Name": "name", "Type": "Edm.String"}},
+                                ),
+                            },
+                        ),
+                    },
+                },
+            },
+        };
+    }
+
+    constructor() : CdsRestClient({
+        "url": "https://fake.crm.dynamics.com/api/data/v9.2",
+        "oauth2_client_id": "x",
+        "oauth2_client_secret": "y",
+        "tenant": "z",
+    }, True) {
+    }
+
+    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+        if (path =~ /^\$metadata/) {
+            return {"body": Metadata};
+        }
+        if (path =~ /^EntityDefinitions/) {
+            return {"body": {"EntitySetName": "accounts"}};
+        }
+        # no rows: the example data falls back to the generated one, which is what an empty
+        # organisation produces
+        return {"body": {"value": ()}};
+    }
+}
+
 #! Tests the Dynamics 365 entity event providers that replace the TypeScript application's triggers
 /** Everything here runs without a Dataverse organisation: it checks the registration surface, the
     identity and ordering decisions that decide whether a subscription delivers anything at all, and
@@ -78,6 +127,7 @@ class CdsEntityEventsTest inherits QUnit::Test {
         addTestCase("odata timestamp literal", \timestampLiteralTest());
         addTestCase("any entity can be watched", \genericEntityTest());
         addTestCase("example event data", \exampleEventDataTest());
+        addTestCase("the payload type comes from the entity", \eventPayloadTypeTest());
         set_return_value(main());
     }
 
@@ -222,6 +272,31 @@ class CdsEntityEventsTest inherits QUnit::Test {
         must not throw: an example is a convenience, and failing to produce one would stop an event
         being configured at all.
     */
+    #! An event describes its payload with the entity's own type
+    /** \c getRecordType() answers with the record's **fields**, and assigning that to a type silently fell
+        into the catch below it, so every entity event published an untyped hash and a caller mapping one
+        got no fields at all.
+    */
+    eventPayloadTypeTest() {
+        FakeCdsRestClient rest();
+        # the events container resolves the entity's declaration and hands it to the watch provider
+        CdsEventsDataProvider live(rest);
+        AbstractDataProvider ep = cast<AbstractDataProvider>(live.getChildProvider("new-or-updated-account"));
+        hash<string, hash<DataProviderMessageInfo>> et = ep.getEventTypes();
+        assertEq(1, et.size());
+        AbstractDataProviderType t = et.firstValue().type;
+        *hash<string, AbstractDataField> fields = t.getFields();
+        assertEq("account", t.getName(), "the payload is typed as the entity, not as an open hash");
+        assertEq(("accountid", "name"), sort(keys fields), "with the entity's own fields");
+
+        # with no client there is nothing to read, and an event that cannot describe its payload is still
+        # better than a subscription that will not start
+        CdsEventsDataProvider events();
+        AbstractDataProvider bare = cast<AbstractDataProvider>(events.getChildProvider("new-or-updated-account"));
+        assertEq(0, (bare.getEventTypes().firstValue().type.getFields() ?? {}).size(),
+            "an unconfigured provider still offers the event");
+    }
+
     exampleEventDataTest() {
         CdsEventsDataProvider events();
 

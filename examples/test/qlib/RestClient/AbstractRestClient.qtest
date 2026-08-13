@@ -102,6 +102,7 @@ class AbstractRestClientTest inherits QUnit::Test {
         addTestCase("header management", \testHeaderManagement());
         addTestCase("token management", \testTokenManagement());
         addTestCase("close method", \testClose());
+        addTestCase("a header sent more than once", \testRepeatedHeader());
 
         set_return_value(main());
     }
@@ -243,6 +244,24 @@ class AbstractRestClientTest inherits QUnit::Test {
 
         # Verify token appears in default headers
         assertEq("Bearer test-token-123", rest.getDefaultHeaders().Authorization);
+    }
+
+    #! A server may send the same header more than once, and the response must still be readable
+    /** Microsoft Dynamics answers some OData requests with two Content-Type headers.  The repeated header
+        arrives as a list, and \c RestResponseInfo::content_type is a single string, so building the
+        response raised a type error in place of returning it - every such response was unreadable.
+    */
+    testRepeatedHeader() {
+        assertEq("application/json", RestClient::getSingleHeaderValue("application/json"));
+        assertEq("application/json",
+            RestClient::getSingleHeaderValue(("application/json", "application/json")),
+            "a repeated header yields a single value");
+        assertEq("application/json",
+            RestClient::getSingleHeaderValue(("application/json", "text/plain")),
+            "the first value wins where they differ");
+        assertNothing(RestClient::getSingleHeaderValue(NOTHING));
+        assertNothing(RestClient::getSingleHeaderValue(()));
+        assertNothing(RestClient::getSingleHeaderValue(""));
     }
 
     testClose() {

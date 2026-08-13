@@ -2090,8 +2090,30 @@ hash<auto> ans = rest.del("/orders/1");
             "status_code": rv.status_code,
             "headers": rv.hdr ?? (rv - ("body", "status_code")),
             "body": rv.body,
-            "content_type": rv."content-type",
+            "content_type": RestClient::getSingleHeaderValue(rv."content-type"),
         };
+    }
+
+    #! Returns a single header value, where a server sent the same header more than once
+    /** A repeated header arrives as a list, and a response carrying one would otherwise fail to be built
+        at all: @ref RestResponseInfo::content_type is a single string, and assigning a list to it raises a
+        type error in place of the response.  Microsoft Dynamics answers some OData requests with two
+        \c Content-Type headers, which made every such response unreadable.
+
+        The first value is taken, which is what a repeated header means in practice - the duplicates are
+        the same value - and is what @ref RFC 9110 permits a recipient to do.
+
+        @param value the header value, which may be a list where the header was repeated
+
+        @return the single value, or @ref nothing where there is none
+
+        @since RestClient 2.4
+    */
+    static *string getSingleHeaderValue(auto value) {
+        if (value.typeCode() == NT_LIST) {
+            return value[0].val() ? value[0].toString() : NOTHING;
+        }
+        return value.val() ? value.toString() : NOTHING;
     }
 
     #! returns the current validator object

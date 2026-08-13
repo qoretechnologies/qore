@@ -2870,7 +2870,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # Convert binary body to string for text-based content types so that
             # deserialization (JSON, XML, etc.) works correctly — HTTP/2 and HTTP/3
             # responses return binary bodies from the C++ layer
-            *string content_type = raw.headers."content-type";
+            # a server may send the same header more than once, in which case it arrives as a list; a
+            # single value is what this needs, and assigning the list would raise a type error instead of
+            # returning the response
+            *string content_type = RestClient::getSingleHeaderValue(raw.headers."content-type");
             if (resp_body && resp_body.typeCode() == NT_BINARY && content_type) {
                 if (content_type =~ /^text\// || content_type =~ /\/(json|xml|yaml|html)/
                         || content_type =~ /\+(json|xml)/ || content_type =~ /charset=/) {

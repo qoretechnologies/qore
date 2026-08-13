@@ -360,9 +360,13 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
             *hash<auto> meta = getEntityMetadata();
             if (meta) {
                 ODataEntityDataProvider entity(rest, getEntityLogicalName(), meta);
-                *AbstractDataProviderType t = entity.getRecordType();
-                if (t) {
-                    return t;
+                # getRecordType() answers with the record's **fields**; an event describes its payload with
+                # a type, so the fields are assembled into one
+                *hash<string, AbstractDataField> fields = entity.getRecordType();
+                if (fields) {
+                    HashDataType rv(AutoHashType, getEntityLogicalName());
+                    map rv.addField($1), fields.iterator();
+                    return rv;
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
