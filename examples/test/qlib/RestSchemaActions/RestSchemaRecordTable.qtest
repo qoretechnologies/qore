@@ -503,6 +503,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         addTestCase("a search option and a predicate on one listing option", \reservedOptionTest());
         addTestCase("filter expression rendering", \queryRenderTest());
         addTestCase("prefix-call and self-rendered query languages", \callAndHookRenderTest());
+        addTestCase("a search naming an absent record", \readOneNotFoundTest());
         addTestCase("a write option spelled differently from the column", \writeFieldMapTest());
         addTestCase("published expression metadata", \expressionInfoTest());
         addTestCase("the limit counts matching records", \limitAfterFilterTest());
@@ -949,6 +950,32 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                     }),
                 },
             }));
+        });
+    }
+
+    #! A search naming a record the service does not have matches nothing; it is not an error
+    /** Every API in this family answers a single read of an unknown identity with a 404, and a search for a
+        record that has just been deleted is an ordinary thing to do.
+    */
+    readOneNotFoundTest() {
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider items = table(ItemTable, \rest, auto sub (string method, string path) {
+            throw "REST-RESPONSE-ERROR", "HTTP 404 response received", {"status_code": 404};
+        });
+        list<hash<auto>> found = map $1, items.searchRecords(eq("id", "i_gone"));
+        assertEq(0, found.size(), "a search naming an unknown record matches nothing");
+        assertNothing(items.searchSingleRecord(eq("id", "i_gone")));
+
+        # ... and an update or a delete naming one reports that nothing matched
+        assertEq(0, items.updateRecords({"status": "closed"}, eq("id", "i_gone")));
+        assertEq(0, items.deleteRecords(eq("id", "i_gone")));
+
+        # any other failure is still raised: a 403 is a permission problem, not an absent record
+        RestSchemaTableDataProvider denied = table(ItemTable, \rest, auto sub (string method, string path) {
+            throw "REST-RESPONSE-ERROR", "HTTP 403 response received", {"status_code": 403};
+        });
+        assertThrows("REST-RESPONSE-ERROR", "403", sub () {
+            map $1, denied.searchRecords(eq("id", "i_1"));
         });
     }
 

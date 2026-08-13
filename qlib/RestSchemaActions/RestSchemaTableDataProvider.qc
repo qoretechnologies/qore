@@ -490,10 +490,13 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
     #! Updates the records matching the search criteria and returns how many were updated
     private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
         list<hash<auto>> ids = getTargetIds(where_cond, search_options, "update");
+        int rv = 0;
         foreach hash<auto> id in (ids) {
-            updateOne(id, set, search_options);
+            if (updateOne(id, set, search_options)) {
+                ++rv;
+            }
         }
-        return ids.size();
+        return rv;
     }
 
     #! Updates the one record matching the search criteria
@@ -517,10 +520,21 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
                 "exports no delete action for it", table.name);
         }
         list<hash<auto>> ids = getTargetIds(where_cond, search_options, "delete");
+        int rv = 0;
         foreach hash<auto> id in (ids) {
-            getLister(table.delete_action).doRequest(getScope(search_options, "delete") + id);
+            # a predicate naming an identity is written straight through without reading first, so a
+            # record that is not there is discovered here; it matched nothing and is not counted
+            try {
+                getLister(table.delete_action).doRequest(getScope(search_options, "delete") + id);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.arg.status_code == 404) {
+                    continue;
+                }
+                rethrow;
+            }
+            ++rv;
         }
-        return ids.size();
+        return rv;
     }
 
     #! Returns the identities of the records a write applies to
@@ -562,29 +576,56 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
         @param set the values to change
         @param search_options the search options, which carry the collection's scope
     */
-    private updateOne(hash<auto> id, hash<auto> set, *hash<auto> search_options) {
+    private bool updateOne(hash<auto> id, hash<auto> set, *hash<auto> search_options) {
         if (!table.update_action.val()) {
             throw "REST-SCHEMA-RECORD-ERROR", sprintf("table %y cannot update records; the application "
                 "exports no update action for it", table.name);
         }
-        if (table.write_list_option.val()) {
-            # a service whose writes take a list of whole documents identifies the one being changed inside
-            # the document, not beside it: there is no path variable to put it in, and the write is the same
-            # operation as a create with the identity present
-            getLister(table.update_action).doRequest(getScope(search_options, "update")
-                + getWriteBody(table.update_action, set + {table.id_field: id.firstValue()}));
-            return;
+        # a predicate naming an identity is written straight through without reading first, so a record
+        # that is not there is discovered here; it matched nothing, and saying so is the honest answer
+        try {
+            if (table.write_list_option.val()) {
+                # a service whose writes take a list of whole documents identifies the one being changed
+                # inside the document, not beside it: there is no path variable to put it in, and the write
+                # is the same operation as a create with the identity present
+                getLister(table.update_action).doRequest(getScope(search_options, "update")
+                    + getWriteBody(table.update_action, set + {table.id_field: id.firstValue()}));
+            } else {
+                getLister(table.update_action).doRequest(getScope(search_options, "update") + id
+                    + getWriteBody(table.update_action, set));
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 404) {
+                return False;
+            }
+            rethrow;
         }
-        getLister(table.update_action).doRequest(getScope(search_options, "update") + id
-            + getWriteBody(table.update_action, set));
+        return True;
     }
 
     #! Reads one record by its identity
-    /** @param id the options addressing the record
+    /** A search that names a record the service does not have matches **nothing**; it is not an error.
+        Every API in this family answers a single read of an unknown identity with a 404, so that answer is
+        turned into an empty result rather than an exception - otherwise a search for a record that has been
+        deleted, or an @ref updateRecords() naming one, would throw where it should report that nothing
+        matched.
+
+        Any other failure is still raised: a 403 is a permission problem and a 400 is a bad request, and
+        neither means "no such record".
+
+        @param id the options addressing the record
         @param search_options the search options, which carry the collection's scope
     */
     private *hash<auto> readOne(hash<auto> id, *hash<auto> search_options) {
-        auto resp = getLister(table.get_action).doRequest(getScope(search_options, "search") + id);
+        auto resp;
+        try {
+            resp = getLister(table.get_action).doRequest(getScope(search_options, "search") + id);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 404) {
+                return;
+            }
+            rethrow;
+        }
         auto rec = RestSchemaRecordPageIterator::followPath(resp, table.record_path);
         if (rec.typeCode() == NT_LIST) {
             rec = rec[0];

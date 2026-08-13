@@ -100,6 +100,21 @@ public namespace IntercomDataProvider {
     **create a second company** rather than change the one matched - a write to the wrong record, which is
     the worst thing a record table can do.
 
+    @section intercomrecord_eventual A Company Write Is Not Visible At Once
+
+    Two behaviours of Intercom's company endpoints surprise a caller who reads back what it just wrote, and
+    both were measured against a live workspace rather than inferred:
+
+    - a company created through \c "POST /companies" is **not** in \c "POST /companies/list" immediately;
+      that listing is backed by an index that lags the write.  Reading the new company by the identity the
+      create returned works at once.
+    - \c "DELETE /companies/{company_id}" answers <tt>{"deleted": true}</tt> and
+      \c "GET /companies/{company_id}" **still returns the company** afterwards.  The delete is accepted and
+      applied; the read-by-identity endpoint continues to answer with it.
+
+    Neither is something this layer can paper over - a table reports what the API did - so a caller that
+    needs to observe its own write should trust the response of the write rather than a subsequent read.
+
     @section intercomrecord_readonly What Cannot Be Written
 
     A conversation is created and read and is not updated or deleted here: Intercom changes one by replying
