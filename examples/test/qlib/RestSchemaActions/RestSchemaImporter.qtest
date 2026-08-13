@@ -96,7 +96,8 @@ public class TestSchema {
     public {
         #! Where the vendored schema came from
         const Provenance = <TestSchemaProvenanceInfo>{
-            "source_url": "https://example.com/old.yaml",
+            "source_url": "https://example.com/a/very/long/path/that/does/not/fit/on/"
+                "one/line/old.yaml",
             "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
             "source_size": 1,
             "source_updated": 2026-01-01,
@@ -528,6 +529,12 @@ public class TestSchema {
 
         string updated = RestSchemaImporter::updateProvenanceSource(ProvenanceSource, values);
         assertRegex("\"source_url\": \"https://example.com/new.yaml\",", updated);
+        # a value written as adjacent string literals across several lines is replaced whole: leaving
+        # the continuation behind would concatenate it onto the new value, producing a URL that was
+        # never right and still compiles - and the provenance URL is the baseline the next import is
+        # diffed against
+        assertNRegex("one/line/old.yaml", updated,
+            "a multi-line value's continuation lines are replaced along with its first line");
         assertRegex("\"source_sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\",",
             updated);
         assertRegex("\"source_size\": 4242,", updated);

@@ -776,8 +776,40 @@ public class RestSchemaImporter {
             # keep whatever trailed the value: a comma, and any comment after it
             string tail = m[2];
             string trailer = (tail =~ x/(,[[:space:]]*(?:#.*)?)$/)[0] ?? "";
-            lines[i] = sprintf("%s\"%s\": %s%s", m[0], name, RestSchemaImporter::renderValue(values{name}),
-                trailer);
+
+            # a member's value may be written across several lines - a long URL split into adjacent
+            # string literals is ordinary %Qore - so the span to replace runs to the end of the value
+            # rather than to the end of the line the member starts on.  Replacing only the first line
+            # would leave the continuation behind to concatenate onto the new value, and the record
+            # would then hold something that was never right and still compiles.
+            int last = i;
+            if (!trailer.val()) {
+                int j = i;
+                while (++j < lines.size()) {
+                    # the record ended, so this member was its last one and simply has no trailing comma
+                    if (lines[j] =~ /^[[:space:]]*};[[:space:]]*$/) {
+                        break;
+                    }
+                    # the next member starts here, so this one ended without a trailing comma
+                    if (lines[j] =~ /^[[:space:]]*"[A-Za-z_][A-Za-z0-9_]*"[[:space:]]*:/) {
+                        break;
+                    }
+                    last = j;
+                    *string t = (lines[j] =~ x/(,[[:space:]]*(?:#.*)?)$/)[0];
+                    if (t.val()) {
+                        trailer = t;
+                        break;
+                    }
+                }
+            }
+
+            string replacement = sprintf("%s\"%s\": %s%s", m[0], name,
+                RestSchemaImporter::renderValue(values{name}), trailer);
+            if (last > i) {
+                splice lines, i, last - i + 1, (replacement,);
+            } else {
+                lines[i] = replacement;
+            }
             written{name} = True;
         }
 
