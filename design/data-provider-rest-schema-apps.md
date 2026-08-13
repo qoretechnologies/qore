@@ -694,15 +694,60 @@ machinery is documented on the `RestSchemaActions` module main page; what belong
 roll-out taught.
 
 **A table is a declaration, not an implementation.** Every one names actions the manifest already exports, so
-a table adds no second copy of a path, a request contract or an escaping rule. Forty-seven tables across seven
-applications are around 2,300 lines of declaration in total, and none of them makes an HTTP request of its
+a table adds no second copy of a path, a request contract or an escaping rule. Sixty-one tables across nine
+applications are around 3,000 lines of declaration in total, and none of them makes an HTTP request of its
 own.
 
-**Declare `supports_native_search` only where the API takes a filter expression.** Two vendors in this family
-publish one - Xero's `where` and Bitbucket's BBQL - and their tables really do have the server do the
-searching. The other five narrow a listing with query arguments and evaluate the rest client-side, which is a
-different claim, and `supports_pushdown` per operator is where that detail goes. The three GitHub tables that
-existed before this work declared native search and did not have it: `where_cond` never reached GitHub.
+**A table usually needs the manifest to grow first.** A vendored schema is pruned to what its port exported,
+and a port exports the listings and writes its predecessor had - which is never the single reads, updates and
+deletes a table needs. Klaviyo needed sixteen new actions and Intercom thirteen; every one was a new action
+ID, so none of them touched a preserved ID. Expect a manifest expansion and a re-import, not just a new
+`.qc`.
+
+Two mechanical notes on that re-import. The importer loads the application's module to read its manifest, and
+the module validates itself against the *pruned* document that does not yet contain the new paths - so the
+first import of an expanded manifest has to be bootstrapped, either by staging the upstream document in place
+of the vendored one (Klaviyo) or by giving the importer the operation list directly with `ops:` (Intercom,
+whose full upstream document does not validate at all: it has defects in operations nobody exports). Once the
+new document is written, the ordinary manifest-driven import reproduces it exactly and the drift check passes,
+which is the thing to verify before committing.
+
+**Declare `supports_native_search` only where the API takes a filter expression.** Four vendors in this
+family publish one - Xero's `where`, Bitbucket's BBQL, Klaviyo's `filter` and Intercom's search tree - and
+their tables really do have the server do the searching. The rest narrow a listing with query arguments and
+evaluate the rest client-side, which is a different claim, and `supports_pushdown` per operator is where that
+detail goes. The three GitHub tables that existed before this work declared native search and did not have
+it: `where_cond` never reached GitHub.
+
+**A filter language is almost always smaller than a renderer assumes, and every way it is smaller is a way
+a search goes wrong rather than merely slow.** The renderer was written for one shape - infix predicates
+joined by AND, OR and NOT into a parenthesised string - and neither of the two applications added after it
+fits:
+
+| | |
+|---|---|
+| Klaviyo has **no OR and no NOT at all**, writes `equals(field,"v")` and joins with a bare comma | a connective a language does not declare fails `canRender()`, so the expression stays whole and is answered client-side; joining an OR's arguments with commas answers with their intersection and looks like it worked |
+| Intercom's query is a **tree of hashes in the request body** | `render_query` renders the whole expression and may return any type, while the operator tables still decide what is pushed down |
+| Klaviyo indexes each field for particular comparisons - no `>=` on a profile's `created`, one on a campaign's `created_at` | `field_ops` states the matrix per field; a per-field-only `fields` set turns `created >= x` into a **failed** search rather than a wrong one |
+| Intercom's `>=` and `<=` do not exist at all | leave them unmapped; mapping `>=` onto `>` silently drops the boundary records |
+
+**Measure the matrix; do not read it.** Klaviyo's is in each argument's own description and was still
+verified live. Intercom's description says only "the accepted field that you want to search on" and
+enumerates nothing, so all of it was measured - one request per field and operator - which is the only way
+anyone would learn that a contact's timestamps refuse `!=` while a conversation's accept it.
+
+**A rendered query is already in wire form.** The argument a table renders into is often the same argument an
+action publishes in a *curated* form: Klaviyo's `filter` takes a whole expression, and the listing actions put
+a wire codec on it publishing the four named fields the superseded application offered. Passing a rendered
+expression through that codec converts it to `nothing`, drops the filter, and answers the search with the
+**whole collection** and no error. `RestSchemaRawValue` marks the value so the codec and the request-type
+check both leave it alone - which is what lets a table reuse the listing action the manifest already exports
+instead of declaring a second copy of the path with the codec left off.
+
+**A column whose write option is spelled differently is dropped, and the write reports success.** Manifests
+rename options for a reason - Klaviyo returns a list's `opt_in_process` and its update action publishes
+`optInProcess`, because that is the name the application it replaces used - and a write sends the columns the
+write action *declares*. `write_field_map` declares the pairs.
 
 **A limit counts matching records.** This is the defect that motivated the whole design and it is worth
 stating as a rule: fetch lazily and let `DefaultRecordIterator` apply the limit *after* the residual
