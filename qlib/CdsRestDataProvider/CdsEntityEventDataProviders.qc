@@ -310,6 +310,32 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
         return utc.date(d).format("YYYY-MM-DDTHH:mm:SS") + "Z";
     }
 
+    #! Returns a real record from the watched table as an example of what the event carries
+    /** Real data first, because a generated example of an OData entity is a hash of type-default
+        values and tells a user nothing about the table they picked. Any failure — no connection, no
+        access to the table, an empty table — falls through to the inherited behaviour, which builds
+        an example from the declared type: an example is a convenience and must not be able to stop
+        a subscription being configured.
+    */
+    private auto getExampleEventDataImpl(string event_id) {
+        if (rest) {
+            try {
+                string field = getTimestampField();
+                hash<auto> info;
+                # the newest row, which is the one most likely to be populated
+                hash<auto> resp = rest.get(sprintf("%s?$orderby=%s desc&$top=1", getEntitySetName(),
+                    field), NOTHING, \info);
+                *list<auto> rows = resp.body.value;
+                if (rows && rows[0].typeCode() == NT_HASH) {
+                    return rows[0];
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # fall through to the generated example
+            }
+        }
+        return AbstractDataProvider::getExampleEventDataImpl(event_id);
+    }
+
     #! Returns the event this provider raises, and the shape of what it carries
     private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         return {

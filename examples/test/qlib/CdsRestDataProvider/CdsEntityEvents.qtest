@@ -77,6 +77,7 @@ class CdsEntityEventsTest inherits QUnit::Test {
         addTestCase("condition option", \conditionTest());
         addTestCase("odata timestamp literal", \timestampLiteralTest());
         addTestCase("any entity can be watched", \genericEntityTest());
+        addTestCase("example event data", \exampleEventDataTest());
         set_return_value(main());
     }
 
@@ -213,6 +214,22 @@ class CdsEntityEventsTest inherits QUnit::Test {
         # a value already in UTC survives unchanged
         assertEq("2026-08-13T12:30:00Z", CdsEntityWatchDataProviderBase::formatODataTimestamp(
             2026-08-13T12:30:00Z));
+    }
+
+    #! Every event must offer example data without a connection
+    /** The example is fetched from the organisation when one is reachable, but a subscription is
+        usually configured before that is true, so the fallback is the path that runs most often. It
+        must not throw: an example is a convenience, and failing to produce one would stop an event
+        being configured at all.
+    */
+    exampleEventDataTest() {
+        CdsEventsDataProvider events();
+
+        foreach string id in (TypeScriptEventIds) {
+            auto example = cast<AbstractDataProvider>(events.getChildProvider(id))
+                .getExampleEventData(id);
+            assertEq(NT_HASH, example.typeCode(), sprintf("event %y offers example data", id));
+        }
     }
 
     #! The generic provider watches any table, where the replaced application hardcoded seven
