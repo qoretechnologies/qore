@@ -277,7 +277,9 @@ int sub main() {
     }
 
     testMissingSiblingNamesTheCall() {
-        TmpDir tmp("qore-aot-split-static-call-slot-missing-");
+        # Keep "grc" in the temporary directory name to verify that the object
+        # lookup only matches the source-file suffix in qcc's encoded filenames.
+        TmpDir tmp("qore-aot-split-static-call-slot-missing-grc-");
         string lib_dir = tmp.path + "/aotlib";
         mkdir(lib_dir);
         hash<string, string> paths = writeSources(tmp.path);
@@ -288,7 +290,7 @@ int sub main() {
 
         # drop the object declaring GroupRuntimeContext, as an out-of-order or
         # incomplete build would: base.qo's recorded static call now has no receiver
-        list<string> grc_objs = glob(lib_dir + "/*grc*.qo");
+        list<string> grc_objs = glob(lib_dir + "/*_grc_qc.qo");
         assertEq(1, grc_objs.size(), sprintf("found the GroupRuntimeContext object: %y", grc_objs));
         unlink(grc_objs[0]);
 
@@ -305,7 +307,7 @@ int sub main() {
     }
 
     testStaleSiblingNamesTheMethod() {
-        TmpDir tmp("qore-aot-split-static-call-slot-stale-");
+        TmpDir tmp("qore-aot-split-static-call-slot-stale-grc-");
         string lib_dir = tmp.path + "/aotlib";
         mkdir(lib_dir);
         hash<string, string> paths = writeSources(tmp.path);
@@ -316,7 +318,7 @@ int sub main() {
 
         # replace the GroupRuntimeContext object with one built from a source that no
         # longer declares the static method — the class resolves, the method does not
-        list<string> grc_objs = glob(lib_dir + "/*grc*.qo");
+        list<string> grc_objs = glob(lib_dir + "/*_grc_qc.qo");
         assertEq(1, grc_objs.size(), sprintf("found the GroupRuntimeContext object: %y", grc_objs));
         unlink(grc_objs[0]);
         write(paths.grc, grcCode(False));
