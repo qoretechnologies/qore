@@ -28,7 +28,7 @@ public class BflDataProviderCommon inherits DataProvider::AbstractDataProvider {
         const ConstructorOptions = {
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "API Key",
-                "short_desc": "BFL API key (sent as `x-key` header)",
+                "short_desc": "BFL API key (sent as x-key header)",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The BFL API key — sent as the `x-key` header.",
                 "required": True,

@@ -55,7 +55,7 @@ public class DeepgramTranscribeFileRequestDataType inherits HashDataType {
             },
             "language": {
                 "display_name": "Language",
-                "short_desc": "BCP-47 language code (e.g., `en-US`, `de`, `fr`)",
+                "short_desc": "BCP-47 language code (e.g., en-US, de, fr)",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "BCP-47 language code.  Pass `multi` to enable Nova-3's "
                     "multilingual mode.  Default is `en` (English).",

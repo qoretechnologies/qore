@@ -2832,8 +2832,8 @@
           "message": "Validate Record Schema"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
-          "source": "Validates each record against a defined schema with configurable violation handling",
-          "message": "Validates each record against a defined schema with configurable violation handling"
+          "source": "Validates each record against a schema",
+          "message": "Validates each record against a schema"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.desc": {
           "source": "Enforce data quality rules before processing — reject orders with negative prices, ensure `customer_id` is always present, or restrict status codes to known values. Each record is validated against a user-defined schema and either enriched with error details (default), silently dropped, or causes an exception.\n\n**Validation rules per field**:\n- `type` — expected type (e.g., `\"int\"` for order quantities, `\"string\"` for names)\n- `required` — field must be present and non-null (e.g., every order needs a `customer_id`)\n- `min` / `max` — numeric value bounds (e.g., `min: 0` to reject negative prices)\n- `min_length` / `max_length` — string length bounds (e.g., `min_length: 1` to reject empty names)\n- `allowed_values` — enumeration of valid values (e.g., `(\"active\", \"inactive\", \"suspended\")` for account status)\n\nEach record passes through individually. In **enrich** mode, every record gets `_is_valid` (bool) and `_validation_errors` (list of strings).",

@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -508,8 +508,8 @@
           "message": "Queries"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
-          "source": "Custom queries to ask of the document (with `QUERIES` feature)",
-          "message": "Custom queries to ask of the document (with `QUERIES` feature)"
+          "source": "Custom queries to ask of the document (with QUERIES feature)",
+          "message": "Custom queries to ask of the document (with QUERIES feature)"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
           "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",

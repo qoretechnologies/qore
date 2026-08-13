@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -400,8 +400,8 @@
           "message": "Language"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.short_desc": {
-          "source": "BCP-47 language code (e.g., `en-US`, `de`, `fr`)",
-          "message": "BCP-47 language code (e.g., `en-US`, `de`, `fr`)"
+          "source": "BCP-47 language code (e.g., en-US, de, fr)",
+          "message": "BCP-47 language code (e.g., en-US, de, fr)"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.desc": {
           "source": "BCP-47 language code.  Pass `multi` to enable Nova-3's multilingual mode.  Default is `en` (English).",

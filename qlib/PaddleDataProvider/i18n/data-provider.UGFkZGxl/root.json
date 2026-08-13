@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -560,8 +560,8 @@
           "message": "Customer"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
-          "source": "Paddle ID of the customer entity to work with",
-          "message": "Paddle ID of the customer entity to work with"
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
@@ -584,8 +584,8 @@
           "message": "Customer"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
-          "source": "Paddle ID of the customer entity to work with",
-          "message": "Paddle ID of the customer entity to work with"
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
@@ -700,8 +700,8 @@
           "message": "Customer"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.short_desc": {
-          "source": "Paddle ID of the customer entity to work with",
-          "message": "Paddle ID of the customer entity to work with"
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
@@ -724,8 +724,8 @@
           "message": "Customer"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.short_desc": {
-          "source": "Paddle ID of the customer entity to work with",
-          "message": "Paddle ID of the customer entity to work with"
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
@@ -832,8 +832,8 @@
           "message": "Type"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.short_desc": {
-          "source": "Return items that match the specified type",
-          "message": "Return items that match the specified type"
+          "source": "Return items that match the specified type.: Type of item",
+          "message": "Return items that match the specified type.: Type of item"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.desc": {
           "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
@@ -1360,8 +1360,8 @@
           "message": "Type"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.short_desc": {
-          "source": "Return items that match the specified type",
-          "message": "Return items that match the specified type"
+          "source": "Return items that match the specified type.: Type of item",
+          "message": "Return items that match the specified type.: Type of item"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.desc": {
           "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
@@ -2216,8 +2216,8 @@
           "message": "Collection Mode"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
-          "source": "Return entities that match the specified collection mode",
-          "message": "Return entities that match the specified collection mode"
+          "source": "Return entities that match the specified collection mode.: How payment is…",
+          "message": "Return entities that match the specified collection mode.: How payment is…"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
           "source": "Return entities that match the specified collection mode.: How payment is collected. `automatic` for checkout, `manual` for invoices.",
@@ -2368,8 +2368,8 @@
           "message": "Address Id"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.short_desc": {
-          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add_'. Requires 'customer_id'. If omitted, transaction status is 'draft'",
-          "message": "Paddle ID of the address that this transaction is for, prefixed with 'add_'. Requires 'customer_id'. If omitted, transaction status is 'draft'"
+          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add…",
+          "message": "Paddle ID of the address that this transaction is for, prefixed with 'add…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.desc": {
           "source": "Paddle ID of the address that this transaction is for, prefixed with `add_`. Requires `customer_id`. If omitted, transaction status is `draft`.",
@@ -2380,8 +2380,8 @@
           "message": "Business Id"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
-          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'. Requires 'customer_id'",
-          "message": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'. Requires 'customer_id'"
+          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz…",
+          "message": "Paddle ID of the business that this transaction is for, prefixed with 'biz…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
           "source": "Paddle ID of the business that this transaction is for, prefixed with `biz_`. Requires `customer_id`. ",
@@ -2512,8 +2512,8 @@
           "message": "Invoice Id"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.short_desc": {
-          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with 'inv_'",
-          "message": "Paddle ID of the invoice that this transaction is related to, prefixed with 'inv_'"
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with…",
+          "message": "Paddle ID of the invoice that this transaction is related to, prefixed with…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.desc": {
           "source": "Paddle ID of the invoice that this transaction is related to, prefixed with `inv_`. Used for compatibility with the Paddle Invoice API, which is now deprecated. This field is scheduled to be removed in the next version of the Paddle API.",
@@ -2548,8 +2548,8 @@
           "message": "Details"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.short_desc": {
-          "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion",
-          "message": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion"
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and…",
+          "message": "Calculated totals for a transaction, including proration, discounts, tax, and…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
           "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion. Considered the source of truth for totals on a transaction.",
@@ -2608,8 +2608,8 @@
           "message": "Billed At"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed'. 'null' for transactions that aren't 'billed' or 'completed'. Set automatically by Paddle",
-          "message": "RFC 3339 datetime string of when this transaction was marked as 'billed'. 'null' for transactions that aren't 'billed' or 'completed'. Set automatically by Paddle"
+          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed…",
+          "message": "RFC 3339 datetime string of when this transaction was marked as 'billed…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
           "source": "RFC 3339 datetime string of when this transaction was marked as `billed`. `null` for transactions that aren't `billed` or `completed`. Set automatically by Paddle.",

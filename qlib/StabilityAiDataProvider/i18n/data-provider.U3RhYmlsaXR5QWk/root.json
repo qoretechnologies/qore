@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -496,8 +496,8 @@
           "message": "Style Preset"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.short_desc": {
-          "source": "Pre-baked style preset (`core` model only)",
-          "message": "Pre-baked style preset (`core` model only)"
+          "source": "Pre-baked style preset (core model only)",
+          "message": "Pre-baked style preset (core model only)"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.desc": {
           "source": "Pre-baked style preset.  Only honoured by the `core` model; ignored by `sd3` and `ultra`.",

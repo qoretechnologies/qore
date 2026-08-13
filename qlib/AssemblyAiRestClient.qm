@@ -277,7 +277,7 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
-                    "short_desc": "AssemblyAI API key (sent as bare `Authorization` header)",
+                    "short_desc": "AssemblyAI API key (sent as bare Authorization header)",
                     "type": "string",
                     "desc": "The AssemblyAI API key — sent as the bare `Authorization` "
                         "header value with no `Bearer` / `Token` prefix.",

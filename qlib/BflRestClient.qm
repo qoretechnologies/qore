@@ -228,7 +228,7 @@ public class BflRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
-                    "short_desc": "BFL API key (sent as `x-key` header)",
+                    "short_desc": "BFL API key (sent as x-key header)",
                     "type": "string",
                     "desc": "The BFL API key — sent as the `x-key` header.",
                     "sensitive": True,

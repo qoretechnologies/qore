@@ -95,15 +95,14 @@ public class OpenAiImageCreateRequestType inherits HashDataType {
         const Fields = {
             "prompt": {
                 "display_name": "Prompt",
-                "short_desc": "A text description of the desired image(s).",
+                "short_desc": "A text description of the desired image(s)",
                 "desc": "A text description of the desired image(s). The maximum length is 32000 characters for "
                     "`gpt-image-1`, 1000 characters for `dall-e-2` and 4000 characters for `dall-e-3`",
                 "type": AbstractDataProviderTypeMap."string",
             },
             "background": {
                 "display_name": "Background",
-                "short_desc": "Allows to set transparency for the background of the generated image(s) when using "
-                    "'gpt-image-1'",
+                "short_desc": "Background transparency, for the gpt-image-1 model",
                 "desc": "Allows to set transparency for the background of the generated image(s) when using "
                     "`gpt-image-1`",
                 "type": AbstractDataProviderTypeMap."*string",
@@ -308,8 +307,7 @@ public class OpenAiImageCreateRequestType inherits HashDataType {
             },
             "user": {
                 "display_name": "User",
-                "short_desc": "A unique identifier representing your end-user, which can help OpenAI to monitor and "
-                    "detect abuse",
+                "short_desc": "An identifier for your end user, used for abuse detection",
                 "desc": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect "
                     "abuse",
                 "type": AbstractDataProviderTypeMap."*string",

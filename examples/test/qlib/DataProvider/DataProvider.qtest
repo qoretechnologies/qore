@@ -894,6 +894,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("optional field attribute test", \optionalFieldAttributeTest());
         addTestCase("soft list of union type test", \softListUnionTest());
         addTestCase("webhook signature test", \webhookSignatureTest());
+        addTestCase("short description derivation", \shortDescriptionTest());
         addTestCase("test", \dataProviderTest());
 
         # Return for compatibility with test harnesses that check the return value.
@@ -5254,6 +5255,61 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("my-list", named.getName());
     }
 
+
+    #! A short description is a one-line plain-text summary of a long one
+    /** Every rule here was put in by a real value found in the fleet: an API's first sentence is regularly
+        longer than a line, "e.g." is not the end of a sentence, and "st." is not an abbreviation when it is
+        the end of "request".
+    */
+    shortDescriptionTest() {
+        # the first sentence is taken, and markdown is rendered away: a short description is plain text
+        assertEq("A simple summary", AbstractDataField::getShortDescription("A simple summary. More here."));
+        assertEq("Use the 'id' field", AbstractDataField::getShortDescription("Use the `id` field"));
+        assertEq("The important part", AbstractDataField::getShortDescription("The **important** part"));
+        assertEq("(Deprecated) Disable email notifications",
+            AbstractDataField::getShortDescription("_(Deprecated)_ Disable email notifications"),
+            "markdown emphasis is rendered away");
+        assertEq("A field named _id in the document",
+            AbstractDataField::getShortDescription("A field named _id in the document"),
+            "an underscore inside a word belongs to an identifier");
+
+        # a full stop that is not sentence punctuation does not end the sentence
+        assertEq("e.g. includeArchived=true - Contacts with a status of ARCHIVED",
+            AbstractDataField::getShortDescription(
+                "e.g. includeArchived=true - Contacts with a status of ARCHIVED"),
+            "an abbreviation does not end a sentence");
+        assertEq("Version 1.5 is required",
+            AbstractDataField::getShortDescription("Version 1.5 is required. Nothing else."),
+            "a decimal point does not end a sentence");
+        assertEq("See example.com for details",
+            AbstractDataField::getShortDescription("See example.com for details. More."),
+            "a domain name does not end a sentence");
+        assertEq("Title of the pull request",
+            AbstractDataField::getShortDescription("Title of the pull request."),
+            "\"st.\" is not an abbreviation at the end of \"request\"");
+        assertEq("Ships from St. Louis",
+            AbstractDataField::getShortDescription("Ships from St. Louis. Second sentence."),
+            "and it is one when it is a word of its own");
+
+        # a newline or a semicolon always ends one
+        assertEq("First line", AbstractDataField::getShortDescription("First line\nsecond line"));
+        assertEq("Semicolons end it", AbstractDataField::getShortDescription("Semicolons end it; and more"));
+
+        # the result is capped so that it fits on a line, cutting on a word boundary
+        string long_desc = "A unique identifier representing your end-user, which can help the service to "
+            "monitor and detect abuse";
+        *string short_desc = AbstractDataField::getShortDescription(long_desc);
+        assertLe(AbstractDataField::ShortDescriptionMaxLength, short_desc.length(), "the summary fits a line");
+        assertTrue(short_desc =~ /…$/, "and says that it was cut short");
+        assertFalse(short_desc =~ / …$/, "with no space before the ellipsis");
+        assertEq(0, long_desc.find(short_desc.substr(0, short_desc.length() - 1)),
+            "the summary is a prefix of the description");
+
+        # a caller that wants the whole first sentence asks for it
+        assertEq(long_desc, AbstractDataField::getShortDescription(long_desc, 0), "0 means no cap");
+
+        assertNothing(AbstractDataField::getShortDescription(NOTHING));
+    }
 
     webhookSignatureTest() {
         # a known vector pins the argument order: hmac() takes (algorithm, data, key), and passing the key

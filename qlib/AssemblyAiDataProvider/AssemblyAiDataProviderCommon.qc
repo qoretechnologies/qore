@@ -30,7 +30,7 @@ public class AssemblyAiDataProviderCommon inherits DataProvider::AbstractDataPro
         const ConstructorOptions = {
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "AssemblyAI API Key",
-                "short_desc": "AssemblyAI API key (sent as bare `Authorization` header)",
+                "short_desc": "AssemblyAI API key (sent as bare Authorization header)",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The AssemblyAI API key — sent as the bare `Authorization` "
                     "header value with no `Bearer` / `Token` prefix.",

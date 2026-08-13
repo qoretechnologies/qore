@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -812,8 +812,8 @@
           "message": "Payment Method"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
-          "source": "Payment method identifier (e",
-          "message": "Payment method identifier (e"
+          "source": "Payment method identifier (e.g., 'bacs', 'paypal')",
+          "message": "Payment method identifier (e.g., 'bacs', 'paypal')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.desc": {
           "source": "Payment method identifier (e.g., `bacs`, `paypal`)",
@@ -848,8 +848,8 @@
           "message": "Currency"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter ISO currency code (e",
-          "message": "Three-letter ISO currency code (e"
+          "source": "Three-letter ISO currency code (e.g., 'USD', 'EUR')",
+          "message": "Three-letter ISO currency code (e.g., 'USD', 'EUR')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter ISO currency code (e.g., `USD`, `EUR`)",
@@ -932,8 +932,8 @@
           "message": "Created Via"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZF92aWE.short_desc": {
-          "source": "Identifier showing where the order originated (e",
-          "message": "Identifier showing where the order originated (e"
+          "source": "Identifier showing where the order originated (e.g. 'rest-api', 'checkout')",
+          "message": "Identifier showing where the order originated (e.g. 'rest-api', 'checkout')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZF92aWE.desc": {
           "source": "Identifier showing where the order originated (e.g. `rest-api`, `checkout`); can only be set when creating the order",
@@ -2576,8 +2576,8 @@
           "message": "Tax Class"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
-          "source": "Tax class slug (e",
-          "message": "Tax class slug (e"
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.desc": {
           "source": "Tax class slug (e.g. `standard`, `reduced-rate`, `zero-rate`)",
@@ -2732,8 +2732,8 @@
           "message": "Download Limit"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'",
-          "message": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'"
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
@@ -2744,8 +2744,8 @@
           "message": "Download Expiry"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
-          "source": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'",
-          "message": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'"
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Number of days before download access expires ('-1' for never) — only used…"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.desc": {
           "source": "Number of days before download access expires (`-1` for never) — only used when `downloadable` is `True`",
@@ -3256,8 +3256,8 @@
           "message": "Tax Class"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
-          "source": "Tax class slug (e",
-          "message": "Tax class slug (e"
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.desc": {
           "source": "Tax class slug (e.g. `standard`, `reduced-rate`, `zero-rate`)",
@@ -3412,8 +3412,8 @@
           "message": "Download Limit"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'",
-          "message": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'"
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
@@ -3424,8 +3424,8 @@
           "message": "Download Expiry"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
-          "source": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'",
-          "message": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'"
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Number of days before download access expires ('-1' for never) — only used…"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.desc": {
           "source": "Number of days before download access expires (`-1` for never) — only used when `downloadable` is `True`",
@@ -5268,8 +5268,8 @@
           "message": "Email Restrictions"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZW1haWxfcmVzdHJpY3Rpb25z.short_desc": {
-          "source": "List of email addresses (or domain wildcards like '*@example.com') that can use this coupon",
-          "message": "List of email addresses (or domain wildcards like '*@example.com') that can use this coupon"
+          "source": "List of email addresses (or domain wildcards like '*@example.com') that can…",
+          "message": "List of email addresses (or domain wildcards like '*@example.com') that can…"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZW1haWxfcmVzdHJpY3Rpb25z.desc": {
           "source": "List of email addresses (or domain wildcards like `*@example.com`) that can use this coupon",
@@ -6104,8 +6104,8 @@
           "message": "Topic"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.short_desc": {
-          "source": "The webhook topic (e",
-          "message": "The webhook topic (e"
+          "source": "The webhook topic (e.g. 'order.created', 'product.updated'); pick a known…",
+          "message": "The webhook topic (e.g. 'order.created', 'product.updated'); pick a known…"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.desc": {
           "source": "The webhook topic (e.g. `order.created`, `product.updated`); pick a known topic or supply a custom `action.<hook>` value",
@@ -7052,8 +7052,8 @@
           "message": "Group"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.short_desc": {
-          "source": "The settings group ID (e",
-          "message": "The settings group ID (e"
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "The settings group ID (e.g., 'general', 'products', 'tax')"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.desc": {
           "source": "The settings group ID (e.g., `general`, `products`, `tax`)",
@@ -7088,8 +7088,8 @@
           "message": "Group"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.short_desc": {
-          "source": "The settings group ID (e",
-          "message": "The settings group ID (e"
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "The settings group ID (e.g., 'general', 'products', 'tax')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.desc": {
           "source": "The settings group ID (e.g., `general`, `products`, `tax`)",

@@ -269,7 +269,7 @@ public class OllamaEmbedRequestDataType inherits HashDataType {
             },
             "options": {
                 "display_name": "Model Options",
-                "short_desc": "Per-model runtime options (`num_ctx`, etc.)",
+                "short_desc": "Per-model runtime options (num_ctx, etc.)",
                 "desc": "Hash of model-specific runtime options.  Ollama-specific extension; "
                     "common keys include `num_ctx`, `num_thread`.",
                 "type": AbstractDataProviderTypeMap."*hash",

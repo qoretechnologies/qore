@@ -1984,8 +1984,7 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
             },
             "user": {
                 "display_name": "User",
-                "short_desc": "A unique identifier representing your end-user, which can help OpenAI to monitor and "
-                    "detect abuse",
+                "short_desc": "An identifier for your end user, used for abuse detection",
                 "desc": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect "
                     "abuse",
                 "type": AbstractDataProviderTypeMap."*string",

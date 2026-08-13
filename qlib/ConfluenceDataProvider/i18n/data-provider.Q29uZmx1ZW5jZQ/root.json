@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -392,8 +392,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "Used to sort the result by a particular field.: The sort fields for pages"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for pages. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
@@ -436,8 +436,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -632,8 +632,8 @@
           "message": "Root Level"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
-          "source": "The page will be created at the root level of the space (outside the space homepage tree)",
-          "message": "The page will be created at the root level of the space (outside the space homepage tree)"
+          "source": "The page will be created at the root level of the space (outside the space…",
+          "message": "The page will be created at the root level of the space (outside the space…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.desc": {
           "source": "The page will be created at the root level of the space (outside the space homepage tree). If true, then a \nvalue may not be supplied for the `parentId` body parameter.",
@@ -668,8 +668,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -768,8 +768,8 @@
           "message": "Include Operations"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "Includes operations associated with this page in the response, as defined in the 'Operation' object"
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "Includes operations associated with this page in the response, as defined in…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.desc": {
           "source": "Includes operations associated with this page in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -852,8 +852,8 @@
           "message": "Include Direct Children"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
-          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse' object",
-          "message": "Includes direct children of the page, as defined in the 'ChildrenResponse' object"
+          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse…",
+          "message": "Includes direct children of the page, as defined in the 'ChildrenResponse…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.desc": {
           "source": "Includes direct children of the page, as defined in the `ChildrenResponse` object.",
@@ -1132,8 +1132,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "Used to sort the result by a particular field.: The sort fields for pages"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for pages. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
@@ -1176,8 +1176,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -1220,8 +1220,8 @@
           "message": "Depth"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.short_desc": {
-          "source": "Filter the results to pages at the root level of the space or to all pages in the space",
-          "message": "Filter the results to pages at the root level of the space or to all pages in the space"
+          "source": "Filter the results to pages at the root level of the space or to all pages in…",
+          "message": "Filter the results to pages at the root level of the space or to all pages in…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.desc": {
           "source": "Filter the results to pages at the root level of the space or to all pages in the space.",
@@ -1276,8 +1276,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "Used to sort the result by a particular field.: The sort fields for pages"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for pages. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
@@ -1320,8 +1320,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -1412,8 +1412,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "Used to sort the result by a particular field.: The sort fields for blog posts"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for blog posts. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
@@ -1448,8 +1448,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -1552,8 +1552,8 @@
           "message": "Status"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.short_desc": {
-          "source": "The status of the blog post, specifies if the blog post will be created as a new blog post or a draft",
-          "message": "The status of the blog post, specifies if the blog post will be created as a new blog post or a draft"
+          "source": "The status of the blog post, specifies if the blog post will be created as a…",
+          "message": "The status of the blog post, specifies if the blog post will be created as a…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.desc": {
           "source": "The status of the blog post, specifies if the blog post will be created as a new blog post or a draft",
@@ -1620,8 +1620,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -1720,8 +1720,8 @@
           "message": "Include Operations"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "Includes operations associated with this page in the response, as defined in the 'Operation' object"
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "Includes operations associated with this page in the response, as defined in…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.desc": {
           "source": "Includes operations associated with this page in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -2004,8 +2004,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "Used to sort the result by a particular field.: The sort fields for blog posts"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for blog posts. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
@@ -2040,8 +2040,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -2120,8 +2120,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "Used to sort the result by a particular field.: The sort fields for blog posts"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for blog posts. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
@@ -2156,8 +2156,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -2284,8 +2284,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for spaces",
+          "message": "Used to sort the result by a particular field.: The sort fields for spaces"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for spaces. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
@@ -2380,8 +2380,8 @@
           "message": "Not Favorited By"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
-          "source": "Filter the results to spaces NOT favorited by the user with the specified account ID",
-          "message": "Filter the results to spaces NOT favorited by the user with the specified account ID"
+          "source": "Filter the results to spaces NOT favorited by the user with the specified…",
+          "message": "Filter the results to spaces NOT favorited by the user with the specified…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.desc": {
           "source": "Filter the results to spaces NOT favorited by the user with the specified account ID.",
@@ -2392,8 +2392,8 @@
           "message": "Description Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
-          "source": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field",
-          "message": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field"
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "The content format type to be returned in the 'description' field of the…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.desc": {
           "source": "The content format type to be returned in the `description` field of the response. If available, the representation will be available under a response field of the same name under the `description` field.: The formats a space description can be represented as. A subset of BodyRepresentation.",
@@ -2448,8 +2448,8 @@
           "message": "Description Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
-          "source": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field",
-          "message": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field"
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "The content format type to be returned in the 'description' field of the…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.desc": {
           "source": "The content format type to be returned in the `description` field of the response. If available, the representation will be available under a response field of the same name under the `description` field.: The formats a space description can be represented as. A subset of BodyRepresentation.",
@@ -2480,8 +2480,8 @@
           "message": "Include Operations"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "Includes operations associated with this page in the response, as defined in the 'Operation' object"
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "Includes operations associated with this page in the response, as defined in…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.desc": {
           "source": "Includes operations associated with this page in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -2632,8 +2632,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -2808,8 +2808,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -3004,8 +3004,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field"
+          "source": "The content format types to be returned in the 'body' field of the response…",
+          "message": "The content format types to be returned in the 'body' field of the response…"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -3144,8 +3144,8 @@
           "message": "Sort"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Used to sort the result by a particular field"
+          "source": "Used to sort the result by a particular field.: The sort fields for attachments",
+          "message": "Used to sort the result by a particular field.: The sort fields for attachments"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c29ydA.desc": {
           "source": "Used to sort the result by a particular field.: The sort fields for attachments. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",

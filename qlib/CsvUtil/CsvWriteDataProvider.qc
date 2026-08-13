@@ -117,7 +117,7 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
             },
             "header_reorder": <DataProviderOptionInfo>{
                 "display_name": "Enforce Header Order",
-                "short_desc": "If true, then the output data will be reordered in the order of `headers`",
+                "short_desc": "If true, then the output data will be reordered in the order of headers",
                 "type": AbstractDataProviderType::get(SoftBoolType),
                 "desc": "If `true` (the default) then if `headers` are provided, then data fields are reordered to "
                     "follow headers",

@@ -724,8 +724,8 @@
           "message": "OAuth2 Authorization Args"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
-          "source": "Optional arguments for authentication requests for the authorization_code grant type",
-          "message": "Optional arguments for authentication requests for the authorization_code grant type"
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "Extra arguments for authorization_code token requests"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
           "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
@@ -748,8 +748,8 @@
           "message": "OAuth2 Auto Refresh"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
-          "source": "Sets if OAuth2 tokens should be automatically refreshed; also enables any custom token refresh in case pure OAuth2 is not in use",
-          "message": "Sets if OAuth2 tokens should be automatically refreshed; also enables any custom token refresh in case pure OAuth2 is not in use"
+          "source": "Whether tokens are refreshed automatically",
+          "message": "Whether tokens are refreshed automatically"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
           "source": "If OAuth2 tokens should be automatically refreshed",
@@ -816,8 +816,8 @@
           "message": "OAuth2 PKCE"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
-          "source": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with the authorization code flow",
-          "message": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with the authorization code flow"
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "Hint to use PKCE with the authorization code flow"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.desc": {
           "source": "The code challenge method for PKCE (Proof Key Code Exchange) with the `authorization_code` flow",
@@ -924,8 +924,8 @@
           "message": "OAuth2 Token Lifetime Hint in Minutes"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
-          "source": "The expected number of minutes that a token will remain valid before it must be refreshed",
-          "message": "The expected number of minutes that a token will remain valid before it must be refreshed"
+          "source": "How many minutes a token stays valid",
+          "message": "How many minutes a token stays valid"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
           "source": "The expected number of minutes that a token will remain valid before it must be refreshed. This option is only used when the connection has a refresh token and the server does not indicate the lifetime of the token in token responses",
@@ -948,8 +948,8 @@
           "message": "OAuth2 Token Use Basic Auth?"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
-          "source": "Use basic authorization with the client ID and client secret when making token requests",
-          "message": "Use basic authorization with the client ID and client secret when making token requests"
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "Send the client ID and secret as basic authorization"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
           "source": "Use basic authorization with the client ID and client secret when making token requests",
@@ -972,8 +972,8 @@
           "message": "REST Body Auth Error Check"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
-          "source": "A hash to check all deserialized bodies in 200 OK server responses for authentication errors",
-          "message": "A hash to check all deserialized bodies in 200 OK server responses for authentication errors"
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "Values marking a 200 OK body as an authentication error"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.desc": {
           "source": "A hash to check all deserialized bodies from the server to check for authentication errors",

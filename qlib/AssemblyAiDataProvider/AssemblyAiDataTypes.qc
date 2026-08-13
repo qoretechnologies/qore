@@ -54,7 +54,7 @@ public class AssemblyAiTranscribeRequestDataType inherits HashDataType {
             },
             "language_code": {
                 "display_name": "Language Code",
-                "short_desc": "BCP-47 / ISO-639-1 language code (e.g., `en_us`, `de`, `fr`)",
+                "short_desc": "BCP-47 / ISO-639-1 language code (e.g., en_us, de, fr)",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "Language code (BCP-47 or ISO-639-1, depending on model).  "
                     "Omit to enable automatic detection (see `language_detection`).",
@@ -97,7 +97,7 @@ public class AssemblyAiTranscribeRequestDataType inherits HashDataType {
             },
             "summary_model": {
                 "display_name": "Summary Model",
-                "short_desc": "Summarization model (used with `summarization`)",
+                "short_desc": "Summarization model (used with summarization)",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "Summarization model name when `summarization` is `True`.",
                 "allowed_values": (

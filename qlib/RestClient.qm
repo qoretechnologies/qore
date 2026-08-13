@@ -3993,7 +3993,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 },
                 "oauth2_auth_args": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Authorization Args",
-                    "short_desc": "Optional arguments for authentication requests for the authorization_code grant type",
+                    "short_desc": "Extra arguments for authorization_code token requests",
                     "type": "hash",
                     "desc": "Optional arguments for authentication requests for the `authorization_code` grant type; "
                         "ignored if the `token` option is set.  Note that the `authorization_code` grant type "
@@ -4009,8 +4009,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 },
                 "oauth2_auto_refresh": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Auto Refresh",
-                    "short_desc": "Sets if OAuth2 tokens should be automatically refreshed; also enables any custom "
-                        "token refresh in case pure OAuth2 is not in use",
+                    "short_desc": "Whether tokens are refreshed automatically",
                     "type": "bool",
                     "desc": "If OAuth2 tokens should be automatically refreshed",
                     "default_value": True,
@@ -4070,8 +4069,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 },
                 "oauth2_pkce": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 PKCE",
-                    "short_desc": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with "
-                        "the authorization code flow",
+                    "short_desc": "Hint to use PKCE with the authorization code flow",
                     "type": "string",
                     "desc": "The code challenge method for PKCE (Proof Key Code Exchange) with the "
                         "`authorization_code` flow",
@@ -4146,8 +4144,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 },
                 "oauth2_token_expiry_hint": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Token Lifetime Hint in Minutes",
-                    "short_desc": "The expected number of minutes that a token will remain valid before it must be "
-                        "refreshed",
+                    "short_desc": "How many minutes a token stays valid",
                     "type": "int",
                     "desc": "The expected number of minutes that a token will remain valid before it must be "
                         "refreshed. This option is only used when the connection has a refresh token and the server "
@@ -4161,8 +4158,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 },
                 "oauth2_token_use_basic_auth": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Token Use Basic Auth?",
-                    "short_desc": "Use basic authorization with the client ID and client secret when making token "
-                        "requests",
+                    "short_desc": "Send the client ID and secret as basic authorization",
                     "type": "bool",
                     "desc": "Use basic authorization with the client ID and client secret when making token "
                         "requests",
@@ -4231,8 +4227,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 },
                 "rest_body_auth_error_check": <ConnectionOptionInfo>{
                     "display_name": "REST Body Auth Error Check",
-                    "short_desc": "A hash to check all deserialized bodies in 200 OK server responses for "
-                        "authentication errors",
+                    "short_desc": "Values marking a 200 OK body as an authentication error",
                     "type": "hash",
                     "desc": "A hash to check all deserialized bodies from the server to check for authentication "
                         "errors",

@@ -176,8 +176,8 @@
           "message": "Text"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
-          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
-          "message": "If 'True' the file will be returned as a string, 'False' (the default) as binary data"
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "If 'True' the file will be returned as a string, 'False' (the default) as…"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.desc": {
           "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
@@ -344,8 +344,8 @@
           "message": "Symlink"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
-          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
-          "message": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target"
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "If 'True', then if the target path is a symbolic link, information about the…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.desc": {
           "source": "If `True`, then if the target path is a symbolic link, information about the link itself will be returned instead of the target",

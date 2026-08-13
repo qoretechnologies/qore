@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -396,8 +396,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
@@ -444,8 +444,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
@@ -708,8 +708,8 @@
           "message": "Custom Attributes"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
-          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store",
-          "message": "A hash of key/value pairs containing any other data about the company you want Intercom to store"
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "A hash of key/value pairs containing any other data about the company you want…"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
           "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
@@ -912,8 +912,8 @@
           "message": "Include Monitors"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
-          "source": "If set to true, the response will include a 'monitor_evaluations' array on each conversation with any QA monitor results that flagged it",
-          "message": "If set to true, the response will include a 'monitor_evaluations' array on each conversation with any QA monitor results that flagged it"
+          "source": "If set to true, the response will include a 'monitor_evaluations' array on…",
+          "message": "If set to true, the response will include a 'monitor_evaluations' array on…"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.desc": {
           "source": "If set to true, the response will include a `monitor_evaluations` array on each conversation with any QA monitor results that flagged it.",
@@ -924,8 +924,8 @@
           "message": "Include Scorecards"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
-          "source": "If set to true, the response will include a 'scorecards' array on each conversation with any QA scorecard results",
-          "message": "If set to true, the response will include a 'scorecards' array on each conversation with any QA scorecard results"
+          "source": "If set to true, the response will include a 'scorecards' array on each…",
+          "message": "If set to true, the response will include a 'scorecards' array on each…"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.desc": {
           "source": "If set to true, the response will include a `scorecards` array on each conversation with any QA scorecard results.",
@@ -1048,8 +1048,8 @@
           "message": "Create Conversation Without Contact Reply"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
-          "source": "Whether a conversation should be opened in the inbox for the message without the contact replying",
-          "message": "Whether a conversation should be opened in the inbox for the message without the contact replying"
+          "source": "Whether a conversation should be opened in the inbox for the message without…",
+          "message": "Whether a conversation should be opened in the inbox for the message without…"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.desc": {
           "source": "Whether a conversation should be opened in the inbox for the message without the contact replying. Defaults to false if not provided.",
@@ -1280,8 +1280,8 @@
           "message": "Title"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
-          "source": "The title of the article",
-          "message": "The title of the article"
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "The title of the article.For multilingual articles, this will be the title of…"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
           "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
@@ -1484,8 +1484,8 @@
           "message": "Display Avatar"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
-          "source": "If set to true, the response will include the admin's avatar object containing the image URL",
-          "message": "If set to true, the response will include the admin's avatar object containing the image URL"
+          "source": "If set to true, the response will include the admin's avatar object containing…",
+          "message": "If set to true, the response will include the admin's avatar object containing…"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.desc": {
           "source": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false.",
@@ -1520,8 +1520,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
@@ -1652,8 +1652,8 @@
           "message": "Last Seen At"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
-          "source": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually)",
-          "message": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually)"
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen (either…",
+          "message": "(Unix timestamp in seconds) The time when the contact was last seen (either…"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.desc": {
           "source": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually).\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
@@ -1700,8 +1700,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response. Only returned for contacts with a 'user' role"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
@@ -1772,8 +1772,8 @@
           "message": "Include Translations"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
-          "source": "If set to true, conversation parts will be translated to the detected language of the conversation",
-          "message": "If set to true, conversation parts will be translated to the detected language of the conversation"
+          "source": "If set to true, conversation parts will be translated to the detected language…",
+          "message": "If set to true, conversation parts will be translated to the detected language…"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.desc": {
           "source": "If set to true, conversation parts will be translated to the detected language of the conversation.",
@@ -1892,8 +1892,8 @@
           "message": "Custom Attributes"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
-          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store",
-          "message": "A hash of key/value pairs containing any other data about the company you want Intercom to store"
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "A hash of key/value pairs containing any other data about the company you want…"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
           "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
@@ -1988,8 +1988,8 @@
           "message": "Title"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
-          "source": "The title of the article",
-          "message": "The title of the article"
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "The title of the article.For multilingual articles, this will be the title of…"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
           "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",

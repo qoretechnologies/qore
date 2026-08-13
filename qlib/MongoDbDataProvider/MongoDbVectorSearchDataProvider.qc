@@ -224,7 +224,7 @@ public class MongoDbVectorSearchResponseDataType inherits HashDataType {
         const Fields = {
             "results": {
                 "display_name": "Results",
-                "short_desc": "Matching documents with `score` field appended",
+                "short_desc": "Matching documents with score field appended",
                 "type": SoftListType,
                 "desc": "List of matching documents.  Each document carries an injected "
                     "`score` field with the Atlas vector-search relevance score.",

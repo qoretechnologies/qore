@@ -30,7 +30,7 @@ public class DeepgramDataProviderCommon inherits DataProvider::AbstractDataProvi
         const ConstructorOptions = {
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "Deepgram API Key",
-                "short_desc": "Deepgram API key (sent as `Authorization: Token` header)",
+                "short_desc": "Deepgram API key (sent as Authorization: Token header)",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The Deepgram API key — sent as the `Authorization: Token <key>` "
                     "header (NOT `Authorization: Bearer`).",

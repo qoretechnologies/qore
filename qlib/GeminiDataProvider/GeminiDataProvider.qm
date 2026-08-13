@@ -101,7 +101,7 @@ module GeminiDataProvider {
             "action": "simple-chat",
             "groups": "Generation",
             "display_name": "Simple Chat",
-            "short_desc": "Chat with a Gemini model by sending a single message and receiving a single reply",
+            "short_desc": "Chat by sending one message",
             "desc": "Chat with a Gemini model by sending a single message and receiving a single reply. "
                 "Simplifies the API by handling message formatting automatically",
             "action_code": DPAT_API,

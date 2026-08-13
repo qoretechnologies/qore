@@ -102,7 +102,7 @@ public class StabilityAiGenerateImageRequestDataType inherits HashDataType {
             },
             "style_preset": {
                 "display_name": "Style Preset",
-                "short_desc": "Pre-baked style preset (`core` model only)",
+                "short_desc": "Pre-baked style preset (core model only)",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "Pre-baked style preset.  Only honoured by the `core` "
                     "model; ignored by `sd3` and `ultra`.",

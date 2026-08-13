@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -512,8 +512,8 @@
           "message": "Model Options"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3B0aW9ucw.short_desc": {
-          "source": "Per-model runtime options (`num_ctx`, etc.)",
-          "message": "Per-model runtime options (`num_ctx`, etc.)"
+          "source": "Per-model runtime options (num_ctx, etc.)",
+          "message": "Per-model runtime options (num_ctx, etc.)"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3B0aW9ucw.desc": {
           "source": "Hash of model-specific runtime options.  Ollama-specific extension; common keys include `num_ctx`, `num_thread`.",

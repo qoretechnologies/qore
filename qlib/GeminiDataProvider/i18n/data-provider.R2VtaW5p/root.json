@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -440,8 +440,8 @@
           "message": "Simple Chat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
-          "source": "Chat with a Gemini model by sending a single message and receiving a single reply",
-          "message": "Chat with a Gemini model by sending a single message and receiving a single reply"
+          "source": "Chat by sending one message",
+          "message": "Chat by sending one message"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with a Gemini model by sending a single message and receiving a single reply. Simplifies the API by handling message formatting automatically",

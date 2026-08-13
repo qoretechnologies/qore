@@ -192,7 +192,7 @@ public class DeepgramRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
-                    "short_desc": "Deepgram API key (sent as `Authorization: Token` header)",
+                    "short_desc": "Deepgram API key (sent as Authorization: Token header)",
                     "type": "string",
                     "desc": "The Deepgram API key — sent as the `Authorization: Token <key>` "
                         "header (NOT `Authorization: Bearer`).",

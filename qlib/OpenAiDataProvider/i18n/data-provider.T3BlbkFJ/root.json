@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -344,8 +344,8 @@
           "message": "Multi Chat"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
-          "message": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies"
+          "source": "Chat by sending several messages at once",
+          "message": "Chat by sending several messages at once"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.desc": {
           "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
@@ -1892,8 +1892,8 @@
           "message": "User"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "An identifier for your end user, used for abuse detection"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.desc": {
           "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
@@ -2296,8 +2296,8 @@
           "message": "User"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "An identifier for your end user, used for abuse detection"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.desc": {
           "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
@@ -2788,8 +2788,8 @@
           "message": "Prompt"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
-          "source": "A text description of the desired image(s).",
-          "message": "A text description of the desired image(s)."
+          "source": "A text description of the desired image(s)",
+          "message": "A text description of the desired image(s)"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.desc": {
           "source": "A text description of the desired image(s). The maximum length is 32000 characters for `gpt-image-1`, 1000 characters for `dall-e-2` and 4000 characters for `dall-e-3`",
@@ -2800,8 +2800,8 @@
           "message": "Background"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
-          "source": "Allows to set transparency for the background of the generated image(s) when using 'gpt-image-1'",
-          "message": "Allows to set transparency for the background of the generated image(s) when using 'gpt-image-1'"
+          "source": "Background transparency, for the gpt-image-1 model",
+          "message": "Background transparency, for the gpt-image-1 model"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.desc": {
           "source": "Allows to set transparency for the background of the generated image(s) when using `gpt-image-1`",
@@ -3112,8 +3112,8 @@
           "message": "User"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "An identifier for your end user, used for abuse detection"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.desc": {
           "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",

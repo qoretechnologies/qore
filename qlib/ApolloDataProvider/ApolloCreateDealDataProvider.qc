@@ -60,7 +60,7 @@ public class ApolloCreateDealRequestDataType inherits HashDataType {
             "status": {
                 "type": StringOrNothingType,
                 "display_name": "Status",
-                "short_desc": "The deal status: `open`, `won`, or `lost`",
+                "short_desc": "The deal status: open, won, or lost",
                 "desc": "The status of the deal: `open`, `won`, or `lost`",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "open"},

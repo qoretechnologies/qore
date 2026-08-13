@@ -167,7 +167,7 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
             },
             "oauth2_auth_args": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Authorization Args",
-                "short_desc": "Optional arguments for authentication requests for the authorization_code grant type",
+                "short_desc": "Extra arguments for authorization_code token requests",
                 "type": AbstractDataProviderTypeMap."hash",
                 "desc": "Optional arguments for authentication requests for the `authorization_code` grant type; "
                     "ignored for logins if the `token` option is set.  Note that the `authorization_code` grant type "

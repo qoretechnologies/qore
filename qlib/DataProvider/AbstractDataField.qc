@@ -71,6 +71,41 @@ public hashdecl DataFieldInfo {
 #! describes a data type based on a hashdecl
 public class AbstractDataField inherits Qore::Serializable {
     public {
+        #! The length a derived short description is capped at, in characters
+        /** A short description is a **one-line summary** shown beside a field, so it has to fit on one line.
+            @ref getShortDescription() takes the first sentence of a long description, and a first sentence
+            is very often longer than a line: an API's own parameter documentation regularly opens with a
+            sentence of 150 characters or more, and every one of those became a short description that no
+            user interface could show.
+
+            The cap therefore applies by default rather than on request.  Nothing is lost by it - the whole
+            text remains available as the long description - and a caller that really wants an uncapped
+            summary passes \c 0.
+
+            @since DataProvider 3.6
+        */
+        const ShortDescriptionMaxLength = 80;
+
+        #! Marks a short description that was cut short, so that a reader knows to look at the long one
+        /** @since DataProvider 3.6
+        */
+        const ShortDescriptionEllipsis = "…";
+
+        #! Abbreviations whose full stop does not end a sentence
+        /** @ref getShortDescription() takes the first sentence of a long description, and a full stop that
+            ends one of these does not end a sentence.  Xero documents an argument as
+            <tt>"e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included"</tt>,
+            whose first "sentence" is otherwise the single letter \c "e".
+
+            Compared case-insensitively.
+
+            @since DataProvider 3.6
+        */
+        const SentenceAbbreviations = (
+            "e.g.", "i.e.", "etc.", "vs.", "cf.", "approx.", "resp.", "no.", "fig.", "ca.", "al.",
+            "inc.", "ltd.", "co.", "st.", "dr.", "mr.", "mrs.", "ms.", "prof.",
+        );
+
         #! Maximum length in characters of an all upper-case word assumed to be an acronym
         /** All upper-case words no longer than this are not case-folded when converting a technical name to a
             display name with @ref getDisplayName(), so that short acronyms are preserved
@@ -505,12 +540,33 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     #! Converts a long description into a short description
-    static *string getShortDescription(*string desc, *int maxlen) {
+    /** Takes the first sentence of the long description, renders any markdown code spans as plain text, and
+        caps the result at @ref ShortDescriptionMaxLength characters, cutting on a word boundary and marking
+        the elision with @ref ShortDescriptionEllipsis.
+
+        @param desc the long description, which may carry markdown
+        @param maxlen the length to cap the result at; defaults to @ref ShortDescriptionMaxLength, and
+        \c 0 or a negative value means no cap at all
+
+        @return the short description in plain text, or @ref nothing if \a desc is @ref nothing
+
+        @note The cap applies by default.  A short description is a one-line summary, and a long
+        description's first sentence is very often longer than a line - most of an API's own parameter
+        documentation is - so leaving it uncapped produced summaries no user interface could show.
+    */
+    static *string getShortDescription(*string desc, *int maxlen = ShortDescriptionMaxLength) {
         if (!exists desc) {
             return;
         }
         # convert backquotes to single quotes
         desc =~ s/`/'/g;
+
+        # a short description is plain text, so markdown emphasis is rendered away rather than shown:
+        # GitLab marks a deprecated argument as "_(Deprecated)_ Disable email notifications".  Only
+        # emphasis is matched - an underscore inside a word belongs to an identifier such as
+        # "shipping_option_code" and is left exactly as it is
+        desc =~ s/\*\*([^*]+)\*\*/$1/g;
+        desc =~ s/(^|[[:space:]])_([^_]+)_(?=[[:space:][:punct:]]|$)/$1$2/g;
 
         # get single-quoted strings
         *list<string> sq = (desc =~ x/'([^\'\n]*)'/g);
@@ -526,18 +582,93 @@ public class AbstractDataField inherits Qore::Serializable {
         }
 
         # end after the first sentence or newline, if any
-        desc =~ s/[\.;\n].*//s;
+        int end = AbstractDataField::findSentenceEnd(desc);
+        if (end >= 0) {
+            splice desc, end;
+        }
         trim desc;
 
         # re-add quotes to what's left
         map desc = replace(desc, "{{" + $# + "}}", $1), sq;
         map desc = replace(desc, "{{" + $# + "}}", $1), dq;
 
-        if (maxlen > 0) {
-            splice desc, maxlen;
+        if (maxlen > 0 && desc.length() > maxlen) {
+            # cut on a word boundary so that the summary does not end in the middle of a word; the ellipsis
+            # counts towards the cap, and a "word" longer than the cap is cut where it falls
+            string cut = desc.substr(0, maxlen - ShortDescriptionEllipsis.length());
+            int sp = cut.rfind(" ");
+            if (sp > 0) {
+                splice cut, sp;
+            }
+            # a summary ending in punctuation reads badly once the ellipsis is added
+            cut =~ s/[[:space:][:punct:]]+$//;
+            desc = cut + ShortDescriptionEllipsis;
         }
 
         return desc;
+    }
+
+    #! Returns the offset of the end of the first sentence, or -1 where the text is a single sentence
+    /** A newline or a semicolon always ends one.  A full stop ends one only where it is really sentence
+        punctuation: one that is not followed by whitespace is a decimal point, a domain name or a file
+        extension, and one that ends a @ref SentenceAbbreviations "known abbreviation" is not a sentence end
+        either.
+
+        @param desc the description to scan
+
+        @return the offset of the terminator, or \c -1 where there is none
+
+        @since DataProvider 3.6
+    */
+    private static int findSentenceEnd(string desc) {
+        int rv = -1;
+        foreach string t in (("\n", ";")) {
+            int p = desc.find(t);
+            if (p >= 0 && (rv < 0 || p < rv)) {
+                rv = p;
+            }
+        }
+        int pos = 0;
+        while (True) {
+            int dot = desc.find(".", pos);
+            if (dot < 0 || (rv >= 0 && dot > rv)) {
+                break;
+            }
+            string next = desc.substr(dot + 1, 1);
+            if ((next.val() && next !~ /^[[:space:]]/) || AbstractDataField::endsAbbreviation(desc, dot)) {
+                pos = dot + 1;
+                continue;
+            }
+            if (rv < 0 || dot < rv) {
+                rv = dot;
+            }
+            break;
+        }
+        return rv;
+    }
+
+    #! Returns @ref True if the full stop at the given offset ends a known abbreviation
+    /** @param desc the description
+        @param dot the offset of the full stop
+
+        @see @ref SentenceAbbreviations
+
+        @since DataProvider 3.6
+    */
+    private static bool endsAbbreviation(string desc, int dot) {
+        foreach string a in (SentenceAbbreviations) {
+            int start = dot + 1 - a.length();
+            if (start < 0 || desc.substr(start, a.length()).lwr() != a.lwr()) {
+                continue;
+            }
+            # the abbreviation has to be a word of its own: without this, "st." matches the end of
+            # "request." and every sentence ending in one of those words stops being a sentence
+            if (start > 0 && desc.substr(start - 1, 1) =~ /[[:alnum:]]/) {
+                continue;
+            }
+            return True;
+        }
+        return False;
     }
 
     #! Converts a technical name into a display name

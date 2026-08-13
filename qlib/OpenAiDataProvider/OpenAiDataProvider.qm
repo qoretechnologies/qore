@@ -77,8 +77,7 @@ module OpenAiDataProvider {
             "path": "/multi-chat",
             "action": "multi-chat",
             "display_name": "Multi Chat",
-            "short_desc": "Chat with an AI model by sending multiple messages at once and potentially getting "
-                "multiple replies",
+            "short_desc": "Chat by sending several messages at once",
             "desc": "Chat with an AI model by sending multiple messages at once and potentially getting multiple "
                 "replies",
             "action_code": DPAT_API,

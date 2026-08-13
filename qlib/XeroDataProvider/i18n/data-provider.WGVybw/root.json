@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -392,8 +392,8 @@
           "message": "Search Term"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
-          "message": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields"
+          "source": "Search parameter that performs a case-insensitive text search across the Name…",
+          "message": "Search parameter that performs a case-insensitive text search across the Name…"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.desc": {
           "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
@@ -404,8 +404,8 @@
           "message": "Include Archived"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…",
+          "message": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
           "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
@@ -416,8 +416,8 @@
           "message": "Summary Only"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
-          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
-          "message": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object"
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…",
+          "message": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
@@ -484,8 +484,8 @@
           "message": "Summarize Errors"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "If false return 200 OK and mix of successfully created objects and any with validation errors"
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "If false return 200 OK and mix of successfully created objects and any with…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
@@ -580,8 +580,8 @@
           "message": "Search Term"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
-          "message": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields"
+          "source": "Search parameter that performs a case-insensitive text search across the Name…",
+          "message": "Search parameter that performs a case-insensitive text search across the Name…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.desc": {
           "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
@@ -604,8 +604,8 @@
           "message": "Include Archived"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…",
+          "message": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
           "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
@@ -616,8 +616,8 @@
           "message": "Summary Only"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
-          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
-          "message": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object"
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…",
+          "message": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
@@ -628,8 +628,8 @@
           "message": "Unitdp"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
@@ -696,8 +696,8 @@
           "message": "Summarize Errors"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "If false return 200 OK and mix of successfully created objects and any with validation errors"
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "If false return 200 OK and mix of successfully created objects and any with…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
@@ -708,8 +708,8 @@
           "message": "Unitdp"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
@@ -720,8 +720,8 @@
           "message": "Allow Backorders"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
-          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
-          "message": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative"
+          "source": "Allows an invoice to be created even when one or more line items contain…",
+          "message": "Allows an invoice to be created even when one or more line items contain…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.desc": {
           "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
@@ -844,8 +844,8 @@
           "message": "Summarize Errors"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "If false return 200 OK and mix of successfully created objects and any with validation errors"
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "If false return 200 OK and mix of successfully created objects and any with…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
@@ -876,8 +876,8 @@
           "message": "Summarize Errors"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "If false return 200 OK and mix of successfully created objects and any with validation errors"
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "If false return 200 OK and mix of successfully created objects and any with…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
@@ -1000,8 +1000,8 @@
           "message": "Date"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
-          "source": "Date the payment is being made (YYYY-MM-DD) e",
-          "message": "Date the payment is being made (YYYY-MM-DD) e"
+          "source": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06",
+          "message": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.desc": {
           "source": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06",
@@ -1012,8 +1012,8 @@
           "message": "Reference"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
-          "source": "An optional description for the payment e",
-          "message": "An optional description for the payment e"
+          "source": "An optional description for the payment e.g. Direct Debit",
+          "message": "An optional description for the payment e.g. Direct Debit"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.desc": {
           "source": "An optional description for the payment e.g. Direct Debit",
@@ -1060,8 +1060,8 @@
           "message": "Invoice Number"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
-          "source": "Number of invoice or credit note you are applying payment to e",
-          "message": "Number of invoice or credit note you are applying payment to e"
+          "source": "Number of invoice or credit note you are applying payment to e.g.INV-4003",
+          "message": "Number of invoice or credit note you are applying payment to e.g.INV-4003"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.desc": {
           "source": "Number of invoice or credit note you are applying payment to e.g.INV-4003",
@@ -1072,8 +1072,8 @@
           "message": "Credit Note Number"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
-          "source": "Number of invoice or credit note you are applying payment to e",
-          "message": "Number of invoice or credit note you are applying payment to e"
+          "source": "Number of invoice or credit note you are applying payment to e.g. INV-4003",
+          "message": "Number of invoice or credit note you are applying payment to e.g. INV-4003"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.desc": {
           "source": "Number of invoice or credit note you are applying payment to e.g. INV-4003",
@@ -1088,8 +1088,8 @@
           "message": "Code"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
-          "source": "Code of account you are using to make the payment e",
-          "message": "Code of account you are using to make the payment e"
+          "source": "Code of account you are using to make the payment e.g. 001 (note- not all…",
+          "message": "Code of account you are using to make the payment e.g. 001 (note- not all…"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.desc": {
           "source": "Code of account you are using to make the payment e.g. 001 (note- not all accounts have a code value)",
@@ -1180,8 +1180,8 @@
           "message": "Payment ID"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
-          "source": "The Xero identifier for an Payment e",
-          "message": "The Xero identifier for an Payment e"
+          "source": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9",
+          "message": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.desc": {
           "source": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9",
@@ -1276,8 +1276,8 @@
           "message": "Unitdp"
         },
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…"
         },
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
@@ -1356,8 +1356,8 @@
           "message": "Summarize Errors"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "If false return 200 OK and mix of successfully created objects and any with validation errors"
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "If false return 200 OK and mix of successfully created objects and any with…"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
@@ -1416,8 +1416,8 @@
           "message": "Unitdp"
         },
         "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…"
         },
         "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
@@ -1484,8 +1484,8 @@
           "message": "Summarize Errors"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "If false return 200 OK and mix of successfully created objects and any with validation errors"
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "If false return 200 OK and mix of successfully created objects and any with…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
@@ -1496,8 +1496,8 @@
           "message": "Unitdp"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
@@ -1544,8 +1544,8 @@
           "message": "Unitdp"
         },
         "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…"
         },
         "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
@@ -1588,8 +1588,8 @@
           "message": "Summarize Errors"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "If false return 200 OK and mix of successfully created objects and any with validation errors"
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "If false return 200 OK and mix of successfully created objects and any with…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
@@ -1600,8 +1600,8 @@
           "message": "Unitdp"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
@@ -2020,8 +2020,8 @@
           "message": "Task Ids"
         },
         "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
-          "source": "Search for all tasks that match a comma separated list of taskIds, i",
-          "message": "Search for all tasks that match a comma separated list of taskIds, i"
+          "source": "Search for all tasks that match a comma separated list of taskIds, i.e. GET…",
+          "message": "Search for all tasks that match a comma separated list of taskIds, i.e. GET…"
         },
         "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.desc": {
           "source": "Search for all tasks that match a comma separated list of taskIds, i.e. GET https://.../tasks?taskIds={taskID},{taskID}",

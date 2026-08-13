@@ -1134,8 +1134,7 @@ module DataProviderML {
             "path": "/schema-validation",
             "action": "schema-validation",
             "display_name": "Validate Record Schema",
-            "short_desc": "Validates each record against a defined schema with configurable "
-                "violation handling",
+            "short_desc": "Validates each record against a schema",
             "desc": "Enforce data quality rules before processing — reject orders with "
                 "negative prices, ensure `customer_id` is always present, or restrict status "
                 "codes to known values. Each record is validated against a user-defined schema "

@@ -93,7 +93,7 @@ public class BflGenerateImageRequestDataType inherits HashDataType {
             },
             "input_image": {
                 "display_name": "Input Image (base64)",
-                "short_desc": "Base64-encoded input image (for `flux-kontext-*` models)",
+                "short_desc": "Base64-encoded input image (for flux-kontext-* models)",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "Base64-encoded input image, used by the "
                     "`flux-kontext-pro` and `flux-kontext-max` models for "

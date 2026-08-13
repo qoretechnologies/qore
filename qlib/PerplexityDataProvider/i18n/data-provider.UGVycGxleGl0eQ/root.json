@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -344,8 +344,8 @@
           "message": "Multi Chat"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
-          "message": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations"
+          "source": "Chat by sending several messages at once, with citations",
+          "message": "Chat by sending several messages at once, with citations"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.desc": {
           "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
@@ -884,8 +884,8 @@
           "message": "Simple Chat"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
-          "message": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations"
+          "source": "Chat by sending one message, with citations",
+          "message": "Chat by sending one message, with citations"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",

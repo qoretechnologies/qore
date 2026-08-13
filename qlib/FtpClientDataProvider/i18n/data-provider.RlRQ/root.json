@@ -44,8 +44,8 @@
           "message": "Text"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
-          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
-          "message": "If 'True' the file will be returned as a string, 'False' (the default) as binary data"
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "If 'True' the file will be returned as a string, 'False' (the default) as…"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.desc": {
           "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
@@ -92,8 +92,8 @@
           "message": "Text"
         },
         "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
-          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
-          "message": "If 'True' the file will be returned as a string, 'False' (the default) as binary data"
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "If 'True' the file will be returned as a string, 'False' (the default) as…"
         },
         "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.desc": {
           "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",

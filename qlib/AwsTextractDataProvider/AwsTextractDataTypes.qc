@@ -233,7 +233,7 @@ public class AwsTextractAnalyzeDocumentRequestDataType inherits HashDataType {
             },
             "queries": {
                 "display_name": "Queries",
-                "short_desc": "Custom queries to ask of the document (with `QUERIES` feature)",
+                "short_desc": "Custom queries to ask of the document (with QUERIES feature)",
                 "type": AbstractDataProviderTypeMap."*softlist",
                 "desc": "List of query objects when `QUERIES` is in `feature_types`.  "
                     "Each query has a `Text` field (the question to ask) plus an "

@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
         },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -392,8 +392,8 @@
           "message": "Language Code"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
-          "source": "BCP-47 / ISO-639-1 language code (e.g., `en_us`, `de`, `fr`)",
-          "message": "BCP-47 / ISO-639-1 language code (e.g., `en_us`, `de`, `fr`)"
+          "source": "BCP-47 / ISO-639-1 language code (e.g., en_us, de, fr)",
+          "message": "BCP-47 / ISO-639-1 language code (e.g., en_us, de, fr)"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.desc": {
           "source": "Language code (BCP-47 or ISO-639-1, depending on model).  Omit to enable automatic detection (see `language_detection`).",
@@ -464,8 +464,8 @@
           "message": "Summary Model"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
-          "source": "Summarization model (used with `summarization`)",
-          "message": "Summarization model (used with `summarization`)"
+          "source": "Summarization model (used with summarization)",
+          "message": "Summarization model (used with summarization)"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.desc": {
           "source": "Summarization model name when `summarization` is `True`.",
