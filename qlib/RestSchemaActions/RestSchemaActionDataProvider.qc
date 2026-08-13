@@ -243,13 +243,16 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
             }
             seen{key} = True;
             # many APIs allow an object's human-readable name to be unset; showing the ID is better than
-            # showing an empty row
+            # showing an empty row.  The test is whether the name has a value, not whether the field is
+            # present: an API that answers "" for an unset name is as common as one that omits it, and
+            # Intercom does exactly that for an untitled conversation - a dropdown of blank rows is no more
+            # usable than a dropdown of missing ones
             auto display = rd.display_field.val()
                 ? RestSchemaActionDataProvider::getRecordValue(record, rd.display_field)
                 : NOTHING;
             rv += <AllowedValueInfo>{
                 "value": value,
-                "display_name": (display ?? value).toString(),
+                "display_name": (display.val() ? display : value).toString(),
                 "desc": rd.desc,
             };
         }
