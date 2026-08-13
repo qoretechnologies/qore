@@ -1030,7 +1030,7 @@ public class XeroDataProviderTest inherits QUnit::Test {
             "exp": DP_SEARCH_OP_EQ,
             "args": (<DataProviderFieldReference>{"field": "Status"}, "ACTIVE"),
         });
-        assertEq({"where": "Status == \"ACTIVE\""}, s.options);
+        assertEq("Status == \"ACTIVE\"", s.options.where.value);
         assertNothing(s.client, "Xero evaluates it, so nothing is left for the client side");
 
         # a field Xero does not index is evaluated here instead of being sent and turned into an error

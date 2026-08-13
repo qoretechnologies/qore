@@ -192,9 +192,15 @@ public class RestSchemaRecordFilter {
                     }
                 }
                 if (renderable) {
-                    rv.options{table.query.option} = renderable.size() == 1
-                        ? render(renderable[0])
-                        : render(<DataProviderExpression>{"exp": DP_OP_AND, "args": renderable});
+                    # wrapped because a rendered query is by construction already what the wire takes; an
+                    # option carrying a wire codec would otherwise convert it a second time, and Klaviyo's
+                    # converts an unrecognised shape to nothing - which drops the filter and answers the
+                    # search with the whole collection
+                    rv.options{table.query.option} = <RestSchemaRawValue>{
+                        "value": renderable.size() == 1
+                            ? render(renderable[0])
+                            : render(<DataProviderExpression>{"exp": DP_OP_AND, "args": renderable}),
+                    };
                 }
             } else {
                 residual += pending;

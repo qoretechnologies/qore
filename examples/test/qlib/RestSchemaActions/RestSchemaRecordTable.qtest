@@ -85,12 +85,21 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         #! The fixture schema
         const SchemaFile = get_script_dir() + DirSep + "record-store.json";
 
+        #! The name of the codec publishing a curated form of the listing's query argument
+        const CuratedFilterCodec = "test-curated-filter";
+
         #! The manifest the record tables are built on
         const Manifest = (
             <RestSchemaActionInfo>{
                 "action": "list-items", "method": "GET", "path": "/items",
                 "operation_id": "listItems",
                 "display_name": "List Items", "short_desc": "list items", "desc": "lists items",
+                # the query argument carries a wire codec publishing a curated form of it, exactly as
+                # Klaviyo's "filter" does; a table rendering a whole expression into the same argument must
+                # not have the codec applied to what it rendered
+                "fields": {
+                    "q": <RestSchemaFieldOverlayInfo>{"codec": CuratedFilterCodec},
+                },
             },
             <RestSchemaActionInfo>{
                 "action": "create-item", "method": "POST", "path": "/items",
@@ -427,6 +436,22 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
     }
 
     constructor() : Test("RestSchemaRecordTableTest", "1.0") {
+        # a codec of the shape Klaviyo's filter codecs have: it publishes a handful of named fields and
+        # builds the service's query syntax from them, and answers anything else with nothing at all
+        RestSchemaActionCodecs::registerCodec(<RestSchemaWireCodecInfo>{
+            "name": CuratedFilterCodec,
+            "type": AbstractDataProviderType::get(AutoHashOrNothingType),
+            "desc": "sent as the service's query syntax",
+            "to_wire": auto sub (auto v) {
+                if (v.typeCode() != NT_HASH) {
+                    return;
+                }
+                return (map sprintf("curated[%s:%s]", $1.key, $1.value), v.pairIterator()).join(",");
+            },
+            "from_wire": auto sub (auto v) {
+                return v;
+            },
+        });
         schema = OpenApi3::OpenApi3Loader::fromFile(SchemaFile);
         aset = new RestSchemaActionSet(schema, Manifest);
 
@@ -643,7 +668,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertTrue(f.hasNativeSearch());
 
         hash<RestSchemaRecordFilterSplit> s = f.split(eq("status", "closed"));
-        assertEq({"q": "status == \"closed\""}, s.options);
+        assertEq("status == \"closed\"", s.options.q.value);
         assertNothing(s.client, "the service evaluates the whole predicate");
 
         # a whole tree goes over the wire, including the disjunction a query-argument table cannot express
@@ -651,25 +676,25 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
             eq("status", "open"),
             logic(DP_OP_OR, (op(DP_SEARCH_OP_GT, "count", 5), op(DP_OP_CONTAINS, "name", "wid"))),
         )));
-        assertEq("(status == \"open\" AND (count > 5 OR name.Contains(\"wid\")))", s.options.q);
+        assertEq("(status == \"open\" AND (count > 5 OR name.Contains(\"wid\")))", s.options.q.value);
         assertNothing(s.client);
 
         # negation
         s = f.split(logic(DP_SEARCH_OP_NOT, (eq("status", "open"),)));
-        assertEq("NOT status == \"open\"", s.options.q);
+        assertEq("NOT status == \"open\"", s.options.q.value);
 
         # a language with no "in" spells it as a disjunction of equalities, which is exact
         s = f.split(<DataProviderExpression>{
             "exp": DP_SEARCH_OP_IN,
             "args": (<DataProviderFieldReference>{"field": "status"}, ("open", "closed")),
         });
-        assertEq("(status == \"open\" OR status == \"closed\")", s.options.q);
+        assertEq("(status == \"open\" OR status == \"closed\")", s.options.q.value);
         assertNothing(s.client);
 
         # a field the service will not filter on stays client-side rather than becoming a query the
         # service would reject
         s = f.split(logic(DP_OP_AND, (eq("status", "open"), eq("tags", "red"))));
-        assertEq("status == \"open\"", s.options.q);
+        assertEq("status == \"open\"", s.options.q.value);
         assertEq(DP_SEARCH_OP_EQ, s.client.exp);
         assertEq("tags", s.client.args[0].field);
 
@@ -680,7 +705,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
 
         # a string value must be escaped, or a name containing a quote would end the literal early
         s = f.split(eq("name", "the \"best\" item"));
-        assertEq("name == \"the \\\"best\\\" item\"", s.options.q);
+        assertEq("name == \"the \\\"best\\\" item\"", s.options.q.value);
     }
 
     #! The three rendering forms and the two ways a language can be smaller than the renderer assumes
@@ -694,12 +719,12 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
 
         # one predicate, rendered as a prefix call rather than as an infix comparison
         hash<RestSchemaRecordFilterSplit> s = f.split(eq("status", "closed"));
-        assertEq({"q": "equals(status,\"closed\")"}, s.options);
+        assertEq("equals(status,\"closed\")", s.options.q.value);
         assertNothing(s.client, "the service evaluates the whole predicate");
 
         # a conjunction joins with the declared separator and is not parenthesised
         s = f.split(logic(DP_OP_AND, (eq("status", "open"), op(DP_SEARCH_OP_GT, "count", 5))));
-        assertEq("equals(status,\"open\"),greater-than(count,5)", s.options.q);
+        assertEq("equals(status,\"open\"),greater-than(count,5)", s.options.q.value);
         assertNothing(s.client);
 
         # "in" has a call of its own and takes the whole list as one JSON array
@@ -707,7 +732,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
             "exp": DP_SEARCH_OP_IN,
             "args": (<DataProviderFieldReference>{"field": "status"}, ("open", "closed")),
         });
-        assertEq("any(status,[\"open\",\"closed\"])", s.options.q);
+        assertEq("any(status,[\"open\",\"closed\"])", s.options.q.value);
         assertNothing(s.client);
 
         # a language with no OR cannot render one: the whole expression is evaluated client-side rather
@@ -726,7 +751,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
             eq("status", "open"),
             logic(DP_OP_OR, (op(DP_SEARCH_OP_GT, "count", 5), op(DP_SEARCH_OP_LT, "count", 2))),
         )));
-        assertEq("equals(status,\"open\")", s.options.q);
+        assertEq("equals(status,\"open\")", s.options.q.value);
         assertEq(DP_OP_OR, s.client.exp, "the disjunction is left for the client side");
 
         # an infix language with equality but no disjunction cannot spell an "in" of more than one value,
@@ -744,14 +769,14 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
             "exp": DP_SEARCH_OP_IN,
             "args": (<DataProviderFieldReference>{"field": "status"}, ("open",)),
         });
-        assertEq("status == \"open\"", s.options.q);
+        assertEq("status == \"open\"", s.options.q.value);
         assertNothing(s.client);
 
         # a language that renders itself puts a hash on the query option, not a string
         RestSchemaRecordFilter hf(HookTable);
         s = hf.split(eq("status", "closed"));
-        assertEq({"field": "status", "operator": "=", "value": "closed"}, s.options.q);
-        assertEq(NT_HASH, s.options.q.typeCode(), "the rendered query need not be a string");
+        assertEq({"field": "status", "operator": "=", "value": "closed"}, s.options.q.value);
+        assertEq(NT_HASH, s.options.q.value.typeCode(), "the rendered query need not be a string");
         assertNothing(s.client);
 
         s = hf.split(logic(DP_OP_AND, (
@@ -770,13 +795,36 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                     ),
                 },
             ),
-        }, s.options.q);
+        }, s.options.q.value);
         assertNothing(s.client);
 
         # the hook renders only what the declared operators accept: this language declares no NOT
         s = hf.split(logic(DP_SEARCH_OP_NOT, (eq("status", "open"),)));
         assertEq({}, s.options);
         assertEq(DP_SEARCH_OP_NOT, s.client.exp);
+
+        # the defect this wrapping exists to prevent: the listing's query argument carries a wire codec that
+        # answers anything but a hash with nothing at all, so a rendered expression handed to it a second
+        # time would be dropped and the search would answer with the whole collection and no error
+        ScriptedRestClient rest;
+        RestSchemaTableDataProvider q = table(QueryTable, \rest, auto sub (string method, string path) {
+            return {"data": itemPage(1, 100, 3), "has_more": False};
+        });
+        map $1, q.searchRecords(eq("status", "closed"));
+        assertRegex("q=status%20%3D%3D%20%22closed%22", rest.paths[0], "the rendered query reached the wire");
+        assertFalse(rest.paths[0] =~ /curated/, "and was not converted a second time by the codec");
+
+        # ... and the same argument still applies its codec to an ordinary value, so wrapping is opt-in and
+        # the curated presentation the action publishes is unaffected
+        RestSchemaActionOperation lister = aset.getOperationEx("list-items");
+        assertEq("curated[status:open]", lister.unflatten({"q": {"status": "open"}}).req.query.q);
+        assertEq("already rendered", lister.unflatten({
+            "q": <RestSchemaRawValue>{"value": "already rendered"},
+        }).req.query.q, "a wrapped value is placed unchanged");
+        # a wrapped value is still an option the action has to declare
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "has no option", sub () {
+            lister.unflatten({"nope": <RestSchemaRawValue>{"value": "x"}});
+        });
 
         # a syntax that can neither render a value nor render the whole query could spell nothing at all
         assertThrows("REST-SCHEMA-RECORD-ERROR", "render_value", sub () {

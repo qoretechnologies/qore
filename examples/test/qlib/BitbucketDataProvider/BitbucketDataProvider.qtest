@@ -808,7 +808,7 @@ public class BitbucketDataProviderTest inherits QUnit::Test {
             "exp": DP_SEARCH_OP_EQ,
             "args": (<DataProviderFieldReference>{"field": "name"}, "master"),
         });
-        assertEq({"q": "name = \"master\""}, s.options, "a name predicate is rendered into BBQL");
+        assertEq("name = \"master\"", s.options.q.value, "a name predicate is rendered into BBQL");
         assertNothing(s.client, "and Bitbucket evaluates it, so nothing is left for the client side");
 
         # a predicate on any other field is answered here: Bitbucket rejects a query naming a field it does

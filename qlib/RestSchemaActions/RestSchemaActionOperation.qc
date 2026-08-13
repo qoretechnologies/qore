@@ -263,6 +263,13 @@ public class RestSchemaActionOperation {
         foreach hash<auto> i in (options.pairIterator()) {
             hash<RestSchemaFlatFieldInfo> fi = flat_map{i.key};
             auto value = i.value;
+            if (value instanceof hash<RestSchemaRawValue>) {
+                # the value is already what the wire takes - a record table's rendered query is - so the
+                # option's codec is not applied to it a second time
+                placeRequestValue(\req, \path_vars, fi.loc, fi.wire_name, fi.wire_path,
+                    cast<hash<RestSchemaRawValue>>(value).value);
+                continue;
+            }
             if (*hash<auto> node = request_conv{i.key}) {
                 value = RestSchemaActionOperation::convertValue(value, node, True);
                 # a codec that converts to nothing is saying there is nothing to send: placing it anyway

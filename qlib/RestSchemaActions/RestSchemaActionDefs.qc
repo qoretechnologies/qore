@@ -112,6 +112,32 @@ public hashdecl RestSchemaFlatFieldInfo {
     *string lift_into;
 }
 
+#! Wraps an option value that is already in wire form, so that its option's codec is not applied to it
+/** A wire codec presents an option in a shape that is convenient to fill in on a form and converts that
+    shape to what the API takes.  That is a **narrowing**: Klaviyo's \c filter argument accepts a whole
+    filter expression, and the codec on it publishes four named fields, because those are the four the
+    application it replaces offered.
+
+    A record table needs the full argument.  It renders a search expression into the API's own query syntax,
+    which means the value it produces is already exactly what the wire takes - and passing it through the
+    codec a second time either mangles it or, in Klaviyo's case, converts it to @ref nothing and drops the
+    filter, answering the search with the **unfiltered** collection and no error at all.
+
+    Wrapping the value says so, and is the only thing that lets a table reuse the listing action the manifest
+    already exports rather than declaring a second copy of the same path with the codec left off.
+
+    @note This is not a way to bypass validation: the option must still be one the action declares, and it is
+    checked as any other option is.  It says only that the value needs no conversion.
+
+    @see @ref RestSchemaActions::RestSchemaRecordQueryInfo::option "RestSchemaRecordQueryInfo::option"
+
+    @since RestSchemaActions 1.1
+*/
+public hashdecl RestSchemaRawValue {
+    #! The value to place in the request unchanged
+    auto value;
+}
+
 #! Describes a value whose properties are published as options in place of the value itself
 /** The value is not an option, so it has no entry in
     @ref RestSchemaActions::RestSchemaActionOperation::getFlatMap() "the flat map"; everything needed to

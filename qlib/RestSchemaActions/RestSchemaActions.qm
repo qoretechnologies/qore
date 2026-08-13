@@ -258,6 +258,21 @@ module RestSchemaActions {
     predicate all stay declarative.  A hook that also decided pushdown would put the honesty of those flags
     inside a closure.
 
+    @subsection restschemaactions_records_raw A Rendered Query Is Already in Wire Form
+
+    The argument a table renders its query into is often the same argument an **action** publishes in a
+    curated form.  Klaviyo's \c filter takes a whole filter expression, and the listing actions put a wire
+    codec on it that publishes the four named fields the application they replace offered.
+
+    A rendered query must not be converted by that codec: it is already exactly what the wire takes, and
+    Klaviyo's codec answers a shape it does not recognise with @ref nothing - which would drop the filter
+    and answer the search with the **whole collection**, with no error anywhere.  So the query value is
+    placed in a @ref RestSchemaActions::RestSchemaRawValue "RestSchemaRawValue", which
+    @ref RestSchemaActions::RestSchemaActionOperation::unflatten() "unflatten()" places unchanged.  The
+    option is still one the action has to declare and is checked as any other is; only the conversion is
+    skipped.  This is what lets a table reuse the listing action the manifest already exports instead of
+    declaring a second copy of the same path with the codec left off.
+
     @subsection restschemaactions_records_type What the Columns Are
 
     A listing returns a **projection**; reading one record returns the **record**.  A vendor describes both
