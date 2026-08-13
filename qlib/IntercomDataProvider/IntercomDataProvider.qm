@@ -92,6 +92,7 @@ module IntercomDataProvider {
             "groups": (IntercomManifest::GroupConversations,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 IntercomReplyConversationDataProvider::RequestType.getFields()),
+            "output_type": IntercomReplyConversationDataProvider::getConversationRecordType(action_set),
         });
 
         # register the polling event actions

@@ -255,10 +255,19 @@ public class IntercomReplyConversationDataProvider inherits DataProvider::Abstra
     }
 
     #! Returns the response type: the conversation the reply was added to
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return IntercomReplyConversationDataProvider::getConversationRecordType(action_set);
+    }
+
+    #! Returns the type of the conversation this action answers with
     /** Taken from the action set the application ships, so that this action and the generated ones cannot
         describe the same conversation differently.
+
+        Static because the action's registration needs it too: an action registered without an
+        \c output_type gives a caller no visibility into what it returns, and there is no instance to ask
+        while the module is still being initialized.
     */
-    private *AbstractDataProviderType getResponseTypeImpl() {
+    static *AbstractDataProviderType getConversationRecordType(RestSchemaActionSet action_set) {
         *RestSchemaActionOperation op = action_set.getOperation("searchConversations");
         if (op) {
             *AbstractDataProviderType t = op.getResponseType();
