@@ -352,6 +352,15 @@ public class RestSchemaRecordFilter {
             case DP_OP_AND:
             case DP_OP_OR:
             case DP_SEARCH_OP_NOT: {
+                # a language that does not have a connective cannot render one; the expression stays whole
+                # and is evaluated client-side, which is the only answer that is not wrong.  Sending the
+                # arguments of an OR joined by anything else would answer with records the caller excluded
+                if (c.exp == DP_OP_OR && !syn.or_op.val()) {
+                    return False;
+                }
+                if (c.exp == DP_SEARCH_OP_NOT && !syn.not_op.val()) {
+                    return False;
+                }
                 foreach auto arg in (c.args) {
                     if (!(arg instanceof hash<DataProviderExpression>)) {
                         return False;
@@ -376,11 +385,36 @@ public class RestSchemaRecordFilter {
                 return False;
             }
         }
-        if (exists syn.binary_ops{c.exp} || exists syn.method_ops{c.exp}) {
+        if (RestSchemaRecordFilter::hasOp(syn, c.exp)) {
             return True;
         }
         # a language with no "in" spells it as a disjunction of equalities, which is exact
-        return c.exp == DP_SEARCH_OP_IN && exists syn.binary_ops{DP_SEARCH_OP_EQ};
+        if (c.exp != DP_SEARCH_OP_IN || !RestSchemaRecordFilter::hasOp(syn, DP_SEARCH_OP_EQ)) {
+            return False;
+        }
+        # more than one value needs a disjunction, and a language with no OR cannot write one
+        return RestSchemaRecordFilter::getInValues(c).size() < 2 || syn.or_op.val();
+    }
+
+    #! Returns @ref True if the syntax can render an operator in any of its three forms
+    /** @param syn the query language
+        @param op the generic search operator
+
+        @see @ref restschemaquerysyntax_forms
+    */
+    private static bool hasOp(hash<RestSchemaQuerySyntaxInfo> syn, string op) {
+        return exists syn.binary_ops{op} || exists syn.call_ops{op} || exists syn.method_ops{op};
+    }
+
+    #! Returns the values of an "in" predicate, flattening a list argument into its elements
+    /** @param c the predicate
+    */
+    private static list<auto> getInValues(hash<DataProviderExpression> c) {
+        list<auto> rv = ();
+        for (int j = 1; j < c.args.size(); ++j) {
+            rv += c.args[j].typeCode() == NT_LIST ? c.args[j] : list(c.args[j]);
+        }
+        return rv;
     }
 
     #! Returns @ref True if the rendered query means exactly what the expression means
@@ -404,28 +438,40 @@ public class RestSchemaRecordFilter {
     #! Renders an expression into the table's query language
     /** @param c the expression; must satisfy @ref canRender()
 
-        @return the rendered query
+        @return the value to place on the query option.  Normally the rendered query string; a syntax
+        declaring @ref RestSchemaActions::RestSchemaQuerySyntaxInfo::render_query "render_query" returns
+        whatever that hook returns, which need not be a string - Intercom's search takes a hash
 
         @throw REST-SCHEMA-RECORD-ERROR the expression cannot be rendered
     */
-    string render(hash<DataProviderExpression> c) {
+    auto render(hash<DataProviderExpression> c) {
         if (!exists table.query) {
             throw "REST-SCHEMA-RECORD-ERROR", sprintf("table %y declares no filter expression language",
                 table.name);
         }
+        if (*code<auto(hash<DataProviderExpression>)> hook = table.query.syntax.render_query) {
+            return hook(c);
+        }
+        return renderExp(c);
+    }
+
+    #! Renders an expression into the table's query language as a string
+    /** @param c the expression; must satisfy @ref canRender()
+
+        @return the rendered query
+
+        @throw REST-SCHEMA-RECORD-ERROR the expression cannot be rendered
+    */
+    private string renderExp(hash<DataProviderExpression> c) {
         hash<RestSchemaQuerySyntaxInfo> syn = table.query.syntax;
         switch (c.exp) {
             case DP_OP_AND:
             case DP_OP_OR: {
-                string token = c.exp == DP_OP_AND ? syn.and_op : syn.or_op;
-                list<string> parts = map render(cast<hash<DataProviderExpression>>($1)), c.args;
-                if (parts.size() == 1) {
-                    return parts[0];
-                }
-                return "(" + (foldl $1 + " " + token + " " + $2, parts) + ")";
+                list<string> parts = map renderExp(cast<hash<DataProviderExpression>>($1)), c.args;
+                return joinGroup(c.exp == DP_OP_AND, parts);
             }
             case DP_SEARCH_OP_NOT: {
-                return syn.not_op + " " + render(cast<hash<DataProviderExpression>>(c.args[0]));
+                return syn.not_op + " " + renderExp(cast<hash<DataProviderExpression>>(c.args[0]));
             }
         }
         string field = cast<hash<DataProviderFieldReference>>(c.args[0]).field;
@@ -433,29 +479,60 @@ public class RestSchemaRecordFilter {
         if (syn.render_field) {
             wire_field = syn.render_field(wire_field);
         }
-        if (c.exp == DP_SEARCH_OP_IN && !exists syn.binary_ops{DP_SEARCH_OP_IN}
-            && !exists syn.method_ops{DP_SEARCH_OP_IN}) {
-            list<auto> values = ();
-            for (int j = 1; j < c.args.size(); ++j) {
-                values += c.args[j].typeCode() == NT_LIST ? c.args[j] : list(c.args[j]);
-            }
-            list<string> parts = map sprintf("%s %s %s", wire_field, syn.binary_ops{DP_SEARCH_OP_EQ},
-                syn.render_value($1, field)), values;
-            if (parts.size() == 1) {
-                return parts[0];
-            }
-            return "(" + (foldl $1 + " " + syn.or_op + " " + $2, parts) + ")";
+        if (c.exp == DP_SEARCH_OP_IN && !RestSchemaRecordFilter::hasOp(syn, DP_SEARCH_OP_IN)) {
+            # a language with no "in" spells it as a disjunction of equalities
+            list<string> parts = map renderPredicate(DP_SEARCH_OP_EQ, wire_field, field, $1),
+                RestSchemaRecordFilter::getInValues(c);
+            return joinGroup(False, parts);
         }
-        if (*string method = syn.method_ops{c.exp}) {
-            return sprintf("%s.%s(%s)", wire_field, method, syn.render_value(c.args[1], field));
+        return renderPredicate(c.exp, wire_field, field, c.args[1]);
+    }
+
+    #! Joins the rendered arguments of a connective
+    /** @param and_group @ref True for an AND, @ref False for an OR
+        @param parts the rendered arguments
+
+        @see @ref restschemaquerysyntax_connectives
+    */
+    private string joinGroup(bool and_group, list<string> parts) {
+        if (parts.size() == 1) {
+            return parts[0];
         }
-        *string token = syn.binary_ops{c.exp};
+        hash<RestSchemaQuerySyntaxInfo> syn = table.query.syntax;
+        string sep = and_group
+            ? (syn.and_sep ?? " " + syn.and_op + " ")
+            : (syn.or_sep ?? " " + syn.or_op + " ");
+        string rv = foldl $1 + sep + $2, parts;
+        return syn.parenthesize ? "(" + rv + ")" : rv;
+    }
+
+    #! Renders one predicate in whichever of the three forms the syntax declares for its operator
+    /** @param op the generic search operator
+        @param wire_field the field name as the query language spells it
+        @param field the record field, passed to the value renderer
+        @param value the value to compare against
+
+        @return the rendered predicate
+
+        @throw REST-SCHEMA-RECORD-ERROR the syntax has no rendering for the operator
+
+        @see @ref restschemaquerysyntax_forms
+    */
+    private string renderPredicate(string op, string wire_field, string field, auto value) {
+        hash<RestSchemaQuerySyntaxInfo> syn = table.query.syntax;
+        if (*string method = syn.method_ops{op}) {
+            return sprintf("%s.%s(%s)", wire_field, method, syn.render_value(value, field));
+        }
+        if (*string call = syn.call_ops{op}) {
+            return sprintf("%s(%s,%s)", call, wire_field, syn.render_value(value, field));
+        }
+        *string token = syn.binary_ops{op};
         if (!token.val()) {
             throw "REST-SCHEMA-RECORD-ERROR", sprintf("the %y query language has no rendering for operator "
-                "%y; renderable operators: %y", syn.name, c.exp,
-                sort(keys (syn.binary_ops + (syn.method_ops ?? {}))));
+                "%y; renderable operators: %y", syn.name, op,
+                sort(keys (syn.binary_ops + (syn.call_ops ?? {}) + (syn.method_ops ?? {}))));
         }
-        return sprintf("%s %s %s", wire_field, token, syn.render_value(c.args[1], field));
+        return sprintf("%s %s %s", wire_field, token, syn.render_value(value, field));
     }
 
     #! Splits a plain search hash, which carries no operators and is therefore all client-side
@@ -479,10 +556,20 @@ public class RestSchemaRecordFilter {
         hash<string, bool> pushdown = {};
         map pushdown{$1.operator} = True, table.filters;
         if (exists table.query) {
-            map pushdown{$1} = True, keys table.query.syntax.binary_ops;
-            map pushdown{$1} = True, keys table.query.syntax.method_ops;
-            map pushdown{$1} = True, (DP_OP_AND, DP_OP_OR, DP_SEARCH_OP_NOT);
-            if (exists table.query.syntax.binary_ops{DP_SEARCH_OP_EQ}) {
+            hash<RestSchemaQuerySyntaxInfo> syn = table.query.syntax;
+            map pushdown{$1} = True, keys syn.binary_ops;
+            map pushdown{$1} = True, keys syn.call_ops;
+            map pushdown{$1} = True, keys syn.method_ops;
+            pushdown{DP_OP_AND} = True;
+            # a connective the language does not have is never pushed down; claiming it here would say the
+            # API can answer a search it would in fact have to be answered client-side
+            if (syn.or_op.val()) {
+                pushdown{DP_OP_OR} = True;
+            }
+            if (syn.not_op.val()) {
+                pushdown{DP_SEARCH_OP_NOT} = True;
+            }
+            if (RestSchemaRecordFilter::hasOp(syn, DP_SEARCH_OP_EQ)) {
                 pushdown{DP_SEARCH_OP_IN} = True;
             }
         }

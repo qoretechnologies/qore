@@ -161,6 +161,13 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
         if (exists table.query) {
             RestSchemaTableDataProvider::checkOption(table, list_flat, table.query.option,
                 "the filter expression");
+            # the built-in rendering has no way to spell a value without this; a syntax that renders the
+            # whole expression itself spells its own values and does not need it
+            if (!exists table.query.syntax.render_value && !exists table.query.syntax.render_query) {
+                throw "REST-SCHEMA-RECORD-ERROR", sprintf("the %y query language declares neither "
+                    "\"render_value\" nor \"render_query\", so no predicate could be rendered into it",
+                    table.query.syntax.name);
+            }
         }
         foreach string opt in (table.scope_options) {
             RestSchemaTableDataProvider::checkOption(table, list_flat, opt, "a scope option");

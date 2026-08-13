@@ -160,40 +160,96 @@ public hashdecl RestSchemaRecordFilterInfo {
 }
 
 #! Describes a query language the API evaluates server-side, and how to render an expression tree into it
-/** Two of the applications in this family publish a real filter expression language - Xero's \c where and
-    Bitbucket's BBQL - and for those an entire expression tree maps onto the wire rather than one predicate at
-    a time.  That is the difference between a table that declares
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" honestly and one that
-    only narrows what it fetches.
+/** Several of the applications in this family publish a real filter expression language - Xero's \c where,
+    Bitbucket's BBQL, Klaviyo's \c filter and Intercom's search tree - and for those an entire expression tree
+    maps onto the wire rather than one predicate at a time.  That is the difference between a table that
+    declares @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" honestly and
+    one that only narrows what it fetches.
 
-    The syntax is declared rather than coded because it is small and entirely regular: an infix token per
-    operator, a method-call form for the string predicates, and one function that renders a value.  What is
-    **not** regular - which fields the API will accept in a filter - belongs to the table, not the syntax.
+    The syntax is declared rather than coded because most of it is small and entirely regular: a token per
+    operator in one of three rendering forms, and one function that renders a value.  What is **not**
+    regular - which fields the API will accept in a filter - belongs to the table, not the syntax.
+
+    @section restschemaquerysyntax_forms The Three Rendering Forms
+
+    |!Form|!Declared in|!Renders as|!Example
+    |infix|@ref binary_ops|<tt>field op value</tt>|<tt>Status=="AUTHORISED"</tt>
+    |call|@ref call_ops|<tt>op(field,value)</tt>|<tt>equals(channel,"email")</tt>
+    |method|@ref method_ops|<tt>field.Method(value)</tt>|<tt>Name.Contains("x")</tt>
+
+    An operator absent from all three cannot be rendered, and any predicate using it is evaluated client-side
+    instead.
+
+    @section restschemaquerysyntax_connectives A Language Need Not Have Every Connective
+
+    @ref and_op is mandatory because a language with no conjunction cannot express a search at all, but
+    @ref or_op and @ref not_op are optional, and a language that does not declare one **cannot render it**:
+    the whole expression becomes residual and is evaluated client-side.  Klaviyo's \c filter argument supports
+    neither, so declaring them there would either drop half a search or send Klaviyo a query it rejects.
+
+    @section restschemaquerysyntax_hook Rendering the Whole Expression
+
+    @ref render_query takes the rendering over entirely, for a language whose query is not a string at all:
+    Intercom's search takes a **tree of hashes** in the request body.  The operator tables are still declared
+    alongside it and still decide what is pushed down, so
+    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" and the residual
+    predicate stay declarative; only the spelling moves into the hook.
 */
 public hashdecl RestSchemaQuerySyntaxInfo {
     #! The syntax name, used in error messages
     string name;
 
     #! Generic operator to infix token, ex: <tt>{DP_SEARCH_OP_EQ: "=="}</tt>
-    /** An operator absent here and from @ref method_ops cannot be rendered, and any predicate using it is
-        evaluated client-side instead.
+    /** @see @ref restschemaquerysyntax_forms
     */
     hash<string, string> binary_ops;
+
+    #! Generic operator to a token rendered as <tt>op(field,value)</tt>
+    /** Klaviyo spells every predicate this way: <tt>equals(email,"x")</tt>,
+        <tt>greater-than(created,"2026-01-01")</tt>.
+
+        @see @ref restschemaquerysyntax_forms
+    */
+    *hash<string, string> call_ops;
 
     #! Generic operator to a method name rendered as <tt>field.Method(value)</tt>
     /** Xero spells "contains" as <tt>Name.Contains("x")</tt>; Bitbucket spells it as an infix \c ~ and
         declares it in @ref binary_ops instead.
+
+        @see @ref restschemaquerysyntax_forms
     */
     *hash<string, string> method_ops;
 
     #! The token joining the arguments of a logical AND
     string and_op = "AND";
 
-    #! The token joining the arguments of a logical OR
-    string or_op = "OR";
+    #! The token joining the arguments of a logical OR, if the language has one
+    /** @see @ref restschemaquerysyntax_connectives
+    */
+    *string or_op = "OR";
 
-    #! The token negating a sub-expression
-    string not_op = "NOT";
+    #! The token negating a sub-expression, if the language has one
+    /** @see @ref restschemaquerysyntax_connectives
+    */
+    *string not_op = "NOT";
+
+    #! The literal separator joining the arguments of a logical AND
+    /** Defaults to @ref and_op with a space on each side, which is how an infix language reads.  Klaviyo
+        joins its predicates with a bare comma and no spaces, so it declares <tt>","</tt> here.
+    */
+    *string and_sep;
+
+    #! The literal separator joining the arguments of a logical OR
+    /** Defaults to @ref or_op with a space on each side.
+    */
+    *string or_sep;
+
+    #! Whether a rendered group of more than one argument is wrapped in parentheses
+    /** True for an infix language, where grouping is what makes precedence unambiguous.  False for a language
+        with no grouping at all: Klaviyo's \c filter is a flat comma-separated list of predicates and rejects
+        a parenthesised one.
+    */
+    bool parenthesize = True;
 
     #! Renders one value as the query language spells it
     /** @param value the value from the expression
@@ -201,13 +257,27 @@ public hashdecl RestSchemaQuerySyntaxInfo {
         differently from a name - Xero wraps a GUID in \c guid("...")
 
         @return the rendered literal
+
+        Required unless @ref render_query is set, which renders the values itself.
     */
-    code<string(auto, string)> render_value;
+    *code<string(auto, string)> render_value;
 
     #! Renders one field reference as the query language spells it
     /** Absent when the field name is used unchanged.
     */
     *code<string(string)> render_field;
+
+    #! Renders the whole expression, replacing the built-in rendering entirely
+    /** @param exp the expression to render; it has already been accepted by
+        @ref RestSchemaActions::RestSchemaRecordFilter::canRender() "canRender()", so every operator in it is
+        one this syntax declares and every connective is one it has
+
+        @return the value to place on the query option, which need **not** be a string: Intercom's search
+        takes a hash
+
+        @see @ref restschemaquerysyntax_hook
+    */
+    *code<auto(hash<DataProviderExpression>)> render_query;
 }
 
 #! Declares that a record table's listing action takes a whole filter expression in one option

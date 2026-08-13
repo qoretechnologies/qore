@@ -275,6 +275,108 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
             },
         };
 
+        #! A prefix-call filter language with no OR, no NOT and no grouping, of the shape Klaviyo's has
+        const CallSyntax = <RestSchemaQuerySyntaxInfo>{
+            "name": "test-call",
+            "binary_ops": {},
+            "call_ops": {
+                DP_SEARCH_OP_EQ: "equals",
+                DP_SEARCH_OP_IN: "any",
+                DP_SEARCH_OP_GT: "greater-than",
+                DP_SEARCH_OP_LT: "less-than",
+                DP_OP_CONTAINS: "contains",
+            },
+            "and_sep": ",",
+            "parenthesize": False,
+            "or_op": NOTHING,
+            "not_op": NOTHING,
+            "render_value": string sub (auto value, string field) {
+                return make_json(value);
+            },
+        };
+
+        #! The same collection, filtered with a prefix-call language
+        const CallTable = <RestSchemaRecordTableInfo>{
+            "name": "call-items",
+            "display_name": "Items by Prefix Call",
+            "short_desc": "the items, filtered by a prefix-call language",
+            "desc": "the items, filtered by a prefix-call language",
+            "list_action": "list-items",
+            "id_field": "id",
+            "records_path": ("data",),
+            "paging": ItemPaging,
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": CallSyntax,
+                "fields": {"id": True, "name": True, "status": True, "created": True, "count": True},
+            },
+        };
+
+        #! The operators the query-tree language spells, shared by its declaration and its renderer
+        const HookOps = {
+            DP_SEARCH_OP_EQ: "=",
+            DP_SEARCH_OP_NE: "!=",
+            DP_SEARCH_OP_GT: ">",
+            DP_SEARCH_OP_LT: "<",
+            DP_SEARCH_OP_IN: "IN",
+            DP_OP_CONTAINS: "~",
+        };
+
+        #! A filter language whose query is a tree of hashes rather than a string, as Intercom's is
+        const HookSyntax = <RestSchemaQuerySyntaxInfo>{
+            "name": "test-hook",
+            "binary_ops": HookOps,
+            "or_op": "OR",
+            "not_op": NOTHING,
+            # renders the whole tree and returns a hash; no "render_value" is declared or needed
+            "render_query": \RestSchemaRecordTableTest::renderHookQuery(),
+        };
+
+        #! The same collection, filtered with a language that renders itself
+        const HookTable = <RestSchemaRecordTableInfo>{
+            "name": "hook-items",
+            "display_name": "Items by Query Tree",
+            "short_desc": "the items, filtered by a query tree",
+            "desc": "the items, filtered by a query tree",
+            "list_action": "list-items",
+            "id_field": "id",
+            "records_path": ("data",),
+            "paging": ItemPaging,
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": HookSyntax,
+                "fields": {"id": True, "name": True, "status": True, "created": True, "count": True},
+            },
+        };
+
+        #! An infix language with equality but no disjunction, so an "in" of two values cannot be spelled
+        const NoOrSyntax = <RestSchemaQuerySyntaxInfo>{
+            "name": "test-no-or",
+            "binary_ops": {DP_SEARCH_OP_EQ: "=="},
+            "or_op": NOTHING,
+            "not_op": NOTHING,
+            "render_value": string sub (auto value, string field) {
+                return make_json(value);
+            },
+        };
+
+        #! The same collection, filtered with a language that has no disjunction
+        const NoOrTable = <RestSchemaRecordTableInfo>{
+            "name": "no-or-items",
+            "display_name": "Items Without Disjunction",
+            "short_desc": "the items, filtered by a language with no OR",
+            "desc": "the items, filtered by a language with no OR",
+            "list_action": "list-items",
+            "id_field": "id",
+            "records_path": ("data",),
+            "paging": ItemPaging,
+            "query": <RestSchemaRecordQueryInfo>{
+                "option": "q",
+                "syntax": NoOrSyntax,
+                "fields": {"id": True, "name": True, "status": True, "created": True, "count": True},
+            },
+        };
+
         #! A cursor-paged collection
         const CursorTable = <RestSchemaRecordTableInfo>{
             "name": "cursor-items",
@@ -331,6 +433,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         addTestCase("predicate split with query arguments", \splitTest());
         addTestCase("a search option and a predicate on one listing option", \reservedOptionTest());
         addTestCase("filter expression rendering", \queryRenderTest());
+        addTestCase("prefix-call and self-rendered query languages", \callAndHookRenderTest());
         addTestCase("published expression metadata", \expressionInfoTest());
         addTestCase("the limit counts matching records", \limitAfterFilterTest());
         addTestCase("paging stops where it should", \pagingTest());
@@ -357,6 +460,31 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
             "exp": DP_SEARCH_OP_EQ,
             "args": (<DataProviderFieldReference>{"field": field}, value),
         };
+    }
+
+    #! Renders an expression as a tree of hashes, the way Intercom's search takes one
+    /** The point of the hook: the value placed on the query option is not a string at all.
+    */
+    static auto renderHookQuery(hash<DataProviderExpression> exp) {
+        switch (exp.exp) {
+            case DP_OP_AND:
+            case DP_OP_OR: {
+                return {
+                    "operator": exp.exp == DP_OP_AND ? "AND" : "OR",
+                    "value": map RestSchemaRecordTableTest::renderHookQuery(
+                        cast<hash<DataProviderExpression>>($1)), exp.args,
+                };
+            }
+        }
+        string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+        if (exp.exp == DP_SEARCH_OP_IN) {
+            list<auto> values = ();
+            for (int i = 1; i < exp.args.size(); ++i) {
+                values += exp.args[i].typeCode() == NT_LIST ? exp.args[i] : list(exp.args[i]);
+            }
+            return {"field": field, "operator": "IN", "value": values};
+        }
+        return {"field": field, "operator": HookOps{exp.exp}, "value": exp.args[1]};
     }
 
     #! Returns a predicate with the given operator
@@ -555,6 +683,114 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertEq("name == \"the \\\"best\\\" item\"", s.options.q);
     }
 
+    #! The three rendering forms and the two ways a language can be smaller than the renderer assumes
+    /** Neither Klaviyo nor Intercom fits the infix-string shape the renderer was written for, and both of
+        them are wrong in a way that is silent rather than loud: a language with no OR would render one
+        anyway, and a language whose query is a hash cannot be a string at all.
+    */
+    callAndHookRenderTest() {
+        RestSchemaRecordFilter f(CallTable);
+        assertTrue(f.hasNativeSearch());
+
+        # one predicate, rendered as a prefix call rather than as an infix comparison
+        hash<RestSchemaRecordFilterSplit> s = f.split(eq("status", "closed"));
+        assertEq({"q": "equals(status,\"closed\")"}, s.options);
+        assertNothing(s.client, "the service evaluates the whole predicate");
+
+        # a conjunction joins with the declared separator and is not parenthesised
+        s = f.split(logic(DP_OP_AND, (eq("status", "open"), op(DP_SEARCH_OP_GT, "count", 5))));
+        assertEq("equals(status,\"open\"),greater-than(count,5)", s.options.q);
+        assertNothing(s.client);
+
+        # "in" has a call of its own and takes the whole list as one JSON array
+        s = f.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, ("open", "closed")),
+        });
+        assertEq("any(status,[\"open\",\"closed\"])", s.options.q);
+        assertNothing(s.client);
+
+        # a language with no OR cannot render one: the whole expression is evaluated client-side rather
+        # than being sent as something the service would answer differently
+        s = f.split(logic(DP_OP_OR, (eq("status", "open"), eq("status", "closed"))));
+        assertEq({}, s.options, "a disjunction is not sent to a service that cannot evaluate one");
+        assertEq(DP_OP_OR, s.client.exp, "and it is answered here instead");
+
+        # the same for a negation
+        s = f.split(logic(DP_SEARCH_OP_NOT, (eq("status", "open"),)));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_NOT, s.client.exp);
+
+        # a conjunction with a disjunction inside it still pushes the conjunct it can render
+        s = f.split(logic(DP_OP_AND, (
+            eq("status", "open"),
+            logic(DP_OP_OR, (op(DP_SEARCH_OP_GT, "count", 5), op(DP_SEARCH_OP_LT, "count", 2))),
+        )));
+        assertEq("equals(status,\"open\")", s.options.q);
+        assertEq(DP_OP_OR, s.client.exp, "the disjunction is left for the client side");
+
+        # an infix language with equality but no disjunction cannot spell an "in" of more than one value,
+        # because the disjunction it would expand to is the connective it does not have
+        RestSchemaRecordFilter nf(NoOrTable);
+        s = nf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, ("open", "closed")),
+        });
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_IN, s.client.exp);
+
+        # ... and can spell one of a single value, which is an equality
+        s = nf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, ("open",)),
+        });
+        assertEq("status == \"open\"", s.options.q);
+        assertNothing(s.client);
+
+        # a language that renders itself puts a hash on the query option, not a string
+        RestSchemaRecordFilter hf(HookTable);
+        s = hf.split(eq("status", "closed"));
+        assertEq({"field": "status", "operator": "=", "value": "closed"}, s.options.q);
+        assertEq(NT_HASH, s.options.q.typeCode(), "the rendered query need not be a string");
+        assertNothing(s.client);
+
+        s = hf.split(logic(DP_OP_AND, (
+            eq("status", "open"),
+            logic(DP_OP_OR, (op(DP_SEARCH_OP_GT, "count", 5), op(DP_OP_CONTAINS, "name", "wid"))),
+        )));
+        assertEq({
+            "operator": "AND",
+            "value": (
+                {"field": "status", "operator": "=", "value": "open"},
+                {
+                    "operator": "OR",
+                    "value": (
+                        {"field": "count", "operator": ">", "value": 5},
+                        {"field": "name", "operator": "~", "value": "wid"},
+                    ),
+                },
+            ),
+        }, s.options.q);
+        assertNothing(s.client);
+
+        # the hook renders only what the declared operators accept: this language declares no NOT
+        s = hf.split(logic(DP_SEARCH_OP_NOT, (eq("status", "open"),)));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_NOT, s.client.exp);
+
+        # a syntax that can neither render a value nor render the whole query could spell nothing at all
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "render_value", sub () {
+            RestSchemaTableDataProvider::check(aset, cast<hash<RestSchemaRecordTableInfo>>(CallTable + {
+                "query": <RestSchemaRecordQueryInfo>{
+                    "option": "q",
+                    "syntax": cast<hash<RestSchemaQuerySyntaxInfo>>(CallSyntax + {
+                        "render_value": NOTHING,
+                    }),
+                },
+            }));
+        });
+    }
+
     expressionInfoTest() {
         ScriptedRestClient rest;
         RestSchemaTableDataProvider items = table(ItemTable, \rest);
@@ -580,6 +816,27 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertTrue(qinfo.expressions{DP_OP_OR}.supports_pushdown);
         assertTrue(qinfo.expressions{DP_OP_CONTAINS}.supports_pushdown);
         assertFalse(qinfo.expressions{DP_SEARCH_OP_REGEX}.supports_pushdown);
+
+        # a language with no disjunction and no negation says so, rather than publishing a pushdown that
+        # would in fact be answered client-side
+        RestSchemaTableDataProvider c = table(CallTable, \rest);
+        hash<DataProviderInfo> cinfo = c.getInfo();
+        assertTrue(cinfo.supports_native_search);
+        assertTrue(cinfo.expressions{DP_OP_AND}.supports_pushdown);
+        assertFalse(cinfo.expressions{DP_OP_OR}.supports_pushdown, "the language has no OR");
+        assertFalse(cinfo.expressions{DP_SEARCH_OP_NOT}.supports_pushdown, "the language has no NOT");
+        assertTrue(cinfo.expressions{DP_SEARCH_OP_EQ}.supports_pushdown, "declared as a prefix call");
+        assertTrue(cinfo.expressions{DP_SEARCH_OP_IN}.supports_pushdown);
+        assertFalse(cinfo.expressions{DP_SEARCH_OP_GE}.supports_pushdown, "the language has no >=");
+
+        # a language rendering itself still declares what it can push down
+        RestSchemaTableDataProvider h = table(HookTable, \rest);
+        hash<DataProviderInfo> hinfo = h.getInfo();
+        assertTrue(hinfo.supports_native_search);
+        assertTrue(hinfo.expressions{DP_OP_OR}.supports_pushdown);
+        assertFalse(hinfo.expressions{DP_SEARCH_OP_NOT}.supports_pushdown);
+        assertTrue(hinfo.expressions{DP_OP_CONTAINS}.supports_pushdown);
+        assertFalse(hinfo.expressions{DP_SEARCH_OP_GE}.supports_pushdown, "the language has no >=");
 
         # the search options carry the collection's own, taken from the listing action
         assertTrue(exists qinfo.search_options.limit);

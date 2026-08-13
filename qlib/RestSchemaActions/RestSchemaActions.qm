@@ -236,9 +236,27 @@ module RestSchemaActions {
     search operator is answered whether the service can evaluate it or not.
 
     @ref RestSchemaActions::RestSchemaQuerySyntaxInfo "RestSchemaQuerySyntaxInfo" declares such a language
-    without any application code: an infix token per operator, a method-call form for the string predicates,
-    and one function rendering a value.  An operator the language spells without quite meaning it is listed
-    in \c inexact_ops, so it narrows the listing and the predicate is still answered here.
+    without any application code: a token per operator in one of three rendering forms - infix
+    <tt>field op value</tt>, prefix <tt>op(field,value)</tt> or method <tt>field.Method(value)</tt> - and one
+    function rendering a value.  An operator the language spells without quite meaning it is listed in
+    \c inexact_ops, so it narrows the listing and the predicate is still answered here.
+
+    @subsection restschemaactions_records_smaller A Language Is Usually Smaller Than the Renderer Assumes
+
+    No vendor in this family publishes a complete boolean algebra, and assuming one is how a search comes back
+    wrong rather than empty:
+
+    |!What varies|!How it is declared|!What it prevents
+    |A language with no OR or no NOT|leave \c or_op or \c not_op unset|the connective cannot be rendered, so the expression stays whole and is evaluated client-side.  Klaviyo's \c filter has neither, and sending the arguments of an OR joined by anything else would answer with records the caller excluded
+    |A language with no grouping|\c and_sep / \c or_sep give the literal separator, \c parenthesize says whether a group is wrapped|Klaviyo joins predicates with a bare comma and rejects a parenthesised one
+    |A query that is not a string|\c render_query renders the whole expression and may return any type|Intercom's search takes a **tree of hashes** in the request body
+
+    The split matters: the operator tables still decide **what is pushed down** even when \c render_query
+    decides **how it is spelled**, so
+    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search",
+    @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown" and the residual
+    predicate all stay declarative.  A hook that also decided pushdown would put the honesty of those flags
+    inside a closure.
 
     @subsection restschemaactions_records_type What the Columns Are
 
