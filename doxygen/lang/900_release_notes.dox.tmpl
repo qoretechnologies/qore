@@ -2230,6 +2230,17 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref kitrestclientintro "KitRestClient" module
       - new module providing a REST client for <a href="https://kit.com/">Kit</a>'s email marketing API
 
+    - @ref klaviyodataproviderintro "KlaviyoDataProvider" module
+      - new module providing a data provider API for <a href="https://www.klaviyo.com">Klaviyo</a> profiles, lists,
+        segments, tags, campaigns, events and subscriptions, with actions generated from Klaviyo's own OpenAPI 3
+        description at a pinned dated revision, and four polling events for new profiles, new events and profiles
+        added to a list or a segment
+
+    - @ref klaviyorestclientintro "KlaviyoRestClient" module
+      - new module providing a REST client for the <a href="https://www.klaviyo.com">Klaviyo</a> REST API,
+        authenticating through OAuth2 with PKCE or a private API key, and sending the pinned API revision on
+        every request
+
     - @ref krb5utilintro "Krb5Util" module
       - new module providing Qore-language helpers for the @ref krb5intro "krb5" binary module
 

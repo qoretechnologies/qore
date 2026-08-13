@@ -174,6 +174,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         addTestCase("schema drift", \driftReportTest());
         addTestCase("a body lifted out of an envelope", \requestUnwrapTest());
         addTestCase("a grouping object published as options", \liftTest());
+        addTestCase("a response envelope merged into what carries it", \mergeTest());
 
         set_return_value(main());
     }
@@ -1264,6 +1265,148 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
                 "attributes": {"name": "widget"},
             },
         }, wire4.req.body, "and is repeated in the envelope without being asked for twice");
+    }
+
+    private mergeTest() {
+        hash<auto> record = {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "type": {"type": "string"},
+                "attributes": {
+                    "type": "object",
+                    "properties": {
+                        "email": {"type": "string"},
+                        "created": {"type": "integer"},
+                    },
+                },
+            },
+        };
+        hash<auto> doc = {
+            "openapi": "3.0.1",
+            "info": {"title": "t", "version": "1"},
+            "paths": {
+                "/people/{id}": {
+                    "get": {
+                        "operationId": "get_person",
+                        "parameters": (
+                            {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}},
+                        ),
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    MimeTypeJson: {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {"data": record},
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                "/people": {
+                    "get": {
+                        "operationId": "get_people",
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    MimeTypeJson: {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "data": {"type": "array", "items": record},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromString(make_json(doc), True);
+
+        # a single resource: the envelope's properties are published beside the identity
+        RestSchemaActionOperation op = new RestSchemaActionSet(schema, (<RestSchemaActionInfo>{
+            "action": "get_person",
+            "method": "GET",
+            "path": "/people/{id}",
+            "display_name": "Get Person",
+            "short_desc": "x",
+            "desc": "x",
+            "response_unwrap": "data",
+            "response_fields": {
+                "attributes": <RestSchemaFieldOverlayInfo>{"merge": True},
+            },
+        },)).getOperationEx("get_person");
+        assertEq(("created", "email", "id", "type"),
+            sort(keys (op.getResponseType().getFields() ?? {})), "the envelope is not a field of its own");
+        assertEq({"id": "p1", "type": "person", "email": "a@example.com", "created": 5},
+            op.processResponse({"data": {"id": "p1", "type": "person",
+                "attributes": {"email": "a@example.com", "created": 5}}}),
+            "the envelope's properties are published beside the identity");
+        # a value the envelope does not carry is left alone rather than being invented
+        assertEq({"id": "p1", "type": "person"},
+            op.processResponse({"data": {"id": "p1", "type": "person"}}),
+            "a response with no envelope is passed through");
+
+        # a collection: the overlay reaches the element type, and a codec inside the envelope still applies
+        RestSchemaActionOperation lop = new RestSchemaActionSet(schema, (<RestSchemaActionInfo>{
+            "action": "get_people",
+            "method": "GET",
+            "path": "/people",
+            "display_name": "List People",
+            "short_desc": "x",
+            "desc": "x",
+            "response_fields": {
+                "data": <RestSchemaFieldOverlayInfo>{
+                    "fields": {
+                        "attributes": <RestSchemaFieldOverlayInfo>{
+                            "merge": True,
+                            "fields": {
+                                "created": <RestSchemaFieldOverlayInfo>{
+                                    "codec": RestSchemaActionCodecs::UnixSeconds,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },)).getOperationEx("get_people");
+        *AbstractDataProviderType et = lop.getResponseType().getFields().data.getType().getElementType();
+        assertEq(("created", "email", "id", "type"), sort(keys (et.getFields() ?? {})),
+            "the merge reaches the element type of a collection");
+        assertEq({
+            "data": (
+                {"id": "p1", "type": "person", "email": "a@example.com", "created": 1970-01-01T00:00:05Z},
+                {"id": "p2", "type": "person", "email": "b@example.com", "created": 1970-01-01T00:00:10Z},
+            ),
+        }, lop.processResponse({
+            "data": (
+                {"id": "p1", "type": "person", "attributes": {"email": "a@example.com", "created": 5}},
+                {"id": "p2", "type": "person", "attributes": {"email": "b@example.com", "created": 10}},
+            ),
+        }), "every element is merged, and a codec inside the envelope still converts");
+
+        # merging something that is not an object says so
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "which is not an object",
+            sub () {
+                new RestSchemaActionSet(schema, (<RestSchemaActionInfo>{
+                    "action": "get_person",
+                    "method": "GET",
+                    "path": "/people/{id}",
+                    "display_name": "Get Person",
+                    "short_desc": "x",
+                    "desc": "x",
+                    "response_unwrap": "data",
+                    "response_fields": {"id": <RestSchemaFieldOverlayInfo>{"merge": True}},
+                },));
+            });
     }
 
     private liftTest() {

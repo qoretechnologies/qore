@@ -1,0 +1,689 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** KlaviyoDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires KlaviyoDataProvider
+%requires KlaviyoRestClient
+%requires RestClientIo
+
+%requires json
+
+%exec-class KlaviyoDataProviderTest
+
+#! A recorded outgoing request
+hashdecl RecordedRequest {
+    string method;
+    string path;
+    auto body;
+    *hash<auto> headers;
+}
+
+#! A Klaviyo REST client that records requests instead of making them
+class FakeKlaviyoRestClient inherits KlaviyoRestClient::KlaviyoRestClientIo {
+    public {
+        #! Every request made, in order
+        list<hash<RecordedRequest>> requests = ();
+
+        #! Queued responses, consumed in order
+        list<hash<auto>> responses = ();
+
+        #! Used when the response queue is empty
+        hash<auto> default_response = {"body": {}, "headers": {}};
+    }
+
+    constructor() : KlaviyoRestClientIo({"token": "fake-klaviyo-token"}) {
+    }
+
+    push_response(hash<auto> resp) {
+        push responses, resp;
+    }
+
+    reset() {
+        requests = ();
+        responses = ();
+    }
+
+    hash<RecordedRequest> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no requests were recorded";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Returns the last request body, decoded when the transport was handed a serialized one
+    auto lastBody() {
+        auto body = last().body;
+        if (body.typeCode() == NT_BINARY) {
+            body = binary_to_string(body, "UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            return parse_json(body);
+        }
+        return body;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr) {
+        push requests, <RecordedRequest>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "headers": hdr,
+        };
+        hash<auto> resp = responses ? shift responses : default_response;
+        return <RestClient::RestResponseInfo>{
+            "status_code": resp.status_code ?? 200,
+            "body": resp.body,
+            "headers": resp.headers ?? {},
+        };
+    }
+}
+
+public class KlaviyoDataProviderTest inherits QUnit::Test {
+    public {
+        #! The action IDs the superseded TypeScript application registered
+        /** Read from its i18n catalog at
+            \c module-v8/qlib/TypeScriptActionInterface/i18n/data-provider.S2xhdml5bw/root.json, not from
+            filenames or operation IDs.  Two of the trigger IDs differ from their filenames -
+            \c profile-added-to-list registered as \c new_list_profile - which is exactly the kind of
+            difference that renames an action while looking like preservation.
+        */
+        const SupersededActions = (
+            "add_profile_to_list",
+            "add_tag_to_list",
+            "add_tag_to_segment",
+            "create_event",
+            "create_list",
+            "create_or_update_profile",
+            "create_profile",
+            "get_campaign",
+            "get_profile",
+            "list_campaigns",
+            "list_lists",
+            "list_profiles",
+            "list_segments",
+            "list_tags",
+            "make-api-call",
+            "new_event",
+            "new_list_profile",
+            "new_profile",
+            "new_segment_profile",
+            "remove_profile_from_list",
+            "remove_tag_from_list",
+            "remove_tag_from_segment",
+            "send_campaign",
+            "subscribe_profile",
+            "unsubscribe_profile",
+            "update_profile",
+        );
+
+        #! The read-only listings this application adds so that its dropdowns have actions to call
+        const AddedListings = (
+            "list_events",
+            "list_metrics",
+        );
+
+        #! The options the superseded application published, per action
+        /** These are as much a commitment as the action IDs: an existing workflow supplies option values
+            **by name**, so an option this application renamed would break every workflow that set it.
+            The native action may publish more - Klaviyo accepts more than the application asked for - but
+            never fewer, and never under another name.
+        */
+        const SupersededOptions = {
+            "add_profile_to_list": ("list", "profile"),
+            "add_tag_to_list": ("list", "tag"),
+            "add_tag_to_segment": ("segment", "tag"),
+            "create_event": ("customId", "customProperties", "email", "metric", "profile", "time",
+                "value"),
+            "create_list": ("name",),
+            "create_or_update_profile": ("city", "country", "customProperties", "email", "externalId",
+                "firstName", "id", "imageUrl", "lastName", "organization", "phoneNumber", "region",
+                "title", "zip"),
+            "create_profile": ("city", "country", "customProperties", "email", "externalId", "firstName",
+                "imageUrl", "lastName", "organization", "phoneNumber", "region", "title", "zip"),
+            "get_campaign": ("id",),
+            "get_profile": ("additionalFields", "id"),
+            "list_campaigns": ("channel", "cursor", "name", "pageSize", "sort"),
+            "list_lists": ("cursor", "filter", "sort"),
+            "list_profiles": ("additionalFields", "cursor", "filter", "pageSize", "sort"),
+            "list_segments": ("cursor", "filter", "sort"),
+            "list_tags": ("cursor", "filter", "sort"),
+            "remove_profile_from_list": ("list", "profile"),
+            "remove_tag_from_list": ("list", "tag"),
+            "remove_tag_from_segment": ("segment", "tag"),
+            "send_campaign": ("id",),
+            "subscribe_profile": ("consentToSubscribeToChannel", "email", "list", "phoneNumber",
+                "profileId"),
+            "unsubscribe_profile": ("email", "phoneNumber"),
+            "update_profile": ("city", "country", "customProperties", "email", "externalId", "firstName",
+                "id", "imageUrl", "lastName", "organization", "phoneNumber", "region", "title", "zip"),
+        };
+    }
+
+    constructor() : Test("KlaviyoDataProviderTest", "1.0") {
+        addTestCase("the vendored schema and its provenance", \schemaTest());
+        addTestCase("every superseded action survives", \actionSurfaceTest());
+        addTestCase("every superseded option survives", \optionSurfaceTest());
+        addTestCase("the manifest resolves against the schema", \manifestTest());
+        addTestCase("the JSON:API request envelope", \requestEnvelopeTest());
+        addTestCase("a grouping object published as options", \liftTest());
+        addTestCase("the filter and sort codecs", \codecTest());
+        addTestCase("the JSON:API response envelope", \responseEnvelopeTest());
+        addTestCase("the dropdowns", \referenceDataTest());
+        addTestCase("the hand-written relationship actions", \relationshipTest());
+        addTestCase("the hand-written write actions", \writeActionTest());
+        addTestCase("the polling events", \eventTest());
+        addTestCase("the connection", \connectionTest());
+
+        set_return_value(main());
+    }
+
+    private RestSchemaActionSet aset() {
+        return KlaviyoSchema::getActionSet();
+    }
+
+    private KlaviyoDataProvider getProvider(FakeKlaviyoRestClient rest) {
+        return new KlaviyoDataProvider(rest);
+    }
+
+    private schemaTest() {
+        hash<KlaviyoSchemaProvenanceInfo> p = KlaviyoSchema::Provenance;
+        assertRegex("^https://raw\\.githubusercontent\\.com/klaviyo/openapi/", p.source_url);
+        assertEq(64, p.source_sha256.size(), "the checksum of the unmodified upstream document is recorded");
+        assertGt(1000000, p.source_size, "the upstream document is the combined one, not a slice");
+        assertGt(200, p.source_paths);
+        assertGt(300, p.source_operations);
+        assertGt(1000, p.source_schemas);
+
+        # the revision and the description move together: an action generated from this description and
+        # sent against another revision would be making a request the description does not describe
+        assertEq(KlaviyoRestClient::KlaviyoRestClientBase::ApiRevision, p.api_version,
+            "the client sends the revision the pinned description describes");
+        assertEq(KlaviyoRestClientBase::ApiRevision, KlaviyoSchema::getSchema().info.version,
+            "the description's own version is that revision");
+
+        assertTrue(is_file(KlaviyoSchema::getSchemaPath()), "the schema ships beside the module");
+    }
+
+    private actionSurfaceTest() {
+        hash<string, bool> registered = map {$1.action: True},
+            DataProviderActionCatalog::getActions(KlaviyoDataProvider::AppName) ?? ();
+
+        # every ID the superseded application registered is still here; one missing is a workflow that
+        # breaks, so this is the test that decides whether the flag day can happen
+        list<string> missing = (map $1, SupersededActions, !registered{$1}) ?? ();
+        assertEq((), missing, "no superseded action ID was dropped");
+
+        map assertTrue(registered{$1}, sprintf("the added listing %y is registered", $1)), AddedListings;
+        assertEq(SupersededActions.size() + AddedListings.size(), registered.size(),
+            "nothing was registered that is neither a superseded action nor a declared addition");
+
+        # the four trigger IDs are the registered ones, not the filenames they were written in
+        hash<string, bool> events = map {$1.action: True},
+            (DataProviderActionCatalog::getActions(KlaviyoDataProvider::AppName) ?? ()),
+            $1.action_code == DPAT_EVENT;
+        assertEq(("new_event", "new_list_profile", "new_profile", "new_segment_profile"),
+            sort(keys events), "the trigger IDs are the catalog's, not the filenames'");
+    }
+
+    private optionSurfaceTest() {
+        hash<string, hash<auto>> acts = map {$1.action: $1},
+            DataProviderActionCatalog::getActions(KlaviyoDataProvider::AppName) ?? ();
+        foreach hash<auto> i in (SupersededOptions.pairIterator()) {
+            *hash<auto> act = acts{i.key};
+            assertTrue(exists act, sprintf("action %y is registered", i.key));
+            hash<string, bool> have = map {$1: True}, keys (act.options ?? {});
+            list<string> missing = (map $1, i.value, !have{$1}) ?? ();
+            assertEq((), missing, sprintf("action %y publishes every option it used to", i.key));
+        }
+    }
+
+    private manifestTest() {
+        RestSchemaActionSet set = aset();
+        # every manifest entry resolves, which is what the constructor proves; this asserts the count and
+        # that each one carries the operationId the manifest expects
+        assertEq(KlaviyoManifest::Manifest.size(), set.getActionNames().size(),
+            "every manifest entry produced an action");
+        foreach hash<RestSchemaActionInfo> ai in (KlaviyoManifest::Manifest) {
+            RestSchemaActionOperation op = set.getOperationEx(ai.action);
+            assertEq(ai.method.upr(), op.getMethod(), sprintf("%s: method", ai.action));
+            assertEq(ai.path, op.getPath(), sprintf("%s: path", ai.action));
+            assertEq(ai.operation_id, op.getOperation().operationId, sprintf("%s: operationId", ai.action));
+        }
+
+        # the revision header is the connection's, not the action's, on every generated action
+        foreach string name in (set.getActionNames()) {
+            list<hash<RestSchemaConnectionHeaderInfo>> ch = set.getOperationEx(name).getConnectionHeaders();
+            assertEq(1, ch.size(), sprintf("%s: one connection-supplied header", name));
+            assertEq("revision", ch[0].wire_name, sprintf("%s: it is the revision", name));
+            assertTrue(ch[0].required, sprintf("%s: which Klaviyo declares required", name));
+            assertEq("headers", ch[0].connection_option, sprintf("%s: naming what to set", name));
+        }
+    }
+
+    private requestEnvelopeTest() {
+        RestSchemaActionSet set = aset();
+
+        # a create lifts the action's options out of "{data: {type, attributes}}" and rebuilds it, filling
+        # in the "type" discriminator nobody was asked for
+        RestSchemaActionOperation create = set.getOperationEx("create_profile");
+        hash<auto> wire = create.unflatten({"email": "ada@example.com", "firstName": "Ada"});
+        assertEq({
+            "data": {
+                "type": "profile",
+                "attributes": {"email": "ada@example.com", "first_name": "Ada"},
+            },
+        }, wire.req.body, "the create body is the JSON:API envelope, with camelCase renamed back");
+        assertEq({"email": "ada@example.com", "firstName": "Ada"}, create.flatten(wire),
+            "and flattens back to the options that built it");
+
+        # an update repeats the profile's identity inside the envelope without asking for it twice
+        RestSchemaActionOperation update = set.getOperationEx("update_profile");
+        assertFalse(exists update.getFlatMap().id.wire_path, "the published id is the path variable");
+        hash<auto> uwire = update.unflatten({"id": "01H", "email": "ada@example.com"});
+        assertEq({"id": "01H"}, uwire.path_vars, "the identity travels in the path");
+        assertEq({
+            "data": {
+                "type": "profile",
+                "id": "01H",
+                "attributes": {"email": "ada@example.com"},
+            },
+        }, uwire.req.body, "and is repeated in the envelope, which Klaviyo requires");
+
+        # the import action publishes the envelope's own optional id as an option
+        RestSchemaActionOperation imp = set.getOperationEx("create_or_update_profile");
+        assertEq(("data",), imp.getFlatMap().id.wire_path, "the published id is the envelope's");
+        assertEq({
+            "data": {
+                "type": "profile",
+                "id": "01H",
+                "attributes": {"email": "ada@example.com"},
+            },
+        }, imp.unflatten({"id": "01H", "email": "ada@example.com"}).req.body,
+            "the envelope's id travels at its own level, not among the attributes");
+
+        # a send job's discriminator is filled in at the level the options were lifted to, so an existing
+        # call passing only the campaign still works
+        RestSchemaActionOperation send = set.getOperationEx("send_campaign");
+        assertEq(("id",), sort(keys (send.getRequestType().getFields() ?? {})),
+            "the send job publishes only the campaign");
+        assertEq({
+            "data": {
+                "type": "campaign-send-job",
+                "id": "01C",
+            },
+        }, send.unflatten({"id": "01C"}).req.body, "and fills in the job type itself");
+    }
+
+    private liftTest() {
+        RestSchemaActionSet set = aset();
+
+        # a profile's postal address arrives as a nested object; the four parts the superseded application
+        # published are options here, and are assembled back into it
+        RestSchemaActionOperation create = set.getOperationEx("create_profile");
+        *hash<string, AbstractDataField> fields = create.getRequestType().getFields();
+        map assertTrue(exists fields{$1}, sprintf("the address part %y is an option", $1)),
+            ("city", "region", "country", "zip");
+        assertEq(NOTHING, fields.location, "and the grouping object itself is not");
+        assertEq({
+            "data": {
+                "type": "profile",
+                "attributes": {
+                    "email": "ada@example.com",
+                    "location": {"city": "London", "zip": "NW1"},
+                },
+            },
+        }, create.unflatten({"email": "ada@example.com", "city": "London", "zip": "NW1"}).req.body,
+            "the address is assembled back into the object Klaviyo takes");
+        assertEq({"email": "ada@example.com"},
+            create.flatten(create.unflatten({"email": "ada@example.com"})),
+            "an address left unset is not sent as an empty object");
+
+        # the campaign listing's required filter is published as the two options the application offered
+        RestSchemaActionOperation camp = set.getOperationEx("list_campaigns");
+        *hash<string, AbstractDataField> cfields = camp.getRequestType().getFields();
+        assertTrue(exists cfields.channel, "the campaign channel is an option");
+        assertTrue(exists cfields.name, "so is the campaign name");
+        assertEq(NOTHING, cfields.filter, "and Klaviyo's filter string is not");
+    }
+
+    private codecTest() {
+        RestSchemaActionSet set = aset();
+
+        # the sort token is a field and a direction, not Klaviyo's signed string
+        RestSchemaActionOperation lists = set.getOperationEx("list_lists");
+        hash<auto> wire = lists.unflatten({"sort": {"field": "created", "direction": "desc"}});
+        assertEq("-created", wire.req.query.sort, "descending is a leading minus on the wire");
+        assertEq({"sort": {"field": "created", "direction": "desc"}}, lists.flatten(wire),
+            "and reads back as the field and direction");
+        assertEq("created", lists.unflatten({"sort": {"field": "created", "direction": "asc"}}).req.query.sort,
+            "ascending has no prefix");
+
+        # the filter is named fields with per-field operators, not a DSL string
+        hash<auto> fwire = lists.unflatten({"filter": {"name": ("weekly", "monthly")}});
+        assertEq("any(name,[\"weekly\",\"monthly\"])", fwire.req.query.filter,
+            "several values become a JSON array");
+        assertEq({"filter": {"name": ("weekly", "monthly")}}, lists.flatten(fwire),
+            "and read back as the list that built them");
+        assertEq("any(name,\"weekly\")", lists.unflatten({"filter": {"name": "weekly"}}).req.query.filter,
+            "one value is sent bare, as the superseded application sent it");
+
+        # a tag name is matched by "contains" rather than "any", because that is what the application did
+        assertEq("contains(name,\"news\")",
+            set.getOperationEx("list_tags").unflatten({"filter": {"name": "news"}}).req.query.filter,
+            "the operator belongs to the field");
+
+        # the campaign channel is the required predicate Klaviyo will not list campaigns without
+        RestSchemaActionOperation camp = set.getOperationEx("list_campaigns");
+        assertEq("any(messages.channel,\"email\")",
+            camp.unflatten({"channel": "email"}).req.query.filter,
+            "the channel becomes the predicate the endpoint requires");
+        assertEq("any(messages.channel,[\"email\",\"sms\"]),contains(name,\"launch\")",
+            camp.unflatten({"channel": ("email", "sms"), "name": "launch"}).req.query.filter,
+            "and both options build one filter, in declaration order");
+
+        # a value the codec cannot place is reported rather than silently widening the filter
+        assertThrows("KLAVIYO-FILTER-ERROR", "does not publish",
+            sub () {
+                lists.flatten({"req": {"query": {"filter": "any(nope,\"x\")"}}, "path_vars": {}});
+            });
+    }
+
+    private responseEnvelopeTest() {
+        RestSchemaActionSet set = aset();
+
+        # a single resource is published flat: the identity and the attributes together, which is the shape
+        # the superseded application returned
+        RestSchemaActionOperation get = set.getOperationEx("get_profile");
+        assertEq({
+            "id": "01H",
+            "type": "profile",
+            "email": "ada@example.com",
+            "first_name": "Ada",
+        }, get.processResponse({
+            "data": {
+                "id": "01H",
+                "type": "profile",
+                "attributes": {"email": "ada@example.com", "first_name": "Ada"},
+            },
+        }), "the resource is published flat");
+        *hash<string, AbstractDataField> gfields = get.getResponseType().getFields();
+        assertTrue(exists gfields.email, "and the output type says so");
+        assertEq(NOTHING, gfields.attributes, "with no envelope of its own");
+
+        # a collection merges each element, and publishes the next-page cursor where the superseded
+        # application published it
+        RestSchemaActionOperation list = set.getOperationEx("list_lists");
+        hash<auto> out = list.processResponse({
+            "data": (
+                {"id": "L1", "type": "list", "attributes": {"name": "weekly"}},
+                {"id": "L2", "type": "list", "attributes": {"name": "monthly"}},
+            ),
+            "links": {"self": "https://a/1", "next": "https://a/2"},
+        });
+        assertEq(("L1", "L2"), (map $1.id, out.data), "every element is delivered");
+        assertEq(("weekly", "monthly"), (map $1.name, out.data), "with its attributes beside its identity");
+        assertEq("https://a/2", out.next, "and the next-page link at the top level");
+    }
+
+    private referenceDataTest() {
+        RestSchemaActionSet set = aset();
+        hash<string, hash<RestSchemaReferenceDataInfo>> rd = set.getAllReferenceDataDecls();
+        assertEq(KlaviyoManifest::ReferenceData.size(), rd.size(), "every dropdown is declared");
+        foreach hash<RestSchemaReferenceDataInfo> i in (rd.iterator()) {
+            # a dropdown can only name an action the manifest exports, or it can never be filled
+            assertTrue(exists set.getOperation(i.action),
+                sprintf("the dropdown %y names an exported action", i.name));
+            assertEq(("data",), i.records_path,
+                sprintf("%s: JSON:API answers its records under \"data\"", i.name));
+        }
+        # the metric dropdowns differ in what they are keyed by, which is why there are two of them
+        assertEq("name", rd{KlaviyoManifest::RefMetricName}.value_field,
+            "an event names its metric, because Klaviyo defines one on first use");
+        assertEq("id", rd{KlaviyoManifest::RefMetricId}.value_field,
+            "the trigger filters by metric ID");
+
+        # the campaign dropdown asks for both channels: Klaviyo will not list campaigns without a channel,
+        # and a picker offering only e-mail campaigns would be missing half the account
+        assertEq(("email", "sms"), rd{KlaviyoManifest::RefCampaign}.options.channel,
+            "the campaign dropdown covers both channels");
+    }
+
+    private relationshipTest() {
+        FakeKlaviyoRestClient rest();
+        KlaviyoDataProvider klaviyo = getProvider(rest);
+
+        AbstractDataProvider add = klaviyo.getChildProviderEx("add_profile_to_list");
+        add.doRequest({"list": "L1", "profile": "P1"});
+        assertEq("POST", rest.last().method);
+        assertEq("/api/lists/L1/relationships/profiles", rest.last().path);
+        assertEq({"data": ({"type": "profile", "id": "P1"},)}, rest.lastBody(),
+            "the body is the single-element relationship array Klaviyo takes");
+
+        AbstractDataProvider detach = klaviyo.getChildProviderEx("remove_tag_from_segment");
+        detach.doRequest({"tag": "T1", "segment": "S1"});
+        assertEq("DELETE", rest.last().method);
+        assertEq("/api/tags/T1/relationships/segments", rest.last().path);
+        assertEq({"data": ({"type": "segment", "id": "S1"},)}, rest.lastBody(),
+            "the type discriminator follows what is being detached");
+
+        # an identifier carrying a reserved character stays one path segment
+        add.doRequest({"list": "a/b", "profile": "P1"});
+        assertEq("/api/lists/a%2Fb/relationships/profiles", rest.last().path);
+
+        # a missing identifier is reported before the request is made: the request type declares both
+        # options required, so the framework rejects it without the provider being reached
+        assertThrows("INVALID-REQUEST", "profile",
+            sub () { add.doRequest({"list": "L1"}); });
+        assertEq(3, rest.requests.size(), "and no request was made");
+
+        # the two options are the ones the superseded application published, and both offer a dropdown
+        *hash<string, AbstractDataField> fields = add.getRequestType().getFields();
+        assertEq(("profile", "list"), keys fields, "in the order the application presented them");
+        assertEq(KlaviyoManifest::RefProfile, fields.profile.getAttributes().ref_data);
+        assertEq(KlaviyoManifest::RefList, fields.list.getAttributes().ref_data);
+    }
+
+    private writeActionTest() {
+        FakeKlaviyoRestClient rest();
+        KlaviyoDataProvider klaviyo = getProvider(rest);
+
+        # an event nests a metric envelope and a profile envelope inside its attributes
+        AbstractDataProvider event = klaviyo.getChildProviderEx("create_event");
+        event.doRequest({
+            "metric": "Placed Order",
+            "email": "ada@example.com",
+            "value": 99.95,
+            "customId": "A-1234",
+            "time": 2026-08-13T10:00:00Z,
+            "customProperties": {"order_id": "A-1234"},
+        });
+        assertEq("/api/events", rest.last().path);
+        hash<auto> body = rest.lastBody();
+        assertEq("event", body.data.type);
+        assertEq("Placed Order", body.data.attributes.metric.data.attributes.name,
+            "the metric is named, because Klaviyo defines one on first use");
+        assertEq("ada@example.com", body.data.attributes.profile.data.attributes.email);
+        assertEq("A-1234", body.data.attributes.unique_id, "the custom ID makes a retry safe");
+        assertEq("2026-08-13T10:00:00Z", body.data.attributes.time, "the time is ISO-8601 in UTC");
+        assertEq({"order_id": "A-1234"}, body.data.attributes.properties);
+
+        # Klaviyo requires "properties", so an event recording nothing beyond the fact still sends one
+        rest.reset();
+        event.doRequest({"metric": "Viewed Product", "profile": "P1"});
+        assertEq({}, rest.lastBody().data.attributes.properties);
+        assertEq("P1", rest.lastBody().data.attributes.profile.data.id);
+        assertEq(NOTHING, rest.lastBody().data.attributes.time, "an unset option is not a value to send");
+
+        # consent is recorded by creating a bulk subscription job
+        rest.reset();
+        AbstractDataProvider subscribe = klaviyo.getChildProviderEx("subscribe_profile");
+        subscribe.doRequest({
+            "consentToSubscribeToChannel": "both",
+            "email": "ada@example.com",
+            "phoneNumber": "+15005550006",
+            "smsSubscriptionType": "both",
+            "list": "L1",
+        });
+        assertEq("/api/profile-subscription-bulk-create-jobs", rest.last().path);
+        hash<auto> sbody = rest.lastBody();
+        hash<auto> profile = sbody.data.attributes.profiles.data[0];
+        assertEq("SUBSCRIBED", profile.attributes.subscriptions.email.marketing.consent);
+        assertEq("SUBSCRIBED", profile.attributes.subscriptions.sms.marketing.consent);
+        assertEq("SUBSCRIBED", profile.attributes.subscriptions.sms.transactional.consent,
+            "\"both\" covers marketing and transactional, which Klaviyo holds separately");
+        assertEq("L1", sbody.data.relationships."list".data.id,
+            "subscribing through a list is what applies its double opt-in process");
+
+        # e-mail only touches the e-mail channel
+        rest.reset();
+        subscribe.doRequest({"consentToSubscribeToChannel": "email", "email": "ada@example.com"});
+        assertEq(("email",), keys rest.lastBody().data.attributes.profiles.data[0].attributes.subscriptions);
+        assertEq(NOTHING, rest.lastBody().data.relationships, "and no list is named");
+
+        # withdrawing follows from the identifier supplied
+        rest.reset();
+        AbstractDataProvider unsub = klaviyo.getChildProviderEx("unsubscribe_profile");
+        unsub.doRequest({"phoneNumber": "+15005550006"});
+        assertEq("/api/profile-subscription-bulk-delete-jobs", rest.last().path);
+        hash<auto> uprofile = rest.lastBody().data.attributes.profiles.data[0];
+        assertEq(("sms",), keys uprofile.attributes.subscriptions,
+            "a phone number withdraws SMS consent and nothing else");
+        assertEq("UNSUBSCRIBED", uprofile.attributes.subscriptions.sms.marketing.consent);
+        assertEq("+15005550006", uprofile.attributes.phone_number);
+
+        assertThrows("KLAVIYO-ACTION-ERROR", "is required",
+            sub () { unsub.doRequest({}); });
+    }
+
+    private eventTest() {
+        FakeKlaviyoRestClient rest();
+        KlaviyoDataProvider klaviyo = getProvider(rest);
+        AbstractDataProvider events = klaviyo.getChildProviderEx(KlaviyoDataProvider::EventsChildName);
+        assertEq(("new_profile", "new_event", "new_list_profile", "new_segment_profile"),
+            events.getChildProviderNames(), "every trigger the application had is here");
+
+        foreach hash<auto> ev in (KlaviyoEvents) {
+            AbstractDataProvider p = events.getChildProviderEx(ev.event);
+            assertTrue(p instanceof AbstractTimestampWatchDataProvider,
+                sprintf("%s: is a timestamp watch", ev.event));
+            assertEq(ev.event, p.getName(), sprintf("%s: names itself by its registered ID", ev.event));
+            # AbstractDataProvider also implements observersReady() and reports it as unsupported, so a
+            # provider resolving to that branch would fail every subscription at run time rather than here
+            assertTrue(p instanceof DelayedObservable, sprintf("%s: is a delayed observable", ev.event));
+        }
+
+        # Klaviyo answers a whole URL for the next page; the cursor is what has to be sent back
+        assertEq("abc123", KlaviyoWatchDataProviderBase::getCursorFromLink(
+            "https://a.klaviyo.com/api/profiles?page%5Bcursor%5D=abc123&sort=created"));
+        assertEq("abc123", KlaviyoWatchDataProviderBase::getCursorFromLink(
+            "https://a.klaviyo.com/api/profiles?page[cursor]=abc123"));
+        assertEq(NOTHING, KlaviyoWatchDataProviderBase::getCursorFromLink("https://a.klaviyo.com/api/profiles"),
+            "a link with no cursor means there is no next page");
+        assertEq(NOTHING, KlaviyoWatchDataProviderBase::getCursorFromLink(NOTHING));
+
+        # a record is delivered with its attributes beside its identity, as the listings return it
+        assertEq({"id": "P1", "type": "profile", "email": "ada@example.com"},
+            KlaviyoWatchDataProviderBase::flattenRecord({
+                "id": "P1",
+                "type": "profile",
+                "attributes": {"email": "ada@example.com"},
+            }));
+    }
+
+    private connectionTest() {
+        KlaviyoRestConnection conn("klaviyo", "test", "klaviyo://a.klaviyo.com", {"monitor": False}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("klaviyo", conn.getType());
+        assertEq("Klaviyo", conn.getAppName(), "the app name the superseded application registered");
+        assertTrue(conn.hasDataProvider());
+
+        # the scheme is registered, or a connection of this type could not be created from configuration
+        assertTrue(exists ConnectionSchemeCache::getScheme("klaviyo"), "the klaviyo scheme is registered");
+
+        hash<auto> opts = KlaviyoRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq(KlaviyoRestClientBase::ApiRevision, opts.headers.revision,
+            "the revision travels as a default header on every call");
+        assertEq(KlaviyoRestClientBase::DefaultScopes, opts.oauth2_scopes,
+            "the 16 scopes the registered app holds");
+        assertEq(16, KlaviyoRestClientBase::DefaultScopes.size());
+        assertEq("S256", opts.oauth2_pkce, "Klaviyo requires PKCE");
+        assertTrue(opts.oauth2_token_use_basic_auth, "and basic auth on the token endpoint");
+        assertEq("/api/accounts", opts.ping_path);
+
+        # a caller's own header does not drop the revision, and an explicit one wins
+        assertEq(KlaviyoRestClientBase::ApiRevision,
+            KlaviyoRestClientBase::getOptions({"headers": {"X-Test": "1"}}).headers.revision);
+        assertEq("2025-01-15",
+            KlaviyoRestClientBase::getOptions({"headers": {"revision": "2025-01-15"}}).headers.revision,
+            "a caller that set the revision explicitly keeps its own value");
+
+        # a private API key is a different token type, which is how Klaviyo spells that credential
+        assertEq("Klaviyo-API-Key", KlaviyoRestClientBase::ApiKeyTokenType);
+        assertEq("Bearer", KlaviyoRestClientBase::getOptions({"token": "pk_x"}).token_type,
+            "an OAuth2 access token is the default");
+    }
+}

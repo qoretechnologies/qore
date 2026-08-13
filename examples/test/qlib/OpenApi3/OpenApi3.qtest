@@ -424,6 +424,7 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test response header references", \testResponseHeaderReference());
         addTestCase("Test constraint-only compositions", \testConstraintOnlyComposition());
         addTestCase("Test reference siblings", \testReferenceSiblings());
+        addTestCase("Test allOf object property composition", \testAllOfObjectProperties());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -4364,6 +4365,73 @@ public class OpenApi3Test inherits QUnit::Test {
                 });
             });
         }
+    }
+
+    #! Two "allOf" members declaring the same object property compose it, rather than the first one winning
+    /** \c allOf is an intersection: a value has to satisfy every member, so a property both members declare
+        as an object carries the union of what they declare.  Klaviyo's profile response is exactly this -
+        one member declares the computed attribute blocks under \c attributes and another the profile's own
+        attributes under the same name - and taking the first alone published a response type without any of
+        the fields a caller actually reads, while the API returned all of them.
+    */
+    testAllOfObjectProperties() {
+        checkModules();
+
+        OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+            "components": {
+                "schemas": {
+                    "Base": {
+                        "type": "object",
+                        "required": ("id",),
+                        "properties": {
+                            "id": {"type": "string"},
+                            "attributes": {
+                                "type": "object",
+                                "required": ("email",),
+                                "properties": {
+                                    "email": {"type": "string"},
+                                    "name": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                    "Extra": {
+                        "type": "object",
+                        "properties": {
+                            "attributes": {
+                                "type": "object",
+                                "properties": {
+                                    "subscriptions": {"type": "object"},
+                                },
+                            },
+                        },
+                    },
+                    "Composed": {
+                        "allOf": (
+                            {"$ref": "#/components/schemas/Extra"},
+                            {"$ref": "#/components/schemas/Base"},
+                        ),
+                    },
+                },
+            },
+        });
+
+        SchemaObject composed = so.components.schemas.Composed;
+        assertEq(("attributes", "id"), sort(keys composed.properties),
+            "the composition carries every member's properties");
+        SchemaObject attrs = cast<SchemaObject>(composed.properties.attributes);
+        assertEq(("email", "name", "subscriptions"), sort(keys attrs.properties),
+            "and an object property declared by both members carries the union of the two");
+        assertTrue(attrs.required.email, "a property one member requires stays required");
+
+        # the member schemas themselves are untouched: the composition is made on a copy, or every other
+        # use of a shared "$ref" target would silently acquire the other member's properties
+        assertEq(("email", "name"),
+            sort(keys cast<SchemaObject>(so.components.schemas.Base.properties.attributes).properties),
+            "the referenced member is not modified by having been composed");
+        assertEq(("subscriptions",),
+            sort(keys cast<SchemaObject>(so.components.schemas.Extra.properties.attributes).properties),
+            "and neither is the other one");
     }
 
     testOpenApi3AllOfScalar() {

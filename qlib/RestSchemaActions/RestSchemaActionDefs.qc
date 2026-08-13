@@ -375,6 +375,24 @@ public hashdecl RestSchemaFieldOverlayInfo {
     */
     *bool lift;
 
+    #! Merge this object-valued field's properties into the object that contains it
+    /** The response-side counterpart of @ref lift.  A vendor that wraps every resource in an envelope
+        returns the thing itself one level down - JSON:API answers
+        @code{.py}
+{"id": "01H…", "type": "profile", "attributes": {"email": …, "first_name": …}}
+        @endcode
+        - so a workflow reading an e-mail address has to know that \c attributes exists at all.
+
+        Setting this publishes those properties beside \c id and \c type instead, and the value is
+        reassembled when a request carries the same shape, so the conversion is reversible in both
+        directions.  A property that collides with one the enclosing object already has is reported.
+
+        Use it through @ref RestSchemaActions::RestSchemaActionInfo::response_fields "response_fields",
+        including nested inside a list of records - the element type is what a collection's overlay
+        applies to.
+    */
+    *bool merge;
+
     #! Raw field attributes merged after every other override
     *hash<auto> attr;
 

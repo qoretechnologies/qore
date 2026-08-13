@@ -1,0 +1,47 @@
+# Import spec for the vendored Klaviyo schema.
+#
+#   QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+#       --spec qlib/KlaviyoDataProvider/klaviyo-import.yaml
+#
+# Paths are resolved against this file.  The operations come from the manifest itself, so the selection
+# and what the application exports cannot drift apart.
+#
+# Klaviyo versions its API by a dated revision sent as the "revision" header, and its own description
+# carries that revision in "info.version".  The combined "openapi/stable.json" therefore pins the API
+# version as well, which is why KlaviyoRestClient sends 2026-07-15 and this file names it: the two must
+# move together, and moving them is a re-import rather than an edit.
+#
+# Klaviyo publishes per-category slices alongside the combined document.  The combined one is used because
+# every path this application exports is in it - profiles, lists, segments, tags, campaigns and events all
+# in one document - so there is one schema to load and no cross-slice reference to resolve by hand.
+#
+# There is no "normalize" block: every collection GET this application exports already declares
+# "page[cursor]", and all but "GET /api/metrics" also declare "page[size]", so nothing has to be repaired
+# for a generated action to be able to ask for page two.
+documents:
+  - name: Klaviyo
+    source: https://raw.githubusercontent.com/klaviyo/openapi/main/openapi/stable.json
+    output: klaviyo-openapi.json
+    manifest: KlaviyoDataProvider:KlaviyoManifest::Manifest
+    provenance: KlaviyoSchema.qc
+
+    # The operations the hand-written actions and the polling triggers call.  They have no manifest entry -
+    # an action that is not generated does not have one - so the pruner would drop them, and the module
+    # would then ship a description that does not describe requests it makes.  Naming them here keeps the
+    # committed schema a description of the whole application, and keeps upstream drift in them visible.
+    op:
+      # the six relationship actions: the body is a JSON:API relationship array
+      - POST /api/lists/{id}/relationships/profiles
+      - DELETE /api/lists/{id}/relationships/profiles
+      - POST /api/tags/{id}/relationships/lists
+      - DELETE /api/tags/{id}/relationships/lists
+      - POST /api/tags/{id}/relationships/segments
+      - DELETE /api/tags/{id}/relationships/segments
+      # create_event: the body nests a metric envelope and a profile envelope in the attributes
+      - POST /api/events
+      # subscribe_profile / unsubscribe_profile: the body is a bulk job of per-channel envelopes
+      - POST /api/profile-subscription-bulk-create-jobs
+      - POST /api/profile-subscription-bulk-delete-jobs
+      # the two membership triggers poll these
+      - GET /api/lists/{id}/profiles
+      - GET /api/segments/{id}/profiles

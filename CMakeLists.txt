@@ -3611,6 +3611,8 @@ qore_user_module("qlib/PaddleDataProvider" "paddle-logo.svg" "paddle-openapi.yam
 qore_user_module("qlib/StripeDataProvider" "stripe-logo.svg" "stripe-openapi3.json")
 qore_user_module("qlib/IntercomRestClient.qm")
 qore_user_module("qlib/IntercomDataProvider" "intercom-logo.svg" "intercom-openapi.yaml")
+qore_user_module("qlib/KlaviyoRestClient.qm")
+qore_user_module("qlib/KlaviyoDataProvider" "klaviyo-logo.svg" "klaviyo-openapi.json")
 qore_user_module("qlib/LinkedInOrganizationsDataProvider" "linkedin-logo.svg")
 qore_user_module("qlib/WaveDataProvider" "wave-logo.svg")
 qore_user_module("qlib/WooCommerceDataProvider" "woocommerce-logo.svg")

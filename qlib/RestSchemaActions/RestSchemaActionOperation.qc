@@ -114,8 +114,8 @@ public class RestSchemaActionOperation {
         #! Request value conversion tree, keyed by action option name
         hash<string, hash<auto>> request_conv = {};
 
-        #! Response value conversion tree, keyed by response body field name
-        hash<string, hash<auto>> response_conv = {};
+        #! Response value conversion tree for the response body
+        *hash<auto> response_conv;
 
         #! The HTTP status code of the response published as the output type
         *string response_code;
@@ -529,7 +529,7 @@ public class RestSchemaActionOperation {
             body = body{name};
         }
         if (response_conv && exists body) {
-            body = RestSchemaActionOperation::convertValue(body, {"fields": response_conv}, False);
+            body = RestSchemaActionOperation::convertValue(body, response_conv, False);
         }
         return body;
     }
@@ -756,10 +756,12 @@ public class RestSchemaActionOperation {
                 # level; a partially supplied body is still rejected by the schema's request validation
                 f = f.getOrNothingType();
             }
+            # a property at the level the options were lifted to is "the body" as far as the action is
+            # concerned, so it is addressed by its own name; only a property of an outer envelope level
+            # needs the path to tell it apart from one of the same name further in
             derived{RSAL_BODY} += {
                 "wire_name": i.key,
                 "wire_path": request_wrap,
-                "ov_name": request_wrap ? (request_wrap + i.key).join(".") : NOTHING,
                 "field": f,
             };
         }
@@ -974,9 +976,7 @@ public class RestSchemaActionOperation {
         if (info.response_fields) {
             *hash<auto> node;
             type = applyTypeOverlay(type, info.response_fields, "response body", \node);
-            if (node.fields) {
-                response_conv = node.fields;
-            }
+            response_conv = node;
         }
         response_type = type;
     }
@@ -1100,14 +1100,19 @@ public class RestSchemaActionOperation {
 
         AbstractDataProviderType type = rv.getType();
         *string codec_desc;
+        # a codec or a type override replaces the schema-derived type, which makes the schema's own allowed
+        # values and default value descriptions of the *wire* value rather than of what the action presents
+        bool type_replaced = False;
         if (ov.codec.val()) {
             hash<RestSchemaWireCodecInfo> codec = RestSchemaActionCodecs::getCodecEx(ov.codec);
             type = codec.type;
             node.codec = codec;
             codec_desc = codec.desc;
+            type_replaced = True;
         }
         if (ov.type) {
             type = ov.type;
+            type_replaced = True;
         }
         if (ov.fields) {
             *hash<auto> nested;
@@ -1115,15 +1120,11 @@ public class RestSchemaActionOperation {
             if (nested.fields) {
                 node.fields = nested.fields;
             }
+            if (nested.merge) {
+                node.merge = nested.merge;
+            }
         }
         rv.updateFieldType(required ? type.getMandatoryType() : type.getOrNothingType());
-
-        if (exists ov.default_value) {
-            rv.setDefaultValue(ov.default_value);
-        }
-        if (exists ov.allowed_values) {
-            rv.setAllowedValues(ov.allowed_values, ov.allowed_values_creatable);
-        }
 
         # attributes are what DataProviderActionCatalog::getActionOptionFromFields() reads, so requiredness
         # derived from the type has to be published there as well
@@ -1146,9 +1147,19 @@ public class RestSchemaActionOperation {
         if (attr) {
             rv.setAttributes(attr);
         }
-        if (ov.short_desc.val() || ov.desc.val() || exists ov.example_value || codec_desc.val()) {
+        if (type_replaced || ov.short_desc.val() || ov.desc.val() || exists ov.example_value
+            || codec_desc.val()) {
             # AbstractDataField has no setters for descriptions or example values, so rebuild the field
-            rv = rebuildField(rv, ov, codec_desc);
+            rv = rebuildField(rv, ov, codec_desc, type_replaced);
+        }
+
+        # the overlay's own allowed values and default describe what the action presents, so they are set
+        # after any rebuild that dropped the schema's, which describe what the wire carries
+        if (exists ov.default_value) {
+            rv.setDefaultValue(ov.default_value);
+        }
+        if (exists ov.allowed_values) {
+            rv.setAllowedValues(ov.allowed_values, ov.allowed_values_creatable);
         }
         return rv;
     }
@@ -1181,6 +1192,7 @@ public class RestSchemaActionOperation {
         hash<string, AbstractDataField> new_fields = {};
         hash<string, hash<auto>> conv = {};
         hash<string, bool> renamed = {};
+        list<hash<auto>> merged = ();
         foreach hash<auto> i in (tfields.pairIterator()) {
             *hash<RestSchemaFieldOverlayInfo> ov = ovl{i.key};
             if (!ov) {
@@ -1188,6 +1200,10 @@ public class RestSchemaActionOperation {
                 continue;
             }
             if (ov.ignore) {
+                continue;
+            }
+            if (ov.merge) {
+                mergeFieldUp(i.value, ov, i.key, ctx, \new_fields, \conv, \merged);
                 continue;
             }
             string name = ov.name ?? i.key;
@@ -1217,7 +1233,56 @@ public class RestSchemaActionOperation {
         if (conv) {
             node.fields = conv;
         }
+        if (merged) {
+            node.merge = merged;
+        }
         return cast<HashDataType>(type).copyWithFields(new_fields);
+    }
+
+    #! Publishes an object-valued field's properties beside it rather than inside it
+    /** @param field the field to merge up
+        @param ov the overlay for it
+        @param key the field's name
+        @param ctx a description of the enclosing type for error messages
+        @param new_fields the enclosing type's fields, added to here
+        @param conv the enclosing type's conversion tree, added to here
+        @param merged the merges recorded on the enclosing type, added to here
+
+        @throw REST-SCHEMA-ACTION-ERROR the field is not an object, declares no properties, or one of them
+        collides with a property the enclosing object already has
+
+        @see @ref RestSchemaActions::RestSchemaFieldOverlayInfo::merge "merge"
+    */
+    private mergeFieldUp(AbstractDataField field, hash<RestSchemaFieldOverlayInfo> ov, string key, string ctx,
+            reference<hash<string, AbstractDataField>> new_fields, reference<hash<string, hash<auto>>> conv,
+            reference<list<hash<auto>>> merged) {
+        *hash<auto> fnode;
+        AbstractDataField applied = applyFieldOverlay(field, ov - "merge", key,
+            sprintf("%s field %y", ctx, key), \fnode);
+        AbstractDataProviderType type = applied.getType();
+        if (type.getBaseTypeCode() != NT_HASH) {
+            throw "REST-SCHEMA-ACTION-ERROR", sprintf("cannot merge %s field %y into the object that "
+                "contains it: it has type %y, which is not an object", ctx, key, type.getName());
+        }
+        *hash<string, AbstractDataField> mfields = type.getFields();
+        if (!mfields) {
+            throw "REST-SCHEMA-ACTION-ERROR", sprintf("cannot merge %s field %y into the object that "
+                "contains it: it declares no properties", ctx, key);
+        }
+        foreach hash<auto> i in (mfields.pairIterator()) {
+            if (exists new_fields{i.key}) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("merging %s field %y into the object that "
+                    "contains it would produce two properties named %y", ctx, key, i.key);
+            }
+            new_fields{i.key} = i.value;
+        }
+        # the merged properties sit at the enclosing level now, so any conversion declared for one of them
+        # is re-keyed there too, and the tree stays a description of the shape it is applied to
+        map conv{$1.key} = $1.value, (fnode.fields ?? {}).pairIterator();
+        merged += {
+            "name": key,
+            "fields": keys mfields,
+        };
     }
 
     #! Rebuilds a field with overridden descriptions and example value
@@ -1227,7 +1292,7 @@ public class RestSchemaActionOperation {
         difference between the presented value and the wire value is documented where it is read
     */
     private QoreDataField rebuildField(AbstractDataField field, hash<RestSchemaFieldOverlayInfo> ov,
-            *string codec_desc) {
+            *string codec_desc, *bool type_replaced) {
         hash<DataFieldInfo> fi = field.getLocalInfo();
         hash<auto!> h = {
             "name": field.getName(),
@@ -1248,16 +1313,20 @@ public class RestSchemaActionOperation {
         if (exists ov.example_value) {
             h.example_value = ov.example_value;
         }
-        if (exists field.getDefaultValue()) {
-            h.default_value = field.getDefaultValue();
-        }
-        if (fi.allowed_values) {
-            h.allowed_values = fi.allowed_values;
-            h.allowed_values_creatable = fi.allowed_values_creatable;
-        }
-        if (fi.element_allowed_values) {
-            h.element_allowed_values = fi.element_allowed_values;
-            h.element_allowed_values_creatable = fi.element_allowed_values_creatable;
+        # a value the schema fixed for the wire form cannot be assigned to a type that replaced it, and
+        # would be describing something the action no longer presents
+        if (!type_replaced) {
+            if (exists field.getDefaultValue()) {
+                h.default_value = field.getDefaultValue();
+            }
+            if (fi.allowed_values) {
+                h.allowed_values = fi.allowed_values;
+                h.allowed_values_creatable = fi.allowed_values_creatable;
+            }
+            if (fi.element_allowed_values) {
+                h.element_allowed_values = fi.element_allowed_values;
+                h.element_allowed_values_creatable = fi.element_allowed_values_creatable;
+            }
         }
         return new QoreDataField(h);
     }
@@ -1301,23 +1370,18 @@ public class RestSchemaActionOperation {
         if (!to_wire && node.codec) {
             value = node.codec.from_wire(value);
         }
-        if (node.fields) {
+        if (node.fields || node.merge) {
             switch (value.typeCode()) {
-                case NT_HASH: {
-                    foreach hash<auto> i in (node.fields.pairIterator()) {
-                        if (value.hasKey(i.key)) {
-                            value{i.key} = RestSchemaActionOperation::convertValue(value{i.key}, i.value,
-                                to_wire);
-                        }
-                    }
+                case NT_HASH:
+                    value = RestSchemaActionOperation::convertObject(value, node, to_wire);
                     break;
-                }
                 case NT_LIST: {
-                    # the overlay describes the element shape, so it applies to every element
+                    # the overlay describes the element shape, so it applies to every element; the codec
+                    # applied to the list itself must not be applied again to each of them
+                    hash<auto> enode = node - "codec";
                     list<auto> converted = ();
                     foreach auto element in (value) {
-                        converted += RestSchemaActionOperation::convertValue(element, {"fields": node.fields},
-                            to_wire);
+                        converted += RestSchemaActionOperation::convertValue(element, enode, to_wire);
                     }
                     value = converted;
                     break;
@@ -1328,6 +1392,64 @@ public class RestSchemaActionOperation {
             value = node.codec.to_wire(value);
         }
         return value;
+    }
+
+    #! Converts the properties of an object through a conversion tree in either direction
+    /** A merged envelope is opened before the properties inside it are converted, and closed after they
+        have been converted back, so the conversion tree always describes the shape it is applied to.
+    */
+    private static hash<auto> convertObject(hash<auto> value, hash<auto> node, bool to_wire) {
+        # "auto!" because the converted values need not share a type with the ones they replace
+        hash<auto!> rv = value;
+        if (!to_wire && node.merge) {
+            rv = RestSchemaActionOperation::openMerged(rv, node.merge);
+        }
+        foreach hash<auto> i in ((node.fields ?? {}).pairIterator()) {
+            if (rv.hasKey(i.key)) {
+                rv{i.key} = RestSchemaActionOperation::convertValue(rv{i.key}, i.value, to_wire);
+            }
+        }
+        if (to_wire && node.merge) {
+            rv = RestSchemaActionOperation::closeMerged(rv, node.merge);
+        }
+        return rv;
+    }
+
+    #! Lifts the properties of each merged envelope into the object that carries it
+    private static hash<auto> openMerged(hash<auto> value, list<hash<auto>> merged) {
+        # "auto!" because the merged properties need not share a type with the ones already there
+        hash<auto!> rv = value;
+        foreach hash<auto> m in (merged) {
+            if (!rv.hasKey(m.name)) {
+                continue;
+            }
+            auto inner = remove rv{m.name};
+            if (inner.typeCode() != NT_HASH) {
+                continue;
+            }
+            map rv{$1.key} = $1.value, inner.pairIterator();
+        }
+        return rv;
+    }
+
+    #! Puts the properties of each merged envelope back inside it
+    /** The inverse of @ref openMerged().  Only the properties the envelope declares are moved back, so a
+        value carrying something else keeps it where it is rather than having it swept into the envelope.
+    */
+    private static hash<auto> closeMerged(hash<auto> value, list<hash<auto>> merged) {
+        hash<auto!> rv = value;
+        foreach hash<auto> m in (merged) {
+            hash<auto!> inner = {};
+            foreach string name in (m.fields) {
+                if (rv.hasKey(name)) {
+                    inner{name} = remove rv{name};
+                }
+            }
+            if (inner) {
+                rv{m.name} = inner;
+            }
+        }
+        return rv;
     }
 }
 }

@@ -280,6 +280,7 @@ public class DataProvider {
             "github": "GitHubDataProvider",
             "gitlab": "GitLabDataProvider",
             "intercom": "IntercomDataProvider",
+            "klaviyo": "KlaviyoDataProvider",
             "xero": "XeroDataProvider",
 
             # provided by the jni module

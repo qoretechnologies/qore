@@ -1,0 +1,410 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file KlaviyoDataProvider.qm Qore user module providing a data provider API for Klaviyo
+
+/*  KlaviyoDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaActions
+%requires KlaviyoRestClient
+%requires RestClientIo
+
+%requires json
+
+module KlaviyoDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Klaviyo";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new KlaviyoDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": KlaviyoDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Klaviyo",
+            "short_desc": "Email and SMS marketing automation platform",
+            "desc": "Provides access to [Klaviyo](https://www.klaviyo.com), the e-mail and SMS marketing "
+                "platform.\n\n"
+                "Klaviyo holds the people a brand markets to as **profiles**, groups them into **lists** "
+                "they opted in to and **segments** it evaluates continuously, records what they did as "
+                "**events** against **metrics**, and sends **campaigns** to them.\n\n"
+                "**Common use cases**:\n"
+                "- **Profiles**: create or update someone from your own system's records, and find them "
+                "again\n"
+                "- **Lists and segments**: list them, create a list, and move profiles in and out\n"
+                "- **Subscriptions**: record and withdraw marketing consent per channel\n"
+                "- **Events**: record what somebody did, which is what triggers a flow\n"
+                "- **Campaigns**: find a campaign and send it\n"
+                "- **Tags**: organise lists and segments for reporting\n\n"
+                "Authentication is the OAuth2 authorization code flow against an app registered in "
+                "Klaviyo's developer portal, or a private API key for an integration serving one "
+                "account.\n\n"
+                "Klaviyo is a trademark of Klaviyo, Inc.",
+            "scheme": "klaviyo",
+            "logo": Priv::KlaviyoLogo,
+            "logo_file_name": "klaviyo-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Marketing,),
+        });
+
+        # register every action in the manifest
+        RestSchemaActionSet action_set = KlaviyoSchema::getActionSet();
+        action_set.registerActions(KlaviyoDataProvider::AppName);
+
+        # register the nine hand-written actions; see @ref klaviyomanifest_handwritten for why they are
+        # not generated
+        foreach hash<KlaviyoRelationshipActionInfo> ri in (KlaviyoRelationshipActions.iterator()) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": KlaviyoDataProvider::AppName,
+                "path": "/" + ri.action,
+                "action": ri.action,
+                "display_name": ri.display_name,
+                "short_desc": ri.short_desc,
+                "desc": ri.desc,
+                "action_code": DPAT_API,
+                "groups": (ri.group,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    KlaviyoRelationshipDataProvider::getRequestType(ri).getFields()),
+            });
+        }
+        foreach hash<auto> ai in (KlaviyoWrittenActions) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": KlaviyoDataProvider::AppName,
+                "path": "/" + ai.action,
+                "action": ai.action,
+                "display_name": ai.display_name,
+                "short_desc": ai.short_desc,
+                "desc": ai.desc,
+                "action_code": DPAT_API,
+                "groups": (ai.group,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(ai.type.getFields()),
+            });
+        }
+
+        # register the polling event actions
+        foreach hash<auto> event in (KlaviyoEvents) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": KlaviyoDataProvider::AppName,
+                "path": "/" + KlaviyoDataProvider::EventsChildName + "/" + event.event,
+                "action": event.event,
+                "display_name": event.display_name,
+                "short_desc": event.short_desc,
+                "desc": event.desc,
+                "action_code": DPAT_EVENT,
+                "action_val": event.event,
+                "groups": ("Events",),
+            });
+        }
+    };
+}
+
+/** @mainpage KlaviyoDataProvider Module
+
+    @tableofcontents
+
+    @section klaviyodataproviderintro KlaviyoDataProvider Introduction
+
+    The %KlaviyoDataProvider module provides a @ref dataproviderintro "data provider" API for
+    [Klaviyo](https://www.klaviyo.com), the e-mail and SMS marketing platform.
+
+    Klaviyo holds the people a brand markets to as **profiles**, groups them into **lists** they opted in to
+    and **segments** it evaluates continuously, records what they did as **events** against **metrics**, and
+    sends **campaigns** to them.
+
+    @section klaviyodataprovider_generated Mostly Generated, Deliberately Not Entirely
+
+    Most of the actions this application exports are **generated from Klaviyo's own OpenAPI 3 description**
+    by the @ref restschemaactionsintro "RestSchemaActions" module.  A schema describes the transport contract
+    precisely and is maintained by Klaviyo; duplicating a thousand request and response fields in %Qore would
+    mean finding and reproducing every upstream change by hand.
+
+    Nine actions are hand-written, because Klaviyo's description cannot express what they do as one flat
+    option shape - a relationship body is an array, and an event or a subscription nests envelopes three and
+    four levels deep.  See @ref klaviyomanifest_handwritten.
+
+    @section klaviyodataprovider_parity Two Identities Were Preserved
+
+    This is the first application on this path whose predecessor was hand-written rather than generated from
+    an \c allowed-paths map.  Its 21 actions had a designed, flat, camelCase option surface, and existing
+    workflows supply option values **by name** - so both the action IDs **and** the option names are a
+    commitment, and both are reproduced here.
+
+    Three mechanisms carry that, and each one exists because of this application:
+
+    |!Mechanism|!What it does
+    |@ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap"|lifts a write body out \
+of Klaviyo's JSON:API envelope, so \c create_profile offers \c email rather than \c data
+    |@ref RestSchemaActions::RestSchemaFieldOverlayInfo::lift "lift"|publishes a grouping object's \
+properties as options, so a profile's address is \c city and \c zip rather than a \c location hash
+    |@ref RestSchemaActions::RestSchemaFieldOverlayInfo::merge "merge"|publishes a response envelope's \
+properties beside the identity, so a result carries \c email rather than \c attributes.email
+
+    @section klaviyodataprovider_pinned The Pinned Schema, and the Revision With It
+
+    Klaviyo versions its API by a dated revision - \c 2026-07-15 here - sent as a \c revision header, and
+    carries it in the description's \c info.version.  So pinning the description pins the API version as
+    well, and the two move together:
+
+    |!Property|!Value
+    |Source|https://github.com/klaviyo/openapi \c openapi/stable.json
+    |Revision|\c 2026-07-15
+    |Stable until|2027-07-15, removed 2028-07-15
+    |Imported|2026-08-13
+
+    Klaviyo declares the \c revision header **required** on 344 of its 345 operations, so
+    @ref KlaviyoRestClient::KlaviyoRestClientBase "KlaviyoRestClientBase" always sends it and sends the one
+    this description describes.  See @ref KlaviyoDataProvider::KlaviyoSchema "KlaviyoSchema".
+
+    @section klaviyodataprovider_actions Actions
+
+    The exported actions are in these groups:
+
+    |!Group|!What it covers
+    |Profiles|creating, updating, finding and listing the people in the account
+    |Lists|the lists profiles opt in to, and moving profiles in and out
+    |Segments|the rules Klaviyo evaluates continuously
+    |Tags|the tags that organise lists, segments and campaigns
+    |Campaigns|finding a campaign and sending it
+    |Events|recording what somebody did, and the metrics events are recorded against
+
+    Identifier options are dropdowns wherever the application exports an operation that can list the values,
+    so a user picks a profile rather than pasting an identifier.  Every dropdown also accepts a value typed
+    or chained in from a previous step, because an identifier usually comes from earlier in a workflow and a
+    narrowly scoped credential may not be able to list the values at all.
+
+    @section klaviyodataprovider_conventions Filtering, Sorting and Paging
+
+    Three conventions are worth knowing before using these actions:
+
+    - **Filters are structured, not typed.**  Klaviyo's own filter syntax is a string of predicates -
+      \c "any(name,[\"a\",\"b\"])" - and this application publishes named fields instead, assembling the
+      string when the request is built.  A field a listing does not publish is reachable through
+      \c make-api-call.
+    - **Sorting is a field and a direction**, not Klaviyo's signed token; \c "-created" is
+      \c "{field: \"created\", direction: \"desc\"}" here.
+    - **Paging is by cursor.**  A listing answers \c links.next, published as \c next, and that value is
+      passed back as \c cursor; it is absent once the collection is exhausted.  Klaviyo caps the page size
+      per endpoint - 10 on lists and segments, 50 on tags, 100 on profiles and campaigns - and rejects a
+      larger value rather than clamping it.
+
+    @section klaviyodataprovider_events Events
+
+    Four events are reported, and all **poll**:
+
+    |!Event|!Fires
+    |\c new_profile|for each profile created in the account
+    |\c new_event|for each event recorded against the chosen metric
+    |\c new_list_profile|for each profile added to the chosen list
+    |\c new_segment_profile|for each profile that enters the chosen segment
+
+    Klaviyo publishes a Webhooks API and native webhook triggers would be better, but a webhook is
+    configured against the account in Klaviyo's own console rather than by anything a connection can do, and
+    it changes delivery semantics.  That is a separate, reviewable decision.
+
+    These poll better than the application they replace, which read the newest page on every cycle in
+    descending order and discarded what it had already seen from a bounded in-memory set - so a restart
+    re-delivered whatever was still in that page, and a burst larger than one page lost records outright.
+    These position the feed by its timestamp field, ask for records at or after the cursor in ascending
+    order, and keep a durable checkpoint.
+
+    @section klaviyodataprovider_examples Examples
+
+    @subsection klaviyodataprovider_ex_provider Getting the Data Provider
+
+    From a connection, which is how a data-provider-aware caller reaches it:
+
+    @code{.py}
+%requires ConnectionProvider
+%requires KlaviyoDataProvider
+
+AbstractDataProvider klaviyo = get_connection("klaviyo").getDataProvider();
+    @endcode
+
+    Or directly from a private API key, for a script:
+
+    @code{.py}
+%requires KlaviyoDataProvider
+%requires KlaviyoRestClient
+
+KlaviyoDataProvider klaviyo(new KlaviyoRestClientIo({
+    "token": ENV.KLAVIYO_API_KEY,
+    "token_type": KlaviyoRestClientBase::ApiKeyTokenType,
+}));
+    @endcode
+
+    @subsection klaviyodataprovider_ex_profile Creating a Profile
+
+    @code{.py}
+hash<auto> profile = klaviyo.getChildProviderEx("create_profile").doRequest({
+    "email": "ada@example.com",
+    "firstName": "Ada",
+    "lastName": "Lovelace",
+    "city": "London",
+    "country": "United Kingdom",
+});
+printf("created %s\n", profile.id);
+    @endcode
+
+    @subsection klaviyodataprovider_ex_list Listing and Paging
+
+    @code{.py}
+AbstractDataProvider list_profiles = klaviyo.getChildProviderEx("list_profiles");
+
+*string cursor;
+list<hash<auto>> all = ();
+while (True) {
+    hash<auto> page = list_profiles.doRequest({
+        "filter": {"email": ("ada@example.com", "grace@example.com")},
+        "sort": {"field": "created", "direction": "desc"},
+    } + (cursor ? {"cursor": cursor} : {}));
+    all += page.data;
+    # "next" is absent once the collection is exhausted
+    if (!(cursor = page.next)) {
+        break;
+    }
+}
+printf("%d profiles\n", all.size());
+    @endcode
+
+    @subsection klaviyodataprovider_ex_event Recording an Event
+
+    @code{.py}
+klaviyo.getChildProviderEx("create_event").doRequest({
+    "metric": "Placed Order",
+    "email": "ada@example.com",
+    "value": 99.95,
+    "customProperties": {"order_id": "A-1234"},
+});
+    @endcode
+
+    @subsection klaviyodataprovider_ex_events Reacting to an Event
+
+    @code{.py}
+class ProfileObserver inherits DataProvider::Observer {
+    update(string event_id, hash<auto> data) {
+        printf("%s: %s\n", event_id, data.email);
+    }
+}
+
+AbstractDataProvider event = klaviyo.getChildProviderEx("events").getChildProviderEx("new_profile");
+event.registerObserver(new ProfileObserver());
+cast<DelayedObservable>(event).observersReady();
+    @endcode
+
+    @subsection klaviyodataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+
+    The application exports a reviewed subset of Klaviyo's API.  For anything else, the generic API call
+    action reaches the rest of it with the same connection and authentication:
+
+    @code{.py}
+hash<auto> res = klaviyo.getChildProviderEx("__call__").doRequest({
+    "method": "GET",
+    "path": "/api/flows",
+});
+printf("%d flows\n", res.body.data.size());
+    @endcode
+
+    @section klaviyodataproviderrelnotes Release Notes
+
+    @subsection klaviyodataproviderv1_0 KlaviyoDataProvider v1.0
+    - the initial version of the %KlaviyoDataProvider module
+*/
+
+#! contains all public definitions in the KlaviyoDataProvider module
+public namespace KlaviyoDataProvider {
+#! The hand-written actions that are not relationship changes
+/** The six relationship actions are described by
+    @ref KlaviyoDataProvider::KlaviyoRelationshipActions "KlaviyoRelationshipActions"; these three each have
+    a class of their own, because each builds a different envelope.
+*/
+public const KlaviyoWrittenActions = (
+    {
+        "action": KlaviyoCreateEventDataProvider::ActionName,
+        "display_name": KlaviyoCreateEventDataProvider::DisplayName,
+        "short_desc": KlaviyoCreateEventDataProvider::ShortDesc,
+        "desc": KlaviyoCreateEventDataProvider::Desc,
+        "group": KlaviyoManifest::GroupEvents,
+        "type": KlaviyoCreateEventDataProvider::RequestType,
+    },
+    {
+        "action": KlaviyoSubscribeProfileDataProvider::ActionName,
+        "display_name": KlaviyoSubscribeProfileDataProvider::DisplayName,
+        "short_desc": KlaviyoSubscribeProfileDataProvider::ShortDesc,
+        "desc": KlaviyoSubscribeProfileDataProvider::Desc,
+        "group": KlaviyoManifest::GroupSubscriptions,
+        "type": KlaviyoSubscribeProfileDataProvider::RequestType,
+    },
+    {
+        "action": KlaviyoUnsubscribeProfileDataProvider::ActionName,
+        "display_name": KlaviyoUnsubscribeProfileDataProvider::DisplayName,
+        "short_desc": KlaviyoUnsubscribeProfileDataProvider::ShortDesc,
+        "desc": KlaviyoUnsubscribeProfileDataProvider::Desc,
+        "group": KlaviyoManifest::GroupSubscriptions,
+        "type": KlaviyoUnsubscribeProfileDataProvider::RequestType,
+    },
+);
+
+#! The IDs of every action this application writes by hand
+public const KlaviyoHandWrittenActions = (keys KlaviyoRelationshipActions)
+    + (map $1.action, KlaviyoWrittenActions);
+
+#! The events this application reports
+/** Registered as actions so that they appear in the application's action surface; each is served by a
+    provider under the \c events child.
+*/
+public const KlaviyoEvents = (
+    {
+        "event": KlaviyoNewProfileDataProvider::EventName,
+        "display_name": KlaviyoNewProfileDataProvider::DisplayName,
+        "short_desc": KlaviyoNewProfileDataProvider::ShortDesc,
+        "desc": KlaviyoNewProfileDataProvider::Desc,
+    },
+    {
+        "event": KlaviyoNewEventDataProvider::EventName,
+        "display_name": KlaviyoNewEventDataProvider::DisplayName,
+        "short_desc": KlaviyoNewEventDataProvider::ShortDesc,
+        "desc": KlaviyoNewEventDataProvider::Desc,
+    },
+    {
+        "event": KlaviyoNewListProfileDataProvider::EventName,
+        "display_name": KlaviyoNewListProfileDataProvider::DisplayName,
+        "short_desc": KlaviyoNewListProfileDataProvider::ShortDesc,
+        "desc": KlaviyoNewListProfileDataProvider::Desc,
+    },
+    {
+        "event": KlaviyoNewSegmentProfileDataProvider::EventName,
+        "display_name": KlaviyoNewSegmentProfileDataProvider::DisplayName,
+        "short_desc": KlaviyoNewSegmentProfileDataProvider::ShortDesc,
+        "desc": KlaviyoNewSegmentProfileDataProvider::Desc,
+    },
+);
+}

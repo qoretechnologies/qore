@@ -4774,7 +4774,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     foreach hash<auto> i in (member.properties.pairIterator()) {
                         if (!exists properties{i.key}) {
                             properties{i.key} = i.value;
+                            continue;
                         }
+                        # two members declaring the same *object* property compose it, rather than the
+                        # first one seen winning; see mergeAllOfProperty()
+                        properties{i.key} = SchemaObject::mergeAllOfProperty(
+                            cast<SchemaObject>(properties{i.key}), cast<SchemaObject>(i.value));
                     }
                     if (member.required) {
                         required += member.required;
@@ -5137,6 +5142,45 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         The constraints that belong to the adopted type are taken with it, since a type without its
         \c format, \c enum or array \c items would validate values the schema rejects.
     */
+    #! Returns the composition of two schemas an \c allOf declares under the same property name
+    /** \c allOf is an **intersection**: a value has to satisfy every member, so when two members declare
+        the same property as an object, that property's contract is the union of what both declare.  Taking
+        whichever was seen first drops the rest of it.
+
+        Klaviyo's profile response is exactly this shape - one member declares the computed attribute
+        blocks under \c attributes and another declares the profile's own attributes under the same name -
+        and keeping only the first published a response type without \c email, \c first_name or anything
+        else a caller reads, while the API returned all of them.
+
+        A property that is not an object on both sides keeps the outer declaration, which is what lets a
+        one-member \c allOf attach a description or an example to a reusable scalar type without replacing
+        it.
+
+        @param outer the declaration already recorded
+        @param inner the declaration an \c allOf member adds
+
+        @return the composed property
+
+        @since %OpenApi3 1.4
+    */
+    private static SchemaObject mergeAllOfProperty(SchemaObject outer, SchemaObject inner) {
+        if (!outer.properties || !inner.properties) {
+            return outer;
+        }
+        # the outer schema may be a "$ref" target shared with every other use of it, so the composition is
+        # made on a copy; mutating it in place would change a schema this composition does not own
+        SchemaObject rv = outer.copy();
+        foreach hash<auto> i in (inner.properties.pairIterator()) {
+            rv.properties{i.key} = exists rv.properties{i.key}
+                ? SchemaObject::mergeAllOfProperty(cast<SchemaObject>(rv.properties{i.key}),
+                    cast<SchemaObject>(i.value))
+                : i.value;
+        }
+        # "required" is a set, so a property both members require stays required once
+        rv.required += inner.required;
+        return rv;
+    }
+
     private adoptScalarTypeFromAllOf() {
         *SchemaObject source;
         foreach SchemaObject member in (allOf) {

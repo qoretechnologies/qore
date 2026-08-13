@@ -1,0 +1,405 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file KlaviyoRestClient.qm Qore user module for calling Klaviyo REST API services
+
+/*  KlaviyoRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module KlaviyoRestClient {
+    version = "1.0";
+    desc = "User module for calling Klaviyo REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("klaviyo", KlaviyoRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage KlaviyoRestClient Module
+
+    @tableofcontents
+
+    @section klaviyorestclientintro KlaviyoRestClient Introduction
+
+    The %KlaviyoRestClient module provides an API for calling [Klaviyo](https://www.klaviyo.com)'s REST API
+    services.
+
+    To use this module, use \c "%requires KlaviyoRestClient" in your code.
+
+    All the public symbols in the module are defined in the KlaviyoRestClient namespace.
+
+    The main classes are:
+    - @ref KlaviyoRestClient::KlaviyoRestClient "KlaviyoRestClient": the REST client for the Klaviyo API
+    - @ref KlaviyoRestClient::KlaviyoRestClientIo "KlaviyoRestClientIo": the same client on the asynchronous
+      I/O transport, which is what data providers use
+    - @ref KlaviyoRestClient::KlaviyoRestConnection "KlaviyoRestConnection": a connection object to Klaviyo
+      (based on the @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section klaviyorestclient_revision The Revision Belongs to the Connection
+
+    Klaviyo versions its API by a dated **revision** sent as a \c revision header, and its own description
+    declares that header \c required on 344 of its 345 operations.  A revision is stable for a year and
+    deprecated for a second, then removed; the behaviour of an endpoint - and sometimes whether it exists -
+    depends on which one is sent.
+
+    So this client **always** sends it, and sends the revision the
+    @ref klaviyodataproviderintro "KlaviyoDataProvider" module's pinned description describes.  The two move
+    together: adopting a newer revision is a re-import of that description, not an edit here.
+
+    The header is the connection's business rather than each action's, so it is set as a default header on
+    the client; the actions generated from the description drop it and it is filled in when the request is
+    built.
+
+    @section klaviyorestclient_auth Two Ways to Authenticate
+
+    |!Method|!What it is|!Options
+    |OAuth2|the authorization code flow against an app registered in Klaviyo's developer portal, scoped to \
+the permissions the app holds|\c oauth2_client_id, \c oauth2_client_secret
+    |private API key|a key issued to one account, which carries that account's full permissions|\c token, \
+with \c token_type set to \c "Klaviyo-API-Key"
+
+    OAuth2 is the default and the one to prefer: it is scoped, revocable per install, and does not embed an
+    account-wide credential in a connection.  Klaviyo's token endpoint takes the client credentials as HTTP
+    basic authentication and requires PKCE, both of which this connection sets by default.
+
+    A private API key is spelled \c "Authorization: Klaviyo-API-Key <key>" rather than \c Bearer, which is
+    why it needs \c token_type as well as \c token.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires KlaviyoRestClient
+
+KlaviyoRestClientIo klaviyo({"token": ENV.KLAVIYO_TOKEN});
+hash<auto> result = klaviyo.get("/api/lists");
+printf("%d lists\n", result.body.data.size());
+    @endcode
+
+    @section klaviyorestclientrelnotes Release Notes
+
+    @subsection klaviyorestclientv1_0 KlaviyoRestClient v1.0
+    - the initial version of the %KlaviyoRestClient module
+*/
+
+#! the KlaviyoRestClient namespace contains all the objects in the KlaviyoRestClient module
+public namespace KlaviyoRestClient {
+#! Common base class for KlaviyoRestClient functionality
+public class KlaviyoRestClientBase {
+    public {
+        #! The default Klaviyo API URL
+        /** Klaviyo publishes one host, and its description declares one server; there is no sandbox
+            environment to select between.
+        */
+        const DefaultUrl = "https://a.klaviyo.com";
+
+        #! The header naming the API revision a request is made against
+        const RevisionHeader = "revision";
+
+        #! The API revision this module speaks
+        /** The revision the vendored description in the \c KlaviyoDataProvider module describes.  The two
+            must agree: an action generated from the 2026-07-15 description and sent against another
+            revision would be making a request the description does not describe.
+
+            Klaviyo keeps a revision stable for a year and deprecated for a second, so this one is stable
+            until 2027-07-15 and removed on 2028-07-15.  Changing it is a re-import of that description
+            rather than an edit here.
+        */
+        const ApiRevision = "2026-07-15";
+
+        #! Default OAuth2 authorization request URL
+        const DefaultAuthUrl = "https://www.klaviyo.com/oauth/authorize";
+
+        #! Default OAuth2 token request URL
+        const DefaultTokenUrl = "https://a.klaviyo.com/oauth/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes
+        /** Klaviyo validates a request against the scopes the registered app holds, so asking for one
+            outside the set fails authorization before a user sees a consent screen.  These are exactly the
+            scopes the superseded application requested, which is what the registered app is set up for.
+        */
+        const DefaultScopes = (
+            "accounts:read",
+            "metrics:read",
+            "segments:read", "segments:write",
+            "events:read", "events:write",
+            "profiles:read", "profiles:write",
+            "lists:read", "lists:write",
+            "subscriptions:read", "subscriptions:write",
+            "campaigns:read", "campaigns:write",
+            "tags:read", "tags:write",
+        );
+
+        #! Default OAuth2 PKCE challenge method
+        /** Klaviyo requires PKCE on the authorization code flow.
+        */
+        const DefaultPkce = "S256";
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default authorization token type
+        /** \c Bearer, which is what an OAuth2 access token is sent as.  A connection using a private API
+            key instead sets this to @ref ApiKeyTokenType.
+        */
+        const DefaultTokenType = "Bearer";
+
+        #! The authorization token type for a private API key
+        /** Klaviyo spells an API key credential \c "Authorization: Klaviyo-API-Key <key>" rather than
+            \c Bearer.
+        */
+        const ApiKeyTokenType = "Klaviyo-API-Key";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** \c GET /api/accounts identifies the account the credential reaches, so it proves the credential
+            works without naming any object.  It needs only the \c accounts:read scope, which is the first
+            one every install grants.
+        */
+        const DefaultPingPath = "/api/accounts";
+
+        #! The largest page Klaviyo returns for a cursor-paged listing
+        /** Klaviyo caps \c page[size] per endpoint rather than globally; 100 is the largest value every
+            paged listing this module exports accepts.
+        */
+        const MaxPageSize = 100;
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "token_type": DefaultTokenType,
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns options for the KlaviyoRestClient constructors
+    /** @param opts0 the caller's options
+
+        @return the options to pass to the client constructor
+    */
+    static hash<auto> getOptions(*hash<auto> opts0) {
+        # "auto!" because a caller's literal option hash whose values happen to share a type narrows to
+        # that type, and adding a hash-valued or list-valued default would then throw at run time
+        hash<auto!> opts = opts0 ?? {};
+
+        # the revision travels as a header on every call, so it is merged into the client's headers rather
+        # than passed to each request; a caller adding a header of its own does not drop it, and a caller
+        # that set the header explicitly keeps its own value
+        opts.headers = {RevisionHeader: ApiRevision, "Accept": MimeTypeJson} + (opts.headers ?? {});
+
+        if (opts.oauth2_client_id.val()) {
+            if (!opts.oauth2_grant_type.val()) {
+                opts.oauth2_grant_type = DefaultGrantType;
+            }
+            if (!opts.oauth2_auth_url.val()) {
+                opts.oauth2_auth_url = DefaultAuthUrl;
+            }
+            if (!opts.oauth2_token_url.val()) {
+                opts.oauth2_token_url = DefaultTokenUrl;
+            }
+            if (!opts.oauth2_scopes) {
+                opts.oauth2_scopes = DefaultScopes;
+            }
+            if (!opts.oauth2_pkce.val()) {
+                opts.oauth2_pkce = DefaultPkce;
+            }
+            if (!exists opts.oauth2_token_use_basic_auth) {
+                opts.oauth2_token_use_basic_auth = True;
+            }
+        }
+
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+}
+
+#! Klaviyo REST client
+public class KlaviyoRestClient inherits RestClient::RestClient, KlaviyoRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *softbool do_not_connect)
+            : RestClient(KlaviyoRestClientBase::getOptions(opts), do_not_connect) {
+    }
+}
+
+#! Klaviyo REST client for non-blocking I/O
+public class KlaviyoRestClientIo inherits RestClientIo::RestClientIo, KlaviyoRestClientBase {
+    #! Creates the object with the given options
+    constructor(*hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(KlaviyoRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for Klaviyo REST connections
+public class KlaviyoRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Klaviyo connection URL
+        const DefaultConnectionUrl = "klaviyo://a.klaviyo.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Klaviyo REST Connection",
+            "short_desc": "A connection to the Klaviyo REST API",
+            "desc": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, "
+                "tags, campaigns, events and subscriptions.\n\n"
+                "**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and "
+                "`oauth2_client_secret` from an app registered in Klaviyo's developer portal. Klaviyo "
+                "requires PKCE and takes the client credentials as HTTP basic authentication on the token "
+                "endpoint, both of which are set by default. The scopes requested are the ones the "
+                "registered app holds; asking for one outside that set fails authorization before a user "
+                "sees a consent screen.\n\n"
+                "A **private API key** works as an alternative for an integration that only ever serves "
+                "one account: set `token` to the key and `token_type` to `Klaviyo-API-Key`, which is how "
+                "Klaviyo spells that credential. It carries the account's full permissions and cannot be "
+                "scoped, so prefer OAuth2 where both are available.\n\n"
+                "**The API revision is sent on every call** as `revision: "
+                + KlaviyoRestClientBase::ApiRevision + "`, matching the description the actions are "
+                "generated from. Klaviyo declares that header required on almost every operation, and a "
+                "revision is removed two years after it ships, so it is never left to a default.\n\n"
+                "Klaviyo is a trademark of Klaviyo, Inc.",
+            "cls": Class::forName("KlaviyoRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "klaviyo": True,
+            },
+            "base_scheme_map": {
+                "https": "klaviyo",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultGrantType,
+                },
+                "oauth2_pkce": RestConnection::ConnectionScheme.options.oauth2_pkce
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultPkce,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultScopes,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultTokenUrl,
+                },
+                "oauth2_token_use_basic_auth":
+                    RestConnection::ConnectionScheme.options.oauth2_token_use_basic_auth
+                + <ConnectionOptionInfo>{
+                    "default_value": True,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultPingPath,
+                },
+                "token_type": RestConnection::ConnectionScheme.options."token_type"
+                + <ConnectionOptionInfo>{
+                    "default_value": KlaviyoRestClientBase::DefaultTokenType,
+                },
+            },
+            # the OAuth2 alternative is named first because it is the one to prefer: it is scoped to what
+            # the registered app holds and revocable per install, where a private API key carries the whole
+            # account and cannot be narrowed
+            "required_options": "oauth2_client_id,oauth2_client_secret|token",
+        };
+    }
+
+    #! Creates the KlaviyoRestConnection object
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! Creates the KlaviyoRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! Returns the connection type name
+    string getType() {
+        return "klaviyo";
+    }
+
+    #! Returns the name of the application this connection serves
+    /** The name the superseded TypeScript application registered, which is what existing workflows
+        reference.
+    */
+    *string getAppName() {
+        return "Klaviyo";
+    }
+
+    #! Returns @ref True, as the connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the Klaviyo data provider for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*string subtype, *hash<auto> options) {
+        # the data provider module is loaded on demand, so that a connection can be created and pinged
+        # without it
+        load_module("KlaviyoDataProvider");
+        return create_object("KlaviyoDataProvider", getAsync());
+    }
+
+    #! Returns a KlaviyoRestClient object
+    private KlaviyoRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new KlaviyoRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new KlaviyoRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

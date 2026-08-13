@@ -266,6 +266,7 @@ public class ConnectionSchemeCache {
             "github": "GitHubRestClient",
             "gitlab": "GitLabRestClient",
             "intercom": "IntercomRestClient",
+            "klaviyo": "KlaviyoRestClient",
             "xero": "XeroRestClient",
 
             "pop3": "Pop3Client",
