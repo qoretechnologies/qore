@@ -45,7 +45,7 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": False,
             "children_can_support_records": True,
-            "children_can_support_observers": False,
+            "children_can_support_observers": True,
         };
     }
 
@@ -54,6 +54,8 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
 
         const ChildMap = {
             "tables": Class::forName("CdsRestDataProvider::CdsRestTablesDataProvider"),
+            CdsRestDataProvider::EventsChildName:
+                Class::forName("CdsRestDataProvider::CdsEventsDataProvider"),
         };
     }
 

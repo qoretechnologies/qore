@@ -34,7 +34,7 @@
 %requires(reexport) CdsRestClient
 
 module CdsRestDataProvider {
-    version = "2.1.0";
+    version = "2.2.0";
     desc = "user module providing a data provider API for Microsoft Common Data Service instances through a REST API";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -157,6 +157,35 @@ module CdsRestDataProvider {
                 },
             },
             "data_provider_info": ODataEntityDataProvider::CdsProviderInfo,
+        });
+
+        # register the polling event actions; the IDs come from the same map the child providers
+        # are built from, so an event cannot be registered without being reachable
+        foreach hash<auto> i in (CdsEntityEvents.pairIterator()) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": CdsRestDataProvider::DynamicsAppName,
+                "path": "/" + CdsRestDataProvider::EventsChildName + "/" + i.key,
+                "action": i.key,
+                "display_name": i.value.display_name,
+                "short_desc": i.value.short_desc,
+                "desc": i.value.desc,
+                "action_code": DPAT_EVENT,
+                "action_val": i.key,
+                "groups": ("Events",),
+            });
+        }
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CdsRestDataProvider::DynamicsAppName,
+            "path": "/" + CdsRestDataProvider::EventsChildName + "/"
+                + CdsCustomEntityWatchDataProvider::EventName,
+            "action": CdsCustomEntityWatchDataProvider::EventName,
+            "display_name": CdsCustomEntityWatchDataProvider::DisplayName,
+            "short_desc": CdsCustomEntityWatchDataProvider::ShortDesc,
+            "desc": CdsCustomEntityWatchDataProvider::Desc,
+            "action_code": DPAT_EVENT,
+            "action_val": CdsCustomEntityWatchDataProvider::EventName,
+            "groups": ("Events",),
         });
 
         # Register Business Central app and actions
@@ -343,6 +372,16 @@ module CdsRestDataProvider {
     - @ref CdsRestDataProvider::ODataEntityDataProvider "ODataEntityDataProvider"
     - @ref CdsRestDataProvider::ODataRecordIterator "ODataRecordIterator"
 
+    @subsection cdsrestdataprovider_v2_2 CdsRestDataProvider v2.2
+    - added polling event providers for Dynamics 365 entities, replacing the triggers of the
+      TypeScript application of the same name
+      - one generic provider watches any Dataverse table, where the application it replaces
+        hardcoded seven and added a custom-entity special case for everything else
+      - each event takes a @c condition option selecting whether it fires once when a record is
+        created or again on every subsequent change
+      - the custom-entity event resolves the entity set and primary key from the organisation's own
+        entity definition rather than deriving them from the logical name's spelling
+
     @subsection cdsrestdataprovider_v2_1 CdsRestDataProvider v2.1
     - added support for Microsoft Dynamics 365 Business Central
       - new data provider classes for Business Central CRUD operations
@@ -369,6 +408,9 @@ public const DynamicsAppName = "Dynamics";
 
 #! Application name for Business Central
 public const BusinessCentralAppName = "BusinessCentral";
+
+#! The name of the child provider holding the Dynamics event providers
+public const EventsChildName = "events";
 
 # used in accordance with: https://learn.microsoft.com/en-us/dynamics365/get-started/icons#icon-updates
 public const DynamicsLogo = File::readTextFile(get_script_dir() + "/dynamics-logo.svg");

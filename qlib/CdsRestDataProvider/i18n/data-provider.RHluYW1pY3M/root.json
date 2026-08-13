@@ -458,6 +458,102 @@
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.option.dGFibGU.desc": {
           "source": "The name of the Dynamics table, ex: `account`",
           "message": "The name of the Dynamics table, ex: `account`"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
+          "source": "New or Updated Account",
+          "message": "New or Updated Account"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
+          "source": "Fires when an account is created or changed",
+          "message": "Fires when an account is created or changed"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.desc": {
+          "source": "Fires for each account created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Fires for each account created in the organisation, and, when the condition is `updated`, again on every subsequent change."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
+          "source": "New or Updated Case",
+          "message": "New or Updated Case"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
+          "source": "Fires when a case is created or changed",
+          "message": "Fires when a case is created or changed"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.desc": {
+          "source": "Fires for each case created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `incident`.",
+          "message": "Fires for each case created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `incident`."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
+          "source": "New or Updated Contact",
+          "message": "New or Updated Contact"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "Fires when a contact is created or changed"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.desc": {
+          "source": "Fires for each contact created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Fires for each contact created in the organisation, and, when the condition is `updated`, again on every subsequent change."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
+          "source": "New or Updated Invoice",
+          "message": "New or Updated Invoice"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
+          "source": "Fires when an invoice is created or changed",
+          "message": "Fires when an invoice is created or changed"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.desc": {
+          "source": "Fires for each invoice created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Fires for each invoice created in the organisation, and, when the condition is `updated`, again on every subsequent change."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
+          "source": "New or Updated Lead",
+          "message": "New or Updated Lead"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
+          "source": "Fires when a lead is created or changed",
+          "message": "Fires when a lead is created or changed"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.desc": {
+          "source": "Fires for each lead created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Fires for each lead created in the organisation, and, when the condition is `updated`, again on every subsequent change."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
+          "source": "New or Updated Opportunity",
+          "message": "New or Updated Opportunity"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
+          "source": "Fires when an opportunity is created or changed",
+          "message": "Fires when an opportunity is created or changed"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.desc": {
+          "source": "Fires for each opportunity created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Fires for each opportunity created in the organisation, and, when the condition is `updated`, again on every subsequent change."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
+          "source": "New or Updated Order",
+          "message": "New or Updated Order"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
+          "source": "Fires when an order is created or changed",
+          "message": "Fires when an order is created or changed"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.desc": {
+          "source": "Fires for each order created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `salesorder`.",
+          "message": "Fires for each order created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `salesorder`."
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
+          "source": "New or Updated Custom Entity",
+          "message": "New or Updated Custom Entity"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {
+          "source": "Fires for each record created or changed in any Dataverse table",
+          "message": "Fires for each record created or changed in any Dataverse table"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.desc": {
+          "source": "Fires for each record created or changed in a Dataverse table named when the subscription is created.\n\nThe table is given by its logical name, ex: `account`; its entity set and primary key are read from the organisation's entity definition, so a custom table whose set name is not simply its logical name pluralised works unchanged.",
+          "message": "Fires for each record created or changed in a Dataverse table named when the subscription is created.\n\nThe table is given by its logical name, ex: `account`; its entity set and primary key are read from the organisation's entity definition, so a custom table whose set name is not simply its logical name pluralised works unchanged."
         }
       }
     }

@@ -1,0 +1,240 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires CdsRestClient
+%requires CdsRestDataProvider
+%requires reflection
+
+%requires qore >= 2.0
+
+%modern
+
+%exec-class CdsEntityEventsTest
+
+#! Tests the Dynamics 365 entity event providers that replace the TypeScript application's triggers
+/** Everything here runs without a Dataverse organisation: it checks the registration surface, the
+    identity and ordering decisions that decide whether a subscription delivers anything at all, and
+    the shape of the OData literal the cursor is sent upstream as. Delivery itself needs a live
+    organisation and is not attempted here.
+*/
+class CdsEntityEventsTest inherits QUnit::Test {
+    public {
+        #! The action IDs the replaced TypeScript application registered
+        /** Read out of that application's i18n catalog, not derived from its filenames: the files
+            were named `new-*` while the registered IDs are `new-or-updated-*`, and an action ID is a
+            product commitment — renaming one breaks every workflow that names it.
+        */
+        const TypeScriptEventIds = (
+            "new-or-updated-account",
+            "new-or-updated-case",
+            "new-or-updated-contact",
+            "new-or-updated-invoice",
+            "new-or-updated-lead",
+            "new-or-updated-opportunity",
+            "new-or-updated-order",
+            "new-custom-entity",
+        );
+
+        #! Dataverse's primary key for each watched table
+        /** Dataverse names a primary key after its own table and never calls it `id`, which is the
+            inherited default. A provider that does not override it produces an empty feed rather
+            than an error, which is how the equivalent mistake went unnoticed in the Xero port.
+        */
+        const ExpectedIdFields = {
+            "new-or-updated-account": "accountid",
+            "new-or-updated-case": "incidentid",
+            "new-or-updated-contact": "contactid",
+            "new-or-updated-invoice": "invoiceid",
+            "new-or-updated-lead": "leadid",
+            "new-or-updated-opportunity": "opportunityid",
+            "new-or-updated-order": "salesorderid",
+        };
+
+        #! Dataverse's entity set for each watched table
+        const ExpectedEntitySets = {
+            "new-or-updated-account": "accounts",
+            "new-or-updated-case": "incidents",
+            "new-or-updated-contact": "contacts",
+            "new-or-updated-invoice": "invoices",
+            "new-or-updated-lead": "leads",
+            "new-or-updated-opportunity": "opportunities",
+            "new-or-updated-order": "salesorders",
+        };
+    }
+
+    constructor() : Test("CdsEntityEventsTest", "1.0") {
+        addTestCase("action surface", \actionSurfaceTest());
+        addTestCase("events are reachable", \eventsReachableTest());
+        addTestCase("watch base is inherited first", \watchBaseFirstTest());
+        addTestCase("id fields", \idFieldTest());
+        addTestCase("entity sets", \entitySetTest());
+        addTestCase("condition option", \conditionTest());
+        addTestCase("odata timestamp literal", \timestampLiteralTest());
+        addTestCase("any entity can be watched", \genericEntityTest());
+        set_return_value(main());
+    }
+
+    #! Every ID the replaced application registered must still be registered here
+    /** This is the mechanical action-surface diff: an ID on the TypeScript side and absent here is a
+        workflow that breaks on the flag day.
+    */
+    actionSurfaceTest() {
+        list<string> ids = map $1.action, DataProviderActionCatalog::getActions("Dynamics");
+
+        foreach string id in (TypeScriptEventIds) {
+            assertTrue(ids.contains(id), sprintf("action %y is registered", id));
+        }
+
+        # and each is registered as an event, not as some other action code
+        hash<string, hash<auto>> by_id = map {$1.action: $1}, DataProviderActionCatalog::getActions("Dynamics");
+        foreach string id in (TypeScriptEventIds) {
+            assertEq(DPAT_EVENT, by_id{id}.action_code, sprintf("action %y is an event", id));
+        }
+    }
+
+    #! Registering an action that no child provides would leave it unusable
+    eventsReachableTest() {
+        CdsEventsDataProvider events();
+        list<string> children = events.getChildProviderNames();
+
+        foreach string id in (TypeScriptEventIds) {
+            assertTrue(children.contains(id), sprintf("event %y is reachable", id));
+            assertTrue(events.getChildProvider(id).getInfo().supports_observable,
+                sprintf("event %y supports observers", id));
+        }
+
+        assertNothing(events.getChildProvider("no-such-event"));
+    }
+
+    #! The watch base must come first in the inherits list
+    /** Both bases declare `observersReady()`, %Qore resolves a method to the first branch that
+        declares it, and the wrong order reports every subscription unsupported at run time rather
+        than failing at build time. Checked structurally so the failure cannot reach a user.
+    */
+    watchBaseFirstTest() {
+        foreach string cls_name in (("CdsRestDataProvider::CdsEntityWatchDataProvider",
+                "CdsRestDataProvider::CdsCustomEntityWatchDataProvider")) {
+            Class cls = Class::forName(cls_name);
+            list<hash<ClassAccessInfo>> parents = cls.getParentClasses();
+            assertTrue(parents.size() > 0, sprintf("%s has parents", cls_name));
+
+            # walk the first branch to the top; the watch base must be on it
+            list<string> first_branch = ();
+            Class walk = parents[0].cls;
+            while (True) {
+                first_branch += walk.getPathName();
+                list<hash<ClassAccessInfo>> up = walk.getParentClasses();
+                if (!up) {
+                    break;
+                }
+                walk = up[0].cls;
+            }
+
+            assertTrue(first_branch.contains("DataProvider::AbstractWatchDataProviderBase"),
+                sprintf("%s resolves observersReady() to the watch base; first branch is %y",
+                    cls_name, first_branch));
+        }
+    }
+
+    #! A watch provider whose identity field is wrong delivers nothing and reports no error
+    /** Asserted on the descriptor map rather than through the providers: the map is the single
+        source both the child providers and the registered actions are built from, so it is where
+        such a mistake would be made, and it is public where the accessors reading it are not.
+    */
+    idFieldTest() {
+        foreach hash<auto> i in (ExpectedIdFields.pairIterator()) {
+            assertEq(i.value, CdsEntityEvents{i.key}.id_field,
+                sprintf("event %y is keyed by %y", i.key, i.value));
+            assertNeq("id", CdsEntityEvents{i.key}.id_field,
+                sprintf("event %y does not use the inherited default key", i.key));
+        }
+
+        # every named event must declare one; a missing key is the silent-empty-feed failure
+        foreach hash<auto> i in (CdsEntityEvents.pairIterator()) {
+            assertTrue(i.value.id_field.val(), sprintf("event %y declares a key", i.key));
+        }
+    }
+
+    #! The entity set is the OData path segment; the logical name is not
+    /** The replaced application used the logical name as the path segment and appended `id` to it
+        for the key, which is wrong for every table whose set name is not its logical name with an
+        `s` on the end — and wrong for `incident`, `opportunity` and `salesorder` even among the
+        seven it hardcoded.
+    */
+    entitySetTest() {
+        foreach hash<auto> i in (ExpectedEntitySets.pairIterator()) {
+            assertEq(i.value, CdsEntityEvents{i.key}.entity_set,
+                sprintf("event %y polls %y", i.key, i.value));
+        }
+
+        # the two spellings must be kept apart, not derived from one another
+        assertEq("incidents", CdsEntityEvents."new-or-updated-case".entity_set);
+        assertEq("incident", CdsEntityEvents."new-or-updated-case".logical_name);
+        assertEq("opportunities", CdsEntityEvents."new-or-updated-opportunity".entity_set);
+        assertEq("opportunity", CdsEntityEvents."new-or-updated-opportunity".logical_name);
+    }
+
+    #! `condition` selects the column the feed is positioned by
+    conditionTest() {
+        assertEq("createdon", CdsConditionTimestampField{CdsWatchCreated},
+            "the created condition positions by createdon");
+        assertEq("modifiedon", CdsConditionTimestampField{CdsWatchUpdated},
+            "the updated condition positions by modifiedon");
+
+        # the option's default must be the one the replaced application defaulted to
+        hash<auto> opt = CdsEntityWatchDataProviderBase::WatchConstructorOptions.condition;
+        assertEq(CdsWatchCreated, opt.default_value, "the default condition is `created`");
+        assertEq(2, opt.allowed_values.size(), "both conditions are offered");
+
+        hash<auto> info = CdsEntityEvents."new-or-updated-account";
+        assertThrows("CDS-EVENT-ERROR", sub () {
+            CdsEntityWatchDataProvider bad(NOTHING, {"condition": "whenever"},
+                "new-or-updated-account", info);
+        });
+    }
+
+    #! The cursor is sent upstream as an OData datetime literal
+    /** Unquoted, and normalised to UTC so a comparison cannot depend on the zone the subscription
+        happens to run in.
+    */
+    timestampLiteralTest() {
+        string lit = CdsEntityWatchDataProviderBase::formatODataTimestamp(
+            2026-08-13T14:30:00+02:00);
+
+        assertEq("2026-08-13T12:30:00Z", lit, "the literal is UTC and unquoted");
+        assertFalse(lit =~ /'/, "the literal carries no quotes");
+
+        # a value already in UTC survives unchanged
+        assertEq("2026-08-13T12:30:00Z", CdsEntityWatchDataProviderBase::formatODataTimestamp(
+            2026-08-13T12:30:00Z));
+    }
+
+    #! The generic provider watches any table, where the replaced application hardcoded seven
+    genericEntityTest() {
+        # a table no registration names, given the same way a registered one is
+        hash<auto> info = {
+            "entity_set": "cr123_widgets",
+            "logical_name": "cr123_widget",
+            "id_field": "cr123_widgetid",
+            "desc": "a custom table",
+        };
+        CdsEntityWatchDataProvider provider(NOTHING, NOTHING, "watch-widget", info);
+
+        assertEq("watch-widget", provider.getName());
+        assertEq(info.desc, provider.getDesc());
+        assertTrue(cast<AbstractDataProvider>(provider).getInfo().supports_observable);
+
+        # the custom-entity event takes the table as an option and resolves its entity set and key
+        # from the organisation's own entity definition rather than from the option's spelling
+        hash<auto> copts = CdsCustomEntityWatchDataProvider::ConstructorOptions;
+        assertTrue(copts.entity.required, "the custom-entity event requires an entity");
+        assertTrue(exists copts.condition, "the custom-entity event takes a condition too");
+        assertEq("account", copts.entity.example_value, "the option is a logical name");
+    }
+}
