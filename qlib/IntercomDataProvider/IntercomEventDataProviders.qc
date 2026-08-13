@@ -253,7 +253,8 @@ public class IntercomWatchDataProviderBase inherits DataProvider::AbstractTimest
 
     #! Returns the record type the search action this provider polls returns
     /** Taken from the action set the application ships, so that the event and the action a workflow reads
-        it with cannot describe the same record differently.
+        it with cannot describe the same record differently, plus any field Intercom returns and declares
+        nowhere - see @ref getExtraEventFields().
     */
     private AbstractDataProviderType getEventRecordType() {
         RestSchemaActionSet aset = IntercomSchema::getActionSet();
@@ -269,14 +270,41 @@ public class IntercomWatchDataProviderBase inherits DataProvider::AbstractTimest
                     if (vt && vt.getBaseTypeCode() == NT_LIST) {
                         *AbstractDataProviderType et = vt.getElementType();
                         if (et) {
-                            return et;
+                            return addExtraEventFields(et);
                         }
                     }
                 }
-                return t;
+                return addExtraEventFields(t);
             }
         }
         return AbstractDataProviderType::get(AutoHashType);
+    }
+
+    #! Returns the given type with any undeclared field this event carries merged in
+    /** The schema stays primary: only a field it does not declare at all is added, so the merge cannot go
+        stale when Intercom starts declaring one.
+    */
+    private AbstractDataProviderType addExtraEventFields(AbstractDataProviderType t) {
+        *hash<string, AbstractDataField> extra = getExtraEventFields();
+        if (!extra) {
+            return t;
+        }
+        *hash<string, AbstractDataField> declared = t.getFields();
+        if (!declared) {
+            return t;
+        }
+        HashDataType rv(getEventName() + "-record");
+        map rv.addField($1), declared.iterator();
+        map rv.addField($1.value), extra.pairIterator(), !exists declared{$1.key};
+        return rv;
+    }
+
+    #! Returns fields this event's records carry that Intercom's description declares nowhere
+    /** Empty by default; see
+        @ref IntercomDataProvider::IntercomNewContactDataProvider::getExtraEventFields() "the contact event"
+        for why one is needed.
+    */
+    private *hash<string, AbstractDataField> getExtraEventFields() {
     }
 
     #! Returns the search endpoint this event polls
@@ -383,6 +411,45 @@ public class IntercomNewContactDataProvider inherits IntercomWatchDataProviderBa
     #! Returns the action whose records this provider reports
     private string getEventSourceAction() {
         return "SearchContacts";
+    }
+
+    #! Returns the fields a contact carries that Intercom's description declares nowhere
+    /** Measured against a live workspace: Intercom returns these eleven on every contact and declares not
+        one of them, in the 2.16 description or any earlier one.  The application this module replaces
+        declared them in its trigger's hand-written event type, so leaving them out would quietly break any
+        workflow that maps a UTM value or a subscription list off a new contact - a parity regression one
+        level below the action surface, where a mechanical diff does not reach.
+
+        The schema stays primary: these are merged only where it declares nothing, so they disappear of
+        their own accord if Intercom ever documents them.
+    */
+    private *hash<string, AbstractDataField> getExtraEventFields() {
+        return {
+            "opted_in_subscription_types": new QoreDataField("opted_in_subscription_types",
+                "The subscription types this contact has opted in to",
+                AbstractDataProviderTypeMap."*hash"),
+            "opted_out_subscription_types": new QoreDataField("opted_out_subscription_types",
+                "The subscription types this contact has opted out of",
+                AbstractDataProviderTypeMap."*hash"),
+            "utm_campaign": new QoreDataField("utm_campaign", "The campaign that brought the contact in",
+                AbstractDataProviderTypeMap."*string"),
+            "utm_content": new QoreDataField("utm_content", "The content that brought the contact in",
+                AbstractDataProviderTypeMap."*string"),
+            "utm_medium": new QoreDataField("utm_medium", "The medium that brought the contact in",
+                AbstractDataProviderTypeMap."*string"),
+            "utm_source": new QoreDataField("utm_source", "The source that brought the contact in",
+                AbstractDataProviderTypeMap."*string"),
+            "utm_term": new QoreDataField("utm_term", "The search term that brought the contact in",
+                AbstractDataProviderTypeMap."*string"),
+            "referrer": new QoreDataField("referrer", "The URL the contact arrived from",
+                AbstractDataProviderTypeMap."*string"),
+            "sms_consent": new QoreDataField("sms_consent", "Whether the contact has consented to SMS",
+                AbstractDataProviderTypeMap."*bool"),
+            "unsubscribed_from_sms": new QoreDataField("unsubscribed_from_sms",
+                "Whether the contact has unsubscribed from SMS", AbstractDataProviderTypeMap."*bool"),
+            "enabled_push_messaging": new QoreDataField("enabled_push_messaging",
+                "Whether push messaging is enabled for the contact", AbstractDataProviderTypeMap."*bool"),
+        };
     }
 
     #! Returns the configuration that defines which scan this provider follows

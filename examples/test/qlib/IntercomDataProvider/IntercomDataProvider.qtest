@@ -172,7 +172,6 @@ public class IntercomDataProviderTest inherits QUnit::Test {
             "ListContacts",
             "listAdmins",
             "listAllCollections",
-            "listConversations",
             "listTagsForAContact",
         );
     }
@@ -314,12 +313,6 @@ public class IntercomDataProviderTest inherits QUnit::Test {
             assertTrue(exists fields.starting_after, sprintf("%s can ask for the next page", action));
         }
 
-        # "GET /conversations" is what makes the repair a repair rather than an invention: it returns the
-        # same envelope and does declare both arguments
-        *hash<string, AbstractDataField> conv =
-            aset.getOperationEx("listConversations").getRequestType().getFields();
-        assertTrue(exists conv.per_page);
-        assertTrue(exists conv.starting_after);
 
         # these answer envelopes with no "pages" object at all, so they are genuinely unpaged and were
         # deliberately left alone

@@ -43,16 +43,25 @@ public namespace IntercomDataProvider {
 
     @section intercommanifest_added What This Application Adds
 
-    Five read-only listings are exported that the TypeScript application did not.  Every one of them exists
+    Four read-only listings are exported that the TypeScript application did not.  Every one of them exists
     so that a dropdown has an action to call: a dropdown can only name an action the manifest exports, and
     the application this module replaces filled its dropdowns by calling endpoints it never exported.
 
     |!Action|!Fills
     |\c listAdmins|the teammate dropdowns - an article's author, a note's or a reply's admin, a message's sender
     |\c ListContacts|the contact dropdowns, and the contact e-mail and external-ID dropdowns with them
-    |\c listConversations|the conversation dropdown on **Reply to Conversation**
     |\c listAllCollections|the parent-collection dropdown on **Create Article**
     |\c listTagsForAContact|the tag dropdown on **Remove Tag from Contact**, which is scoped to the contact
+
+    @section intercommanifest_conversations The Conversation Dropdown Uses the Search
+
+    \c "GET /conversations" is **not** exported, and the conversation dropdown is filled by
+    \c searchConversations instead.  Intercom does not grant an app permission to that listing by default
+    and answers **403** without it, while the search returns the same conversations to the same credential -
+    measured against a live workspace, where the listing failed and the search returned 28.
+
+    A listing exported only to fill a dropdown, which then cannot be read by a normally configured app, is
+    a name that does not work; the search is the endpoint that does.
 
     @section intercommanifest_sections The Section Dropdown Is Withdrawn
 
@@ -152,6 +161,14 @@ public class IntercomManifest {
         #! The largest page Intercom returns for a cursor-paged listing
         const MaxPageSize = IntercomRestClient::IntercomRestClientBase::MaxPageSize;
 
+        #! The largest page \c "POST /companies/list" accepts
+        /** The one listing Intercom pages by number rather than by cursor is also the one with a smaller
+            cap: it answers **"Per Page is too big"** above 60, where the cursor-paged listings take 150.
+            The description declares no maximum on either, so this was measured against the API - asking
+            for 150 here made the company dropdown fail outright with a 400.
+        */
+        const MaxCompanyPageSize = 60;
+
         #! The dropdowns the application offers
         /** Each is produced by executing a listing action from this same manifest, so a dropdown can never
             drift away from an endpoint the application actually exports.
@@ -200,7 +217,8 @@ public class IntercomManifest {
             RefCompany: <RestSchemaReferenceDataInfo>{
                 "name": RefCompany,
                 "action": "listAllCompanies",
-                "options": {"per_page": MaxPageSize},
+                # not MaxPageSize: this endpoint rejects anything above 60
+                "options": {"per_page": MaxCompanyPageSize},
                 "records_path": "data",
                 # "company_id" is the identity the caller gave the company, which is what the create and
                 # update operation matches on; Intercom's own "id" addresses a company in a URL and is not
@@ -211,8 +229,15 @@ public class IntercomManifest {
             },
             RefConversation: <RestSchemaReferenceDataInfo>{
                 "name": RefConversation,
-                "action": "listConversations",
-                "options": {"per_page": MaxPageSize},
+                # deliberately the search rather than "GET /conversations": that listing needs a permission
+                # Intercom does not grant an app by default and answers **403** without it, while the search
+                # returns the same conversations to the same credential.  Measured against a live workspace,
+                # where the listing failed and this succeeded
+                "action": "searchConversations",
+                "options": {
+                    "query": {"field": "created_at", "operator": ">", "value": 0},
+                    "pagination": {"per_page": MaxPageSize},
+                },
                 "records_path": "conversations",
                 "value_field": "id",
                 # a conversation often has no title, in which case the ID identifies it
@@ -598,20 +623,6 @@ public class IntercomManifest {
                     },
                     "created_at": TimestampOverlay,
                 },
-            },
-            <RestSchemaActionInfo>{
-                "action": "listConversations",
-                "method": "GET",
-                "path": "/conversations",
-                "operation_id": "listConversations",
-                "display_name": "List Conversations",
-                "short_desc": "List the conversations in the workspace",
-                "desc": "Lists conversations.\n\n"
-                    "This is exported so that the conversation dropdown has an action to call; **Search "
-                    "Conversations** is the one to reach for when the conversations wanted are a subset.",
-                "groups": (GroupConversations,),
-                "field_order": ("per_page", "starting_after"),
-                "fields": Common + CursorPagingOverlay,
             },
             <RestSchemaActionInfo>{
                 "action": "searchConversations",
