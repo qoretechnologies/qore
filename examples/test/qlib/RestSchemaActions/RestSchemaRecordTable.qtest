@@ -121,6 +121,16 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                 "operation_id": "deleteItem",
                 "display_name": "Delete Item", "short_desc": "delete an item", "desc": "deletes an item",
             },
+            # the same update, with its option renamed the way a manifest renames one to keep the name the
+            # application it replaces used
+            <RestSchemaActionInfo>{
+                "action": "update-item-renamed", "method": "PATCH", "path": "/items/{item_id}",
+                "operation_id": "updateItem", "variant_of": "update-item",
+                "display_name": "Update Item", "short_desc": "update an item", "desc": "updates an item",
+                "fields": {
+                    "status": <RestSchemaFieldOverlayInfo>{"name": "state"},
+                },
+            },
             <RestSchemaActionInfo>{
                 "action": "list-unions", "method": "GET", "path": "/unions",
                 "operation_id": "listUnions",
@@ -465,9 +475,16 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
     constructor() : Test("RestSchemaRecordTableTest", "1.0") {
         # a codec of the shape Klaviyo's filter codecs have: it publishes a handful of named fields and
         # builds the service's query syntax from them, and answers anything else with nothing at all
+        # the type names the fields it publishes and refuses any other, as Klaviyo's filter codecs do; a
+        # type accepting any hash at all would not notice a wire-form value reaching the type check
+        HashDataType curated(AutoHashOrNothingType, "curated filter");
+        curated.addQoreFields({
+            "status": {"name": "status", "type": AbstractDataProviderTypeMap."*string"},
+            "name": {"name": "name", "type": AbstractDataProviderTypeMap."*string"},
+        });
         RestSchemaActionCodecs::registerCodec(<RestSchemaWireCodecInfo>{
             "name": CuratedFilterCodec,
-            "type": AbstractDataProviderType::get(AutoHashOrNothingType),
+            "type": curated,
             "desc": "sent as the service's query syntax",
             "to_wire": auto sub (auto v) {
                 if (v.typeCode() != NT_HASH) {
@@ -486,6 +503,7 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         addTestCase("a search option and a predicate on one listing option", \reservedOptionTest());
         addTestCase("filter expression rendering", \queryRenderTest());
         addTestCase("prefix-call and self-rendered query languages", \callAndHookRenderTest());
+        addTestCase("a write option spelled differently from the column", \writeFieldMapTest());
         addTestCase("published expression metadata", \expressionInfoTest());
         addTestCase("the limit counts matching records", \limitAfterFilterTest());
         addTestCase("paging stops where it should", \pagingTest());
@@ -762,6 +780,16 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertEq("any(status,[\"open\",\"closed\"])", s.options.q.value);
         assertNothing(s.client);
 
+        # ... including when the values arrive as separate arguments rather than as one list, which is the
+        # other way an "in" is written; rendering only the second argument would send a set predicate
+        # matching one value and silently under-return
+        s = f.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "status"}, "open", "closed", "held"),
+        });
+        assertEq("any(status,[\"open\",\"closed\",\"held\"])", s.options.q.value);
+        assertNothing(s.client);
+
         # a language with no OR cannot render one: the whole expression is evaluated client-side rather
         # than being sent as something the service would answer differently
         s = f.split(logic(DP_OP_OR, (eq("status", "open"), eq("status", "closed"))));
@@ -922,6 +950,57 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
                 },
             }));
         });
+    }
+
+    #! A column whose write option is spelled differently from the record field
+    /** Without the mapping the narrowing to the write action's options drops it, and the write reports
+        success having changed nothing at all.
+    */
+    writeFieldMapTest() {
+        ScriptedRestClient rest;
+        # "status" is a column of the record and an option of the update action under another name
+        hash<RestSchemaRecordTableInfo> t = cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "update_action": "update-item-renamed",
+            "write_field_map": {"status": "state"},
+        });
+        RestSchemaTableDataProvider items = table(t, \rest, auto sub (string method, string path) {
+            if (method == "GET") {
+                return {"data": (itemPage(1, 1, 1)[0],), "has_more": False};
+            }
+            return {"data": itemPage(1, 1, 1)[0]};
+        });
+        items.updateRecords({"status": "closed"}, eq("id", "i_0"));
+        assertEq("PATCH", rest.methods.last());
+        # the option is "state" and its wire name is still "status": the mapping bridges the record field
+        # to the option, and the schema decides what goes on the wire
+        assertEq({"status": "closed"}, parse_json(rest.bodies.last()),
+            "the column reached the request through the renamed option");
+
+        # without the mapping the same write sends nothing at all, which is the defect
+        rest.reset();
+        RestSchemaTableDataProvider plain = table(cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+            "update_action": "update-item-renamed",
+        }), \rest, auto sub (string method, string path) {
+            if (method == "GET") {
+                return {"data": (itemPage(1, 1, 1)[0],), "has_more": False};
+            }
+            return {"data": itemPage(1, 1, 1)[0]};
+        });
+        # the unmapped column is dropped by the narrowing and the write carries nothing.  Here the schema
+        # requires a body and the request fails; where an action wraps its body in an envelope the drop is
+        # silent instead and the update reports success having changed no value at all
+        assertThrows("UPDATE-RECORDS-ERROR", "expected type", sub () {
+            plain.updateRecords({"status": "closed"}, eq("id", "i_0"));
+        });
+
+        # a mapping onto an option no write action declares is refused rather than dropped in the same way
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "neither the create nor the update action declares",
+            sub () {
+                RestSchemaTableDataProvider::check(aset,
+                    cast<hash<RestSchemaRecordTableInfo>>(ItemTable + {
+                        "write_field_map": {"status": "no_such_option"},
+                    }));
+            });
     }
 
     expressionInfoTest() {

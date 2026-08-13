@@ -105,6 +105,46 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         return op.getResponseType();
     }
 
+    #! Makes the API call, holding back any value that is already in wire form from the type check
+    /** A @ref RestSchemaActions::RestSchemaRawValue "RestSchemaRawValue" carries a value the caller has
+        already rendered into what the API takes - a record table's filter expression - and the option's
+        published type describes the **curated** shape the action offers instead, so validating one against
+        the other would reject exactly the value that is correct.
+
+        Every other value is checked as before, and the wire-form values are put back afterwards so that
+        @ref RestSchemaActions::RestSchemaActionOperation::unflatten() "unflatten()" places them without
+        applying the option's codec.
+
+        @param req the request options
+        @param request_options the request options for the transport
+
+        @return the response body
+    */
+    auto doRequest(auto req, *hash<auto> request_options) {
+        if (req.typeCode() != NT_HASH) {
+            return AbstractDataProvider::doRequest(req, request_options);
+        }
+        hash<auto> opts = req;
+        # "auto!" because the wire-form values are of every type
+        hash<auto!> raw = {};
+        map raw{$1.key} = $1.value, opts.pairIterator(), $1.value instanceof hash<RestSchemaRawValue>;
+        if (!raw) {
+            return AbstractDataProvider::doRequest(req, request_options);
+        }
+        checkRequest();
+        auto checked = opts - (keys raw);
+        *AbstractDataProviderType request_type = getRequestTypeWithData(checked);
+        if (request_type) {
+            try {
+                checked = request_type.acceptsValue(checked);
+            } catch (hash<ExceptionInfo> ex) {
+                rethrow "INVALID-REQUEST", sprintf("invalid request argument for request %y: %s: %s",
+                    getName(), ex.err, ex.desc), getWrappedExceptionArg(ex);
+            }
+        }
+        return doRequestImpl(checked + raw, validateRequestOptions(request_options));
+    }
+
     #! Makes the API call and returns the response body
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> wire = op.unflatten(req);

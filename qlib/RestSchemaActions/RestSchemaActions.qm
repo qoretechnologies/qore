@@ -286,6 +286,14 @@ module RestSchemaActions {
     therefore removes functionality silently, which is why the richer description wins and why the two are
     merged rather than one being chosen.
 
+    A write sends the columns the write action **declares**, and nothing else - so a column whose option is
+    spelled differently from the record field is dropped, and the write reports success having changed no
+    value at all.  That happens wherever a manifest renames an option, which manifests do for a reason:
+    Klaviyo returns a list's \c opt_in_process and its update action publishes \c optInProcess, because that
+    is the name the application it replaces used.
+    @ref RestSchemaActions::RestSchemaRecordTableInfo::write_field_map "write_field_map" declares the pairs,
+    and an entry naming an option no write action has is refused rather than dropped in the same way.
+
     Where a vendor returns a field and describes it nowhere -
     @ref RestSchemaActions::RestSchemaRecordTableInfo::extra_columns "extra_columns" declares it, merged over
     the derived type.  That keeps the schema the primary description and leaves a short list of what it is

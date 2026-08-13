@@ -512,10 +512,16 @@ public class RestSchemaRecordFilter {
         if (syn.render_field) {
             wire_field = syn.render_field(wire_field);
         }
-        if (c.exp == DP_SEARCH_OP_IN && !RestSchemaRecordFilter::hasOp(syn, DP_SEARCH_OP_IN)) {
+        if (c.exp == DP_SEARCH_OP_IN) {
+            # an "in" carries its values as the arguments after the field, and any of them may itself be a
+            # list; rendering only the second argument would send a set predicate matching one value
+            list<auto> values = RestSchemaRecordFilter::getInValues(c);
+            if (RestSchemaRecordFilter::hasOp(syn, DP_SEARCH_OP_IN)) {
+                # the language spells set membership itself, and takes the whole set as the value
+                return renderPredicate(DP_SEARCH_OP_IN, wire_field, field, values);
+            }
             # a language with no "in" spells it as a disjunction of equalities
-            list<string> parts = map renderPredicate(DP_SEARCH_OP_EQ, wire_field, field, $1),
-                RestSchemaRecordFilter::getInValues(c);
+            list<string> parts = map renderPredicate(DP_SEARCH_OP_EQ, wire_field, field, $1), values;
             return joinGroup(False, parts);
         }
         return renderPredicate(c.exp, wire_field, field, c.args[1]);

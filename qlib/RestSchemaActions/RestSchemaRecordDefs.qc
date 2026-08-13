@@ -502,6 +502,22 @@ public hashdecl RestSchemaRecordTableInfo {
     */
     *softlist<string> read_only_fields;
 
+    #! Record field to the write action's option name for it, where the two differ
+    /** A write sends the columns the write action **declares** and nothing else, which silently drops a
+        column whose option is spelled differently from the record field.  That happens wherever a manifest
+        renames an option, and a manifest renames options for a reason: Klaviyo returns a list's
+        \c opt_in_process and its update action publishes \c optInProcess, because that is the name the
+        application it replaces used and preserving it was a commitment of the port.
+
+        Without this a table would read \c opt_in_process, hand it straight back to \c updateRecords(), and
+        send **nothing** - reporting a successful update that changed no value at all.  Declaring the pairs
+        is what keeps a record readable and writable in the same shape.
+
+        Keyed by record field, with the value naming the option on the create and update actions.  A field
+        absent from here is sent under its own name.
+    */
+    *hash<string, string> write_field_map;
+
     #! Converts a record as the API returns it into the table's shape
     /** Required with @ref record_type, and unused without it.
     */

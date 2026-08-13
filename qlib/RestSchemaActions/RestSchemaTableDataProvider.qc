@@ -201,6 +201,23 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
             throw "REST-SCHEMA-RECORD-ERROR", "cursor paging needs a \"next_path\" saying where the response "
                 "reports the cursor of the next page";
         }
+        # a write field mapping naming an option no write action declares would be dropped exactly as the
+        # unmapped field would have been, which is the defect it exists to prevent
+        if (exists table.write_field_map) {
+            hash<string, bool> write_opts = {};
+            foreach string a in ((table.create_action, table.update_action)) {
+                if (a.val()) {
+                    map write_opts{$1} = True, keys action_set.getOperationEx(a).getFlatMap();
+                }
+            }
+            foreach hash<auto> i in (table.write_field_map.pairIterator()) {
+                if (!write_opts{i.value}) {
+                    throw "REST-SCHEMA-RECORD-ERROR", sprintf("the write field mapping sends record field "
+                        "%y as option %y, which neither the create nor the update action declares; known "
+                        "write options: %y", i.key, i.value, sort(keys write_opts));
+                }
+            }
+        }
         if (exists table.to_record != exists table.to_wire) {
             throw "REST-SCHEMA-RECORD-ERROR", "a table converting its records needs both \"to_record\" and "
                 "\"to_wire\"; with only one of them its records could be read but not written back, or "
@@ -654,6 +671,15 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
             # the whole record travels as one value, so its columns are not action options and cannot be
             # checked against them
             return {table.write_list_option: (rv,)};
+        }
+        # a column whose option is spelled differently from the record field would be dropped by the
+        # narrowing below, and the write would report success having changed nothing
+        foreach hash<auto> i in (table.write_field_map.pairIterator()) {
+            if (rv.hasKey(i.key)) {
+                auto value = rv{i.key};
+                rv -= i.key;
+                rv{i.value} = value;
+            }
         }
         return rv{keys action_set.getOperationEx(action).getFlatMap()};
     }
