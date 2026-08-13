@@ -538,8 +538,12 @@ module AOTConcurrentReexportDep {
 
 public namespace AOTConcurrentReexportDep {
     public class StaticValue {
+        public {
+            static int Stored = 42;
+        }
+
         public static int get() {
-            return 42;
+            return StaticValue::Stored;
         }
     }
 
@@ -621,8 +625,8 @@ if (errors) {
 
         string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("errors=0\nEXIT=0\n", run_out,
-            "concurrent Program::loadModule() calls must not deadlock while resolving deferred static calls "
-                + "in AOT reexported modules");
+            "concurrent Program::loadModule() calls must not deadlock or lose the owning class while "
+                + "resolving deferred static calls and variables in AOT reexported modules");
     }
 
     moduleConcurrentDistinctProgramLoads() {

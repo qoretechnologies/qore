@@ -2400,9 +2400,7 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
         }
     }
 
-    found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, resolved_class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(pgm, resolved_class_path, false);
     if (!qc) {
         xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve class '%s' for static variable '%s'",
             class_path, var_name);

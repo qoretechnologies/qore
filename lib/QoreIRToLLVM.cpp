@@ -16057,7 +16057,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return false;
                     }
                     std::string class_name = static_var
-                        ? static_var->qc.getNamespacePath() : deferred_static->class_path;
+                        ? qore_aot_encode_class_ref(&static_var->qc) : deferred_static->class_path;
                     std::string member_name = static_var
                         ? static_var->str : deferred_static->member_name;
                     llvm::Value* class_path = qore_ir_create_global_string_ptr(
@@ -24873,7 +24873,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 std::string class_name = static_var
-                    ? static_var->qc.getNamespacePath() : deferred_static->class_path;
+                    ? qore_aot_encode_class_ref(&static_var->qc) : deferred_static->class_path;
                 std::string member_name = static_var
                     ? static_var->str : deferred_static->member_name;
                 llvm::Value* class_path = qore_ir_create_global_string_ptr(
