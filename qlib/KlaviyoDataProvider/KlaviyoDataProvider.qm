@@ -73,7 +73,7 @@ module KlaviyoDataProvider {
             "logo": Priv::KlaviyoLogo,
             "logo_file_name": "klaviyo-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (DataProvider::AppGroup::Marketing,),
+            "groups": (DataProvider::AppGroup::Marketing, DataProvider::AppGroup::Email),
         });
 
         # register every action in the manifest
