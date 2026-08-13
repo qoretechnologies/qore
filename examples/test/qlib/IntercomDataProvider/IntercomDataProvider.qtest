@@ -174,6 +174,29 @@ public class IntercomDataProviderTest inherits QUnit::Test {
             "listAllCollections",
             "listTagsForAContact",
         );
+
+        #! The single reads and writes added so that the record tables have actions to name
+        /** A table is assembled from actions the manifest already exports, and the port shipped only the
+            listings, the searches and the writes the superseded application had.  Every ID here is new, so
+            none of them touches an ID that application registered.
+
+            @see @ref IntercomDataProvider::IntercomRecordTables "IntercomRecordTables"
+        */
+        const AddedRecordActions = (
+            "DeleteContact",
+            "RetrieveACompanyById",
+            "ShowContact",
+            "UpdateCompany",
+            "UpdateContact",
+            "deleteArticle",
+            "deleteCompany",
+            "deleteTag",
+            "findTag",
+            "retrieveArticle",
+            "retrieveCollection",
+            "retrieveConversation",
+            "updateArticle",
+        );
     }
 
     constructor() : Test("IntercomDataProviderTest", "1.0") {
@@ -187,6 +210,8 @@ public class IntercomDataProviderTest inherits QUnit::Test {
         addTestCase("execution", \executionTest());
         addTestCase("replyConversation", \replyConversationTest());
         addTestCase("events", \eventsTest());
+        addTestCase("recordTables", \recordTableTest());
+        addTestCase("searchTreeRendering", \tableQueryTest());
         set_return_value(main());
     }
 
@@ -248,6 +273,9 @@ public class IntercomDataProviderTest inherits QUnit::Test {
         }
         foreach string action in (AddedListings) {
             assertTrue(native{action}, sprintf("%y is exported to fill a dropdown", action));
+        }
+        foreach string action in (AddedRecordActions) {
+            assertTrue(native{action}, sprintf("%y is exported for the record tables", action));
         }
 
         # the section dropdown is deliberately not reproduced: Intercom removed "GET /help_center/sections"
@@ -489,6 +517,161 @@ public class IntercomDataProviderTest inherits QUnit::Test {
                 new IntercomReplyConversationDataProvider(IntercomSchema::getActionSet())
                     .doRequest({"conversation_id": "1", "message_type": "comment", "admin_id": "1"});
             });
+    }
+
+    private recordTableTest() {
+        RestSchemaActionSet set = IntercomSchema::getActionSet();
+
+        # every table names actions the manifest exports, and every path a record is read or written
+        # through resolves against the response the action publishes
+        RestSchemaTablesDataProvider tables("tables", set, IntercomRecordTables::Tables);
+        tables.checkTables();
+        assertEq(("contacts", "conversations", "companies", "articles", "collections", "tags", "teammates"),
+            (map $1.name, IntercomRecordTables::Tables));
+
+        hash<string, hash<DataProviderInfo>> info = {};
+        map info{$1.name} = (new RestSchemaTableDataProvider(set, $1)).getInfo(),
+            IntercomRecordTables::Tables;
+
+        # native search is claimed only where Intercom takes a filter expression, which is the two search
+        # endpoints; the other five narrow nothing and are searched here
+        assertTrue(info.contacts.supports_native_search);
+        assertTrue(info.conversations.supports_native_search);
+        map assertFalse(info{$1}.supports_native_search, sprintf("%y lists rather than searches", $1)),
+            ("companies", "articles", "collections", "tags", "teammates");
+
+        # what each table can do is what Intercom can do
+        assertFalse(info.contacts.supports_create, "this application exports no contact create");
+        assertTrue(info.contacts.supports_update);
+        assertTrue(info.contacts.supports_delete);
+        assertFalse(info.conversations.supports_update,
+            "a conversation is changed by replying to it, not by writing its columns");
+        assertFalse(info.conversations.supports_delete);
+        assertTrue(info.conversations.supports_create);
+        assertFalse(info.tags.supports_create, "a tag is created by attaching it to something");
+        assertTrue(info.tags.supports_delete);
+        map assertFalse(info{$1}.supports_create, sprintf("%y is read only", $1)),
+            ("collections", "teammates");
+        map assertFalse(info{$1}.supports_delete, sprintf("%y is read only", $1)),
+            ("collections", "teammates");
+
+        # the update action is the one addressed by Intercom's own identifier; "createOrUpdateCompany"
+        # matches on the caller's "company_id" and would create a second company rather than update one
+        assertEq("UpdateCompany", IntercomRecordTables::CompaniesTable.update_action);
+        assertEq("createOrUpdateCompany", IntercomRecordTables::CompaniesTable.create_action);
+
+        # Intercom has no ">=", no "<=" and no negation of a sub-expression
+        map assertFalse(info{$1}.expressions{DP_SEARCH_OP_GE}.supports_pushdown,
+            sprintf("%y claims no >=", $1)), keys info;
+        map assertFalse(info{$1}.expressions{DP_SEARCH_OP_LE}.supports_pushdown,
+            sprintf("%y claims no <=", $1)), keys info;
+        map assertFalse(info{$1}.expressions{DP_SEARCH_OP_NOT}.supports_pushdown,
+            sprintf("%y claims no NOT", $1)), keys info;
+        # ... and it does have a disjunction, unlike Klaviyo
+        assertTrue(info.contacts.expressions{DP_OP_OR}.supports_pushdown);
+        assertTrue(info.conversations.expressions{DP_OP_OR}.supports_pushdown);
+
+        # the two searches carry their paging in the body; the table names the option carrying its cursor,
+        # which only exists because the manifest publishes the paging object's properties in its place
+        hash<string, hash<RestSchemaFlatFieldInfo>> flat = set.getOperationEx("SearchContacts").getFlatMap();
+        assertEq(RSAL_BODY, flat.starting_after.loc, "the cursor travels in the request body");
+        assertEq("starting_after", flat.starting_after.wire_name);
+        assertEq(RSAL_BODY, flat.per_page.loc);
+        assertEq("starting_after", IntercomRecordTables::CursorPaging.page_option);
+    }
+
+    private tableQueryTest() {
+        RestSchemaRecordFilter cf(IntercomRecordTables::ContactsTable);
+        assertTrue(cf.hasNativeSearch());
+
+        # a single predicate is a hash, not a string: this is what the rendering hook exists for
+        hash<RestSchemaRecordFilterSplit> s = cf.split(eq("email", "ada@example.com"));
+        assertEq({"field": "email", "operator": "=", "value": "ada@example.com"}, s.options.query.value);
+        assertEq(NT_HASH, s.options.query.value.typeCode(), "the rendered query is not a string");
+        assertNothing(s.client, "Intercom evaluates it, so nothing is left for the client side");
+
+        # a conjunction is a combination node holding the filters
+        s = cf.split(<DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (eq("role", "user"), op(DP_SEARCH_OP_GT, "created_at", 2026-01-01Z)),
+        });
+        assertEq({
+            "operator": "AND",
+            "value": (
+                {"field": "role", "operator": "=", "value": "user"},
+                # a date is compared as a count of seconds since the epoch
+                {"field": "created_at", "operator": ">", "value": 1767225600},
+            ),
+        }, s.options.query.value);
+        assertNothing(s.client);
+
+        # a disjunction, which Intercom does have
+        s = cf.split(<DataProviderExpression>{
+            "exp": DP_OP_OR,
+            "args": (eq("id", "a"), eq("id", "b")),
+        });
+        assertEq("OR", s.options.query.value.operator);
+        assertEq(2, s.options.query.value.value.size());
+        assertNothing(s.client);
+
+        # a set predicate keeps its whole value set
+        s = cf.split(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_IN,
+            "args": (<DataProviderFieldReference>{"field": "email"}, ("a@b.c", "d@e.f")),
+        });
+        assertEq({"field": "email", "operator": "IN", "value": ("a@b.c", "d@e.f")}, s.options.query.value);
+
+        # Intercom has no ">=": mapping it onto ">" would silently drop the boundary records, so it is
+        # answered here instead
+        s = cf.split(op(DP_SEARCH_OP_GE, "created_at", 2026-01-01Z));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_GE, s.client.exp);
+
+        # a contact's timestamps refuse "!=", where its text fields accept it - measured, not guessed
+        s = cf.split(op(DP_SEARCH_OP_NE, "created_at", 2026-01-01Z));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_NE, s.client.exp);
+        s = cf.split(op(DP_SEARCH_OP_NE, "email", "ada@example.com"));
+        assertEq({"field": "email", "operator": "!=", "value": "ada@example.com"}, s.options.query.value);
+
+        # ... and a conversation's timestamps do accept it
+        RestSchemaRecordFilter vf(IntercomRecordTables::ConversationsTable);
+        s = vf.split(op(DP_SEARCH_OP_NE, "created_at", 2026-01-01Z));
+        assertEq("!=", s.options.query.value.operator);
+
+        # a field Intercom refuses is answered here rather than turned into an error
+        s = cf.split(eq("workspace_id", "w1"));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        # "contains" narrows the fetch and is applied again, because Intercom documents neither its case
+        # sensitivity nor its collation
+        s = cf.split(op(DP_OP_CONTAINS, "name", "ada"));
+        assertEq({"field": "name", "operator": "~", "value": "ada"}, s.options.query.value);
+        assertEq(DP_OP_CONTAINS, s.client.exp, "and the predicate is answered here as well");
+
+        # a conjunction with one renderable conjunct sends the filter itself rather than a combination of
+        # one, which is the simpler form Intercom also accepts
+        s = cf.split(<DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (eq("email", "ada@example.com"), eq("workspace_id", "w1")),
+        });
+        assertEq({"field": "email", "operator": "=", "value": "ada@example.com"}, s.options.query.value);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+        assertEq("workspace_id", s.client.args[0].field);
+    }
+
+    #! Returns an equality predicate
+    private hash<DataProviderExpression> eq(string field, auto value) {
+        return op(DP_SEARCH_OP_EQ, field, value);
+    }
+
+    #! Returns a predicate with the given operator
+    private hash<DataProviderExpression> op(string operator, string field, auto value) {
+        return <DataProviderExpression>{
+            "exp": operator,
+            "args": (<DataProviderFieldReference>{"field": field}, value),
+        };
     }
 
     private eventsTest() {

@@ -79,6 +79,14 @@ module IntercomDataProvider {
         RestSchemaActionSet action_set = IntercomSchema::getActionSet();
         action_set.registerActions(IntercomDataProvider::AppName);
 
+        # register the record-based table actions; declaring the tables is only half of it, and a table no
+        # action reaches is offered to nobody
+        RestSchemaTablesDataProvider::registerRecordActions(IntercomDataProvider::AppName,
+            "/" + IntercomDataProvider::TablesChildName, action_set, IntercomRecordTables::Tables,
+            IntercomRecordTables::RecordActionIds, {
+                "groups": (IntercomRecordTables::RecordGroup,),
+            });
+
         # register the one hand-written action; see IntercomReplyConversationDataProvider for why it is
         # not generated
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -212,6 +220,35 @@ module IntercomDataProvider {
 
     A contact edited later, or a reply to an existing conversation, does **not** fire either event: both
     feeds are positioned by when the object was created.
+
+    @section intercomdataprovider_tables Record Tables
+
+    Seven of Intercom's collections are exposed under \c tables for record-based reading and writing:
+
+    |!Table|!Reads|!Writes|!Server-side search
+    |\c contacts|search, get|update, delete|**yes** - the filter tree
+    |\c conversations|search, get|create|**yes**
+    |\c companies|list, get|create, update, delete|no
+    |\c articles|list, get|create, update, delete|no
+    |\c collections|list, get|-|no
+    |\c tags|list, get|delete|no
+    |\c teammates|list|-|no
+
+    Every table is assembled from actions the manifest exports; thirteen single reads and writes were added
+    for them, all under new action IDs, so no ID the superseded application registered is touched.
+
+    A search on \c contacts or \c conversations is rendered into the **tree of hashes** Intercom's two
+    search endpoints take in their request body, and the rest of a search is applied to the records as they
+    arrive, with the caller's limit counting **matching** records.  Which field accepts which operator was
+    measured against a live workspace rather than read from the description, which enumerates no fields at
+    all: a contact's timestamps take \c = \c < \c > and refuse \c !=, while a conversation's accept it.
+
+    Intercom has **no `>=`, no `<=`** and no negation of a sub-expression; those are evaluated here rather
+    than mapped onto a neighbouring operator, which would silently drop the boundary records.
+
+    @see @ref IntercomDataProvider::IntercomRecordTables "IntercomRecordTables", including why a company is
+    updated through \c UpdateCompany rather than \c createOrUpdateCompany - the two mean different things by
+    \c company_id, and using the wrong one creates a company instead of changing it.
 
     @section intercomdataprovider_examples Examples
 

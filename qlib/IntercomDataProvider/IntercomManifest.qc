@@ -235,8 +235,7 @@ public class IntercomManifest {
                 # where the listing failed and this succeeded
                 "action": "searchConversations",
                 "options": {
-                    "query": {"field": "created_at", "operator": ">", "value": 0},
-                    "pagination": {"per_page": MaxPageSize},
+                    "per_page": MaxPageSize,
                 },
                 "records_path": "conversations",
                 "value_field": "id",
@@ -368,6 +367,40 @@ public class IntercomManifest {
             "starting_after": StartingAfterOverlay,
         };
 
+        #! The filter that matches every record, which is how Intercom is asked for a whole collection
+        /** Both search endpoints declare \c query **required**, so there is no way to ask them for an
+            unfiltered collection: a record search with no predicate, and the conversation dropdown, would
+            both fail with a schema error rather than reading anything.
+
+            Intercom's own idiom for "everything" is a predicate that is true of every record, and every
+            record has a creation time after the epoch.
+        */
+        const MatchEverything = {"field": "created_at", "operator": ">", "value": 0};
+
+        #! Overlay applied to a search's query, defaulting it to the filter that matches everything
+        const SearchQueryOverlay = {
+            "query": <RestSchemaFieldOverlayInfo>{
+                "default_value": MatchEverything,
+                "preselected": True,
+            },
+        };
+
+        #! Overlay publishing a search's paging object as the two options it holds
+        /** The two searches are \c POST operations carrying their paging **inside the request body**, as a
+            \c pagination object, where every other listing here takes the same two values as query
+            arguments.  Publishing the object's properties in its place makes the two spellings one, and it
+            is what lets a record table page a search at all: a table names **one option** carrying the
+            cursor, and there is no such option while the cursor is a property of a value.
+        */
+        const SearchPagingOverlay = {
+            "pagination": <RestSchemaFieldOverlayInfo>{
+                "lift": True,
+                # the two keep their wire names, which are the names every other listing here uses for
+                # the same two values
+                "fields": CursorPagingOverlay,
+            },
+        };
+
         #! The operations the application exports
         const Manifest = (
             # --- Contacts ---
@@ -385,11 +418,11 @@ public class IntercomManifest {
                     "`custom_attributes.<name>`.\n\n"
                     "Timestamps in a query are counts of seconds since the epoch, so "
                     "`created_at > 1755000000` reads as \"created after that instant\".\n\n"
-                    "The result is paged with `pagination`: pass back the `pages.next.starting_after` "
+                    "The result is paged with `starting_after`: pass back the `pages.next.starting_after` "
                     "value from the previous response.",
                 "groups": (GroupContacts,),
-                "field_order": ("query", "pagination", "sort", "include_merge_history"),
-                "fields": Common,
+                "field_order": ("query", "per_page", "starting_after", "sort", "include_merge_history"),
+                "fields": Common + SearchPagingOverlay + SearchQueryOverlay,
             },
             <RestSchemaActionInfo>{
                 "action": "ListContacts",
@@ -637,8 +670,9 @@ public class IntercomManifest {
                     "combining several.\n\n"
                     "Timestamps in a query are counts of seconds since the epoch.",
                 "groups": (GroupConversations,),
-                "field_order": ("query", "pagination", "include_monitors", "include_scorecards"),
-                "fields": Common,
+                "field_order": ("query", "per_page", "starting_after", "include_monitors",
+                    "include_scorecards"),
+                "fields": Common + SearchPagingOverlay + SearchQueryOverlay,
             },
             <RestSchemaActionInfo>{
                 "action": "createMessage",
@@ -875,6 +909,227 @@ public class IntercomManifest {
                     "array.",
                 "groups": (GroupContacts,),
                 "fields": Common,
+            },
+
+            # --- Single reads and writes, added so that the record tables have actions to name ---
+            # every ID here is new, so none of them touches an ID the superseded application registered
+            <RestSchemaActionInfo>{
+                "action": "ShowContact",
+                "method": "GET",
+                "path": "/contacts/{contact_id}",
+                "operation_id": "ShowContact",
+                "display_name": "Get Contact",
+                "short_desc": "Retrieve a contact by its identity",
+                "desc": "Retrieves one contact by the identity Intercom gave it.\n\n"
+                    "To find a contact by your own identifier instead, search for it: "
+                    "`{field: \"external_id\", operator: \"=\", value: \"...\"}`.",
+                "groups": (GroupContacts,),
+                "fields": Common + {"contact_id": ContactOverlay},
+            },
+            <RestSchemaActionInfo>{
+                "action": "UpdateContact",
+                "method": "PUT",
+                "path": "/contacts/{contact_id}",
+                "operation_id": "UpdateContact",
+                "display_name": "Update Contact",
+                "short_desc": "Update an existing contact",
+                "desc": "Updates a contact that already exists, named by the identity Intercom gave it.\n\n"
+                    "Only the attributes supplied are changed. A field Intercom does not define on a "
+                    "contact is written by naming it under `custom_attributes`.",
+                "groups": (GroupContacts,),
+                "fields": Common + {
+                    "contact_id": ContactOverlay,
+                    "signed_up_at": TimestampOverlay,
+                    "last_seen_at": TimestampOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "DeleteContact",
+                "method": "DELETE",
+                "path": "/contacts/{contact_id}",
+                "operation_id": "DeleteContact",
+                "display_name": "Delete Contact",
+                "short_desc": "Delete a contact",
+                "desc": "Deletes a contact.\n\n"
+                    "This is a hard delete and is not reversible. To keep the record and stop messaging "
+                    "the person instead, archive the contact.",
+                "groups": (GroupContacts,),
+                "fields": Common + {"contact_id": ContactOverlay},
+            },
+            <RestSchemaActionInfo>{
+                "action": "retrieveConversation",
+                "method": "GET",
+                "path": "/conversations/{conversation_id}",
+                "operation_id": "retrieveConversation",
+                "display_name": "Get Conversation",
+                "short_desc": "Retrieve a conversation by its identity",
+                "desc": "Retrieves one conversation, including its parts - the messages and notes it holds",
+                "groups": (GroupConversations,),
+                "fields": Common + {"conversation_id": ConversationOverlay},
+            },
+            <RestSchemaActionInfo>{
+                "action": "RetrieveACompanyById",
+                "method": "GET",
+                "path": "/companies/{company_id}",
+                "operation_id": "RetrieveACompanyById",
+                "display_name": "Get Company",
+                "short_desc": "Retrieve a company by its identity",
+                "desc": "Retrieves one company by the identity Intercom gave it.\n\n"
+                    "To find a company by your own identifier instead, use **Create Or Update Company**, "
+                    "which matches on `company_id`.",
+                "groups": (GroupCompanies,),
+                "fields": Common + {
+                    "company_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Company",
+                        "short_desc": "The company to retrieve",
+                        "ref_data": RefCompany,
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "UpdateCompany",
+                "method": "PUT",
+                "path": "/companies/{company_id}",
+                "operation_id": "UpdateCompany",
+                "display_name": "Update Company",
+                "short_desc": "Update an existing company by its identity",
+                "desc": "Updates a company that already exists, named by the identity **Intercom** gave "
+                    "it.\n\n"
+                    "This is not the same thing as **Create Or Update Company**, which matches on the "
+                    "`company_id` **you** gave it and creates one when nothing matches. Where the intent is "
+                    "to change a company that is already known, this is the action that cannot create a "
+                    "second one by accident.",
+                "groups": (GroupCompanies,),
+                "fields": Common + {
+                    "company_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Company",
+                        "short_desc": "The company to update",
+                        "ref_data": RefCompany,
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "deleteCompany",
+                "method": "DELETE",
+                "path": "/companies/{company_id}",
+                "operation_id": "deleteCompany",
+                "display_name": "Delete Company",
+                "short_desc": "Delete a company",
+                "desc": "Deletes a company.\n\n"
+                    "The contacts attached to it are **not** deleted; they simply stop belonging to it.",
+                "groups": (GroupCompanies,),
+                "fields": Common + {
+                    "company_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Company",
+                        "short_desc": "The company to delete",
+                        "ref_data": RefCompany,
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "retrieveArticle",
+                "method": "GET",
+                "path": "/articles/{article_id}",
+                "operation_id": "retrieveArticle",
+                "display_name": "Get Article",
+                "short_desc": "Retrieve a help center article by its identity",
+                "desc": "Retrieves one help center article",
+                "groups": (GroupArticles,),
+                "fields": Common + {
+                    "article_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Article",
+                        "short_desc": "The article to retrieve",
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "updateArticle",
+                "method": "PUT",
+                "path": "/articles/{article_id}",
+                "operation_id": "updateArticle",
+                "display_name": "Update Article",
+                "short_desc": "Update an existing help center article",
+                "desc": "Updates a help center article that already exists.\n\n"
+                    "Only the attributes supplied are changed. An article's parent can only be a "
+                    "**collection**: Intercom withdrew sections at API version 2.10.",
+                "groups": (GroupArticles,),
+                "fields": Common + {
+                    "article_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Article",
+                        "short_desc": "The article to update",
+                        "preselected": True,
+                    },
+                    "author_id": AdminOverlay,
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "deleteArticle",
+                "method": "DELETE",
+                "path": "/articles/{article_id}",
+                "operation_id": "deleteArticle",
+                "display_name": "Delete Article",
+                "short_desc": "Delete a help center article",
+                "desc": "Deletes a help center article",
+                "groups": (GroupArticles,),
+                "fields": Common + {
+                    "article_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Article",
+                        "short_desc": "The article to delete",
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "retrieveCollection",
+                "method": "GET",
+                "path": "/help_center/collections/{collection_id}",
+                "operation_id": "retrieveCollection",
+                "display_name": "Get Collection",
+                "short_desc": "Retrieve a help center collection by its identity",
+                "desc": "Retrieves one help center collection.\n\n"
+                    "What used to be a **section** is now a collection with a parent, which is how "
+                    "Intercom has represented them since API version 2.10.",
+                "groups": (GroupArticles,),
+                "fields": Common + {
+                    "collection_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Collection",
+                        "short_desc": "The collection to retrieve",
+                        "ref_data": RefCollection,
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "findTag",
+                "method": "GET",
+                "path": "/tags/{tag_id}",
+                "operation_id": "findTag",
+                "display_name": "Get Tag",
+                "short_desc": "Retrieve a tag by its identity",
+                "desc": "Retrieves one tag",
+                "groups": (GroupTags,),
+                "fields": Common + {"tag_id": TagOverlay},
+            },
+            <RestSchemaActionInfo>{
+                "action": "deleteTag",
+                "method": "DELETE",
+                "path": "/tags/{tag_id}",
+                "operation_id": "deleteTag",
+                "display_name": "Delete Tag",
+                "short_desc": "Delete a tag",
+                "desc": "Deletes a tag.\n\n"
+                    "Intercom **refuses** to delete a tag that is still applied to any contact or company, "
+                    "answering 400; detach it everywhere first.",
+                "groups": (GroupTags,),
+                "fields": Common + {"tag_id": TagOverlay},
             },
         );
     }

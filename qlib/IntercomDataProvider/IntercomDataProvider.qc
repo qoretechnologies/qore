@@ -37,6 +37,9 @@ public class IntercomDataProvider inherits RestSchemaActions::RestSchemaActionSe
         #! The name of the child provider holding the event providers
         const EventsChildName = "events";
 
+        #! The name of the child provider holding the record-based tables
+        const TablesChildName = "tables";
+
         #! The ID of the one hand-written action
         /** @see @ref IntercomDataProvider::IntercomReplyConversationDataProvider
             "IntercomReplyConversationDataProvider" for why it is not generated
@@ -51,6 +54,7 @@ public class IntercomDataProvider inherits RestSchemaActions::RestSchemaActionSe
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
             "children_can_support_observers": True,
+            "children_can_support_records": True,
         };
 
         #! Constructor options
@@ -115,11 +119,15 @@ public class IntercomDataProvider inherits RestSchemaActions::RestSchemaActionSe
     */
     private *list<string> getChildProviderNamesImpl() {
         return (RestSchemaActionSetDataProvider::getChildProviderNamesImpl() ?? ())
-            + (ReplyConversationAction, EventsChildName);
+            + (ReplyConversationAction, EventsChildName, TablesChildName);
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == TablesChildName) {
+            return new RestSchemaTablesDataProvider(TablesChildName, IntercomSchema::getActionSet(),
+                IntercomRecordTables::Tables, rest);
+        }
         if (name == EventsChildName) {
             return new IntercomEventsDataProvider(cast<*IntercomRestClient::IntercomRestClientIo>(rest));
         }

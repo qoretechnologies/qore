@@ -237,6 +237,240 @@ paths:
                   description: "Description of the Article"
                   body: "Body of the Article"
                   state: "published"
+  /articles/{article_id}:
+    get:
+      summary: "Retrieve an article"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "article_id"
+        in: "path"
+        required: true
+        description: "The unique identifier for the article which is given by Intercom."
+        example: 123
+        schema:
+          type: "integer"
+      tags:
+      - "Articles"
+      operationId: "retrieveArticle"
+      description: "You can fetch the details of a single article by making a GET request to `https://api.intercom.io/articles/<id>`."
+      responses:
+        200:
+          description: "Article found"
+          content:
+            application/json:
+              examples:
+                Article found:
+                  value:
+                    id: "45"
+                    type: "article"
+                    workspace_id: "this_is_an_id74_that_should_be_at_least_4"
+                    parent_ids: []
+                    statistics:
+                      type: "article_statistics"
+                      views: 0
+                      conversations: 0
+                      reactions: 0
+                      happy_reaction_percentage: 0
+                      neutral_reaction_percentage: 0
+                      sad_reaction_percentage: 0
+                    tags:
+                      type: "tag.list"
+                      tags: []
+                    title: "This is the article title"
+                    description: ""
+                    body: ""
+                    author_id: 991267502
+                    state: "published"
+                    created_at: 1734537292
+                    updated_at: 1734537292
+                    url: "http://help-center.test/myapp-74/en/articles/45-this-is-the-article-title"
+              schema:
+                $ref: "#/components/schemas/article"
+        404:
+          description: "Article not found"
+          content:
+            application/json:
+              examples:
+                Article not found:
+                  value:
+                    type: "error.list"
+                    request_id: "79abd27a-1bfb-42ec-a404-5728c76ba773"
+                    errors:
+                    - code: "not_found"
+                      message: "Resource Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "2eab07fb-5092-49a4-ba74-44094f31f264"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+    put:
+      summary: "Update an article"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "article_id"
+        in: "path"
+        required: true
+        description: "The unique identifier for the article which is given by Intercom."
+        example: 123
+        schema:
+          type: "integer"
+      tags:
+      - "Articles"
+      operationId: "updateArticle"
+      description: "You can update the details of a single article by making a PUT request to `https://api.intercom.io/articles/<id>`.\n\n> \U0001F4D8 Tags cannot be managed via the Articles API\n>\n> Article tags are read-only in responses. To create, update, or delete tags, use the Intercom UI or the Tags API endpoints.\n"
+      responses:
+        200:
+          description: "successful"
+          content:
+            application/json:
+              examples:
+                successful:
+                  value:
+                    id: "48"
+                    type: "article"
+                    workspace_id: "this_is_an_id80_that_should_be_at_least_4"
+                    parent_ids: []
+                    statistics:
+                      type: "article_statistics"
+                      views: 0
+                      conversations: 0
+                      reactions: 0
+                      happy_reaction_percentage: 0
+                      neutral_reaction_percentage: 0
+                      sad_reaction_percentage: 0
+                    tags:
+                      type: "tag.list"
+                      tags: []
+                    title: "Christmas is here!"
+                    description: ""
+                    body: "<p class=\"no-margin\">New gifts in store for the jolly season</p>"
+                    author_id: 991267508
+                    state: "published"
+                    created_at: 1734537297
+                    updated_at: 1734537298
+                    url: "http://help-center.test/myapp-80/en/articles/48-christmas-is-here"
+              schema:
+                $ref: "#/components/schemas/article"
+        404:
+          description: "Article Not Found"
+          content:
+            application/json:
+              examples:
+                Article Not Found:
+                  value:
+                    type: "error.list"
+                    request_id: "f9adccb2-9fca-4b87-bbb7-65f2af5e1d78"
+                    errors:
+                    - code: "not_found"
+                      message: "Resource Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "d1ea223d-bb62-42e3-8bcf-30fdcf7dbd99"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/update_article_request"
+            examples:
+              successful:
+                summary: "successful"
+                value:
+                  title: "Christmas is here!"
+                  body: "<p>New gifts in store for the jolly season</p>"
+              article_not_found:
+                summary: "Article Not Found"
+                value:
+                  title: "Christmas is here!"
+                  body: "<p>New gifts in store for the jolly season</p>"
+    delete:
+      summary: "Delete an article"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "article_id"
+        in: "path"
+        required: true
+        description: "The unique identifier for the article which is given by Intercom."
+        example: 123
+        schema:
+          type: "integer"
+      tags:
+      - "Articles"
+      operationId: "deleteArticle"
+      description: "You can delete a single article by making a DELETE request to `https://api.intercom.io/articles/<id>`."
+      responses:
+        200:
+          description: "successful"
+          content:
+            application/json:
+              examples:
+                successful:
+                  value:
+                    id: "51"
+                    object: "article"
+                    deleted: true
+              schema:
+                $ref: "#/components/schemas/deleted_article_object"
+        404:
+          description: "Article Not Found"
+          content:
+            application/json:
+              examples:
+                Article Not Found:
+                  value:
+                    type: "error.list"
+                    request_id: "afe37506-cc48-4727-8068-ae7ff0e7b0e3"
+                    errors:
+                    - code: "not_found"
+                      message: "Resource Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "c6e86ce8-9402-4196-89c5-f1b2912b4bac"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
   /help_center/collections:
     get:
       summary: "List all collections"
@@ -311,6 +545,74 @@ paths:
                   value:
                     type: "error.list"
                     request_id: "12c2d3a0-77ef-462e-a5ed-e67ddff50b6e"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+  /help_center/collections/{collection_id}:
+    get:
+      summary: "Retrieve a collection"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "collection_id"
+        in: "path"
+        required: true
+        description: "The unique identifier for the collection which is given by Intercom."
+        example: 123
+        schema:
+          type: "integer"
+      tags:
+      - "Help Center"
+      operationId: "retrieveCollection"
+      description: "You can fetch the details of a single collection by making a GET request to `https://api.intercom.io/help_center/collections/<id>`."
+      responses:
+        200:
+          description: "Collection found"
+          content:
+            application/json:
+              examples:
+                Collection found:
+                  value:
+                    id: "170"
+                    workspace_id: "this_is_an_id106_that_should_be_at_least_"
+                    name: "English collection title"
+                    url: "http://help-center.test/myapp-106/collection-22"
+                    order: 22
+                    created_at: 1734537315
+                    updated_at: 1734537315
+                    description: "english collection description"
+                    icon: "bookmark"
+                    parent_id: null
+                    help_center_id: 84
+              schema:
+                $ref: "#/components/schemas/collection"
+        404:
+          description: "Collection not found"
+          content:
+            application/json:
+              examples:
+                Collection not found:
+                  value:
+                    type: "error.list"
+                    request_id: "a074a09e-97d1-44e2-b164-b703559c9f23"
+                    errors:
+                    - code: "not_found"
+                      message: "Resource Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "a29395a5-181c-4f3b-b069-5b2f32604c58"
                     errors:
                     - code: "unauthorized"
                       message: "Access Token Invalid"
@@ -402,6 +704,231 @@ paths:
                 summary: "Bad Request"
                 value:
                   test: "invalid"
+  /companies/{company_id}:
+    get:
+      summary: "Retrieve a company by ID"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "company_id"
+        in: "path"
+        required: true
+        description: "The unique identifier for the company which is given by Intercom"
+        example: "5f4d3c1c-7b1b-4d7d-a97e-6095715c6632"
+        schema:
+          type: "string"
+      tags:
+      - "Companies"
+      operationId: "RetrieveACompanyById"
+      description: "You can fetch a single company."
+      responses:
+        200:
+          description: "Successful"
+          content:
+            application/json:
+              examples:
+                Successful:
+                  value:
+                    type: "company"
+                    company_id: "1"
+                    id: "6762f07f1bb69f9f2193baf5"
+                    app_id: "this_is_an_id159_that_should_be_at_least_"
+                    name: "company1"
+                    remote_created_at: 1734537343
+                    created_at: 1734537343
+                    updated_at: 1734537343
+                    monthly_spend: 0
+                    session_count: 0
+                    user_count: 1
+                    tags:
+                      type: "tag.list"
+                      tags: []
+                    segments:
+                      type: "segment.list"
+                      segments: []
+                    plan: {}
+                    custom_attributes: {}
+              schema:
+                $ref: "#/components/schemas/company"
+        404:
+          description: "Company Not Found"
+          content:
+            application/json:
+              examples:
+                Company Not Found:
+                  value:
+                    type: "error.list"
+                    request_id: "57d57564-b5e2-4064-abfe-4653e5ac24c0"
+                    errors:
+                    - code: "company_not_found"
+                      message: "Company Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "caf73ce4-bda6-4f2b-bbfb-0d984d430335"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+    put:
+      summary: "Update a company"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "company_id"
+        in: "path"
+        required: true
+        description: "The unique identifier for the company which is given by Intercom"
+        example: "5f4d3c1c-7b1b-4d7d-a97e-6095715c6632"
+        schema:
+          type: "string"
+      tags:
+      - "Companies"
+      operationId: "UpdateCompany"
+      description: "You can update a single company using the Intercom provisioned `id`.\n\n{% admonition type=\"warning\" name=\"Using `company_id`\" %}\n  When updating a company it is not possible to update `company_id`. This can only be set once upon creation of the company.\n{% /admonition %}\n"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/update_company_request"
+            examples:
+              successful:
+                summary: "Successful"
+                value:
+                  name: "my company"
+                  website: "http://www.mycompany.com/"
+              bad_request:
+                summary: "Bad Request"
+                value:
+                  test: "invalid"
+      responses:
+        200:
+          description: "Successful"
+          content:
+            application/json:
+              examples:
+                Successful:
+                  value:
+                    type: "company"
+                    company_id: "1"
+                    id: "6762f0841bb69f9f2193baff"
+                    app_id: "this_is_an_id165_that_should_be_at_least_"
+                    name: "company2"
+                    remote_created_at: 1734537348
+                    created_at: 1734537348
+                    updated_at: 1734537348
+                    monthly_spend: 0
+                    session_count: 0
+                    user_count: 1
+                    tags:
+                      type: "tag.list"
+                      tags: []
+                    segments:
+                      type: "segment.list"
+                      segments: []
+                    plan: {}
+                    custom_attributes: {}
+              schema:
+                $ref: "#/components/schemas/company"
+        404:
+          description: "Company Not Found"
+          content:
+            application/json:
+              examples:
+                Company Not Found:
+                  value:
+                    type: "error.list"
+                    request_id: "daa64b43-3e3c-4fc4-aef9-91eb40c7885c"
+                    errors:
+                    - code: "company_not_found"
+                      message: "Company Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "4748eb32-3261-4798-ace0-a5825edf4eb5"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+    delete:
+      summary: "Delete a company"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "company_id"
+        in: "path"
+        required: true
+        description: "The unique identifier for the company which is given by Intercom"
+        example: "5f4d3c1c-7b1b-4d7d-a97e-6095715c6632"
+        schema:
+          type: "string"
+      tags:
+      - "Companies"
+      operationId: "deleteCompany"
+      description: "Delete a single company.\n\nThis endpoint does not permanently remove the company. It archives the company record and detaches any contacts attached to it; the contacts themselves are not deleted. A `company.deleted` webhook is sent once archival completes.\n\nThe endpoint returns `200` with `\"deleted\": true` as soon as the request is accepted — archival is processed asynchronously.\n\n{% admonition type=\"warning\" %}\nThird-party integrations that sync companies into Intercom (for example, Salesforce or Chargebee) will recreate any company deleted through this endpoint on their next sync. To prevent recreation, remove or filter the company at the source integration before deleting it via the API.\n{% /admonition %}\n"
+      responses:
+        200:
+          description: "Successful"
+          content:
+            application/json:
+              examples:
+                Successful:
+                  value:
+                    id: "6762f0881bb69f9f2193bb09"
+                    object: "company"
+                    deleted: true
+              schema:
+                $ref: "#/components/schemas/deleted_company_object"
+        404:
+          description: "Company Not Found"
+          content:
+            application/json:
+              examples:
+                Company Not Found:
+                  value:
+                    type: "error.list"
+                    request_id: "4f41d1d6-7a42-45e3-a24e-544deb62da47"
+                    errors:
+                    - code: "company_not_found"
+                      message: "Company Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "7b13fd9c-31be-40de-94e1-d71f260a3458"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
   /companies/list:
     post:
       summary: "List all companies"
@@ -829,6 +1356,467 @@ paths:
                       message: "Access Token Invalid"
               schema:
                 $ref: "#/components/schemas/error"
+  /contacts/{contact_id}:
+    put:
+      summary: "Update a contact"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "contact_id"
+        in: "path"
+        description: "id"
+        example: "63a07ddf05a32042dffac965"
+        required: true
+        schema:
+          type: "string"
+      - name: "include_merge_history"
+        in: "query"
+        description: "Pass `true` to include the contact's merge history in the response. Only returned for contacts with a `user` role."
+        required: false
+        schema:
+          type: "boolean"
+          default: false
+      tags:
+      - "Contacts"
+      - "Custom Object Instances"
+      operationId: "UpdateContact"
+      description: "You can update an existing contact (ie. user or lead).\n\n{% admonition type=\"info\" %}\n  This endpoint handles both **contact updates** and **custom object associations**.\n\n  See _`update a contact with an association to a custom object instance`_ in the request/response examples to see the custom object association format.\n{% /admonition %}\n"
+      responses:
+        200:
+          description: "successful"
+          content:
+            application/json:
+              examples:
+                successful:
+                  value:
+                    type: "contact"
+                    id: "6762f0cd1bb69f9f2193bb7c"
+                    workspace_id: "this_is_an_id279_that_should_be_at_least_"
+                    external_id: "70"
+                    role: "user"
+                    email: "joebloggs@intercom.io"
+                    phone: null
+                    name: "joe bloggs"
+                    avatar: null
+                    owner_id: null
+                    social_profiles:
+                      type: "list"
+                      data: []
+                    has_hard_bounced: false
+                    marked_email_as_spam: false
+                    unsubscribed_from_emails: false
+                    created_at: 1734537421
+                    updated_at: 1734537422
+                    signed_up_at: 1734537421
+                    last_seen_at: null
+                    last_replied_at: null
+                    last_contacted_at: null
+                    last_email_opened_at: null
+                    last_email_clicked_at: null
+                    language_override: null
+                    browser: null
+                    browser_version: null
+                    browser_language: null
+                    os: null
+                    location:
+                      type: "location"
+                      country: null
+                      region: null
+                      city: null
+                      country_code: null
+                      continent_code: null
+                    android_app_name: null
+                    android_app_version: null
+                    android_device: null
+                    android_os_version: null
+                    android_sdk_version: null
+                    android_last_seen_at: null
+                    ios_app_name: null
+                    ios_app_version: null
+                    ios_device: null
+                    ios_os_version: null
+                    ios_sdk_version: null
+                    ios_last_seen_at: null
+                    custom_attributes: {}
+                    tags:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/tags"
+                      total_count: 0
+                      has_more: false
+                    notes:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/notes"
+                      total_count: 0
+                      has_more: false
+                    companies:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/companies"
+                      total_count: 0
+                      has_more: false
+                    opted_out_subscription_types:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/subscriptions"
+                      total_count: 0
+                      has_more: false
+                    opted_in_subscription_types:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/subscriptions"
+                      total_count: 0
+                      has_more: false
+                    utm_campaign: null
+                    utm_content: null
+                    utm_medium: null
+                    utm_source: null
+                    utm_term: null
+                    referrer: null
+                    enabled_push_messaging: null
+                update a contact with an association to a custom object instance:
+                  value:
+                    type: "contact"
+                    id: "6762f0cd1bb69f9f2193bb7c"
+                    workspace_id: "this_is_an_id279_that_should_be_at_least_"
+                    external_id: "70"
+                    role: "user"
+                    email: "joebloggs@intercom.io"
+                    phone: null
+                    name: "joe bloggs"
+                    avatar: null
+                    owner_id: null
+                    social_profiles:
+                      type: "list"
+                      data: []
+                    has_hard_bounced: false
+                    marked_email_as_spam: false
+                    unsubscribed_from_emails: false
+                    created_at: 1734537421
+                    updated_at: 1734537422
+                    signed_up_at: 1734537421
+                    last_seen_at: null
+                    last_replied_at: null
+                    last_contacted_at: null
+                    last_email_opened_at: null
+                    last_email_clicked_at: null
+                    language_override: null
+                    browser: null
+                    browser_version: null
+                    browser_language: null
+                    os: null
+                    location:
+                      type: "location"
+                      country: null
+                      region: null
+                      city: null
+                      country_code: null
+                      continent_code: null
+                    android_app_name: null
+                    android_app_version: null
+                    android_device: null
+                    android_os_version: null
+                    android_sdk_version: null
+                    android_last_seen_at: null
+                    ios_app_name: null
+                    ios_app_version: null
+                    ios_device: null
+                    ios_os_version: null
+                    ios_sdk_version: null
+                    ios_last_seen_at: null
+                    custom_attributes:
+                      order:
+                        type: "Order.list"
+                        instances:
+                        - id: "21"
+                          external_id: "123"
+                          external_created_at: 1392036272
+                          external_updated_at: 1392036272
+                          custom_attributes:
+                            order_number: "ORDER-12345"
+                            total_amount: 99.99
+                          type: "Order"
+                    tags:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/tags"
+                      total_count: 0
+                      has_more: false
+                    notes:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/notes"
+                      total_count: 0
+                      has_more: false
+                    companies:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/companies"
+                      total_count: 0
+                      has_more: false
+                    opted_out_subscription_types:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/subscriptions"
+                      total_count: 0
+                      has_more: false
+                    opted_in_subscription_types:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0cd1bb69f9f2193bb7c/subscriptions"
+                      total_count: 0
+                      has_more: false
+                    utm_campaign: null
+                    utm_content: null
+                    utm_medium: null
+                    utm_source: null
+                    utm_term: null
+                    referrer: null
+                    enabled_push_messaging: null
+              schema:
+                allOf:
+                - $ref: "#/components/schemas/contact"
+                properties:
+                  enabled_push_messaging:
+                    type: "boolean"
+                    nullable: true
+                    description: "If the user has enabled push messaging."
+                    example: true
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "89ce96d9-aae9-4eec-ace2-d68cc4f74879"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - $ref: "#/components/schemas/update_contact_request"
+            examples:
+              successful:
+                summary: "successful"
+                value:
+                  email: "joebloggs@intercom.io"
+                  name: "joe bloggs"
+              update_a_contact_with_an_association_to_a_custom_object_instance:
+                summary: "update a contact with an association to a custom object instance"
+                value:
+                  custom_attributes:
+                    order:
+                    - "21"
+    get:
+      summary: "Get a contact"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "contact_id"
+        in: "path"
+        description: "contact_id"
+        example: "63a07ddf05a32042dffac965"
+        required: true
+        schema:
+          type: "string"
+      - name: "include_merge_history"
+        in: "query"
+        description: "Pass `true` to include the contact's merge history in the response. Only returned for contacts with a `user` role."
+        required: false
+        schema:
+          type: "boolean"
+          default: false
+      tags:
+      - "Contacts"
+      operationId: "ShowContact"
+      description: "You can fetch the details of a single contact.\n\n{% admonition type=\"info\" name=\"Merged contacts return 410 Gone\" %}\n  If a contact has been merged into another contact via the Merge endpoint (`POST /contacts/merge`), requesting it by its original ID will return **HTTP 410 Gone** with a `Link` header pointing to the canonical (merged-into) contact.\n\n  **Response headers:**\n  ```\n  Link: </contacts/{canonical_id}>; rel=\"canonical\"\n  ```\n\n  **Response body:**\n  ```json\n  {\n    \"type\": \"error.list\",\n    \"errors\": [{ \"code\": \"contact_merged\", \"message\": \"This contact has been merged. See the 'Link' header for the canonical contact.\" }]\n  }\n  ```\n\n  The `Link` header contains the path to the final merge target, resolving multi-hop merge chains (up to 3 hops).\n{% /admonition %}\n"
+      responses:
+        200:
+          description: "successful"
+          content:
+            application/json:
+              examples:
+                successful:
+                  value:
+                    type: "contact"
+                    id: "6762f0d01bb69f9f2193bb7d"
+                    workspace_id: "this_is_an_id283_that_should_be_at_least_"
+                    external_id: "70"
+                    role: "user"
+                    email: "joe@bloggs.com"
+                    phone: null
+                    name: "Joe Bloggs"
+                    avatar: null
+                    owner_id: null
+                    social_profiles:
+                      type: "list"
+                      data: []
+                    has_hard_bounced: false
+                    marked_email_as_spam: false
+                    unsubscribed_from_emails: false
+                    created_at: 1734537424
+                    updated_at: 1734537424
+                    signed_up_at: 1734537424
+                    last_seen_at: null
+                    last_replied_at: null
+                    last_contacted_at: null
+                    last_email_opened_at: null
+                    last_email_clicked_at: null
+                    language_override: null
+                    browser: null
+                    browser_version: null
+                    browser_language: null
+                    os: null
+                    location:
+                      type: "location"
+                      country: null
+                      region: null
+                      city: null
+                      country_code: null
+                      continent_code: null
+                    android_app_name: null
+                    android_app_version: null
+                    android_device: null
+                    android_os_version: null
+                    android_sdk_version: null
+                    android_last_seen_at: null
+                    ios_app_name: null
+                    ios_app_version: null
+                    ios_device: null
+                    ios_os_version: null
+                    ios_sdk_version: null
+                    ios_last_seen_at: null
+                    custom_attributes: {}
+                    tags:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0d01bb69f9f2193bb7d/tags"
+                      total_count: 0
+                      has_more: false
+                    notes:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0d01bb69f9f2193bb7d/notes"
+                      total_count: 0
+                      has_more: false
+                    companies:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0d01bb69f9f2193bb7d/companies"
+                      total_count: 0
+                      has_more: false
+                    opted_out_subscription_types:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0d01bb69f9f2193bb7d/subscriptions"
+                      total_count: 0
+                      has_more: false
+                    opted_in_subscription_types:
+                      type: "list"
+                      data: []
+                      url: "/contacts/6762f0d01bb69f9f2193bb7d/subscriptions"
+                      total_count: 0
+                      has_more: false
+                    utm_campaign: null
+                    utm_content: null
+                    utm_medium: null
+                    utm_source: null
+                    utm_term: null
+                    referrer: null
+                    enabled_push_messaging: null
+              schema:
+                allOf:
+                - $ref: "#/components/schemas/contact"
+                properties:
+                  enabled_push_messaging:
+                    type: "boolean"
+                    nullable: true
+                    description: "If the user has enabled push messaging."
+                    example: true
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "45b30bd1-75d2-40cc-bb39-74ac133a2836"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+        410:
+          description: "Contact Merged"
+          headers:
+            Link:
+              description: "Link to the canonical (merged-into) contact. Format: `</contacts/{id}>; rel=\"canonical\"`"
+              schema:
+                type: "string"
+                example: "</contacts/6762f0d01bb69f9f2193bb7d>; rel=\"canonical\""
+          content:
+            application/json:
+              examples:
+                Contact Merged:
+                  value:
+                    type: "error.list"
+                    request_id: "45b30bd1-75d2-40cc-bb39-74ac133a2836"
+                    errors:
+                    - code: "contact_merged"
+                      message: "This contact has been merged. See the 'Link' header for the canonical contact."
+              schema:
+                $ref: "#/components/schemas/error"
+    delete:
+      summary: "Delete a contact"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "contact_id"
+        in: "path"
+        description: "contact_id"
+        required: true
+        schema:
+          type: "string"
+      tags:
+      - "Contacts"
+      operationId: "DeleteContact"
+      description: "You can delete a single contact."
+      responses:
+        200:
+          description: "successful"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/contact_deleted"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "a947b2f0-23d3-419d-9ec4-cdd191cea676"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
   /contacts/search:
     post:
       summary: "Search contacts"
@@ -1071,6 +2059,251 @@ paths:
                     type: "user"
                     id: "123_doesnt_exist"
                   body: "Hello there"
+  /conversations/{conversation_id}:
+    get:
+      summary: "Retrieve a conversation"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "conversation_id"
+        in: "path"
+        required: true
+        description: "The id of the conversation to target"
+        example: 123
+        schema:
+          type: "integer"
+      - name: "display_as"
+        in: "query"
+        required: false
+        description: "Set to plaintext to retrieve conversation messages in plain text. This affects both the body and subject fields. Inline links are rendered as `label (url)`, preserving the link URL alongside the visible text."
+        example: "plaintext"
+        schema:
+          type: "string"
+      - name: "include_translations"
+        in: "query"
+        required: false
+        description: "If set to true, conversation parts will be translated to the detected language of the conversation."
+        example: true
+        schema:
+          type: "boolean"
+      tags:
+      - "Conversations"
+      operationId: "retrieveConversation"
+      description: "\nYou can fetch the details of a single conversation.\n\nThis will return a single Conversation model with all its conversation parts.\n\n{% admonition type=\"warning\" name=\"Hard limit of 500 parts\" %}\nThe maximum number of conversation parts that can be returned via the API is 500. If you have more than that we will return the 500 most recent conversation parts.\n{% /admonition %}\n\nFor AI agent conversation metadata, please note that you need to have the agent enabled in your workspace, which is a [paid feature](https://www.intercom.com/help/en/articles/8205718-fin-resolutions#h_97f8c2e671).\n"
+      responses:
+        200:
+          description: "conversation found"
+          content:
+            application/json:
+              examples:
+                conversation found:
+                  value:
+                    type: "conversation"
+                    id: "503"
+                    created_at: 1734537511
+                    updated_at: 1734537511
+                    waiting_since: null
+                    snoozed_until: null
+                    source:
+                      type: "conversation"
+                      id: "403918334"
+                      delivered_as: "admin_initiated"
+                      subject: ""
+                      body: "<p>this is the message body</p>"
+                      author:
+                        type: "admin"
+                        id: "991267645"
+                        name: "Ciaran176 Lee"
+                        email: "admin176@email.com"
+                      attachments: []
+                      url: null
+                      redacted: false
+                    contacts:
+                      type: "contact.list"
+                      contacts:
+                      - type: "contact"
+                        id: "6762f1261bb69f9f2193bba7"
+                        external_id: "70"
+                    first_contact_reply: null
+                    admin_assignee_id: 991267715
+                    team_assignee_id: 5017691
+                    open: false
+                    state: "closed"
+                    read: false
+                    tags:
+                      type: "tag.list"
+                      tags:
+                      - type: "tag"
+                        id: "123456"
+                        name: "Test tag"
+                        applied_at: 1663597223
+                        applied_by:
+                          type: "contact"
+                          id: "1a2b3c"
+                    priority: "none"
+                    sla_applied: null
+                    statistics: null
+                    conversation_rating: null
+                    teammates: null
+                    title: null
+                    custom_attributes: {}
+                    topics: {}
+                    ticket: null
+                    linked_objects:
+                      type: "list"
+                      data: []
+                      total_count: 0
+                      has_more: false
+                    ai_agent: null
+                    ai_agent_participated: false
+                    conversation_parts:
+                      type: "conversation_part.list"
+                      conversation_parts:
+                      - type: "conversation_part"
+                        id: 1
+                        part_type: "comment"
+                        body: "<p>Okay!</p>"
+                        created_at: 1663597223
+                        updated_at: 1663597260
+                        notified_at: 1663597260
+                        assigned_to:
+                          type: "contact"
+                          id: "1a2b3c"
+                        author:
+                          type: "admin"
+                          id: "274"
+                          name: "Operator"
+                          email: "operator+abcd1234@intercom.io"
+                        attachments: []
+                        external_id: "abcd1234"
+                        redacted: false
+                        email_message_metadata: null
+                        state: "open"
+                        tags:
+                        - type: "tag"
+                          id: "123456"
+                          name: "Test tag"
+                        event_details: null
+                        app_package_code: null
+                      - type: "conversation_part"
+                        id: 2
+                        part_type: "custom_action_started"
+                        body: null
+                        created_at: 1740141842
+                        updated_at: 1740141842
+                        notified_at: 1740141842
+                        assigned_to: null
+                        author:
+                          type: "admin"
+                          id: "274"
+                          name: "Jamie Oliver"
+                          email: "jamie+abcd1234@intercom.io"
+                        attachments: []
+                        external_id: null
+                        redacted: false
+                        email_message_metadata: null
+                        state: "open"
+                        tags: []
+                        event_details:
+                          action:
+                            name: "Jira Create Issue"
+                        app_package_code: "test-integration"
+                      - type: "conversation_part"
+                        id: 3
+                        part_type: "conversation_attribute_updated_by_admin"
+                        body: null
+                        created_at: 1740141851
+                        updated_at: 1740141851
+                        notified_at: 1740141851
+                        assigned_to: null
+                        author:
+                          type: "bot"
+                          id: "278"
+                          name: "Fin"
+                          email: "operator+abcd1234@intercom.io"
+                        attachments: []
+                        external_id: null
+                        redacted: false
+                        email_message_metadata: null
+                        state: "open"
+                        tags: []
+                        event_details:
+                          attribute:
+                            name: "jira_issue_key"
+                          value:
+                            name: "PROJ-007"
+                        app_package_code: null
+                      - type: "conversation_part"
+                        id: 4
+                        part_type: "custom_action_finished"
+                        body: null
+                        created_at: 1740141857
+                        updated_at: 1740141857
+                        notified_at: 1740141857
+                        assigned_to: null
+                        author:
+                          type: "admin"
+                          id: "274"
+                          name: "Jamie Oliver"
+                          email: "jamie+abcd1234@intercom.io"
+                        attachments: []
+                        external_id: null
+                        redacted: false
+                        email_message_metadata: null
+                        state: "closed"
+                        tags: []
+                        event_details:
+                          action:
+                            name: "Jira Create Issue"
+                            result: "success"
+                        app_package_code: null
+                      total_count: 4
+              schema:
+                $ref: "#/components/schemas/conversation"
+        404:
+          description: "Not found"
+          content:
+            application/json:
+              examples:
+                Not found:
+                  value:
+                    type: "error.list"
+                    request_id: "8c288c4f-b699-4209-9de4-064398f02785"
+                    errors:
+                    - code: "not_found"
+                      message: "Resource Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "1350c241-0f22-48ca-bab9-169080340870"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+        403:
+          description: "API plan restricted"
+          content:
+            application/json:
+              examples:
+                API plan restricted:
+                  value:
+                    type: "error.list"
+                    request_id: "8b3deed3-fd8b-43d6-b6a8-428c9e17aabb"
+                    errors:
+                    - code: "api_plan_restricted"
+                      message: "Active subscription needed."
+              schema:
+                $ref: "#/components/schemas/error"
   /conversations/search:
     post:
       summary: "Search conversations"
@@ -1549,6 +2782,129 @@ paths:
                   value:
                     type: "error.list"
                     request_id: "2859da57-c83f-405c-8166-240a312442a3"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+  /tags/{tag_id}:
+    get:
+      summary: "Find a specific tag"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "tag_id"
+        in: "path"
+        description: "The unique identifier of a given tag"
+        example: "123"
+        required: true
+        schema:
+          type: "string"
+      tags:
+      - "Tags"
+      operationId: "findTag"
+      description: "You can fetch the details of tags that are on the workspace by their id.\nThis will return a tag object.\n"
+      responses:
+        200:
+          description: "Tag found"
+          content:
+            application/json:
+              examples:
+                Tag found:
+                  value:
+                    type: "tag"
+                    id: "113"
+                    name: "Manual tag"
+              schema:
+                $ref: "#/components/schemas/tag_basic"
+        404:
+          description: "Tag not found"
+          content:
+            application/json:
+              examples:
+                Tag not found:
+                  value:
+                    type: "error.list"
+                    request_id: "e20c89d2-29c6-4abb-aa3d-c860e1cec1ca"
+                    errors:
+                    - code: "not_found"
+                      message: "Resource Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "c1c0477c-5b80-4874-be65-01ec8a9ffe14"
+                    errors:
+                    - code: "unauthorized"
+                      message: "Access Token Invalid"
+              schema:
+                $ref: "#/components/schemas/error"
+    delete:
+      summary: "Delete tag"
+      parameters:
+      - name: "Intercom-Version"
+        in: "header"
+        schema:
+          $ref: "#/components/schemas/intercom_version"
+      - name: "tag_id"
+        in: "path"
+        description: "The unique identifier of a given tag"
+        example: "123"
+        required: true
+        schema:
+          type: "string"
+      tags:
+      - "Tags"
+      operationId: "deleteTag"
+      description: "You can delete the details of tags that are on the workspace by passing in the id."
+      responses:
+        200:
+          description: "Successful"
+        404:
+          description: "Resource not found"
+          content:
+            application/json:
+              examples:
+                Resource not found:
+                  value:
+                    type: "error.list"
+                    request_id: "49536975-bbc5-4a2f-ab8b-7928275cb4d3"
+                    errors:
+                    - code: "not_found"
+                      message: "Resource Not Found"
+              schema:
+                $ref: "#/components/schemas/error"
+        400:
+          description: "Tag has dependent objects"
+          content:
+            application/json:
+              examples:
+                Tag has dependent objects:
+                  value:
+                    type: "error.list"
+                    request_id: "28960d1e-a056-46c0-bf18-a0d798eb889f"
+                    errors:
+                    - code: "tag_has_dependent_objects"
+                      message: "Unable to delete Tag with dependent objects. Segments: Seg 1."
+              schema:
+                $ref: "#/components/schemas/error"
+        401:
+          description: "Unauthorized"
+          content:
+            application/json:
+              examples:
+                Unauthorized:
+                  value:
+                    type: "error.list"
+                    request_id: "90a369be-14bb-48d1-8ed6-6287976f6a64"
                     errors:
                     - code: "unauthorized"
                       message: "Access Token Invalid"
@@ -2794,6 +4150,16 @@ components:
           format: "uri"
           description: "The relative URL of the company."
           example: "/companies/5ba682d23d7cf92bef87bfd4"
+    contact_deleted:
+      title: "Contact Deleted"
+      description: "deleted contact object"
+      allOf:
+      - $ref: "#/components/schemas/contact_reference"
+      properties:
+        deleted:
+          type: "boolean"
+          description: "Whether the contact is deleted or not."
+          example: true
     contact_list:
       title: "Contact List"
       type: "object"
@@ -3139,6 +4505,148 @@ components:
           description: "QA scorecard results for this conversation. Only included when `include_scorecards=true` is passed as a query parameter."
           items:
             $ref: "#/components/schemas/conversation_scorecard"
+    conversation:
+      title: "Conversation"
+      type: "object"
+      x-tags:
+      - "Conversations"
+      description: "Conversations are how you can communicate with users in Intercom. They are created when a contact replies to an outbound message, or when one admin directly sends a message to a single contact."
+      properties:
+        type:
+          type: "string"
+          description: "Always conversation."
+          example: "conversation"
+        id:
+          type: "string"
+          description: "The id representing the conversation."
+          example: "1295"
+        title:
+          type: "string"
+          nullable: true
+          description: "The title given to the conversation."
+          example: "Conversation Title"
+        created_at:
+          type: "integer"
+          format: "date-time"
+          description: "The time the conversation was created."
+          example: 1663597223
+        updated_at:
+          type: "integer"
+          format: "date-time"
+          description: "The last time the conversation was updated."
+          example: 1663597260
+        waiting_since:
+          type: "integer"
+          format: "date-time"
+          nullable: true
+          description: "The last time a Contact responded to an Admin. In other words, the time a customer started waiting for a response. Set to null if last reply is from an Admin."
+          example: 1663597260
+        snoozed_until:
+          type: "integer"
+          format: "date-time"
+          nullable: true
+          description: "If set this is the time in the future when this conversation will be marked as open. i.e. it will be in a snoozed state until this time. i.e. it will be in a snoozed state until this time."
+          example: 1663597260
+        open:
+          type: "boolean"
+          description: "Indicates whether a conversation is open (true) or closed (false)."
+          example: true
+        state:
+          type: "string"
+          enum:
+          - "open"
+          - "closed"
+          - "snoozed"
+          description: "Can be set to \"open\", \"closed\" or \"snoozed\"."
+          example: "open"
+        read:
+          type: "boolean"
+          description: "Indicates whether a conversation has been read."
+          example: true
+        priority:
+          type: "string"
+          enum:
+          - "none"
+          - "low"
+          - "medium"
+          - "high"
+          - "urgent"
+          description: "The priority level of the conversation. Returns one of none, low, medium, high, or urgent."
+          example: "high"
+        admin_assignee_id:
+          type: "integer"
+          description: "The id of the admin assigned to the conversation. If it's not assigned to an admin it will return 0."
+          example: 0
+        team_assignee_id:
+          type: "integer"
+          description: "The id of the team assigned to the conversation. If it's not assigned to a team it will return 0."
+          example: 5017691
+        company:
+          $ref: "#/components/schemas/company"
+          nullable: true
+          description: "The company associated with the conversation."
+        tags:
+          $ref: "#/components/schemas/tags"
+        conversation_rating:
+          $ref: "#/components/schemas/conversation_rating"
+        source:
+          $ref: "#/components/schemas/conversation_source"
+        contacts:
+          $ref: "#/components/schemas/conversation_contacts"
+        teammates:
+          $ref: "#/components/schemas/conversation_teammates"
+        custom_attributes:
+          $ref: "#/components/schemas/custom_attributes"
+        first_contact_reply:
+          $ref: "#/components/schemas/conversation_first_contact_reply"
+        sla_applied:
+          $ref: "#/components/schemas/sla_applied"
+        statistics:
+          $ref: "#/components/schemas/conversation_statistics"
+        conversation_parts:
+          $ref: "#/components/schemas/conversation_parts"
+        linked_objects:
+          $ref: "#/components/schemas/linked_object_list"
+        ai_agent_participated:
+          type: "boolean"
+          description: "Indicates whether the AI Agent participated in the conversation."
+          example: true
+        ai_agent:
+          $ref: "#/components/schemas/ai_agent"
+          nullable: true
+        sales_agent_participated:
+          type: "boolean"
+          description: "Indicates whether the Sales Agent participated in the conversation."
+          example: false
+        sales_agent:
+          $ref: "#/components/schemas/sales_agent"
+          nullable: true
+        channel:
+          allOf:
+          - $ref: "#/components/schemas/conversation_channel"
+          type: "object"
+          nullable: true
+          description: "The channel through which the conversation was initiated and its current channel."
+        external_references:
+          type: "array"
+          description: "References linking this conversation to records in an external helpdesk or CRM system. Populated for Fin Standalone workspaces synced from an external platform; an empty array otherwise. Sorted alphabetically by `type` and capped at 20 entries."
+          items:
+            $ref: "#/components/schemas/conversation_external_reference"
+          example:
+          - type: "zendesk_ticket"
+            id: "3633338"
+          - type: "zendesk_sunshine_conversation"
+            id: "abc-def-uuid"
+        monitor_evaluations:
+          type: "array"
+          description: "QA monitor evaluations that flagged this conversation. Only included when `include_monitors=true` is passed as a query parameter."
+          items:
+            $ref: "#/components/schemas/conversation_monitor_evaluation"
+        scorecards:
+          type: "array"
+          description: "QA scorecard results for this conversation. Only included when `include_scorecards=true` is passed as a query parameter."
+          items:
+            $ref: "#/components/schemas/conversation_scorecard"
     conversation_channel:
       title: "Conversation Channel"
       type: "object"
@@ -3383,6 +4891,168 @@ components:
           example: 12345
         pages:
           $ref: "#/components/schemas/cursor_pages"
+    conversation_part:
+      title: "Conversation Part"
+      type: "object"
+      description: "A Conversation Part represents a message in the conversation."
+      properties:
+        type:
+          type: "string"
+          description: "Always conversation_part"
+          example: "conversation_part"
+        id:
+          type: "string"
+          description: "The id representing the conversation part."
+          example: "3"
+        part_type:
+          type: "string"
+          description: "The type of conversation part."
+          example: "comment"
+        body:
+          type: "string"
+          nullable: true
+          description: "The message body, which may contain HTML. For Twitter, this will show a generic message regarding why the body is obscured. In webhook payloads for API version 2.15+, this field returns plain text."
+          example: "<p>Okay!</p>"
+        created_at:
+          type: "integer"
+          format: "date-time"
+          description: "The time the conversation part was created."
+          example: 1663597223
+        updated_at:
+          type: "integer"
+          format: "date-time"
+          description: "The last time the conversation part was updated."
+          example: 1663597260
+        notified_at:
+          type: "integer"
+          format: "date-time"
+          description: "The time the user was notified with the conversation part."
+          example: 1663597260
+        assigned_to:
+          $ref: "#/components/schemas/reference"
+          nullable: true
+          description: "The id of the admin that was assigned the conversation by this conversation_part (null if there has been no change in assignment.)"
+        author:
+          $ref: "#/components/schemas/conversation_part_author"
+        attachments:
+          title: "Conversation part attachments"
+          type: "array"
+          description: "A list of attachments for the part."
+          items:
+            $ref: "#/components/schemas/part_attachment"
+        external_id:
+          type: "string"
+          nullable: true
+          description: "The external id of the conversation part"
+          example: "abcd1234"
+        redacted:
+          type: "boolean"
+          description: "Whether or not the conversation part has been redacted."
+          example: false
+        email_message_metadata:
+          $ref: "#/components/schemas/email_message_metadata"
+          nullable: true
+        metadata:
+          $ref: "#/components/schemas/conversation_part_metadata"
+          nullable: true
+        state:
+          type: "string"
+          enum:
+          - "open"
+          - "closed"
+          - "snoozed"
+          description: "Indicates the current state of conversation when the conversation part was created."
+          example: "open"
+        tags:
+          type: "array"
+          description: "A list of tags objects associated with the conversation part."
+          items:
+            $ref: "#/components/schemas/tag_basic"
+          nullable: true
+        event_details:
+          $ref: "#/components/schemas/event_details"
+          nullable: true
+        app_package_code:
+          type: "string"
+          nullable: true
+          example: "test-integration"
+          description: "The app package code if this part was created via API. null if the part was not created via API."
+    conversation_part_author:
+      title: "Conversation part author"
+      type: "object"
+      description: "The object who initiated the conversation, which can be a Contact, Admin or Team. Bots and campaigns send messages on behalf of Admins or Teams. For Twitter, this will be blank."
+      properties:
+        type:
+          type: "string"
+          description: "The type of the author"
+          example: "admin"
+        id:
+          type: "string"
+          description: "The id of the author"
+          example: "274"
+        name:
+          type: "string"
+          nullable: true
+          description: "The name of the author"
+          example: "Operator"
+        email:
+          type: "string"
+          format: "email"
+          description: "The email of the author"
+          example: "operator+abcd1234@intercom.io"
+        from_ai_agent:
+          type: "boolean"
+          description: "If this conversation part was sent by the AI Agent"
+          example: true
+        is_ai_answer:
+          type: "boolean"
+          description: "If this conversation part body was generated by the AI Agent"
+          example: false
+    conversation_parts:
+      title: "Conversation Parts"
+      type: "object"
+      description: "A list of Conversation Part objects for each part message in the conversation. This is only returned when Retrieving a Conversation, and ignored when Listing all Conversations. There is a limit of 500 parts."
+      properties:
+        type:
+          type: "string"
+          description: ""
+          enum:
+          - "conversation_part.list"
+          example: "conversation_part.list"
+        conversation_parts:
+          title: "Conversation Parts"
+          type: "array"
+          description: "A list of Conversation Part objects for each part message in the conversation. This is only returned when Retrieving a Conversation, and ignored when Listing all Conversations. There is a limit of 500 parts."
+          items:
+            $ref: "#/components/schemas/conversation_part"
+        total_count:
+          type: "integer"
+          description: ""
+          example: 1
+    conversation_part_metadata:
+      title: "Conversation Part Metadata"
+      description: "Metadata for a conversation part"
+      type: "object"
+      properties:
+        quick_reply_options:
+          type: "array"
+          description: "The quick reply options sent by the Admin or bot, presented in this conversation part."
+          items:
+            allOf:
+            - $ref: "#/components/schemas/quick_reply_option"
+            properties:
+              translations:
+                type: "object"
+                nullable: true
+                description: "The translations for the quick reply option."
+                example:
+                  en: "Hello"
+                  fr: "Bonjour"
+        quick_reply_uuid:
+          type: "string"
+          format: "uuid"
+          description: "The unique identifier for the quick reply option that was clicked by the end user."
+          example: "123e4567-e89b-12d3-a456-426614174000"
     conversation_rating:
       title: "Conversation Rating"
       type: "object"
@@ -4041,6 +5711,45 @@ components:
           type: "integer"
           description: "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647.."
           example: 1000
+    update_company_request:
+      type: "object"
+      title: "Update Company Request Payload"
+      description: "You can update a Company"
+      nullable: true
+      properties:
+        name:
+          type: "string"
+          description: "The name of the Company"
+          example: "Intercom"
+        plan:
+          type: "string"
+          description: "The name of the plan you have associated with the company."
+          example: "Enterprise"
+        size:
+          type: "integer"
+          description: "The number of employees in this company."
+          example: "100"
+        website:
+          type: "string"
+          description: "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string."
+          example: "https://www.example.com"
+        industry:
+          type: "string"
+          description: "The industry that this company operates in."
+          example: "Manufacturing"
+        custom_attributes:
+          type: "object"
+          description: "A hash of key/value pairs containing any other data about the company you want Intercom to store."
+          additionalProperties:
+            type: "string"
+          example:
+            paid_subscriber: true
+            monthly_spend: 155.5
+            team_mates: 9
+        monthly_spend:
+          type: "integer"
+          description: "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647.."
+          example: 1000
     cursor_pages:
       title: "Cursor based pages"
       type: "object"
@@ -4199,6 +5908,44 @@ components:
           type: "string"
           description: "The description of the event"
           example: "A user placed an order"
+    deleted_article_object:
+      title: "Deleted Article Object"
+      type: "object"
+      description: "Response returned when an object is deleted"
+      properties:
+        id:
+          type: "string"
+          description: "The unique identifier for the article which you provided in the URL."
+          example: "6890762"
+        object:
+          type: "string"
+          description: "The type of object which was deleted. - article"
+          enum:
+          - "article"
+          example: "article"
+        deleted:
+          type: "boolean"
+          description: "Whether the article was deleted successfully or not."
+          example: true
+    deleted_company_object:
+      title: "Deleted Company Object"
+      type: "object"
+      description: "Response returned when an object is deleted"
+      properties:
+        id:
+          type: "string"
+          description: "The unique identifier for the company which is given by Intercom."
+          example: "5b7e8b2f-7a1a-4e6c-8e1b-4f9d4f4c4d4f"
+        object:
+          type: "string"
+          description: "The type of object which was deleted. - `company`"
+          enum:
+          - "company"
+          example: "company"
+        deleted:
+          type: "boolean"
+          description: "Whether the company was deleted successfully or not."
+          example: true
     email_address_header:
       title: "Email Address Header"
       type: "object"
@@ -4217,6 +5964,164 @@ components:
           nullable: true
           description: "The name associated with the email address"
           example: "Joe Example"
+    email_message_metadata:
+      title: "Email Message Metadata"
+      type: "object"
+      description: "Contains metadata if the message was sent as an email"
+      properties:
+        subject:
+          type: "string"
+          description: "The subject of the email"
+          example: "Question about my order"
+        email_address_headers:
+          title: "Email Address Headers"
+          type: "array"
+          description: "A list of an email address headers."
+          items:
+            $ref: "#/components/schemas/email_address_header"
+        message_id:
+          type: "string"
+          nullable: true
+          description: "The unique identifier for the email message as specified in the Message-ID header"
+          example: "<CADKw7xrXzqSn8v3mP8K8Q8yZ6K8Q8yZ6@mail.gmail.com>"
+    conversation_attribute_updated_by_workflow:
+      title: "Part type - conversation_attribute_updated_by_workflow"
+      type: "object"
+      description: "Contains details about the workflow that was triggered and any Custom Data Attributes (CDAs) that were modified during the workflow execution for conversation part type <code>conversation_attribute_updated_by_workflow</code>."
+      properties:
+        workflow:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Name of the workflow"
+              example: "Workflow 1"
+        attribute:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Name of the CDA updated"
+              example: "flight_category"
+        value:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Value of the CDA updated"
+              example: "vip_status"
+    conversation_attribute_updated_by_admin:
+      title: "Part type - conversation_attribute_updated_by_admin"
+      type: "object"
+      description: "Contains details about Custom Data Attributes (CDAs) that were modified by an admin (operator) for conversation part type <code>conversation_attribute_updated_by_admin</code>."
+      properties:
+        attribute:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Name of the CDA updated"
+              example: "jira_issue_key"
+        value:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Current value of the CDA updated"
+              example: "PROJ-007"
+            previous:
+              type: "string"
+              nullable: true
+              description: "Previous value of the CDA"
+              example: "PROJ-006"
+    conversation_attribute_updated_by_user:
+      title: "Part type - conversation_attribute_updated_by_user"
+      type: "object"
+      description: "Contains details about Custom Data Attributes (CDAs) that were modified by a user for conversation part type <code>conversation_attribute_updated_by_user</code>."
+      properties:
+        attribute:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Name of the CDA updated"
+              example: "Priority"
+        value:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Current value of the CDA updated"
+              example: "High"
+            previous:
+              type: "string"
+              nullable: true
+              description: "Previous value of the CDA (null for older events)"
+              example: "Medium"
+    custom_action_started:
+      title: "Part type - custom_action_started"
+      type: "object"
+      description: "Contains details about name of the action that was initiated for conversation part type <code>custom_action_started</code>."
+      properties:
+        action:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Name of the action"
+              example: "Jira Create Issue"
+    custom_action_finished:
+      title: "Part type - custom_action_finished"
+      type: "object"
+      description: "Contains details about final status of the completed action for conversation part type <code>custom_action_finished</code>."
+      properties:
+        action:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "Name of the action"
+              example: "Jira Create Issue"
+            result:
+              type: "string"
+              description: "Status of the action"
+              enum:
+              - "success"
+              - "failed"
+              example: "success"
+    operator_workflow_event:
+      title: "Part type - operator_workflow_event"
+      type: "object"
+      description: "Contains details about name of the workflow for conversation part type <code>operator_workflow_event</code>."
+      properties:
+        workflow:
+          type: "object"
+          properties:
+            name:
+              type: "string"
+              description: "The name of the workflow"
+              example: "Custom Bot 1"
+        event:
+          type: "object"
+          properties:
+            type:
+              type: "string"
+              description: "Type of the workflow event initiated"
+              example: "wait_finished"
+            result:
+              type: "string"
+              description: "Result of the workflow event"
+              example: "Finsihed waiting"
+    event_details:
+      title: "Event details of Workflow & actions"
+      type: "object"
+      anyOf:
+      - $ref: "#/components/schemas/conversation_attribute_updated_by_workflow"
+      - $ref: "#/components/schemas/conversation_attribute_updated_by_admin"
+      - $ref: "#/components/schemas/conversation_attribute_updated_by_user"
+      - $ref: "#/components/schemas/custom_action_started"
+      - $ref: "#/components/schemas/custom_action_finished"
+      - $ref: "#/components/schemas/operator_workflow_event"
     error:
       type: "object"
       title: "Error"
@@ -4662,6 +6567,20 @@ components:
           type: "integer"
           description: "The height of the attachment"
           example: 100
+    quick_reply_option:
+      title: "Quick Reply Option"
+      type: "object"
+      properties:
+        text:
+          type: "string"
+          description: "The text to display in this quick reply option."
+        uuid:
+          type: "string"
+          format: "uuid"
+          description: "A unique identifier for this quick reply option. This value will be available within the metadata of the comment conversation part that is created when a user clicks on this reply option."
+      required:
+      - "text"
+      - "uuid"
     reference:
       title: "Reference"
       type: "object"
@@ -4928,6 +6847,143 @@ components:
           - 493881
           items:
             type: "integer"
+    update_article_request:
+      description: "You can Update an Article"
+      type: "object"
+      title: "Update Article Request Payload"
+      nullable: true
+      properties:
+        title:
+          type: "string"
+          description: "The title of the article.For multilingual articles, this will be the title of the default language's content."
+          example: "Thanks for everything"
+        description:
+          type: "string"
+          description: "The description of the article. For multilingual articles, this will be the description of the default language's content."
+          example: "Description of the Article"
+        body:
+          type: "string"
+          description: "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`."
+          example: "<p>This is the body in html</p>"
+        body_markdown:
+          type: "string"
+          description: "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`."
+          example: "## Updated heading\n\nNew content.\n"
+        author_id:
+          type: "integer"
+          description: "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace."
+          example: 1295
+        state:
+          type: "string"
+          description: "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content."
+          enum:
+          - "published"
+          - "draft"
+          example: "draft"
+        parent_id:
+          type: "string"
+          description: "The id of the article's parent collection or section. An article without this field stands alone."
+          example: "18"
+        parent_type:
+          type: "string"
+          description: "The type of parent, which can either be a `collection` or `section`."
+          example: "collection"
+        translated_content:
+          $ref: "#/components/schemas/article_translated_content"
+        audience_ids:
+          type: "array"
+          nullable: true
+          description: "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. Sending `audience_ids: []` clears all audience memberships from every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs."
+          items:
+            type: "integer"
+          example:
+          - 1
+          - 2
+        ai_chatbot_availability:
+          type: "boolean"
+          description: "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability."
+          example: true
+        ai_copilot_availability:
+          type: "boolean"
+          description: "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability."
+          example: true
+        ai_sales_agent_availability:
+          type: "boolean"
+          description: "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability."
+          example: true
+        scheduled_publish_at:
+          type: "string"
+          format: "date-time"
+          nullable: true
+          description: "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`."
+          example: "2026-12-31T09:00:00Z"
+        scheduled_unpublish_at:
+          type: "string"
+          format: "date-time"
+          nullable: true
+          description: "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`."
+          example: "2026-12-31T17:00:00Z"
+    update_contact_request:
+      description: "You can update a contact"
+      type: "object"
+      title: "Update Contact Request Payload"
+      properties:
+        role:
+          type: "string"
+          description: "The role of the contact."
+        external_id:
+          type: "string"
+          description: "A unique identifier for the contact which is given to Intercom"
+        email:
+          type: "string"
+          description: "The contacts email"
+          example: "jdoe@example.com"
+        email_verified:
+          type: "boolean"
+          nullable: true
+          description: "Whether the contact's email address has been verified. Set to true to indicate you have verified the contact owns this email address, or false to mark it as unverified. Must be supplied together with an email in the same request; sending it without an email returns a 400."
+          example: true
+        phone:
+          type: "string"
+          nullable: true
+          description: "The contacts phone"
+          example: "+353871234567"
+        name:
+          type: "string"
+          nullable: true
+          description: "The contacts name"
+          example: "John Doe"
+        avatar:
+          type: "string"
+          nullable: true
+          description: "An image URL containing the avatar of a contact"
+          example: "https://www.example.com/avatar_image.jpg"
+        signed_up_at:
+          type: "integer"
+          format: "date-time"
+          nullable: true
+          description: "(Unix timestamp in seconds) The time specified for when a contact signed up."
+          example: 1571672154
+        last_seen_at:
+          type: "integer"
+          format: "date-time"
+          nullable: true
+          description: "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually)."
+          example: 1571672154
+        owner_id:
+          type: "string"
+          nullable: true
+          description: "The id of an admin that has been assigned account ownership of the contact"
+          example: "321"
+        unsubscribed_from_emails:
+          type: "boolean"
+          nullable: true
+          description: "Whether the contact is unsubscribed from emails"
+          example: true
+        custom_attributes:
+          type: "object"
+          nullable: true
+          description: "The custom attributes which are set for the contact"
   securitySchemes:
     bearerAuth:
       type: "http"
