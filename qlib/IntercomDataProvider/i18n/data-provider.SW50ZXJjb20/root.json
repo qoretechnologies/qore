@@ -847,42 +847,6 @@
           "source": "The unique identifier of the brand to associate with this conversation.",
           "message": "The unique identifier of the brand to associate with this conversation."
         },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.display_name": {
-          "source": "List Conversations",
-          "message": "List Conversations"
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.short_desc": {
-          "source": "List the conversations in the workspace",
-          "message": "List the conversations in the workspace"
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.desc": {
-          "source": "Lists conversations.\n\nThis is exported so that the conversation dropdown has an action to call; **Search Conversations** is the one to reach for when the conversations wanted are a subset.",
-          "message": "Lists conversations.\n\nThis is exported so that the conversation dropdown has an action to call; **Search Conversations** is the one to reach for when the conversations wanted are a subset."
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.option.cGVyX3BhZ2U.display_name": {
-          "source": "Page Size",
-          "message": "Page Size"
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
-          "source": "How many records to return in one page",
-          "message": "How many records to return in one page"
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many results per page",
-          "message": "How many results per page"
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
-          "source": "Starting After",
-          "message": "Starting After"
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
-          "source": "The cursor for the next page",
-          "message": "The cursor for the next page"
-        },
-        "app.SW50ZXJjb20.action.bGlzdENvbnZlcnNhdGlvbnM.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
-          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
-          "message": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page."
-        },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
           "source": "Search Conversations",
           "message": "Search Conversations"
