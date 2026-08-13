@@ -1354,6 +1354,9 @@ fetch
     @subsection dataprovider_v3_7 DataProvider v3.7
     - added source-owned native i18n catalog metadata and deterministic message identities for localized application,
       action, and option presentation without changing technical identities
+    - fixed provider catalog composition when the same module owner is installed in multiple catalog search roots;
+      the highest-precedence installation is now used instead of treating stale shadowed copies as independent
+      contributions
     - fixed app and action module ownership when a deferred initialization closure loads another module; apps and
       actions registered by the loaded module while its own initializer runs were attributed to the module whose
       pending app was being initialized, so

@@ -50,6 +50,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \literalPresentationTest());
         addTestCase("owner fragments reject order-dependent conflicts",
             \ownerFragmentConflictTest());
+        addTestCase("catalog search paths shadow repeated owner layers",
+            \catalogSearchPathShadowingTest());
         addTestCase("source catalogs cover provider presentation metadata",
             \sourceCatalogTest());
         addTestCase("producer locale validation is metadata-only and comprehensive",
@@ -221,6 +223,23 @@ class DataProviderPresentationTest inherits QUnit::Test {
         file.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         file.write(make_json(value));
         file.close();
+    }
+
+    private string sourceRoot() {
+        string path = normalize_dir(dirname(get_script_path()));
+        while (path.val()) {
+            if (is_file(path + DirSep + "CMakeLists.txt")
+                    && is_dir(path + DirSep + "qlib/DataProvider")) {
+                return path;
+            }
+            string parent = dirname(path);
+            if (parent == path) {
+                break;
+            }
+            path = parent;
+        }
+        throw "TEST-ERROR", sprintf(
+            "cannot locate the Qore source root above %y", get_script_path());
     }
 
     stableIdentityTest() {
@@ -409,6 +428,65 @@ class DataProviderPresentationTest inherits QUnit::Test {
         }, NOTHING, "conflicting translated owner fragments cannot depend on load order");
     }
 
+    catalogSearchPathShadowingTest() {
+        string low = make_tmp_dir("data-provider-presentation-low-");
+        on_exit remove_tree(low);
+        string high = make_tmp_dir("data-provider-presentation-high-");
+        on_exit remove_tree(high);
+        string id = DataProviderPresentation::actionMessageId(App, Action,
+            "display_name");
+
+        mkdir(low + DirSep + Domain);
+        mkdir(low + DirSep + Domain + DirSep + "ja");
+        mkdir(high + DirSep + Domain);
+        mkdir(high + DirSep + Domain + DirSep + "ja");
+        writeJson(low + DirSep + Domain + DirSep + "ja"
+                + DirSep + "OwnerOne.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "古い翻訳"},
+            }}},
+        });
+        writeJson(high + DirSep + Domain + DirSep + "ja"
+                + DirSep + "OwnerOne.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "新しい翻訳"},
+            }}},
+        });
+
+        DataProviderPresentationCatalog owner_catalog(Domain, "ja", {
+            "search_path": (low, high),
+        });
+        assertEq("新しい翻訳",
+            owner_catalog.projectAction(app(), action()).display_name,
+            "the highest-precedence installation of one owner is effective");
+
+        writeJson(low + DirSep + Domain + DirSep + "ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "古い直接翻訳"},
+            }}},
+        });
+        writeJson(high + DirSep + Domain + ".ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "新しい直接翻訳"},
+            }}},
+        });
+        unlink(low + DirSep + Domain + DirSep + "ja"
+            + DirSep + "OwnerOne.json");
+        unlink(high + DirSep + Domain + DirSep + "ja"
+            + DirSep + "OwnerOne.json");
+
+        DataProviderPresentationCatalog direct_catalog(Domain, "ja", {
+            "search_path": (low, high),
+        });
+        assertEq("新しい直接翻訳",
+            direct_catalog.projectAction(app(), action()).display_name,
+            "flat and nested direct layouts share one precedence layer");
+    }
+
     sourceCatalogTest() {
         hash<DataProviderPathVarInfo> path_var =
             <DataProviderPathVarInfo>{
@@ -487,8 +565,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     sourceCatalogSyncTest() {
-        string root = normalize_dir(dirname(get_script_path()) + DirSep
-            + "../../../..");
+        string root = sourceRoot();
         string qore_bin = root + DirSep + "build/qore";
         if (!is_executable(qore_bin)) {
             testSkip("built qore executable not available");
@@ -527,8 +604,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     sourceCatalogTranslationCheckTest() {
-        string root = normalize_dir(dirname(get_script_path()) + DirSep
-            + "../../../..");
+        string root = sourceRoot();
         string qore_bin = root + DirSep + "build/qore";
         if (!is_executable(qore_bin)) {
             testSkip("built qore executable not available");
@@ -763,8 +839,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     checkedInLocaleCatalogTest() {
-        string catalog_root = normalize_dir(dirname(get_script_path())
-            + DirSep + "../../../../qlib/DataProvider/i18n");
+        string catalog_root = sourceRoot() + DirSep
+            + "qlib/DataProvider/i18n";
         hash<auto> qore_app = DataProviderActionCatalog::getAppEx("Qore");
         hash<auto> histogram;
         foreach hash<auto> candidate in (

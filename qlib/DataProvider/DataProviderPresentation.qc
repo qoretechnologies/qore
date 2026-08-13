@@ -695,6 +695,59 @@ public class DataProviderPresentationCatalog {
         I18n::MessageCatalog catalog;
     }
 
+    #! Selects the effective copy of each logical provider catalog layer
+    /** A module owner can be installed below more than one native catalog
+        search root during upgrades or development.  Such copies are the same
+        logical contribution, not independent owners.  Native catalog search
+        paths are ordered from low to high precedence, so retain only the last
+        direct locale catalog and the last @c owner.json fragment for each
+        locale.  Distinct owner filenames remain independent contributions and
+        are still checked for collisions by
+        @ref validateComposableCatalogFiles().
+
+        The nested @c domain/locale.json and flat @c domain.locale.json layouts
+        are alternative representations of the same direct locale layer.
+    */
+    private static list<string> selectEffectiveComposableCatalogFiles(
+            string domain, list<string> files) {
+        hash<string, string> effective;
+        foreach string path in (files) {
+            effective{composableCatalogFileIdentity(domain, path)} = path;
+        }
+
+        hash<string, bool> emitted;
+        list<string> rv = ();
+        foreach string path in (files) {
+            string identity = composableCatalogFileIdentity(domain, path);
+            if (!emitted{identity} && effective{identity} == path) {
+                emitted{identity} = True;
+                rv += path;
+            }
+        }
+        return rv;
+    }
+
+    private static string composableCatalogFileIdentity(string domain,
+            string path) {
+        string name = basename(path);
+        string parent = basename(dirname(path));
+        if (parent == domain) {
+            # domain/locale.json
+            return "direct\x1f" + name.substr(0, name.length() - 5);
+        }
+
+        if (basename(dirname(dirname(path))) == domain) {
+            # domain/locale/owner.json
+            return "owner\x1f" + parent + "\x1f" + name;
+        }
+
+        # domain.locale.json; discovery has already validated the domain and
+        # filename, so the suffix arithmetic is bounded.
+        string prefix = domain + ".";
+        return "direct\x1f" + name.substr(prefix.length(),
+            name.length() - prefix.length() - 5);
+    }
+
     #! Rejects order-dependent message collisions across provider catalog files
     /** Generic native catalogs intentionally use later-file precedence. Source-
         owned provider fragments have a stricter contract: independently owned
@@ -768,6 +821,7 @@ public class DataProviderPresentationCatalog {
         list<string> files = I18n::discover_catalog_files(domain, locale,
             discovery_opts);
         if (files) {
+            files = selectEffectiveComposableCatalogFiles(domain, files);
             validateComposableCatalogFiles(files);
             catalog = new I18n::MessageCatalog(files,
                 {"literal_messages": True});
