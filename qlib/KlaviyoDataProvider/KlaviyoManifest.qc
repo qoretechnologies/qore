@@ -901,10 +901,15 @@ public class KlaviyoManifest {
             RefCampaign: <RestSchemaReferenceDataInfo>{
                 "name": RefCampaign,
                 "action": "list_campaigns",
-                # both channels, because a campaign picker that offered only e-mail campaigns would be
-                # missing half the account; the superseded application listed each channel separately and
-                # merged the two
-                "options": {"channel": ("email", "sms"), "pageSize": RefPageSize},
+                # Klaviyo accepts only "equals" on the message channel, so an account's campaigns are
+                # reachable one channel at a time; a picker offering only e-mail campaigns would be missing
+                # half the account, so this reads both and merges them - which is what the superseded
+                # application did by hand
+                "options": {"pageSize": RefPageSize},
+                "option_sets": (
+                    {"channel": "email"},
+                    {"channel": "sms"},
+                ),
                 "records_path": "data",
                 "value_field": "id",
                 "display_field": "name",

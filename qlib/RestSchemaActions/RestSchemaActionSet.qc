@@ -80,6 +80,20 @@ public hashdecl RestSchemaReferenceDataInfo {
     */
     *string display_field;
 
+    #! Option sets to run the listing once for each of, in addition to @ref options
+    /** Some APIs will not list a collection whole.  Klaviyo's campaign listing **requires** a filter on the
+        message channel and accepts only \c equals there, so an account's campaigns are only reachable one
+        channel at a time - and a dropdown offering half the account is worse than no dropdown at all.
+
+        Each entry here is merged over @ref options and produces one call, and the results are concatenated
+        and de-duplicated exactly as one call's are.  The application being replaced did this by hand, with
+        two calls and a merge.
+
+        A dropdown scoped by @ref options_from still resolves that first: a variant partitions the listing,
+        it does not widen it.
+    */
+    *list<hash<auto>> option_sets;
+
     #! A description of the reference data
     *string desc;
 }

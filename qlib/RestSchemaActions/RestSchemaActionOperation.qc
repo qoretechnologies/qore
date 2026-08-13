@@ -249,9 +249,14 @@ public class RestSchemaActionOperation {
             if (!assembled) {
                 continue;
             }
-            auto value = lv.conv
-                ? RestSchemaActionOperation::convertValue(assembled, lv.conv, True)
-                : assembled;
+            auto value = assembled;
+            if (lv.conv) {
+                value = RestSchemaActionOperation::convertValue(value, lv.conv, True);
+                # a codec that converts to nothing is saying there is nothing to send
+                if (!exists value) {
+                    continue;
+                }
+            }
             placeRequestValue(\req, \path_vars, lv.loc, lv.wire_name, lv.wire_path, value);
         }
 
@@ -260,6 +265,12 @@ public class RestSchemaActionOperation {
             auto value = i.value;
             if (*hash<auto> node = request_conv{i.key}) {
                 value = RestSchemaActionOperation::convertValue(value, node, True);
+                # a codec that converts to nothing is saying there is nothing to send: placing it anyway
+                # would put an empty value in the request, which a schema that constrains the argument
+                # rejects - and an option the caller never filled in would be making the call fail
+                if (!exists value) {
+                    continue;
+                }
             }
             placeRequestValue(\req, \path_vars, fi.loc, fi.wire_name, fi.wire_path, value);
         }

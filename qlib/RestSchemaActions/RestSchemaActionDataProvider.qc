@@ -205,30 +205,39 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         # from that schema's base path
         RestSchemaActionDataProvider lister = new RestSchemaActionDataProvider(owner,
             owner.getOperationEx(rd.action), rest);
-        auto resp = lister.doRequest(opts);
-        foreach string name in (rd.records_path) {
+        # a collection an API will not list whole is read once per partition; see
+        # RestSchemaReferenceDataInfo::option_sets
+        list<auto> records = ();
+        foreach hash<auto> variant in (rd.option_sets ?? ({},)) {
+            auto resp = lister.doRequest(opts + variant);
+            foreach string name in (rd.records_path) {
+                if (!exists resp) {
+                    break;
+                }
+                if (resp.typeCode() != NT_HASH) {
+                    throw "REFERENCE-DATA-ERROR", sprintf("cannot follow records path %y: the value at %y has "
+                        "type %y, not a hash", rd.records_path, name, resp.type());
+                }
+                resp = resp{name};
+            }
             if (!exists resp) {
-                break;
+                continue;
             }
-            if (resp.typeCode() != NT_HASH) {
-                throw "REFERENCE-DATA-ERROR", sprintf("cannot follow records path %y: the value at %y has type "
-                    "%y, not a hash", rd.records_path, name, resp.type());
+            if (resp.typeCode() != NT_LIST) {
+                throw "REFERENCE-DATA-ERROR", sprintf("expected a list of records, but got type %y (records "
+                    "path: %y)", resp.type(), rd.records_path);
             }
-            resp = resp{name};
+            records += resp;
         }
-        if (!exists resp) {
+        if (!records) {
             return;
-        }
-        if (resp.typeCode() != NT_LIST) {
-            throw "REFERENCE-DATA-ERROR", sprintf("expected a list of records, but got type %y (records path: "
-                "%y)", resp.type(), rd.records_path);
         }
         list<hash<AllowedValueInfo>> rv = ();
         # a listing often carries the same value on many records -- the owner of each of a user's
         # repositories, say -- and two dropdown entries with the same value are indistinguishable to
         # whoever is choosing one, so the first occurrence wins and the rest are dropped
         hash<string, bool> seen = {};
-        foreach auto record in (resp) {
+        foreach auto record in (records) {
             if (record.typeCode() != NT_HASH) {
                 throw "REFERENCE-DATA-ERROR", sprintf("expected every record to be a hash, but element %d has "
                     "type %y", $#, record.type());

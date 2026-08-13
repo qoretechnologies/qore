@@ -1488,12 +1488,12 @@
           "message": "Channel"
         },
         "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.short_desc": {
-          "source": "The channel or channels whose campaigns to list",
-          "message": "The channel or channels whose campaigns to list"
+          "source": "The channel whose campaigns to list",
+          "message": "The channel whose campaigns to list"
         },
         "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.desc": {
-          "source": "The channel or channels whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, which is why this is required; naming both lists both.",
-          "message": "The channel or channels whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, which is why this is required; naming both lists both."
+          "source": "The channel whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, and accepts only one: `messages.channel` is the one field whose only permitted operator is `equals`, measured against the live API. A listing across both channels is two calls, which is what the campaign dropdown makes.",
+          "message": "The channel whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, and accepts only one: `messages.channel` is the one field whose only permitted operator is `equals`, measured against the live API. A listing across both channels is two calls, which is what the campaign dropdown makes."
         },
         "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
           "source": "E-mail",

@@ -416,6 +416,11 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
             "and reads back as the field and direction");
         assertEq("created", lists.unflatten({"sort": {"field": "created", "direction": "asc"}}).req.query.sort,
             "ascending has no prefix");
+        # a codec that converts to nothing sends nothing: placing an empty value would make the schema
+        # reject a listing nobody asked to sort, which is how this was found - against the live API
+        assertFalse(lists.unflatten({"sort": {"direction": "desc"}}).req.hasKey("query"),
+            "a sort naming no field is not sent at all");
+        assertFalse(lists.unflatten({}).req.hasKey("query"), "and neither is one left unset");
 
         # the filter is named fields with per-field operators, not a DSL string
         hash<auto> fwire = lists.unflatten({"filter": {"name": ("weekly", "monthly")}});
@@ -423,8 +428,11 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
             "several values become a JSON array");
         assertEq({"filter": {"name": ("weekly", "monthly")}}, lists.flatten(fwire),
             "and read back as the list that built them");
-        assertEq("any(name,\"weekly\")", lists.unflatten({"filter": {"name": "weekly"}}).req.query.filter,
-            "one value is sent bare, as the superseded application sent it");
+        # measured against the live API: Klaviyo rejects "any(name,\"weekly\")" as an invalid filter and
+        # accepts the array form, so the superseded application - which sent a bare string whenever it had
+        # exactly one value - could not filter on a single value at all
+        assertEq("any(name,[\"weekly\"])", lists.unflatten({"filter": {"name": "weekly"}}).req.query.filter,
+            "a set-valued predicate is always an array, even for one value");
 
         # a tag name is matched by "contains" rather than "any", because that is what the application did
         assertEq("contains(name,\"news\")",
@@ -433,11 +441,13 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
 
         # the campaign channel is the required predicate Klaviyo will not list campaigns without
         RestSchemaActionOperation camp = set.getOperationEx("list_campaigns");
-        assertEq("any(messages.channel,\"email\")",
+        # "messages.channel" is the one field whose only permitted operator is "equals", measured against
+        # the live API, so a listing covers one channel and the dropdown makes two calls
+        assertEq("equals(messages.channel,\"email\")",
             camp.unflatten({"channel": "email"}).req.query.filter,
             "the channel becomes the predicate the endpoint requires");
-        assertEq("any(messages.channel,[\"email\",\"sms\"]),contains(name,\"launch\")",
-            camp.unflatten({"channel": ("email", "sms"), "name": "launch"}).req.query.filter,
+        assertEq("equals(messages.channel,\"email\"),contains(name,\"launch\")",
+            camp.unflatten({"channel": "email", "name": "launch"}).req.query.filter,
             "and both options build one filter, in declaration order");
 
         # a value the codec cannot place is reported rather than silently widening the filter
@@ -501,10 +511,12 @@ public class KlaviyoDataProviderTest inherits QUnit::Test {
         assertEq("id", rd{KlaviyoManifest::RefMetricId}.value_field,
             "the trigger filters by metric ID");
 
-        # the campaign dropdown asks for both channels: Klaviyo will not list campaigns without a channel,
-        # and a picker offering only e-mail campaigns would be missing half the account
-        assertEq(("email", "sms"), rd{KlaviyoManifest::RefCampaign}.options.channel,
-            "the campaign dropdown covers both channels");
+        # the campaign dropdown reads both channels: Klaviyo accepts only "equals" on the message channel,
+        # so an account's campaigns come one channel at a time and a picker offering only e-mail campaigns
+        # would be missing half the account
+        assertEq(("email", "sms"),
+            (map $1.channel, rd{KlaviyoManifest::RefCampaign}.option_sets),
+            "the campaign dropdown reads both channels, one call each");
     }
 
     private relationshipTest() {

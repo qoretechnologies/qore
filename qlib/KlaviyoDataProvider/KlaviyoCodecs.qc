@@ -183,14 +183,16 @@ public class KlaviyoCodecs {
             CampaignFilter: {
                 "channel": {
                     "wire_field": "messages.channel",
-                    "operator": "any",
-                    "list": True,
+                    "operator": "equals",
+                    "list": False,
                     "required": True,
                     "display_name": "Channel",
-                    "short_desc": "The channel or channels whose campaigns to list",
-                    "desc": "The channel or channels whose campaigns to list.\n\n"
-                        "Klaviyo will not list campaigns without being told which channel to look at, "
-                        "which is why this is required; naming both lists both.",
+                    "short_desc": "The channel whose campaigns to list",
+                    "desc": "The channel whose campaigns to list.\n\n"
+                        "Klaviyo will not list campaigns without being told which channel to look at, and "
+                        "accepts only one: `messages.channel` is the one field whose only permitted "
+                        "operator is `equals`, measured against the live API. A listing across both "
+                        "channels is two calls, which is what the campaign dropdown makes.",
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "email",
@@ -370,10 +372,12 @@ public class KlaviyoCodecs {
                 if (!values) {
                     continue;
                 }
-                # Klaviyo takes a single value bare and several as a JSON array, which is what the
-                # application being replaced sent
+                # a set-valued predicate is always sent as a JSON array: Klaviyo rejects
+                # "any(email,\"x\")" as an invalid filter and accepts "any(email,[\"x\"])", so the
+                # application being replaced - which sent a bare string whenever it had exactly one value -
+                # could not filter on a single value at all
                 parts += sprintf("%s(%s,%s)", i.value.operator, i.value.wire_field,
-                    make_json(values.size() == 1 ? values[0].toString() : (map $1.toString(), values)));
+                    make_json((map $1.toString(), values)));
                 continue;
             }
             if (!value.toString().val()) {
