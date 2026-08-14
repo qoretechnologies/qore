@@ -35,6 +35,16 @@ public class DataProviderPresentation {
         const CatalogDomainPrefix = "data-provider.";
         const UnknownLocale = "und";
         const RootLocale = "root";
+        #! Translation locales required for the standard provider catalog set
+        /** This policy is shared by Qore and independently released provider
+            modules so their CI checks cannot silently diverge. Locale tags are
+            canonical BCP 47 identities; they never encode language-specific
+            matching or fallback behavior.
+
+            @since %DataProvider 3.7
+        */
+        const StandardTranslationLocales = ("cs", "de", "es", "fr", "it",
+            "ja", "ko", "pl", "sk", "uk", "zh-Hant", "zh-TW");
     }
 
     #! Returns the default catalog domain for an exact app identifier

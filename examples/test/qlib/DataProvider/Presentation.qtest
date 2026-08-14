@@ -599,8 +599,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 root + DirSep + "qlib"),
             "recursive catalog validation covers every Qore provider without an app or locale list");
         assertEq(0, runSourceCatalogTreeCheck(root, qore_bin,
-                root + DirSep + "qlib", ()),
-            "source-tree validation infers and verifies every Qore provider owner module");
+                root + DirSep + "qlib", (), True),
+            "source-tree validation infers and verifies every Qore provider owner module and standard locale");
     }
 
     sourceCatalogTranslationCheckTest() {
@@ -694,6 +694,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(0, runSourceCatalogTreeCheck(root, qore_bin, output,
                 ("DataProvider",)),
             "source-tree verification accepts identical brands and cognates");
+        assertEq(2, runCatalogTreeCheck(root, qore_bin, output, True),
+            "catalog-tree verification detects missing standard locale files");
 
         string fragment_output = make_tmp_dir(
             "data-provider-i18n-fragment-check-");
@@ -773,7 +775,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     private int runCatalogTreeCheck(string root, string qore_bin,
-            string output) {
+            string output, bool require_standard_locales = False) {
         list<string> module_path = (
             root + DirSep + "build/qlib-qmod",
             root + DirSep + "build/modules/i18n",
@@ -784,12 +786,13 @@ class DataProviderPresentationTest inherits QUnit::Test {
             module_path += ENV.QORE_MODULE_DIR;
         }
         return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s >/dev/null",
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s %s >/dev/null",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
-            shellQuote(output)));
+            shellQuote(output), require_standard_locales
+                ? "--require-standard-locales" : ""));
     }
 
     private int runOwnerCatalogCheck(string root, string qore_bin,
@@ -816,7 +819,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     private int runSourceCatalogTreeCheck(string root, string qore_bin,
-            string output, list<string> modules) {
+            string output, list<string> modules,
+            bool require_standard_locales = False) {
         list<string> module_path = (
             output,
             root + DirSep + "build/qlib-qmod",
@@ -830,12 +834,13 @@ class DataProviderPresentationTest inherits QUnit::Test {
         list<string> owner_args = map "--owner " + shellQuote($1),
             modules;
         return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s >/dev/null",
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s %s >/dev/null",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
-            shellQuote(output), owner_args.join(" ")));
+            shellQuote(output), owner_args.join(" "),
+            require_standard_locales ? "--require-standard-locales" : ""));
     }
 
     checkedInLocaleCatalogTest() {
