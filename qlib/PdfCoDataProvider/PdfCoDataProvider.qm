@@ -68,7 +68,7 @@ module PdfCoDataProvider {
 
         # convert-from-pdf
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/convert-from-pdf",
             "action": "convert-from-pdf",
             "display_name": "Convert from PDF",
@@ -97,7 +97,7 @@ module PdfCoDataProvider {
 
         # convert-from-pdf-to-images
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/convert-from-pdf-to-images",
             "action": "convert-from-pdf-to-images",
             "display_name": "Convert from PDF into Images",
@@ -126,7 +126,7 @@ module PdfCoDataProvider {
 
         # convert-html-to-pdf
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/convert-html-to-pdf",
             "action": "convert-html-to-pdf",
             "display_name": "Convert HTML to PDF",
@@ -152,7 +152,7 @@ module PdfCoDataProvider {
 
         # convert-images-to-pdf
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/convert-images-to-pdf",
             "action": "convert-images-to-pdf",
             "display_name": "Convert from Images into PDF",
@@ -176,7 +176,7 @@ module PdfCoDataProvider {
 
         # convert-to-pdf
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/convert-to-pdf",
             "action": "convert-to-pdf",
             "display_name": "Convert into PDF",
@@ -204,7 +204,7 @@ module PdfCoDataProvider {
 
         # merge-pdf
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/merge-pdf",
             "action": "merge-pdf",
             "display_name": "Merge a PDF",
@@ -229,7 +229,7 @@ module PdfCoDataProvider {
 
         # split-pdf
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/split-pdf",
             "action": "split-pdf",
             "display_name": "Split a PDF",
@@ -257,7 +257,7 @@ module PdfCoDataProvider {
 
         # compress-pdf
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/compress-pdf",
             "action": "compress-pdf",
             "display_name": "Compress and Optimize PDF",
@@ -281,7 +281,7 @@ module PdfCoDataProvider {
 
         # add-text-images
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/add-text-images",
             "action": "add-text-images",
             "display_name": "Add Text and Images to a PDF",
@@ -308,7 +308,7 @@ module PdfCoDataProvider {
 
         # create-fillable-form
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/create-fillable-form",
             "action": "create-fillable-form",
             "display_name": "Create Fillable PDF Form",
@@ -336,7 +336,7 @@ module PdfCoDataProvider {
 
         # fill-pdf-form
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/fill-pdf-form",
             "action": "fill-pdf-form",
             "display_name": "Fill a PDF Form",
@@ -365,7 +365,7 @@ module PdfCoDataProvider {
 
         # get-pdf-info
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/get-pdf-info",
             "action": "get-pdf-info",
             "display_name": "Get PDF Information",
@@ -393,7 +393,7 @@ module PdfCoDataProvider {
 
         # search-text
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/search-text",
             "action": "search-text",
             "display_name": "Search Text in PDF",
@@ -421,7 +421,7 @@ module PdfCoDataProvider {
 
         # search-and-delete-text
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/search-and-delete-text",
             "action": "search-and-delete-text",
             "display_name": "Search and Delete Found Text in PDF",
@@ -448,7 +448,7 @@ module PdfCoDataProvider {
 
         # search-and-replace-text
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/search-and-replace-text",
             "action": "search-and-replace-text",
             "display_name": "Search and Replace Text in PDF",
@@ -477,7 +477,7 @@ module PdfCoDataProvider {
 
         # search-and-replace-with-image
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/search-and-replace-with-image",
             "action": "search-and-replace-with-image",
             "display_name": "Search and Replace With Image in PDF",
@@ -510,7 +510,7 @@ module PdfCoDataProvider {
 
         # ai-invoice-parser
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/ai-invoice-parser",
             "action": "ai-invoice-parser",
             "display_name": "AI Invoice Parser",
@@ -536,7 +536,7 @@ module PdfCoDataProvider {
 
         # parse-document
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/parse-document",
             "action": "parse-document",
             "display_name": "Parse a Document",
@@ -563,7 +563,7 @@ module PdfCoDataProvider {
 
         # document-classifier
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/document-classifier",
             "action": "document-classifier",
             "display_name": "Document Classifier",
@@ -592,7 +592,7 @@ module PdfCoDataProvider {
 
         # generate-barcode
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/generate-barcode",
             "action": "generate-barcode",
             "display_name": "Generate a Barcode",
@@ -617,7 +617,7 @@ module PdfCoDataProvider {
 
         # read-barcode
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/read-barcode",
             "action": "read-barcode",
             "display_name": "Read a Barcode",
@@ -650,7 +650,7 @@ module PdfCoDataProvider {
 
         # add-password
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/add-password",
             "action": "add-password",
             "display_name": "Add Password and Security into PDF",
@@ -680,7 +680,7 @@ module PdfCoDataProvider {
 
         # remove-password
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/remove-password",
             "action": "remove-password",
             "display_name": "Remove Password and Security from PDF",
@@ -712,7 +712,7 @@ module PdfCoDataProvider {
 
         # send-email
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/send-email",
             "action": "send-email",
             "display_name": "Send Email With Attachment",
@@ -743,7 +743,7 @@ module PdfCoDataProvider {
 
         # upload-file
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/upload-file",
             "action": "upload-file",
             "display_name": "Upload a File",
@@ -767,7 +767,7 @@ module PdfCoDataProvider {
 
         # job-check
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": PdfCoDataProvider::AppName,
             "path": "/job-check",
             "action": "job-check",
             "display_name": "Job Check",

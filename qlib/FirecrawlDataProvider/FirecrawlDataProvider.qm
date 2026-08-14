@@ -69,7 +69,7 @@ module FirecrawlDataProvider {
 
         # scrape
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/scrape",
             "action": "scrape",
             "display_name": "Scrape a Web Page",
@@ -98,7 +98,7 @@ module FirecrawlDataProvider {
 
         # batch-scrape
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/batch-scrape",
             "action": "batch-scrape",
             "display_name": "Batch Scrape Web Pages",
@@ -128,7 +128,7 @@ module FirecrawlDataProvider {
 
         # cancel-batch-scrape
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/cancel-batch-scrape",
             "action": "cancel-batch-scrape",
             "display_name": "Cancel a Batch Scrape",
@@ -148,7 +148,7 @@ module FirecrawlDataProvider {
 
         # get-batch-scrape-status
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/get-batch-scrape-status",
             "action": "get-batch-scrape-status",
             "display_name": "Get Batch Scrape Status",
@@ -172,7 +172,7 @@ module FirecrawlDataProvider {
 
         # crawl
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/crawl",
             "action": "crawl",
             "display_name": "Crawl a Website",
@@ -203,7 +203,7 @@ module FirecrawlDataProvider {
 
         # get-crawl-status
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/get-crawl-status",
             "action": "get-crawl-status",
             "display_name": "Get Crawl Status",
@@ -223,7 +223,7 @@ module FirecrawlDataProvider {
 
         # cancel-crawl
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/cancel-crawl",
             "action": "cancel-crawl",
             "display_name": "Cancel a Crawl",
@@ -247,7 +247,7 @@ module FirecrawlDataProvider {
 
         # map
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/map",
             "action": "map",
             "display_name": "Map a Website",
@@ -276,7 +276,7 @@ module FirecrawlDataProvider {
 
         # search
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/search",
             "action": "search",
             "display_name": "Search the Web",
@@ -309,7 +309,7 @@ module FirecrawlDataProvider {
 
         # extract
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/extract",
             "action": "extract",
             "display_name": "Extract Structured Data",
@@ -338,7 +338,7 @@ module FirecrawlDataProvider {
 
         # get-extract-status
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/get-extract-status",
             "action": "get-extract-status",
             "display_name": "Get Extraction Status",
@@ -362,7 +362,7 @@ module FirecrawlDataProvider {
 
         # agent
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/agent",
             "action": "agent",
             "display_name": "Run AI Agent",
@@ -392,7 +392,7 @@ module FirecrawlDataProvider {
 
         # cancel-agent
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/cancel-agent",
             "action": "cancel-agent",
             "display_name": "Cancel an Agent Job",
@@ -412,7 +412,7 @@ module FirecrawlDataProvider {
 
         # get-agent-status
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/get-agent-status",
             "action": "get-agent-status",
             "display_name": "Get Agent Status",
@@ -436,7 +436,7 @@ module FirecrawlDataProvider {
 
         # parse
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
+            "app": FirecrawlDataProvider::AppName,
             "path": "/parse",
             "action": "parse",
             "display_name": "Parse a Document",

@@ -572,13 +572,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
             return;
         }
 
-        assertEq(0, system(sprintf("%s %s --help >/dev/null",
-            shellQuote(qore_bin),
-            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"))),
-            "qore-data-provider-i18n accepts default color handling");
-
         list<string> module_path = (
-            root + DirSep + "build/qlib-qmod",
             root + DirSep + "build/modules/i18n",
             root + DirSep + "build/modules/json",
             root + DirSep + "qlib"
@@ -586,10 +580,18 @@ class DataProviderPresentationTest inherits QUnit::Test {
         if (exists ENV.QORE_MODULE_DIR) {
             module_path += ENV.QORE_MODULE_DIR;
         }
-        string cmd = sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s -a Qore",
+        string local_env = sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s",
             shellQuote(module_path.join(PathSep)),
-            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")));
+
+        assertEq(0, system(sprintf("%s %s %s --help >/dev/null",
+            local_env, shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"))),
+            "qore-data-provider-i18n accepts default color handling");
+
+        string cmd = sprintf(
+            "%s %s %s -C --check -o %s -a Qore",
+            local_env,
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(root + DirSep + "qlib/DataProvider/i18n"));
@@ -757,7 +759,6 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private int runCatalogCheck(string root, string qore_bin,
             string output) {
         list<string> module_path = (
-            root + DirSep + "build/qlib-qmod",
             root + DirSep + "build/modules/i18n",
             root + DirSep + "build/modules/json",
             root + DirSep + "qlib"
@@ -777,7 +778,6 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private int runCatalogTreeCheck(string root, string qore_bin,
             string output, bool require_standard_locales = False) {
         list<string> module_path = (
-            root + DirSep + "build/qlib-qmod",
             root + DirSep + "build/modules/i18n",
             root + DirSep + "build/modules/json",
             root + DirSep + "qlib"
@@ -798,7 +798,6 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private int runOwnerCatalogCheck(string root, string qore_bin,
             string output, string owner, list<string> modules) {
         list<string> module_path = (
-            root + DirSep + "build/qlib-qmod",
             root + DirSep + "build/modules/i18n",
             root + DirSep + "build/modules/json",
             root + DirSep + "qlib"
@@ -823,7 +822,6 @@ class DataProviderPresentationTest inherits QUnit::Test {
             bool require_standard_locales = False) {
         list<string> module_path = (
             output,
-            root + DirSep + "build/qlib-qmod",
             root + DirSep + "build/modules/i18n",
             root + DirSep + "build/modules/json",
             root + DirSep + "qlib"
