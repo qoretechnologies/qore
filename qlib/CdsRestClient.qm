@@ -1191,6 +1191,19 @@ public class DynamicsRestConnection inherits CdsRestConnection {
             # the environment's URL is discovered from the credential, so the user does not supply one
             "auto_url": True,
         };
+
+        #! The URL a connection created without one targets until its environment is discovered
+        /** Declared on the connection class because that is where the platform looks for it when it
+            creates an \c auto_url connection: it reads a \c DefaultConnectionUrl or \c DefaultUrl
+            constant from the connection class, and falls back to <tt>\<scheme\>://x</tt> when it finds
+            neither - which authorizes against <tt>https://x</tt> and is refused by Microsoft with
+            \c AADSTS500011.
+
+            @see @ref cdsrestclient_discovery
+
+            @since CdsRestClient 2.2
+        */
+        const DefaultConnectionUrl = CdsRestClientBase::DefaultUrl;
     }
 
     #! creates the CdsRestConnection object

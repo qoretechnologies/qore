@@ -4,6 +4,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires reflection
 %requires Mime
 %requires MapperUtil
 %requires Logger
@@ -265,6 +266,15 @@ class CdsTest inherits QUnit::Test {
         assertEq(CdsRestClientBase::DefaultUrl, c.url, "the connection targets the discovery service");
         assertTrue(DynamicsRestConnection::ConnectionScheme.auto_url, "and does not ask for a URL");
         assertTrue(CdsRestClientBase::isDiscoveryUrl(c.url));
+
+        # the platform builds an auto_url connection's URL by reading a constant off the connection
+        # **class**, and falls back to "<scheme>://x" when it finds none - which authorizes against
+        # "https://x" and is refused with AADSTS500011.  So the default has to be reachable there, not
+        # only on the client base class
+        hash<ConnectionSchemeInfo> si = ConnectionSchemeCache::getSchemeEx("dynamics");
+        *ClassConstant cc = si.cls.tryGetConstant("DefaultConnectionUrl");
+        assertTrue(exists cc, "the connection class publishes a default URL for the platform to find");
+        assertEq(CdsRestClientBase::DefaultUrl, cc.getValue(), "and it is the discovery service");
 
         # the discovery service is an OAuth2 resource of its own, so the profile's own scope template
         # resolves to exactly the scope the discovery call needs - no special case
